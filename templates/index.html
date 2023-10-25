@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <img src="static/techmore.png"><title>Network Scanner GUI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<style>
+body{font-family:'Helvetica Neue',sans-serif;background-color:#1e1e1e;color:#32CD32;}
+.ping-button{position:relative;padding:10px 20px;background-color:#007bff;color:#fff;border:none;border-radius:5px;cursor:pointer;transition:background-color 0.3s ease,transform 0.3s ease;}
+.ping-button:hover{background-color:#0056b3;transform:scale(1.05);}
+.open-ports-cell{max-width:200px;overflow-wrap:break-word;}
+.ping-word{position:relative;z-index:1;}
+::selection{background-color:#007f00;}
+.cursor{background-color:#32CD32;color:#1e1e1e;}
+input{background-color:#f0f0f0;color:#1e1e1e;border:1px solid #d1d1d1;padding:5px;}
+</style>
+<body class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <h1 class="text-2xl font-bold my-4">Network Scanner GUI</h1>
+    <div id="local-ip" class="mt-4 p-2 bg-gray-200 rounded">Local IP Address: <span id="local-ip-value"></span>Subnet Mask: <span id="subnet-mask-value"></span>CIDR : <span id="cidr-value"></span>Public IP: <span id="public-ip-value"></span></div>
+    <div class="relative"><input type="text" id="scan-target" class="border rounded p-2" placeholder="Enter target IP or range"><span id="info-icon" class="absolute top-0 right-0 p-2 cursor-pointer">?</span><div id="tooltip" class="hidden absolute top-full right-0 bg-gray-200 p-2 rounded">You can use IP, range, or CIDR for scanning.</div></div>
+    <button id="start-scan-btn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 mt-4 rounded">Start Scan</button>
+    <div class="my-4"><button id="stop-scan-btn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Stop Scan</button><button id="suspend-scan-btn" class="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded">Suspend Scan</button><button id="resume-scan-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Resume Scan</button></div>
+    <div class="grid grid-cols-3 gap-4 p-4">
+        <div class="bg-gray-200 p-4 rounded shadow-lg"><h2 class="text-lg font-bold text-gray-700">Quick Scan</h2><p>Time taken: <span id="quick-time">XX:XX:XX</span></p><p>Total Hosts: <span id="quick-hosts">XX</span></p><p>nmap -sn <p></div>
+        <div class="bg-gray-300 p-4 rounded shadow-lg"><h2 class="text-lg font-bold text-gray-700">Deep Scan</h2><p>Time taken: <span id="deep-time">XX:XX:XX</span></p><p>Total Hosts: <span id="deep-hosts">XX</span></p><p>Open Ports: <span id="deep-ports">XX</span></p><p>Critical CVEs: <span id="deep-cves">XX</span></p></div>
+        <div class="bg-gray-400 p-4 rounded shadow-lg"><h2 class="text-lg font-bold text-gray-700">Dragnet Scan</h2><p>Time taken: <span id="dragnet-time">XX:XX:XX</span></p><p>Total Hosts: <span id="dragnet-hosts">XX</span></p><p>Open Ports: <span id="dragnet-ports">XX</span></p><p>Critical CVEs: <span id="dragnet-cves">XX</span></p></div>
+    </div>
+    <table id="discovery-table" class="min-w-full table-auto mt-4"><thead><tr><th class="px-4 py-2">IP Address</th><th class="px-4 py-2">Hostname</th><th class="px-4 py-2">Open Ports</th><th class="px-4 py-2">version</th><th class="px-4 py-2" style="width: 250px;">CVEs</th><th class="px-4 py-2">Photos</th><th class="px-4 py-2">Time to Scan</th><th class="px-4 py-2">Rescan</th></tr></thead><tbody></tbody></table>
+
+    <script>
+        var socket = io.connect(`http://${document.domain}:${location.port}`);
+        socket.on('connect', () => console.log('Socket.IO connected'));
+
+        socket.on('scan_feedback', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
+
+        socket.on('local_ip', data => {
+        ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
+        document.getElementById('scan-target').value = data.cidr;
+        });
+
+        socket.on('cve_array', data => {
+        const tb = document.querySelector('#discovery-table tbody');
+        for (let row of tb.rows) {
+            if (row.cells[0].textContent === data.target) {
+            let cell = row.cells[4];
+            cell.innerHTML = '';
+            data.cve_array.forEach(cve => cell.innerHTML += `<div style="font-size: 12px;">${cve.score} : <a href="${cve.url}" target="_blank">${cve.id}</a></div>`);
+            break;
+            }
+        }
+        });
+
+        socket.on('service_info', data => {
+        const tb = document.querySelector('#discovery-table tbody');
+        for (let row of tb.rows) {
+            if (row.cells[0].textContent === data.target) {
+            row.cells[1].innerHTML += `<div>${data.line}</div>`;
+            break;
+            }
+        }
+        });
+
+        socket.on('quickscan_results', data => {
+            console.log("Received quick_scan_results:", data);  // Debug line
+            document.getElementById('quick-time').textContent = data.time_taken;
+            document.getElementById('quick-hosts').textContent = data.hosts_up;
+        });
+
+        socket.on('deep_scan_results', data => data.forEach(updateRowWithResults));
+
+        function updateRowWithResults(host) {
+        const tb = document.querySelector('#discovery-table tbody');
+        let rowToUpdate = Array.from(tb.rows).find(row => row.cells[0].textContent === host.ip);
+        if (rowToUpdate) {
+            rowToUpdate.cells[2].textContent = host.ports.map(port => port.port).join(', ');
+            rowToUpdate.cells[3].textContent = host.ports.map(port => port.service).join(', ');
+        }
+        }
+
+        document.getElementById('start-scan-btn').addEventListener('click', () => {
+        const target = document.getElementById('scan-target').value;
+        socket.emit('start_scan', target);
+        });
+
+        socket.emit('get_local_ip');
+
+        socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
+        socket.on('scan_complete', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
+        socket.on('scan_results', hosts => populateTableWithResults(hosts));
+
+        function populateTableWithResults(data) {
+        const tb = document.querySelector('#discovery-table tbody');
+        tb.innerHTML = '';
+        data.forEach(result => {
+            const newRow = tb.insertRow(-1);
+            ['ip', 'hostname', 'open_ports', 'version', 'severity', 'cves', 'photos'].forEach((col, i) => {
+            const cell = newRow.insertCell(i);
+            cell.textContent = result[col];
+            if (col === 'open_ports') cell.classList.add('open-ports-cell');
+            });
+            const rescanCell = newRow.insertCell(-1);
+            const rescanBtn = document.createElement('button');
+            rescanBtn.textContent = 'Rescan';
+            rescanBtn.classList.add('bg-blue-500', 'hover:bg-blue-700', 'text-white', 'font-bold', 'py-1', 'px-2', 'rounded');
+            rescanBtn.addEventListener('click', () => handleRescan(result['ip']));
+            rescanCell.appendChild(rescanBtn);
+        });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+Flask
+Flask-SocketIO
+Flask-CORS
+selenium
+netifaces
+requests
