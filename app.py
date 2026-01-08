@@ -546,12 +546,42 @@ def check_nmap():
 
 
 def check_vulners():
-    """Check if vulners script exists"""
+    """Check if vulners script exists and update if possible"""
+    vulners_dir = VULNERS_SCRIPT.parent
     if not VULNERS_SCRIPT.exists():
         print(f"ERROR: Vulners script not found at {VULNERS_SCRIPT}")
-        print("The nmap-vulners directory should be included with this repo.")
+        print(
+            "Run: git clone https://github.com/vulnersCom/nmap-vulners.git nmap-vulners"
+        )
         sys.exit(1)
-    print(f"Found: vulners.nse at {VULNERS_SCRIPT}")
+
+    # Try to update if it's a git repo
+    if (vulners_dir / ".git").exists():
+        print("Updating vulners script...")
+        try:
+            result = subprocess.run(
+                ["git", "pull"], cwd=vulners_dir, capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                # Get version info
+                version_result = subprocess.run(
+                    ["git", "log", "-1", "--oneline"],
+                    cwd=vulners_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                if version_result.returncode == 0:
+                    commit = version_result.stdout.strip()
+                    print(f"Vulners updated: {commit}")
+                else:
+                    print("Vulners updated (latest)")
+            else:
+                print("Vulners already up-to-date")
+        except Exception as e:
+            print(f"Vulners update check failed: {e}")
+    else:
+        print("Vulners script found (not a git repo)")
+
     return True
 
 
