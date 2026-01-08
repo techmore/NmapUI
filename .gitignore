@@ -1,0 +1,5 @@
+oatmeal-olive-instrument/
+.DS_Store
+*.pdf
+__pycache__/
+*.pyc
