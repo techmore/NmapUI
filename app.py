@@ -1,9 +1,13 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni
+import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from pathlib import Path
+
+BASE_DIR = Path(__file__).parent.resolve()
+VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
 from reportlab.lib import colors, units, enums, styles, pagesizes
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -310,7 +314,7 @@ def start_deep_scan(targets):
                     "-T3",
                     "-sV",
                     "--script",
-                    "/Users/seandolbec/projects/streamio-nmap/nmap-vulners/vulners",
+                    str(VULNERS_SCRIPT),
                     target,
                 ]
             ).decode("utf-8")
@@ -442,9 +446,58 @@ def start_scan(target):
         emit("scan_error", str(e))
 
 
-if __name__ == "__main__":
-    # Run traceroute at startup to establish network key
-    print("Initializing network key...")
+def check_nmap():
+    """Check if nmap is installed and return version"""
+    nmap_path = shutil.which("nmap")
+    if not nmap_path:
+        print("ERROR: nmap not found. Please install nmap:")
+        print("  macOS:  brew install nmap")
+        print("  Ubuntu: sudo apt install nmap")
+        sys.exit(1)
+
+    try:
+        version = subprocess.check_output(["nmap", "--version"]).decode().split("\n")[0]
+        print(f"Found: {version}")
+        return version
+    except Exception as e:
+        print(f"ERROR: Could not get nmap version: {e}")
+        sys.exit(1)
+
+
+def check_vulners():
+    """Check if vulners script exists"""
+    if not VULNERS_SCRIPT.exists():
+        print(f"ERROR: Vulners script not found at {VULNERS_SCRIPT}")
+        print("The nmap-vulners directory should be included with this repo.")
+        sys.exit(1)
+    print(f"Found: vulners.nse at {VULNERS_SCRIPT}")
+    return True
+
+
+def startup_checks(quick=False):
+    """Run startup checks for dependencies"""
+    print("\n" + "=" * 50)
+    print("NmapUI Startup Checks")
+    print("=" * 50)
+
+    if quick:
+        print("Quick mode: skipping dependency checks")
+    else:
+        print("\nChecking nmap...")
+        check_nmap()
+
+        print("\nChecking vulners script...")
+        check_vulners()
+
+    print("\nInitializing network key...")
     run_traceroute("1.1.1.1")
-    print("Starting server...")
+
+    print("\n" + "=" * 50)
+    print("All checks passed. Starting server...")
+    print("=" * 50 + "\n")
+
+
+if __name__ == "__main__":
+    quick_mode = "--quick" in sys.argv or "-q" in sys.argv
+    startup_checks(quick=quick_mode)
     socketio.run(app, debug=True)
