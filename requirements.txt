@@ -4,3 +4,5 @@ Flask-CORS
 selenium
 netifaces
 requests
+reportlab
+Pillow
