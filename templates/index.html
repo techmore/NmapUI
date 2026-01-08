@@ -115,27 +115,13 @@
         </div>
     </div>
 
-    <!-- Customer Identification Banner -->
-    <div id="customer-banner" class="mb-4 p-4 bg-olive-900 text-white rounded-xl shadow-sm border border-olive-700">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-olive-300 text-sm font-medium">Customer Identification</span>
-            <div class="flex items-center gap-6 text-sm">
-                <div>
-                    <span class="text-olive-400">Customer:</span>
-                    <span id="customer-name" class="font-medium ml-1 text-olive-100">Unknown</span>
-                </div>
-                <div>
-                    <span class="text-olive-400">ID:</span>
-                    <span id="customer-id" class="font-medium ml-1 text-olive-100">unknown</span>
-                </div>
-                <div>
-                    <span class="text-olive-400">Confidence:</span>
-                    <span id="customer-confidence" class="font-medium ml-1 text-olive-100">0.00</span>
-                </div>
-            </div>
-        </div>
-        <div class="text-xs text-olive-400">
-            <span id="customer-status">Analyzing network fingerprint...</span>
+    <!-- Customer Selection Dropdown -->
+    <div id="customer-selection" class="mb-4 p-3 bg-olive-100 rounded-xl shadow-sm border border-olive-300">
+        <div class="flex items-center justify-between">
+            <span class="text-olive-700 font-medium">Customer</span>
+            <select id="current-customer" class="flex-1 p-2 border border-olive-300 rounded bg-white text-olive-900">
+                <option value="">Auto-detect network...</option>
+            </select>
         </div>
     </div>
 
@@ -189,17 +175,23 @@
         </div>
     </div>
 
-    <!-- Customer Management Panel -->
-    <div id="customer-panel" class="mt-6 p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300">
-        <div class="flex items-center justify-between mb-4">
-            <span class="text-olive-700 font-medium">Customer Management</span>
-            <button onclick="toggleCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded-lg hover:bg-olive-700 transition-colors">
-                Add Customer
-            </button>
-        </div>
-        
-        <!-- Add Customer Form (Hidden by default) -->
-        <div id="add-customer-form" class="hidden mt-4 p-4 bg-white rounded-lg border border-olive-200">
+    <!-- Customer Management Compact -->
+    <div class="mt-4 flex items-center gap-2">
+        <button onclick="showCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded hover:bg-olive-700 transition-colors">
+            + Add Customer
+        </button>
+    </div>
+    
+    <!-- Add Customer Form (Hidden by default) -->
+    <div id="add-customer-form" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-olive-900">Add Customer</h3>
+                <button onclick="hideCustomerForm()" class="text-olive-500 hover:text-olive-700">
+                    ✕
+                </button>
+            </div>
+            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Customer Name *</label>
@@ -245,7 +237,7 @@
             </div>
             
             <div class="flex justify-end gap-2 mt-4">
-                <button onclick="toggleCustomerForm()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                <button onclick="hideCustomerForm()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
                     Cancel
                 </button>
                 <button onclick="addCustomer()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors">
@@ -253,25 +245,12 @@
                 </button>
             </div>
         </div>
-        
-        <!-- Customer Assignment Controls -->
-        <div class="mt-4 flex items-center gap-4">
-            <select id="customer-select" class="flex-1 p-2 border border-olive-300 rounded">
-                <option value="">Select Customer...</option>
-            </select>
-            <button onclick="assignCustomer()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors">
-                Assign
-            </button>
-            <button onclick="showCustomerList()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
-                View All
-            </button>
-        </div>
-        
-        <!-- Customer Messages -->
-        <div id="customer-messages" class="mt-4 hidden">
-            <div class="p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
-                <span id="customer-message"></span>
-            </div>
+    </div>
+    
+    <!-- Customer Messages -->
+    <div id="customer-messages" class="mt-4 hidden">
+        <div class="p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
+            <span id="customer-message"></span>
         </div>
     </div>
 
@@ -517,7 +496,6 @@
 
         socket.emit('get_local_ip');
         socket.emit('get_network_key');
-        socket.emit('get_customer_info');
         socket.emit('get_versions');
         socket.emit('get_customers');
 
@@ -542,23 +520,13 @@
             }
         });
 
+        socket.on('customers_list', data => {
+            populateCustomerDropdown(data);
+        });
+
         socket.on('customer_info', data => {
             console.log('Customer info received:', data);
-            document.getElementById('customer-name').textContent = data.name || 'Unknown';
-            document.getElementById('customer-id').textContent = data.id || 'unknown';
-            document.getElementById('customer-confidence').textContent = (data.confidence || 0.0).toFixed(2);
-            
-            const statusEl = document.getElementById('customer-status');
-            if (data.confidence >= 0.7) {
-                statusEl.textContent = `Identified as ${data.name} with high confidence`;
-                statusEl.className = 'text-xs text-green-300';
-            } else if (data.confidence >= 0.4) {
-                statusEl.textContent = `Possible match: ${data.name} (medium confidence)`;
-                statusEl.className = 'text-xs text-yellow-300';
-            } else {
-                statusEl.textContent = 'Unknown network - requires manual labeling';
-                statusEl.className = 'text-xs text-olive-400';
-            }
+            updateCustomerSelection(data);
         });
 
         socket.on('versions', data => {
@@ -624,9 +592,12 @@
         });
 
         // Customer Management Functions
-        function toggleCustomerForm() {
-            const form = document.getElementById('add-customer-form');
-            form.classList.toggle('hidden');
+        function showCustomerForm() {
+            document.getElementById('add-customer-form').classList.remove('hidden');
+        }
+
+        function hideCustomerForm() {
+            document.getElementById('add-customer-form').classList.add('hidden');
         }
 
         function addCustomer() {
@@ -661,22 +632,23 @@
         }
 
         function assignCustomer() {
-            const select = document.getElementById('customer-select');
-            const selectedId = select.value;
-            const selectedName = select.options[select.selectedIndex]?.text || '';
+            const dropdown = document.getElementById('current-customer');
+            const selectedId = dropdown.value;
+            const selectedOption = dropdown.options[dropdown.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
 
             if (!selectedId) {
                 showCustomerMessage('Please select a customer to assign', 'error');
                 return;
             }
 
+            // Extract clean name (remove confidence if present)
+            const cleanName = selectedName.split(' (')[0];
+
             socket.emit('assign_customer', {
                 customer_id: selectedId,
-                customer_name: selectedName
+                customer_name: cleanName
             });
-
-            // Clear selection
-            select.value = '';
         }
 
         socket.on('customer_added', data => {
@@ -691,21 +663,13 @@
         socket.on('customer_assigned', data => {
             if (data.success) {
                 showCustomerMessage(data.message, 'success');
-                // Update current customer display
-                document.getElementById('customer-name').textContent = data.customer.name;
-                document.getElementById('customer-id').textContent = data.customer.id;
-                document.getElementById('customer-confidence').textContent = '1.00';
-                
-                const statusEl = document.getElementById('customer-status');
-                statusEl.textContent = `Manually assigned to ${data.customer.name}`;
-                statusEl.className = 'text-xs text-blue-300';
+                // Update dropdown selection
+                const dropdown = document.getElementById('current-customer');
+                dropdown.value = data.customer.id;
+                dropdown.dispatchEvent(new Event('change'));
             } else {
                 showCustomerMessage('Failed to assign customer', 'error');
             }
-        });
-
-        socket.on('customers_list', data => {
-            populateCustomerSelect(data);
         });
 
         socket.on('customer_deleted', data => {
@@ -745,16 +709,51 @@
             }, 5000);
         }
 
-        function populateCustomerSelect(customers) {
-            const select = document.getElementById('customer-select');
-            select.innerHTML = '<option value="">Select Customer...</option>';
+        function populateCustomerDropdown(customers) {
+            const dropdown = document.getElementById('current-customer');
+            const currentValue = dropdown.value;
+            
+            dropdown.innerHTML = '<option value="">Auto-detect network...</option>';
             
             customers.forEach(customer => {
                 const option = document.createElement('option');
                 option.value = customer.id || customer.get?.('id');
                 option.textContent = customer.name || customer.get?.('name');
-                select.appendChild(option);
+                dropdown.appendChild(option);
             });
+            
+            // Restore previous selection if it still exists
+            if (currentValue) {
+                dropdown.value = currentValue;
+            }
+        }
+
+        function updateCustomerSelection(customer) {
+            const dropdown = document.getElementById('current-customer');
+            
+            if (customer.id && customer.name) {
+                // Update dropdown to show selected customer
+                let customerExists = false;
+                for (let option of dropdown.options) {
+                    if (option.value === customer.id) {
+                        option.textContent = `${customer.name} (${customer.confidence.toFixed(2)} confidence)`;
+                        customerExists = true;
+                        break;
+                    }
+                }
+                
+                if (!customerExists) {
+                    // Add temporary option for current customer
+                    const option = document.createElement('option');
+                    option.value = customer.id;
+                    option.textContent = `${customer.name} (Manual Assignment)`;
+                    dropdown.appendChild(option);
+                }
+                
+                dropdown.value = customer.id;
+            } else {
+                dropdown.value = '';
+            }
         }
 
         function displayCustomerList(customers) {

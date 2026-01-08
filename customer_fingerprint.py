@@ -88,8 +88,93 @@ class CustomerFingerprinter:
 
     def calculate_exit_ip_score(self, network_key: Dict, customer: Dict) -> float:
         exit_ip = network_key.get("exit_ip")
+        public_ip = network_key.get(
+            "public_ip"
+        )  # Get actual public IP from local IP data
+        hops = network_key.get("hops", [])
+
         if not exit_ip:
             return 0.0
+
+        exit_ips = customer.get("networks") or {}.get("exit_ips", [])
+        customer_public_ip = customer.get("networks") or {}.get("public_ip")
+
+        # Check for exact exit IP match
+        if exit_ips != "dynamic":
+            for exit_ip_pattern in exit_ips:
+                if self.match_ip_pattern(exit_ip, exit_ip_pattern):
+                    return 1.0
+
+        # Check if exit IP matches customer's public IP range
+        if customer_public_ip and customer_public_ip != "dynamic" and public_ip:
+            try:
+                # Compare actual public IP with customer's expected range
+                customer_network = ipaddress.ip_network(
+                    customer_public_ip, strict=False
+                )
+                actual_public_ip = ipaddress.ip_address(public_ip)
+                if actual_public_ip in customer_network:
+                    return 0.9
+            except:
+                pass
+
+        # Fallback: check if exit IP is in same subnet as customer's range
+        if public_ip and customer_public_ip and customer_public_ip != "dynamic":
+            try:
+                customer_network = ipaddress.ip_network(
+                    customer_public_ip, strict=False
+                )
+                exit_ip_addr = ipaddress.ip_address(exit_ip)
+                if exit_ip_addr in customer_network:
+                    return 0.7
+            except:
+                pass
+
+        # Bonus points if we have multiple routes (VPN indicators)
+        if len(hops) > 5:  # Likely multi-route setup
+            return 0.6
+
+        return 0.0
+
+        exit_ips = customer.get("networks", {}).get("exit_ips", [])
+        customer_public_ip = customer.get("networks", {}).get("public_ip")
+
+        # Check for exact exit IP match
+        if exit_ips != "dynamic":
+            for exit_ip_pattern in exit_ips:
+                if self.match_ip_pattern(exit_ip, exit_ip_pattern):
+                    return 1.0
+
+        # Check if exit IP matches customer's public IP range
+        if customer_public_ip and customer_public_ip != "dynamic" and public_ip:
+            try:
+                # Compare actual public IP with customer's expected range
+                customer_network = ipaddress.ip_network(
+                    customer_public_ip, strict=False
+                )
+                actual_public_ip = ipaddress.ip_address(public_ip)
+                if actual_public_ip in customer_network:
+                    return 0.9
+            except:
+                pass
+
+        # Fallback: check if exit IP is in same subnet as customer's range
+        if public_ip and customer_public_ip and customer_public_ip != "dynamic":
+            try:
+                customer_network = ipaddress.ip_network(
+                    customer_public_ip, strict=False
+                )
+                exit_ip_addr = ipaddress.ip_address(exit_ip)
+                if exit_ip_addr in customer_network:
+                    return 0.7
+            except:
+                pass
+
+        # Bonus points if we have multiple routes (VPN indicators)
+        if len(hops) > 5:  # Likely multi-route setup
+            return 0.6
+
+        return 0.0
 
         exit_ips = customer.get("networks", {}).get("exit_ips", [])
         public_ip = customer.get("networks", {}).get("public_ip")
