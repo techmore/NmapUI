@@ -43,6 +43,13 @@ network_key = {
     "raw": "",
 }
 
+# Global version information - populated at startup
+versions: dict[str, str | None] = {
+    "nmap": None,
+    "vulners": None,
+    "arp_scan": None,
+}
+
 
 def is_private_ip(ip):
     try:
@@ -268,6 +275,12 @@ def index():
 def get_network_key_event():
     """Send the network key to the client"""
     emit("network_key", network_key)
+
+
+@socketio.on("get_versions")
+def get_versions_event():
+    """Send version information to the client"""
+    emit("versions", get_versions())
 
 
 @socketio.on("get_local_ip")
@@ -548,41 +561,82 @@ def check_nmap():
 def check_vulners():
     """Check if vulners script exists and update if possible"""
     vulners_dir = VULNERS_SCRIPT.parent
-    if not VULNERS_SCRIPT.exists():
-        print(f"ERROR: Vulners script not found at {VULNERS_SCRIPT}")
-        print(
-            "Run: git clone https://github.com/vulnersCom/nmap-vulners.git nmap-vulners"
-        )
-        sys.exit(1)
 
-    # Try to update if it's a git repo
-    if (vulners_dir / ".git").exists():
-        print("Updating vulners script...")
+    # If directory doesn't exist or script missing, try to clone
+    if not VULNERS_SCRIPT.exists():
+        print("Installing vulners script...")
         try:
             result = subprocess.run(
-                ["git", "pull"], cwd=vulners_dir, capture_output=True, text=True
+                [
+                    "git",
+                    "clone",
+                    "https://github.com/vulnersCom/nmap-vulners.git",
+                    str(vulners_dir),
+                ],
+                cwd=BASE_DIR,
+                capture_output=True,
+                text=True,
             )
             if result.returncode == 0:
-                # Get version info
-                version_result = subprocess.run(
-                    ["git", "log", "-1", "--oneline"],
-                    cwd=vulners_dir,
-                    capture_output=True,
-                    text=True,
-                )
-                if version_result.returncode == 0:
-                    commit = version_result.stdout.strip()
-                    print(f"Vulners updated: {commit}")
-                else:
-                    print("Vulners updated (latest)")
+                print("Vulners script installed successfully")
+                return True
             else:
-                print("Vulners already up-to-date")
+                print(f"Failed to install vulners: {result.stderr}")
+                sys.exit(1)
         except Exception as e:
-            print(f"Vulners update check failed: {e}")
-    else:
-        print("Vulners script found (not a git repo)")
+            print(f"Failed to install vulners: {e}")
+            sys.exit(1)
+
+    # Always try to update
+    print("Updating vulners script...")
+    try:
+        # Initialize as git repo if needed
+        if not (vulners_dir / ".git").exists():
+            subprocess.run(["git", "init"], cwd=vulners_dir, capture_output=True)
+            subprocess.run(
+                [
+                    "git",
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://github.com/vulnersCom/nmap-vulners.git",
+                ],
+                cwd=vulners_dir,
+                capture_output=True,
+            )
+
+        # Pull updates
+        result = subprocess.run(
+            ["git", "pull", "origin", "master"],
+            cwd=vulners_dir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            # Get version info
+            version_result = subprocess.run(
+                ["git", "log", "-1", "--oneline"],
+                cwd=vulners_dir,
+                capture_output=True,
+                text=True,
+            )
+            if version_result.returncode == 0:
+                commit = version_result.stdout.strip()
+                print(f"Vulners updated: {commit}")
+            else:
+                print("Vulners updated")
+        else:
+            print("Vulners already up-to-date")
+    except Exception as e:
+        print(f"Vulners update failed: {e}")
 
     return True
+
+
+def get_versions():
+    """Get version information for all tools"""
+    global versions
+    return versions
 
 
 def startup_checks(quick=False):
@@ -594,13 +648,49 @@ def startup_checks(quick=False):
         print("Quick mode: skipping dependency checks")
     else:
         print("\nChecking nmap...")
-        check_nmap()
+        versions["nmap"] = check_nmap()
 
         print("\nChecking vulners script...")
         check_vulners()
+        # Get vulners version info
+        vulners_dir = VULNERS_SCRIPT.parent
+        if vulners_dir.exists():
+            try:
+                version_result = subprocess.run(
+                    [
+                        "git",
+                        "log",
+                        "-1",
+                        "--oneline",
+                        "--date=short",
+                        "--pretty=format:%h %ad %s",
+                    ],
+                    cwd=vulners_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                if version_result.returncode == 0:
+                    versions["vulners"] = version_result.stdout.strip()
+                else:
+                    versions["vulners"] = "Unknown"
+            except:
+                versions["vulners"] = "Unknown"
 
         print("\nChecking arp-scan...")
-        check_arp_scan()
+        if check_arp_scan():
+            try:
+                version = (
+                    subprocess.check_output(
+                        ["arp-scan", "--version"], stderr=subprocess.STDOUT
+                    )
+                    .decode()
+                    .split("\n")[0]
+                )
+                versions["arp_scan"] = version
+            except:
+                versions["arp_scan"] = "arp-scan (version unknown)"
+        else:
+            versions["arp_scan"] = "Not installed"
 
     print("\nInitializing network key...")
     run_traceroute("1.1.1.1")

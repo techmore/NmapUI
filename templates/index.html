@@ -86,10 +86,20 @@
     }
 </style>
 <body class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-    <!-- Header -->
-    <div class="flex items-center gap-4 mb-8">
-        <img src="static/techmore.png" class="h-12 w-auto">
-        <h1 class="text-3xl font-display italic text-olive-950">Network Scanner</h1>
+    <!-- Header with Title -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-6">
+            <img src="static/techmore.png" class="h-12 w-auto">
+            <h1 class="text-4xl font-display italic text-olive-950">Network Scanner</h1>
+        </div>
+        <div class="flex items-center gap-8">
+            <div id="current-date" class="text-xl font-display text-olive-950"></div>
+            <div id="versions" class="text-sm text-olive-600 space-y-1 text-right">
+                <div id="nmap-version">Nmap: --</div>
+                <div id="vulners-version">Vulners: --</div>
+                <div id="arpscan-version">ARP-Scan: --</div>
+            </div>
+        </div>
     </div>
 
     <!-- Network Key Banner -->
@@ -275,6 +285,7 @@
 
         socket.emit('get_local_ip');
         socket.emit('get_network_key');
+        socket.emit('get_versions');
 
         socket.on('network_key', data => {
             console.log('Network key received:', data);
@@ -295,6 +306,18 @@
             } else if (data.error) {
                 routePath.innerHTML = `<span class="text-red-400">${data.error}</span>`;
             }
+        });
+
+        socket.on('versions', data => {
+            console.log('Versions received:', data);
+            // Update version displays with formatted strings
+            const nmapVersion = data.nmap || 'Not found';
+            const vulnersVersion = data.vulners || 'Not found';
+            const arpScanVersion = data.arp_scan || 'Not found';
+            
+            document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
+            document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
+            document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
         });
 
         socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
