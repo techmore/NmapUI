@@ -1,0 +1,201 @@
+customers:
+- confidence: 0.85
+  description: Corporate headquarters with standard enterprise network
+  fingerprints:
+  - description: Direct internet connection
+    hop_count: 3-6
+    latency_profile:
+      exit_hop: 10-30ms
+      first_hop: 1-5ms
+      total_time: <50ms
+    private_hop_pattern:
+    - ip_pattern: 10.0.1.1
+      is_private: true
+      position: 1
+    - ip_pattern: 192.168.*.*
+      is_private: true
+      position: 2
+    public_exit_pattern:
+    - ip_pattern: 203.0.113.*
+      is_private: false
+      position: last
+    type: direct
+  - description: VPN connection via corporate gateway
+    hop_count: 5-8
+    private_hop_pattern:
+    - ip_pattern: 192.168.*.*
+      is_private: true
+      position: 1
+    public_exit_pattern:
+    - ip_pattern: 203.0.113.*
+      is_private: false
+      position: 3
+    type: vpn
+    vpn_indicators:
+    - ip_pattern: 10.10.0.1
+      latency: 5-15ms
+      position: 2
+  id: techcorp_hq
+  metadata:
+    connection_type:
+    - fiber
+    - vpn
+    isp: Enterprise ISP Inc
+    last_updated: '2024-01-08'
+    location: San Francisco, CA
+    network_size: large
+  name: TechCorp Headquarters
+  networks:
+    exit_ips:
+    - 203.0.113.45
+    gateway_pattern: 10.0.1.1
+    private_ranges:
+    - 10.0.0.0/8
+    public_ip: 203.0.113.0/24
+- confidence: 0.7
+  description: Small business with basic network setup
+  fingerprints:
+  - description: Standard consumer broadband router
+    hop_count: 2-4
+    latency_profile:
+      exit_hop: 5-20ms
+      first_hop: <2ms
+      total_time: <30ms
+    private_hop_pattern:
+    - ip_pattern: 192.168.1.1
+      is_private: true
+      position: 1
+    public_exit_pattern:
+    - ip_pattern: 198.51.100.*
+      is_private: false
+      position: 2
+    type: consumer_router
+  id: mainstreet_cafe
+  metadata:
+    connection_type:
+    - cable
+    isp: Comcast Business
+    last_updated: '2024-01-08'
+    location: Austin, TX
+    network_size: small
+  name: Main Street Cafe
+  networks:
+    exit_ips:
+    - 198.51.100.23
+    gateway_pattern: 192.168.1.1
+    private_ranges:
+    - 192.168.0.0/16
+    public_ip: 198.51.100.0/24
+- confidence: 0.6
+  description: Remote developer working from home
+  fingerprints:
+  - description: Home office with consumer equipment
+    hop_count: 3-7
+    latency_profile:
+      exit_hop: 10-50ms
+      first_hop: <1ms
+      total_time: <100ms
+    private_hop_pattern:
+    - ip_pattern: 192.168.1.*
+      is_private: true
+      position: 1
+    public_exit_pattern:
+    - is_private: false
+      latency: 10-50ms
+      position: 2
+    type: home_office
+  id: remote_john
+  metadata:
+    connection_type:
+    - residential
+    - vpn
+    isp: variable
+    last_updated: '2024-01-08'
+    location: Unknown - Remote
+    network_size: small
+  name: Remote Developer - John
+  networks:
+    exit_ips: dynamic
+    gateway_pattern:
+    - 192.168.1.1
+    - 10.0.0.1
+    private_ranges:
+    - 192.168.0.0/16
+    - 10.0.0.0/8
+    public_ip: dynamic
+- confidence: 0.7
+  description: ''
+  fingerprints:
+  - description: direct connection
+    hop_count: ''
+    latency_profile:
+      exit_hop: 5-100ms
+      first_hop: <5ms
+      total_time: <200ms
+    private_hop_pattern:
+    - ip_pattern: ''
+      is_private: true
+      position: 1
+    public_exit_pattern:
+    - ip_pattern: ''
+      is_private: false
+      position: 2
+    type: direct
+  id: '12'
+  metadata:
+    connection_type:
+    - direct
+    isp: Unknown
+    last_updated: '2026-01-08'
+    location: ''
+    network_size: medium
+  name: techmore
+  networks:
+    exit_ips: dynamic
+    gateway_pattern: ''
+    private_ranges: []
+    public_ip: dynamic
+description: Customer network fingerprinting database
+indexing:
+  enabled: true
+  index_fields:
+  - customer_id
+  - timestamp
+  - exit_ip
+  - hop_count
+  - total_latency
+  - network_signature
+  - confidence_score
+  max_entries: 10000
+  retention_days: 90
+  storage_path: data/scan_history.json
+settings:
+  fuzzy_ip_matching: true
+  min_confidence: 0.7
+  weights:
+    exit_ip: 0.3
+    hop_pattern: 0.4
+    latency: 0.2
+    network_size: 0.1
+unknown_customer:
+  confidence: 0.0
+  description: Unidentified network - requires manual labeling
+  fingerprint_patterns:
+  - indicators:
+    - private_gateway: 192.168.1.1
+    - hop_count: 2-5
+    - exit_latency: 5-50ms
+    type: residential
+  - indicators:
+    - private_gateway: 10.*.*.*
+    - hop_count: 3-8
+    - exit_latency: 5-30ms
+    type: corporate
+  - indicators:
+    - private_gateway: 10.*.*.*
+    - hop_count: 4-10
+    - exit_latency: 20-100ms
+    type: mobile/cellular
+  id: unknown
+  name: Unknown Network
+version: '1.0'

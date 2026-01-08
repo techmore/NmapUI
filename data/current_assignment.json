@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-01-08T02:08:12.026663",
+  "customer": {
+    "id": "12",
+    "name": "techmore",
+    "confidence": 1.0,
+    "manual_assignment": true
+  }
+}

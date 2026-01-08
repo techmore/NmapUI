@@ -115,6 +115,30 @@
         </div>
     </div>
 
+    <!-- Customer Identification Banner -->
+    <div id="customer-banner" class="mb-4 p-4 bg-olive-900 text-white rounded-xl shadow-sm border border-olive-700">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-olive-300 text-sm font-medium">Customer Identification</span>
+            <div class="flex items-center gap-6 text-sm">
+                <div>
+                    <span class="text-olive-400">Customer:</span>
+                    <span id="customer-name" class="font-medium ml-1 text-olive-100">Unknown</span>
+                </div>
+                <div>
+                    <span class="text-olive-400">ID:</span>
+                    <span id="customer-id" class="font-medium ml-1 text-olive-100">unknown</span>
+                </div>
+                <div>
+                    <span class="text-olive-400">Confidence:</span>
+                    <span id="customer-confidence" class="font-medium ml-1 text-olive-100">0.00</span>
+                </div>
+            </div>
+        </div>
+        <div class="text-xs text-olive-400">
+            <span id="customer-status">Analyzing network fingerprint...</span>
+        </div>
+    </div>
+
     <!-- Network Key Banner -->
     <div id="network-key-banner" class="mb-4 p-4 bg-olive-800 text-white rounded-xl shadow-sm border border-olive-700">
         <div class="flex items-center justify-between mb-2">
@@ -161,6 +185,92 @@
             <div>
                 <span class="text-olive-500 block">Public IP</span>
                 <span id="public-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Management Panel -->
+    <div id="customer-panel" class="mt-6 p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-olive-700 font-medium">Customer Management</span>
+            <button onclick="toggleCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded-lg hover:bg-olive-700 transition-colors">
+                Add Customer
+            </button>
+        </div>
+        
+        <!-- Add Customer Form (Hidden by default) -->
+        <div id="add-customer-form" class="hidden mt-4 p-4 bg-white rounded-lg border border-olive-200">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer Name *</label>
+                    <input type="text" id="cust-name" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., TechCorp HQ">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer ID *</label>
+                    <input type="text" id="cust-id" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., techcorp_hq">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Description</label>
+                    <input type="text" id="cust-description" class="w-full p-2 border border-olive-300 rounded" placeholder="Brief description">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Location</label>
+                    <input type="text" id="cust-location" class="w-full p-2 border border-olive-300 rounded" placeholder="City, State/Country">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Connection Type</label>
+                    <select id="cust-connection-type" class="w-full p-2 border border-olive-300 rounded">
+                        <option value="direct">Direct</option>
+                        <option value="vpn">VPN</option>
+                        <option value="residential">Residential</option>
+                        <option value="mobile">Mobile/Cellular</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Gateway Pattern</label>
+                    <input type="text" id="cust-gateway" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 192.168.1.1">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Exit IP Pattern</label>
+                    <input type="text" id="cust-exit-pattern" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 203.0.113.*">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Hop Count Range</label>
+                    <input type="text" id="cust-hop-count" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 2-5">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Private IP Ranges</label>
+                    <input type="text" id="cust-private-ranges" class="w-full p-2 border border-olive-300 rounded" placeholder="192.168.0.0/16,10.0.0.0/8">
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="toggleCustomerForm()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                    Cancel
+                </button>
+                <button onclick="addCustomer()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors">
+                    Add Customer
+                </button>
+            </div>
+        </div>
+        
+        <!-- Customer Assignment Controls -->
+        <div class="mt-4 flex items-center gap-4">
+            <select id="customer-select" class="flex-1 p-2 border border-olive-300 rounded">
+                <option value="">Select Customer...</option>
+            </select>
+            <button onclick="assignCustomer()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors">
+                Assign
+            </button>
+            <button onclick="showCustomerList()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                View All
+            </button>
+        </div>
+        
+        <!-- Customer Messages -->
+        <div id="customer-messages" class="mt-4 hidden">
+            <div class="p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
+                <span id="customer-message"></span>
             </div>
         </div>
     </div>
@@ -407,7 +517,9 @@
 
         socket.emit('get_local_ip');
         socket.emit('get_network_key');
+        socket.emit('get_customer_info');
         socket.emit('get_versions');
+        socket.emit('get_customers');
 
         socket.on('network_key', data => {
             console.log('Network key received:', data);
@@ -427,6 +539,25 @@
                 }).join('');
             } else if (data.error) {
                 routePath.innerHTML = `<span class="text-red-400">${data.error}</span>`;
+            }
+        });
+
+        socket.on('customer_info', data => {
+            console.log('Customer info received:', data);
+            document.getElementById('customer-name').textContent = data.name || 'Unknown';
+            document.getElementById('customer-id').textContent = data.id || 'unknown';
+            document.getElementById('customer-confidence').textContent = (data.confidence || 0.0).toFixed(2);
+            
+            const statusEl = document.getElementById('customer-status');
+            if (data.confidence >= 0.7) {
+                statusEl.textContent = `Identified as ${data.name} with high confidence`;
+                statusEl.className = 'text-xs text-green-300';
+            } else if (data.confidence >= 0.4) {
+                statusEl.textContent = `Possible match: ${data.name} (medium confidence)`;
+                statusEl.className = 'text-xs text-yellow-300';
+            } else {
+                statusEl.textContent = 'Unknown network - requires manual labeling';
+                statusEl.className = 'text-xs text-olive-400';
             }
         });
 
@@ -491,6 +622,149 @@
         document.getElementById('info-icon').addEventListener('click', () => {
             document.getElementById('tooltip').classList.toggle('hidden');
         });
+
+        // Customer Management Functions
+        function toggleCustomerForm() {
+            const form = document.getElementById('add-customer-form');
+            form.classList.toggle('hidden');
+        }
+
+        function addCustomer() {
+            const customerData = {
+                name: document.getElementById('cust-name').value,
+                id: document.getElementById('cust-id').value,
+                description: document.getElementById('cust-description').value,
+                location: document.getElementById('cust-location').value,
+                connection_type: document.getElementById('cust-connection-type').value,
+                gateway_pattern: document.getElementById('cust-gateway').value,
+                exit_pattern: document.getElementById('cust-exit-pattern').value,
+                hop_count: document.getElementById('cust-hop-count').value,
+                private_ranges: document.getElementById('cust-private-ranges').value,
+                confidence: 0.7
+            };
+
+            // Clear form
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-id').value = '';
+            document.getElementById('cust-description').value = '';
+            document.getElementById('cust-location').value = '';
+            document.getElementById('cust-gateway').value = '';
+            document.getElementById('cust-exit-pattern').value = '';
+            document.getElementById('cust-hop-count').value = '';
+            document.getElementById('cust-private-ranges').value = '';
+
+            // Hide form
+            toggleCustomerForm();
+
+            // Send to server
+            socket.emit('add_customer', customerData);
+        }
+
+        function assignCustomer() {
+            const select = document.getElementById('customer-select');
+            const selectedId = select.value;
+            const selectedName = select.options[select.selectedIndex]?.text || '';
+
+            if (!selectedId) {
+                showCustomerMessage('Please select a customer to assign', 'error');
+                return;
+            }
+
+            socket.emit('assign_customer', {
+                customer_id: selectedId,
+                customer_name: selectedName
+            });
+
+            // Clear selection
+            select.value = '';
+        }
+
+        socket.on('customer_added', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to add customer', 'error');
+            }
+        });
+
+        socket.on('customer_assigned', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                // Update current customer display
+                document.getElementById('customer-name').textContent = data.customer.name;
+                document.getElementById('customer-id').textContent = data.customer.id;
+                document.getElementById('customer-confidence').textContent = '1.00';
+                
+                const statusEl = document.getElementById('customer-status');
+                statusEl.textContent = `Manually assigned to ${data.customer.name}`;
+                statusEl.className = 'text-xs text-blue-300';
+            } else {
+                showCustomerMessage('Failed to assign customer', 'error');
+            }
+        });
+
+        socket.on('customers_list', data => {
+            populateCustomerSelect(data);
+        });
+
+        socket.on('customer_deleted', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to delete customer', 'error');
+            }
+        });
+
+        socket.on('customer_error', message => {
+            showCustomerMessage(message, 'error');
+        });
+
+        function showCustomerList() {
+            socket.emit('get_customers');
+        }
+
+        function showCustomerMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('customer-messages');
+            const messageSpan = document.getElementById('customer-message');
+            
+            messagesDiv.classList.remove('hidden');
+            messageSpan.textContent = message;
+            
+            // Update styling based on type
+            messagesDiv.firstElementChild.className = `p-3 border rounded-lg text-sm ${
+                type === 'error' ? 'bg-red-100 border-red-300 text-red-800' :
+                type === 'success' ? 'bg-green-100 border-green-300 text-green-800' :
+                'bg-yellow-100 border-yellow-300 text-yellow-800'
+            }`;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messagesDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        function populateCustomerSelect(customers) {
+            const select = document.getElementById('customer-select');
+            select.innerHTML = '<option value="">Select Customer...</option>';
+            
+            customers.forEach(customer => {
+                const option = document.createElement('option');
+                option.value = customer.id || customer.get?.('id');
+                option.textContent = customer.name || customer.get?.('name');
+                select.appendChild(option);
+            });
+        }
+
+        function displayCustomerList(customers) {
+            // Create a simple modal or alert to show customers
+            const customerList = customers.map(c => 
+                `${c.name || c.get?.('name')} (ID: ${c.id || c.get?.('id')})`
+            ).join('\n');
+            
+            showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
+        }
     </script>
 </body>
 </html>

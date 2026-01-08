@@ -1,10 +1,12 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil
+import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from pathlib import Path
+from customer_fingerprint import CustomerFingerprinter
 
 BASE_DIR = Path(__file__).parent.resolve()
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
@@ -43,6 +45,10 @@ network_key = {
     "raw": "",
 }
 
+# Global customer fingerprinter
+customer_fingerprinter = CustomerFingerprinter()
+current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
+
 # Global version information - populated at startup
 versions: dict[str, str | None] = {
     "nmap": None,
@@ -66,7 +72,7 @@ def is_private_ip(ip):
 
 def run_traceroute(target="1.1.1.1"):
     """Run traceroute and parse output into network key"""
-    global network_key
+    global network_key, current_customer
     try:
         print(f"Running traceroute to {target}...")
         output = subprocess.check_output(
@@ -124,6 +130,22 @@ def run_traceroute(target="1.1.1.1"):
             f"Traceroute complete: {network_key['total_hops']} hops, {len(network_key['private_hops'])} private, {len(network_key['public_hops'])} public"
         )
 
+        # Perform customer fingerprinting
+        customer, confidence = customer_fingerprinter.match_customer(network_key)
+        customer = customer or {}
+        current_customer = {
+            "id": customer.get("id", "unknown"),
+            "name": customer.get("name", "Unknown Network"),
+            "confidence": confidence,
+        }
+
+        # Save scan result to history
+        customer_fingerprinter.save_scan_result(network_key, customer, confidence)
+
+        print(
+            f"Customer identified: {current_customer['name']} (confidence: {confidence:.2f})"
+        )
+
     except subprocess.TimeoutExpired:
         print("Traceroute timed out")
         network_key["error"] = "Traceroute timed out"
@@ -135,13 +157,14 @@ def run_traceroute(target="1.1.1.1"):
 
 
 def generate_deep_pdf(output):
-    print("print called")
+    pdf = SimpleDocTemplate("Deep_Scan_Report.pdf", pagesize=letter)
+    styles_obj = getSampleStyleSheet()
     data = []
     for line in output:
         print("line :" + line)
         if "Nmap scan report for" in line:
             ip_address = line.split("for")[-1].strip()
-            data.append(Paragraph(f"IP Address: {ip_address}", styles["Normal"]))
+            data.append(Paragraph(f"IP Address: {ip_address}", styles_obj["Normal"]))
         elif "Nmap done:" in line:
             pattern = re.compile(
                 r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
@@ -151,14 +174,13 @@ def generate_deep_pdf(output):
                 total_ips = int(match.group(1))
                 hosts_up = int(match.group(2))
                 time_taken = float(match.group(3))
-                data.append(Paragraph(f"Total IPs: {total_ips}", styles["Normal"]))
-                data.append(Paragraph(f"Hosts Up: {hosts_up}", styles["Normal"]))
+                data.append(Paragraph(f"Total IPs: {total_ips}", styles_obj["Normal"]))
+                data.append(Paragraph(f"Hosts Up: {hosts_up}", styles_obj["Normal"]))
                 data.append(
-                    Paragraph(f"Time Taken: {time_taken} seconds", styles["Normal"])
+                    Paragraph(f"Time Taken: {time_taken} seconds", styles_obj["Normal"])
                 )
         else:
-            # Add unformatted line to PDF
-            data.append(Paragraph(line, styles["Normal"]))
+            data.append(Paragraph(line, styles_obj["Normal"]))
         pdf.build(data)
         print("end pdf")
 
@@ -277,6 +299,319 @@ def get_network_key_event():
     emit("network_key", network_key)
 
 
+@socketio.on("get_customer_info")
+def get_customer_info_event():
+    """Send customer identification information to the client"""
+    emit("customer_info", current_customer)
+
+
+@socketio.on("search_scan_history")
+def search_scan_history_event(data):
+    """Search scan history with optional filters"""
+    customer_id = data.get("customer_id")
+    limit = data.get("limit", 50)
+
+    try:
+        history = customer_fingerprinter.get_scan_history(customer_id, limit)
+        emit("scan_history_results", history)
+    except Exception as e:
+        emit("scan_error", f"Search failed: {str(e)}")
+
+
+@socketio.on("get_network_statistics")
+def get_network_statistics_event():
+    """Get network identification statistics"""
+    try:
+        history = customer_fingerprinter.get_scan_history(limit=1000)
+
+        stats = {
+            "total_scans": len(history),
+            "unique_customers": len(
+                set(h.get("customer_id", "unknown") for h in history)
+            ),
+            "most_common_customer": None,
+            "average_confidence": 0.0,
+            "recent_scans": history[:10],
+        }
+
+        if history:
+            # Most common customer
+            customer_counts = {}
+            for h in history:
+                cust_id = h.get("customer_id", "unknown")
+                customer_counts[cust_id] = customer_counts.get(cust_id, 0) + 1
+
+            if customer_counts:
+                most_common_id = max(
+                    customer_counts.keys(), key=lambda k: customer_counts[k]
+                )
+                most_common_scan = next(
+                    (h for h in history if h.get("customer_id") == most_common_id), None
+                )
+                if most_common_scan:
+                    stats["most_common_customer"] = {
+                        "id": most_common_id,
+                        "name": most_common_scan.get("customer_name", "Unknown"),
+                        "count": customer_counts[most_common_id],
+                    }
+
+            # Average confidence
+            confidences = [
+                h.get("confidence_score", 0)
+                for h in history
+                if h.get("confidence_score") is not None
+            ]
+            if confidences:
+                stats["average_confidence"] = sum(confidences) / len(confidences)
+
+        emit("network_statistics", stats)
+    except Exception as e:
+        emit("scan_error", f"Statistics failed: {str(e)}")
+
+
+@socketio.on("add_customer")
+def add_customer_event(data):
+    """Add new customer to configuration"""
+    try:
+        customer_data = {
+            "name": data.get("name", "").strip(),
+            "id": data.get("id", "").strip(),
+            "description": data.get("description", "").strip(),
+            "confidence": float(data.get("confidence", 0.7)),
+            "networks": {
+                "public_ip": data.get("public_ip", "").strip() or "dynamic",
+                "private_ranges": [
+                    r.strip()
+                    for r in data.get("private_ranges", "").split(",")
+                    if r.strip()
+                ],
+                "exit_ips": [
+                    e.strip() for e in data.get("exit_ips", "").split(",") if e.strip()
+                ]
+                or "dynamic",
+                "gateway_pattern": data.get("gateway_pattern", "").strip(),
+            },
+            "fingerprints": [
+                {
+                    "type": data.get("connection_type", "direct").strip(),
+                    "description": f"{data.get('connection_type', 'direct')} connection",
+                    "hop_count": data.get("hop_count", "2-10").strip(),
+                    "private_hop_pattern": [
+                        {
+                            "ip_pattern": data.get(
+                                "gateway_pattern", "192.168.1.1"
+                            ).strip(),
+                            "is_private": True,
+                            "position": 1,
+                        }
+                    ],
+                    "public_exit_pattern": [
+                        {
+                            "ip_pattern": data.get("exit_pattern", "*.*.*.*").strip(),
+                            "is_private": False,
+                            "position": 2,
+                        }
+                    ],
+                    "latency_profile": {
+                        "first_hop": data.get("first_hop_latency", "<5ms").strip(),
+                        "exit_hop": data.get("exit_hop_latency", "5-100ms").strip(),
+                        "total_time": data.get("total_latency", "<200ms").strip(),
+                    },
+                }
+            ],
+            "metadata": {
+                "location": data.get("location", "Unknown").strip(),
+                "connection_type": [data.get("connection_type", "direct").strip()],
+                "isp": data.get("isp", "Unknown").strip(),
+                "network_size": data.get("network_size", "medium").strip(),
+                "last_updated": datetime.now().strftime("%Y-%m-%d"),
+            },
+        }
+
+        # Validate required fields
+        if not customer_data["name"] or not customer_data["id"]:
+            emit("customer_error", "Name and ID are required fields")
+            return
+
+        # Check if customer ID already exists
+        existing_ids = [c.get("id") for c in customer_fingerprinter.customers]
+        if customer_data["id"] in existing_ids:
+            emit(
+                "customer_error", f"Customer ID '{customer_data['id']}' already exists"
+            )
+            return
+
+        # Add to customers list
+        customer_fingerprinter.customers.append(customer_data)
+
+        # Save to file
+        save_customers_config()
+
+        emit(
+            "customer_added",
+            {
+                "success": True,
+                "customer": customer_data,
+                "message": f"Customer '{customer_data['name']}' added successfully",
+            },
+        )
+
+    except ValueError as e:
+        emit("customer_error", f"Invalid data format: {str(e)}")
+    except Exception as e:
+        emit("customer_error", f"Failed to add customer: {str(e)}")
+
+
+@socketio.on("assign_customer")
+def assign_customer_event(data):
+    """Manually assign customer for current session"""
+    global current_customer
+    try:
+        customer_id = data.get("customer_id", "").strip()
+        customer_name = data.get("customer_name", "").strip()
+
+        if not customer_id:
+            emit("customer_error", "Customer ID is required")
+            return
+
+        # Find customer in config or create temporary assignment
+        customer = None
+        for c in customer_fingerprinter.customers:
+            if c.get("id") == customer_id:
+                customer = c
+                break
+
+        if not customer:
+            # Create temporary customer assignment
+            customer = {
+                "id": customer_id,
+                "name": customer_name or customer_id,
+                "description": "Manually assigned customer",
+                "confidence": 1.0,
+            }
+
+        current_customer = {
+            "id": customer.get("id", customer_id),
+            "name": customer.get("name", customer_name),
+            "confidence": 1.0,
+            "manual_assignment": True,
+        }
+
+        # Save current assignment
+        save_current_assignment()
+
+        emit(
+            "customer_assigned",
+            {
+                "success": True,
+                "customer": current_customer,
+                "message": f"Assigned to '{current_customer['name']}'",
+            },
+        )
+
+    except Exception as e:
+        emit("customer_error", f"Failed to assign customer: {str(e)}")
+
+
+@socketio.on("get_customers")
+def get_customers_event():
+    """Get list of all configured customers"""
+    try:
+        customers = customer_fingerprinter.customers + [
+            customer_fingerprinter.unknown_customer
+        ]
+        emit("customers_list", customers)
+    except Exception as e:
+        emit("customer_error", f"Failed to get customers: {str(e)}")
+
+
+@socketio.on("delete_customer")
+def delete_customer_event(data):
+    """Delete customer from configuration"""
+    try:
+        customer_id = data.get("customer_id", "").strip()
+
+        if not customer_id:
+            emit("customer_error", "Customer ID is required")
+            return
+
+        # Find and remove customer
+        original_length = len(customer_fingerprinter.customers)
+        customer_fingerprinter.customers = [
+            c for c in customer_fingerprinter.customers if c.get("id") != customer_id
+        ]
+
+        if len(customer_fingerprinter.customers) == original_length:
+            emit("customer_error", f"Customer '{customer_id}' not found")
+            return
+
+        # Save updated config
+        save_customers_config()
+
+        emit(
+            "customer_deleted",
+            {
+                "success": True,
+                "customer_id": customer_id,
+                "message": f"Customer '{customer_id}' deleted successfully",
+            },
+        )
+
+    except Exception as e:
+        emit("customer_error", f"Failed to delete customer: {str(e)}")
+
+
+def save_customers_config():
+    """Save current customers configuration to YAML file"""
+    try:
+        config_data = {
+            "version": customer_fingerprinter.config.get("version", "1.0"),
+            "description": customer_fingerprinter.config.get(
+                "description", "Customer network fingerprinting database"
+            ),
+            "settings": customer_fingerprinter.settings,
+            "customers": customer_fingerprinter.customers,
+            "unknown_customer": customer_fingerprinter.unknown_customer,
+            "indexing": customer_fingerprinter.config.get("indexing", {}),
+        }
+
+        with open(customer_fingerprinter.config_path, "w") as f:
+            yaml.dump(config_data, f, default_flow_style=False, indent=2)
+
+    except Exception as e:
+        print(f"Error saving customers config: {e}")
+
+
+def save_current_assignment():
+    """Save current customer assignment to file"""
+    try:
+        assignment_data = {
+            "timestamp": datetime.now().isoformat(),
+            "customer": current_customer,
+        }
+
+        assignment_path = BASE_DIR / "data" / "current_assignment.json"
+        with open(assignment_path, "w") as f:
+            json.dump(assignment_data, f, indent=2)
+
+    except Exception as e:
+        print(f"Error saving current assignment: {e}")
+
+
+def load_current_assignment():
+    """Load current customer assignment from file"""
+    global current_customer
+    try:
+        assignment_path = BASE_DIR / "data" / "current_assignment.json"
+        if assignment_path.exists():
+            with open(assignment_path, "r") as f:
+                data = json.load(f)
+                current_customer = data.get("customer", current_customer)
+
+    except Exception as e:
+        print(f"Error loading current assignment: {e}")
+
+
 @socketio.on("get_versions")
 def get_versions_event():
     """Send version information to the client"""
@@ -317,16 +652,38 @@ def calculate_cidr(ip, subnet_mask):
     return f"{network_address}/{cidr_prefix}"
 
 
-def start_deep_scan(targets):
+def identify_gateway_firewall_targets(hosts):
+    gateway_targets = []
+
+    if network_key["hops"]:
+        first_private_hop = next(
+            (hop for hop in network_key["hops"] if hop["is_private"]), None
+        )
+        if first_private_hop:
+            gateway_targets.append(first_private_hop["ip"])
+
+        first_public_hop = next(
+            (hop for hop in network_key["hops"] if not hop["is_private"]), None
+        )
+        if first_public_hop:
+            gateway_targets.append(first_public_hop["ip"])
+
+    gateway_hosts = [host for host in hosts if host["ip"] in gateway_targets]
+    regular_hosts = [host for host in hosts if host["ip"] not in gateway_targets]
+
+    return regular_hosts, gateway_hosts
+
+
+def start_deep_scan(targets, is_gateway_phase=False):
     try:
         # Emit deep scan start before the loop
-        emit('deep_scan_start')
+        emit("deep_scan_start")
         # Ensure event is flushed before starting scan loop
         socketio.sleep(0)
 
         for target in targets:
             # Emit per-host start indicator
-            emit('deep_scan_host_start', {'ip': target})
+            emit("deep_scan_host_start", {"ip": target})
             print("nmap -T3 -sV vulners " + target)
             output = subprocess.check_output(
                 [
@@ -386,10 +743,10 @@ def start_deep_scan(targets):
             emit("cve_array", {"target": target, "cve_array": cve_array})
 
             # Emit per-host complete indicator
-            emit('deep_scan_host_complete', {'ip': target})
+            emit("deep_scan_host_complete", {"ip": target})
 
         # Emit deep scan complete after all hosts are done
-        emit('deep_scan_complete')
+        emit("deep_scan_complete")
     except Exception as e:
         emit("scan_error", str(e))
 
@@ -464,12 +821,12 @@ def start_scan(target):
         sorted_hosts = sorted(hosts, key=lambda x: ipaddress.IPv4Address(x["ip"]))
 
         # Emit quick scan complete before ARP scan starts
-        emit('quick_scan_complete')
+        emit("quick_scan_complete")
         # Flush the event to frontend before blocking ARP scan
         socketio.sleep(0)
 
         # Run arp-scan to get MAC/vendor info (ARP cache is fresh from nmap)
-        emit('arp_scan_start')
+        emit("arp_scan_start")
         # Flush the event to frontend before blocking ARP scan
         socketio.sleep(0)
         arp_data = run_arp_scan(target)
@@ -483,13 +840,25 @@ def start_scan(target):
             emit("arp_results", arp_data)
 
         # Emit arp scan complete
-        emit('arp_scan_complete')
+        emit("arp_scan_complete")
 
         emit("scan_results", sorted_hosts)
 
         # Ensure events are flushed before starting deep scan
         socketio.sleep(0)
-        start_deep_scan([host["ip"] for host in hosts])
+
+        regular_hosts, gateway_hosts = identify_gateway_firewall_targets(hosts)
+        regular_targets = [host["ip"] for host in regular_hosts]
+        gateway_targets = [host["ip"] for host in gateway_hosts]
+
+        print(f"Phase 1 - Regular hosts: {len(regular_targets)}")
+        print(f"Phase 2 - Gateway hosts: {len(gateway_targets)}")
+
+        if regular_targets:
+            start_deep_scan(regular_targets, is_gateway_phase=False)
+
+        if gateway_targets:
+            start_deep_scan(gateway_targets, is_gateway_phase=True)
 
         # Generate PDF after deep scan completes (has complete data)
         generate_pdf(sorted_hosts)
@@ -717,6 +1086,9 @@ def startup_checks(quick=False):
                 versions["arp_scan"] = "arp-scan (version unknown)"
         else:
             versions["arp_scan"] = "Not installed"
+
+    print("\nLoading previous customer assignment...")
+    load_current_assignment()
 
     print("\nInitializing network key...")
     run_traceroute("1.1.1.1")
