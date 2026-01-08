@@ -319,7 +319,14 @@ def calculate_cidr(ip, subnet_mask):
 
 def start_deep_scan(targets):
     try:
+        # Emit deep scan start before the loop
+        emit('deep_scan_start')
+        # Ensure event is flushed before starting scan loop
+        socketio.sleep(0)
+
         for target in targets:
+            # Emit per-host start indicator
+            emit('deep_scan_host_start', {'ip': target})
             print("nmap -T3 -sV vulners " + target)
             output = subprocess.check_output(
                 [
@@ -331,8 +338,7 @@ def start_deep_scan(targets):
                     target,
                 ]
             ).decode("utf-8")
-            driver, cve_array, parsed_data, lines = (
-                webdriver.Chrome(options=chrome_options),
+            cve_array, parsed_data, lines = (
                 [],
                 [],
                 output.split("\n"),
@@ -378,9 +384,12 @@ def start_deep_scan(targets):
             emit("deep_scan_results", parsed_data)
             # print("DeepScan complete.")
             emit("cve_array", {"target": target, "cve_array": cve_array})
-            driver.quit()
-            # print("calling generator")
-            # generate_deep_pdf(output)
+
+            # Emit per-host complete indicator
+            emit('deep_scan_host_complete', {'ip': target})
+
+        # Emit deep scan complete after all hosts are done
+        emit('deep_scan_complete')
     except Exception as e:
         emit("scan_error", str(e))
 
@@ -388,6 +397,7 @@ def start_deep_scan(targets):
 @socketio.on("start_scan")
 def start_scan(target):
     try:
+        emit("quick_scan_start", f"Starting quick scan on {target}")
         print("nmap -sn " + target)
         output = subprocess.check_output(["nmap", "-sn", target]).decode("utf-8")
         parsed_data, lines = [], output.split("\n")
@@ -453,7 +463,15 @@ def start_scan(target):
 
         sorted_hosts = sorted(hosts, key=lambda x: ipaddress.IPv4Address(x["ip"]))
 
+        # Emit quick scan complete before ARP scan starts
+        emit('quick_scan_complete')
+        # Flush the event to frontend before blocking ARP scan
+        socketio.sleep(0)
+
         # Run arp-scan to get MAC/vendor info (ARP cache is fresh from nmap)
+        emit('arp_scan_start')
+        # Flush the event to frontend before blocking ARP scan
+        socketio.sleep(0)
         arp_data = run_arp_scan(target)
         for host in sorted_hosts:
             if host["ip"] in arp_data:
@@ -464,9 +482,17 @@ def start_scan(target):
         if arp_data:
             emit("arp_results", arp_data)
 
+        # Emit arp scan complete
+        emit('arp_scan_complete')
+
         emit("scan_results", sorted_hosts)
-        generate_pdf(sorted_hosts)
+
+        # Ensure events are flushed before starting deep scan
+        socketio.sleep(0)
         start_deep_scan([host["ip"] for host in hosts])
+
+        # Generate PDF after deep scan completes (has complete data)
+        generate_pdf(sorted_hosts)
 
     except Exception as e:
         emit("scan_error", str(e))
