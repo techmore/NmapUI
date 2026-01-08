@@ -86,15 +86,15 @@
     }
     .card-pulsing {
         animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        border-color: oklch(42% 0.055 110) !important;
-        box-shadow: 0 0 0 3px oklch(75% 0.040 110 / 0.3);
+        border-color: oklch(22% 0.025 110) !important;
+        box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
     }
     @keyframes pulse-border {
         0%, 100% {
-            box-shadow: 0 0 0 3px oklch(75% 0.040 110 / 0.3);
+            box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
         }
         50% {
-            box-shadow: 0 0 0 8px oklch(75% 0.040 110 / 0.1);
+            box-shadow: 0 0 0 12px oklch(62% 0.055 110 / 0.2);
         }
     }
 </style>
@@ -209,8 +209,14 @@
                 <p class="text-olive-500 text-xs mt-2 font-mono">nmap -sn</p>
             </div>
         </div>
-        <div class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
-            <h2 class="text-xl font-display italic text-olive-900 mb-3">Deep Scan</h2>
+        <div id="deep-scan-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Deep Scan</h2>
+                <span id="deep-scan-indicator" class="hidden relative flex size-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-600 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
+                </span>
+            </div>
             <div class="space-y-1 text-sm">
                 <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="deep-time" class="font-medium text-olive-900">--:--:--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="deep-hosts" class="font-medium text-olive-900">--</span></p>
