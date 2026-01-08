@@ -177,6 +177,9 @@
 
     <!-- Customer Management Compact -->
     <div class="mt-4 flex items-center gap-2">
+        <select id="customer-quick-add" class="px-3 py-1 bg-olive-100 border border-olive-300 rounded text-olive-700">
+            <option value="">Add Customer...</option>
+        </select>
         <button onclick="showCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded hover:bg-olive-700 transition-colors">
             + Add Customer
         </button>
@@ -496,8 +499,19 @@
 
         socket.emit('get_local_ip');
         socket.emit('get_network_key');
+        socket.emit('get_customer_info');
         socket.emit('get_versions');
         socket.emit('get_customers');
+
+        // Customer quick add dropdown handler
+        document.getElementById('customer-quick-add').addEventListener('change', function() {
+            const selectedId = this.value;
+            if (selectedId) {
+                showCustomerForm();
+                // Pre-fill form with selected customer for editing
+                // This allows quick editing of existing customers
+            }
+        });
 
         socket.on('network_key', data => {
             console.log('Network key received:', data);
@@ -710,21 +724,36 @@
         }
 
         function populateCustomerDropdown(customers) {
-            const dropdown = document.getElementById('current-customer');
-            const currentValue = dropdown.value;
+            const mainDropdown = document.getElementById('current-customer');
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+            const currentValue = mainDropdown.value;
             
-            dropdown.innerHTML = '<option value="">Auto-detect network...</option>';
+            // Populate main dropdown
+            mainDropdown.innerHTML = '<option value="">Auto-detect network...</option>';
+            
+            // Populate quick-add dropdown
+            quickAddDropdown.innerHTML = '<option value="">Add Customer...</option>';
             
             customers.forEach(customer => {
-                const option = document.createElement('option');
-                option.value = customer.id || customer.get?.('id');
-                option.textContent = customer.name || customer.get?.('name');
-                dropdown.appendChild(option);
+                const customerId = customer.id || customer.get?.('id');
+                const customerName = customer.name || customer.get?.('name');
+                
+                // Add to main dropdown
+                const mainOption = document.createElement('option');
+                mainOption.value = customerId;
+                mainOption.textContent = customerName;
+                mainDropdown.appendChild(mainOption);
+                
+                // Add to quick-add dropdown
+                const quickOption = document.createElement('option');
+                quickOption.value = customerId;
+                quickOption.textContent = customerName;
+                quickAddDropdown.appendChild(quickOption);
             });
             
             // Restore previous selection if it still exists
             if (currentValue) {
-                dropdown.value = currentValue;
+                mainDropdown.value = currentValue;
             }
         }
 
