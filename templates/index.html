@@ -92,6 +92,36 @@
         <h1 class="text-3xl font-display italic text-olive-950">Network Scanner</h1>
     </div>
 
+    <!-- Network Key Banner -->
+    <div id="network-key-banner" class="mb-4 p-4 bg-olive-800 text-white rounded-xl shadow-sm border border-olive-700">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-olive-300 text-sm font-medium">Network Route</span>
+                <div id="route-path" class="flex items-center gap-1 text-sm font-mono">
+                    <span class="text-olive-400">Loading...</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-6 text-sm">
+                <div>
+                    <span class="text-olive-400">Hops:</span>
+                    <span id="total-hops" class="font-medium ml-1">--</span>
+                </div>
+                <div>
+                    <span class="text-olive-400">Private:</span>
+                    <span id="private-hops" class="font-medium ml-1 text-amber-300">--</span>
+                </div>
+                <div>
+                    <span class="text-olive-400">Public:</span>
+                    <span id="public-hops" class="font-medium ml-1 text-emerald-300">--</span>
+                </div>
+                <div>
+                    <span class="text-olive-400">Exit:</span>
+                    <span id="exit-ip" class="font-medium ml-1 text-sky-300">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Local IP Info Panel -->
     <div id="local-ip" class="mt-4 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -246,6 +276,27 @@
         });
 
         socket.emit('get_local_ip');
+        socket.emit('get_network_key');
+
+        socket.on('network_key', data => {
+            console.log('Network key received:', data);
+            document.getElementById('total-hops').textContent = data.total_hops;
+            document.getElementById('private-hops').textContent = data.private_hops.length;
+            document.getElementById('public-hops').textContent = data.public_hops.length;
+            document.getElementById('exit-ip').textContent = data.exit_ip || '--';
+            
+            // Build route path visualization
+            const routePath = document.getElementById('route-path');
+            if (data.hops && data.hops.length > 0) {
+                routePath.innerHTML = data.hops.map((hop, i) => {
+                    const colorClass = hop.is_private ? 'text-amber-300' : 'text-emerald-300';
+                    const arrow = i < data.hops.length - 1 ? '<span class="text-olive-500 mx-1">→</span>' : '';
+                    return `<span class="${colorClass}">${hop.ip}</span>${arrow}`;
+                }).join('');
+            } else if (data.error) {
+                routePath.innerHTML = `<span class="text-red-400">${data.error}</span>`;
+            }
+        });
 
         socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
         socket.on('scan_complete', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
