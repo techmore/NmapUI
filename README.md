@@ -5,6 +5,7 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 ## Features
 
 - **Quick Scan**: Fast host discovery using `nmap -sn`
+- **ARP Scan**: MAC address and vendor detection via `arp-scan`
 - **Deep Scan**: Service version detection with CVE vulnerability lookup via vulners script
 - **Real-time Updates**: Live scan results via WebSocket
 - **PDF Reports**: Automatic report generation with scan results and CVE findings
@@ -15,6 +16,7 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 
 - Python 3.8+
 - Nmap installed and available in PATH
+- arp-scan (optional, for MAC/vendor detection)
 - Chrome/Chromium (for headless screenshot functionality)
 
 ## Installation
@@ -30,13 +32,13 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
    pip install -r requirements.txt
    ```
 
-3. Ensure Nmap is installed:
+3. Install system dependencies:
    ```bash
    # macOS
-   brew install nmap
+   brew install nmap arp-scan
    
    # Ubuntu/Debian
-   sudo apt install nmap
+   sudo apt install nmap arp-scan
    ```
 
 ## Usage
@@ -48,9 +50,10 @@ python app.py
 
 The app will:
 1. Check for nmap installation
-2. Verify vulners script is present (bundled in `nmap-vulners/`)
-3. Run traceroute to establish network key
-4. Start the web server
+2. Check for arp-scan (optional - warns if missing)
+3. Verify vulners script is present (bundled in `nmap-vulners/`)
+4. Run traceroute to establish network key
+5. Start the web server
 
 Open your browser to `http://127.0.0.1:5000`
 
@@ -62,6 +65,12 @@ python app.py --quick
 # or
 python app.py -q
 ```
+
+## Scan Flow
+
+1. **nmap -sn** runs first for host discovery (warms ARP cache)
+2. **arp-scan** runs immediately after to capture fresh MAC/vendor data
+3. **Deep scan** runs on discovered hosts for service/CVE detection
 
 ## Bundled Components
 

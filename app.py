@@ -437,7 +437,20 @@ def start_scan(target):
                         )
 
             # else: host_status_match = host_status_regex.match(line); current_host['status'] = host_status_match.group(1) if host_status_match else open_port_match.group(1) if (open_port_match := open_port_regex.match(line)) and current_host else None
+
         sorted_hosts = sorted(hosts, key=lambda x: ipaddress.IPv4Address(x["ip"]))
+
+        # Run arp-scan to get MAC/vendor info (ARP cache is fresh from nmap)
+        arp_data = run_arp_scan(target)
+        for host in sorted_hosts:
+            if host["ip"] in arp_data:
+                host["mac"] = arp_data[host["ip"]]["mac"]
+                host["vendor"] = arp_data[host["ip"]]["vendor"]
+
+        # Emit arp results separately for UI update
+        if arp_data:
+            emit("arp_results", arp_data)
+
         emit("scan_results", sorted_hosts)
         generate_pdf(sorted_hosts)
         start_deep_scan([host["ip"] for host in hosts])
@@ -446,8 +459,76 @@ def start_scan(target):
         emit("scan_error", str(e))
 
 
+def run_arp_scan(target, interface="en0"):
+    """Run arp-scan and parse MAC/vendor info"""
+    try:
+        print(f"arp-scan {target} -interface {interface}")
+        # arp-scan requires sudo, try without first
+        try:
+            output = subprocess.check_output(
+                ["arp-scan", target, "-interface", interface],
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            ).decode("utf-8")
+        except subprocess.CalledProcessError:
+            # Try with sudo if regular call fails
+            output = subprocess.check_output(
+                ["sudo", "arp-scan", target, "-interface", interface],
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            ).decode("utf-8")
+
+        arp_data = {}
+        # Parse lines like: 192.168.222.8   b4:fb:e4:7e:18:44       Ubiquiti Networks Inc.
+        arp_pattern = re.compile(r"^(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F:]{17})\s+(.*)$")
+
+        for line in output.split("\n"):
+            match = arp_pattern.match(line.strip())
+            if match:
+                ip = match.group(1)
+                mac = match.group(2).lower()
+                vendor = match.group(3).strip()
+                arp_data[ip] = {"mac": mac, "vendor": vendor}
+
+        print(f"ARP scan found {len(arp_data)} hosts with MAC addresses")
+        return arp_data
+
+    except FileNotFoundError:
+        print("arp-scan not found, skipping MAC/vendor detection")
+        return {}
+    except subprocess.TimeoutExpired:
+        print("arp-scan timed out")
+        return {}
+    except Exception as e:
+        print(f"arp-scan error: {e}")
+        return {}
+
+
+def check_arp_scan():
+    """Check if arp-scan is installed"""
+    arp_path = shutil.which("arp-scan")
+    if arp_path:
+        try:
+            version = (
+                subprocess.check_output(
+                    ["arp-scan", "--version"], stderr=subprocess.STDOUT
+                )
+                .decode()
+                .split("\n")[0]
+            )
+            print(f"Found: {version}")
+            return True
+        except:
+            print("Found: arp-scan (version unknown)")
+            return True
+    else:
+        print("WARNING: arp-scan not found. MAC/vendor detection will be disabled.")
+        print("  macOS:  brew install arp-scan")
+        print("  Ubuntu: sudo apt install arp-scan")
+        return False
+
+
 def check_nmap():
-    """Check if nmap is installed and return version"""
     nmap_path = shutil.which("nmap")
     if not nmap_path:
         print("ERROR: nmap not found. Please install nmap:")
@@ -475,7 +556,6 @@ def check_vulners():
 
 
 def startup_checks(quick=False):
-    """Run startup checks for dependencies"""
     print("\n" + "=" * 50)
     print("NmapUI Startup Checks")
     print("=" * 50)
@@ -488,6 +568,9 @@ def startup_checks(quick=False):
 
         print("\nChecking vulners script...")
         check_vulners()
+
+        print("\nChecking arp-scan...")
+        check_arp_scan()
 
     print("\nInitializing network key...")
     run_traceroute("1.1.1.1")
