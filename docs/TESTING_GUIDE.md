@@ -129,12 +129,12 @@ Expected: Error message "Invalid target" or nmap error
 
 **Test Missing Stylesheet**:
 ```bash
-# Temporarily rename the stylesheet
-mv nmap-pdf-olive.xsl nmap-pdf-olive.xsl.bak
+# Temporarily rename to stylesheet
+mv nmap-pdf-olive-legacy.xsl nmap-pdf-olive-legacy.xsl.bak
 # Generate report
 # Expected: Error message about missing stylesheet
 # Restore the file
-mv nmap-pdf-olive.xsl.bak nmap-pdf-olive.xsl
+mv nmap-pdf-olive-legacy.xsl.bak nmap-pdf-olive-legacy.xsl
 ```
 
 **Test Timeout** (optional, takes time):
@@ -190,7 +190,7 @@ Expected: Timeout after 10 minutes with appropriate error
 
 ### Issue: PDF Has Wrong Colors
 **Check**:
-- Using nmap-pdf-olive.xsl (not nmap-modern.xsl)
+- Using nmap-pdf-olive-legacy.xsl (not nmap-modern.xsl)
 - wkhtmltopdf has --print-media-type flag
 - CSS media queries are present in stylesheet
 
@@ -203,7 +203,7 @@ Expected: Timeout after 10 minutes with appropriate error
 ### Issue: Two HTML Files Identical
 **Check**:
 - app.py calls convert_xml_to_html() twice with different pdf_optimized values
-- Both stylesheets exist (nmap-modern.xsl and nmap-pdf-olive.xsl)
+- Both stylesheets exist (nmap-modern.xsl and nmap-pdf-olive-legacy.xsl)
 - No errors during HTML generation
 
 ## Performance Notes

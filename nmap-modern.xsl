@@ -8,8 +8,10 @@ Updated: 2026
 -->
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
   <xsl:output method="html" encoding="utf-8" indent="yes" doctype-system="about:legacy-compat"/>
-  
-  <!-- Services that have both product and version -->
+
+  <xsl:param name="techmore_version"/>
+
+   <!-- Services that have both product and version -->
   <xsl:key name="svcByProduct"
            match="nmaprun/host/ports/port[state/@state='open']/service[@product and @version]"
            use="@product"/>
@@ -492,8 +494,11 @@ Updated: 2026
           <!-- Hero Section -->
           <div class="card p-8 mb-8 fade-in">
             <h1 class="text-4xl font-display font-bold text-olive-900 mb-2">Nmap Port Scanning Results</h1>
+            <p class="text-sm text-olive-500 mb-1">
+              Techmore Network Scanner <xsl:value-of select="$techmore_version"/>
+            </p>
             <p class="text-olive-600 mb-4">
-              Version <xsl:value-of select="/nmaprun/@version"/> · 
+              Version <xsl:value-of select="/nmaprun/@version"/> ·
               <xsl:value-of select="/nmaprun/@startstr"/> – <xsl:value-of select="/nmaprun/runstats/finished/@timestr"/>
             </p>
             
@@ -1147,9 +1152,10 @@ Updated: 2026
               Questions or problems? <a href="mailto:team@pentestfactory.de" class="text-olive-700 hover:text-olive-900">Contact us</a>
             </p>
             <p class="text-xs">
-              ❤️ Original Bootstrap template by <a href="https://github.com/honze-net/nmap-bootstrap-xsl" target="_blank" class="text-olive-700">Andreas Hontzia</a> · 
-              Tweaks by <a href="https://github.com/l4rm4nd" target="_blank" class="text-olive-700">LRVT</a> · 
-              Modern design update 2026
+              ❤️ Original Bootstrap template by <a href="https://github.com/honze-net/nmap-bootstrap-xsl" target="_blank" class="text-olive-700">Andreas Hontzia</a> ·
+              Tweaks by <a href="https://github.com/l4rm4nd" target="_blank" class="text-olive-700">LRVT</a> ·
+              Modern design update 2026 ·
+              Techmore Network Scanner <xsl:value-of select="$techmore_version"/>
             </p>
           </div>
         </footer>

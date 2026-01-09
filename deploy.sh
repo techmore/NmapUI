@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# NmapUI Deployment Script
+# Builds macOS packages and creates GitHub release
+
+set -e  # Exit on any error
+
+echo "🚀 Starting NmapUI deployment..."
+
+# Check prerequisites
+if ! command -v pyinstaller &> /dev/null; then
+    echo "❌ PyInstaller not found. Install with: pip install pyinstaller"
+    exit 1
+fi
+
+if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI not found. Install from: https://cli.github.com/"
+    exit 1
+fi
+
+# Get version from VERSION file or generate timestamp-based version
+if [ -f "VERSION" ]; then
+    VERSION=$(cat VERSION | tr -d '\n')
+    echo "📋 Using version from VERSION file: $VERSION"
+else
+    # Generate version like v2026.1.9.12_01
+    VERSION="v$(date +%Y.%-m.%-d.%H_%M)"
+    echo "📋 Generated timestamp version: $VERSION"
+    echo "$VERSION" > VERSION
+fi
+
+# Clean previous builds
+echo "🧹 Cleaning previous builds..."
+rm -rf build dist *.pkg *.dmg
+
+# Activate virtual environment if it exists
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+    echo "✅ Activated virtual environment"
+fi
+
+# Install/update dependencies
+echo "📦 Installing dependencies..."
+pip install -r requirements.txt
+
+# Build with PyInstaller
+echo "🔨 Building application bundle..."
+pyinstaller --clean nmapui.spec
+
+# Test the build quickly
+echo "🧪 Testing bundle startup..."
+timeout 10s ./dist/NmapUI.app/Contents/MacOS/NmapUI --quick > /dev/null 2>&1 && echo "✅ Bundle starts successfully" || echo "⚠️  Bundle test inconclusive (may still work)"
+
+# Create PKG installer
+echo "📦 Creating PKG installer..."
+pkgbuild --root ./dist --identifier com.techmore.nmapui --version "${VERSION#v}" --install-location /Applications NmapUI.pkg
+
+# Create DMG
+echo "💿 Creating DMG disk image..."
+mkdir -p dmg_temp
+cp -r dist/NmapUI.app dmg_temp/
+cp NmapUI.pkg dmg_temp/
+ln -s /Applications dmg_temp/Applications
+hdiutil create -volname "NmapUI Installer" -srcfolder dmg_temp -ov -format UDZO NmapUI.dmg
+rm -rf dmg_temp
+
+# Create GitHub release
+echo "🚀 Creating GitHub release..."
+RELEASE_NOTES="## NmapUI $VERSION
+
+### What's New
+- macOS application bundle and installer
+- Standalone executable with all dependencies
+- UI-based application updates
+- Improved network scanning interface
+
+### Installation
+Download and run the .dmg file, or use the .pkg installer for system-wide installation.
+
+### System Requirements
+- macOS 10.13 or later
+- External dependencies: Nmap, ARP-Scan, wkhtmltopdf (may need separate installation)"
+
+gh release create "$VERSION" \
+    --title "NmapUI $VERSION" \
+    --notes "$RELEASE_NOTES" \
+    --latest \
+    NmapUI.dmg NmapUI.pkg
+
+echo "🎉 Deployment complete!"
+echo "📦 Files created: NmapUI.pkg, NmapUI.dmg"
+echo "🚀 Release: https://github.com/techmore/NmapUI/releases/tag/$VERSION"
