@@ -1746,7 +1746,7 @@
             showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
         }
 
-        function saveAndTestScan() {
+        function saveAndRunScan() {
             const startTime = document.getElementById('auto-start-time').value;
             const endTime = document.getElementById('auto-end-time').value;
 
@@ -1772,13 +1772,14 @@
             hideAutoScanTimeModal();
             showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
 
-            // Immediately trigger a test scan
+            // Immediately trigger a scan using generate_report
             setTimeout(() => {
                 const target = lastScanTarget || '192.168.1.0/24';
-                const customerName = current_customer?.name?.split(' (')[0] || 'Test Scan';
+                const customerName = current_customer?.name?.split(' (')[0] || 'Auto Scan';
 
-                showReportStatus(`Starting test scan of ${target}...`, 'info');
+                showReportStatus(`Starting scan of ${target}...`, 'info');
 
+                // Use the same generate_report event as the main Generate Report button
                 socket.emit('generate_report', {
                     target: target,
                     customer_name: customerName
@@ -1840,8 +1841,8 @@
                     <button onclick="saveAutoScanTimes()" class="flex-1 bg-olive-600 text-white py-2 px-4 rounded-lg hover:bg-olive-700 transition-colors">
                         Enable Auto Scan
                     </button>
-                    <button onclick="saveAndTestScan()" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                        Save & Test Scan
+                    <button onclick="saveAndRunScan()" class="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                        Save and Run Scan
                     </button>
                     <button onclick="hideAutoScanTimeModal()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
                         Cancel
