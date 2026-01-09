@@ -19,7 +19,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 
 
 class CustomerFingerprinter:
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: Optional[str] = None):
         self.config_path = config_path or (BASE_DIR / "config" / "customers.yaml")
         self.config = None
         self.customers = []
@@ -34,20 +34,27 @@ class CustomerFingerprinter:
     def load_config(self):
         try:
             with open(self.config_path, "r") as f:
-                self.config = yaml.safe_load(f)
+                self.config = yaml.safe_load(f) or {}
 
             self.settings = self.config.get("settings", {})
             self.customers = self.config.get("customers", [])
-            self.unknown_customer = self.config.get("unknown_customer", {})
+            unknown = self.config.get("unknown_customer", {})
+            self.unknown_customer = unknown if unknown is not None else {}
 
             logger.info(f"Loaded {len(self.customers)} customer configurations")
 
         except FileNotFoundError:
             logger.warning(f"Customer config file not found at {self.config_path}")
             self.config = {}
+            self.settings = {}
+            self.customers = []
+            self.unknown_customer = {}
         except yaml.YAMLError as e:
             logger.error(f"Error parsing customer config: {e}")
             self.config = {}
+            self.settings = {}
+            self.customers = []
+            self.unknown_customer = {}
 
     def load_traceroute_history(self):
         try:
@@ -76,7 +83,7 @@ class CustomerFingerprinter:
             self.customer_traceroutes = {}
 
     def save_traceroute_to_history(
-        self, customer_id: str, network_key: Dict, label: str = None
+        self, customer_id: Optional[str], network_key: Dict, label: Optional[str] = None
     ):
         try:
             traceroute_entry = {
@@ -89,7 +96,7 @@ class CustomerFingerprinter:
                 "raw_traceroute": network_key.get("raw", ""),
             }
 
-            if customer_id not in self.customer_traceroutes:
+            if customer_id and customer_id not in self.customer_traceroutes:
                 self.customer_traceroutes[customer_id] = {
                     "name": self.customer_traceroutes.get(customer_id, {}).get(
                         "name", customer_id
@@ -332,7 +339,7 @@ class CustomerFingerprinter:
 
             networks = customer.get("networks", {})
 
-            if self.match_by_public_ip(current_public_ip, networks):
+            if current_public_ip and self.match_by_public_ip(current_public_ip, networks):
                 matched_customer = customer
                 match_method = "public_ip"
                 logger.info(f"✓ MATCH found via public IP: {customer_name}")
@@ -342,7 +349,7 @@ class CustomerFingerprinter:
                 customer_traceroutes = self.customer_traceroutes[customer_id].get(
                     "traceroutes", []
                 )
-                if self.match_by_traceroute_history(
+                if current_public_ip and self.match_by_traceroute_history(
                     current_signature, current_public_ip, customer_traceroutes
                 ):
                     matched_customer = customer
@@ -352,7 +359,7 @@ class CustomerFingerprinter:
                     )
                     break
 
-            if not matched_customer and self.match_by_exit_ip(
+            if not matched_customer and current_exit_ip and self.match_by_exit_ip(
                 current_exit_ip, networks
             ):
                 matched_customer = customer
@@ -495,7 +502,7 @@ class CustomerFingerprinter:
         return "corporate"
 
     def save_scan_result(self, network_key: Dict, customer: Dict, confidence: float):
-        if not self.config.get("indexing", {}).get("enabled", True):
+        if not self.config or not self.config.get("indexing", {}).get("enabled", True):
             return
 
         indexing_config = self.config.get("indexing", {})
@@ -556,14 +563,14 @@ class CustomerFingerprinter:
     def save_customers_config(self):
         try:
             config_data = {
-                "version": self.config.get("version", "1.0"),
-                "description": self.config.get(
+                "version": (self.config or {}).get("version", "1.0"),
+                "description": (self.config or {}).get(
                     "description", "Customer network fingerprinting database"
                 ),
                 "settings": self.settings,
                 "customers": self.customers,
                 "unknown_customer": self.unknown_customer,
-                "indexing": self.config.get("indexing", {}),
+                "indexing": (self.config or {}).get("indexing", {}),
             }
 
             with open(self.config_path, "w") as f:
@@ -590,8 +597,8 @@ class CustomerFingerprinter:
 
         return " -> ".join(signature_parts)
 
-    def get_scan_history(self, customer_id: str = None, limit: int = 50) -> List[Dict]:
-        indexing_config = self.config.get("indexing", {})
+    def get_scan_history(self, customer_id: Optional[str] = None, limit: int = 50) -> List[Dict]:
+        indexing_config = (self.config or {}).get("indexing", {})
         storage_path = indexing_config.get("storage_path", "data/scan_history.json")
 
         if not os.path.exists(storage_path):
