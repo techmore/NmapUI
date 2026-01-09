@@ -105,7 +105,12 @@
             <img src="static/techmore.png" class="h-12 w-auto">
             <div>
                 <h1 class="text-4xl font-display italic text-olive-950">Network Scanner</h1>
-                <div id="app-version" class="text-sm text-olive-600 font-medium">v--.--.--.__</div>
+                <div class="flex items-center gap-2">
+                    <div id="app-version" class="text-sm text-olive-600 font-medium">v--.--.--.__</div>
+                    <button id="app-update-badge" onclick="showUpdateModal()" class="hidden px-2 py-0.5 bg-amber-500 text-white text-[10px] font-bold rounded-full animate-pulse hover:bg-amber-600 transition-colors">
+                        Update Available
+                    </button>
+                </div>
             </div>
         </div>
         <div id="current-date-time" class="text-xl font-display text-olive-950 text-center"></div>
@@ -287,6 +292,67 @@
                 </div>
 
                 <div id="history-list" class="space-y-3">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div id="update-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        <div class="bg-white rounded-lg max-w-2xl w-full flex flex-col shadow-2xl border border-olive-300">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50 rounded-t-lg">
+                <h2 class="text-2xl font-display italic text-olive-900">Application Update</h2>
+                <button onclick="hideUpdateModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-8">
+                <div id="update-initial" class="space-y-4">
+                    <p class="text-olive-800">A new version of NmapUI is available. Would you like to download it now?</p>
+                    <div id="update-release-notes" class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 max-h-32 overflow-y-auto">
+                        <strong>Release Notes:</strong><br>
+                        Loading...
+                    </div>
+                    <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                        <strong>Note:</strong> This will open your browser to download the new version. You'll need to install it manually.
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button onclick="hideUpdateModal()" class="px-5 py-2 text-olive-600 hover:text-olive-900 font-medium transition-colors">
+                            Later
+                        </button>
+                        <button onclick="startAppUpdate()" class="px-6 py-2 bg-amber-500 text-white font-bold rounded-full hover:bg-amber-600 shadow-sm transition-all">
+                            Download Update
+                        </button>
+                    </div>
+                </div>
+
+                <div id="update-progress" class="hidden space-y-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="update-current-status" class="text-olive-900 font-medium">Initializing update...</span>
+                        <span id="update-percentage" class="text-olive-600 text-sm">0%</span>
+                    </div>
+                    <div class="w-full bg-olive-100 rounded-full h-3 overflow-hidden shadow-inner">
+                        <div id="update-progress-bar" class="bg-amber-500 h-full w-0 transition-all duration-500 shadow-sm"></div>
+                    </div>
+                    <div id="update-terminal" class="mt-4 p-4 bg-zinc-900 text-zinc-300 font-mono text-xs rounded-lg h-48 overflow-y-auto shadow-inner border border-zinc-800">
+                        <div id="update-log"></div>
+                    </div>
+                </div>
+
+                <div id="update-complete" class="hidden text-center space-y-4">
+                    <div class="mx-auto size-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-display text-olive-950">Update Successful</h3>
+                    <p class="text-olive-700">The application is restarting. Please wait a moment...</p>
+                    <button onclick="window.location.reload()" class="mt-4 px-6 py-2 bg-olive-950 text-white rounded-full hover:bg-olive-800 transition-colors">
+                        Reload Page
+                    </button>
                 </div>
             </div>
         </div>
@@ -654,7 +720,91 @@
             console.log('App version received:', data);
             const appVersion = data.version || 'v--.--.--.__';
             document.getElementById('app-version').textContent = appVersion;
+            
+            // Check for updates whenever version is received
+            socket.emit('check_app_updates');
         });
+
+        socket.on('app_update_available', data => {
+            console.log('App update check result:', data);
+            const badge = document.getElementById('app-update-badge');
+            const notesDiv = document.getElementById('update-release-notes');
+            if (data.available) {
+                badge.classList.remove('hidden');
+                if (data.release_notes) {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>${data.release_notes.replace(/\n/g, '<br>')}`;
+                } else {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>New version ${data.latest_version} is available.`;
+                }
+            } else {
+                badge.classList.add('hidden');
+                notesDiv.innerHTML = `<strong>Release Notes:</strong><br>You are using the latest version.`;
+            }
+        });
+
+        socket.on('update_status', data => {
+            console.log('Update status:', data.message);
+            const log = document.getElementById('update-log');
+            const statusText = document.getElementById('update-current-status');
+            const progressBar = document.getElementById('update-progress-bar');
+            const percentageText = document.getElementById('update-percentage');
+
+            statusText.textContent = data.message;
+            log.innerHTML += `<div class="py-0.5"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+
+            // Simple progress simulation based on message content
+            let progress = 0;
+            if (data.message.includes('Starting')) progress = 10;
+            if (data.message.includes('Pulling')) progress = 30;
+            if (data.message.includes('Git Pull Output')) progress = 50;
+            if (data.message.includes('Updating dependencies')) progress = 70;
+            if (data.message.includes('Dependencies updated')) progress = 90;
+            if (data.message.includes('Update complete')) {
+                progress = 100;
+                setTimeout(() => {
+                    document.getElementById('update-progress').classList.add('hidden');
+                    document.getElementById('update-complete').classList.remove('hidden');
+                }, 1000);
+            }
+
+            if (progress > 0) {
+                progressBar.style.width = `${progress}%`;
+                percentageText.textContent = `${progress}%`;
+            }
+        });
+
+        socket.on('update_error', data => {
+            console.error('Update error:', data.message);
+            const log = document.getElementById('update-log');
+            log.innerHTML += `<div class="py-0.5 text-red-400 font-bold"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ERROR: ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+            document.getElementById('update-current-status').textContent = 'Update failed';
+            document.getElementById('update-current-status').classList.add('text-red-500');
+            document.getElementById('update-progress-bar').classList.add('bg-red-500');
+        });
+
+        function showUpdateModal() {
+            document.getElementById('update-modal').classList.remove('hidden');
+            document.getElementById('update-initial').classList.remove('hidden');
+            document.getElementById('update-progress').classList.add('hidden');
+            document.getElementById('update-complete').classList.add('hidden');
+        }
+
+        function hideUpdateModal() {
+            // Only allow closing if not in progress or complete
+            const progressVisible = !document.getElementById('update-progress').classList.contains('hidden');
+            if (!progressVisible) {
+                document.getElementById('update-modal').classList.add('hidden');
+            }
+        }
+
+        function startAppUpdate() {
+            document.getElementById('update-initial').classList.add('hidden');
+            document.getElementById('update-progress').classList.remove('hidden');
+            document.getElementById('update-log').innerHTML = '';
+            socket.emit('perform_app_update');
+        }
 
         socket.on('history_counts', data => {
             console.log('History counts received:', data);

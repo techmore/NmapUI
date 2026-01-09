@@ -43,6 +43,52 @@ def get_app_version():
     return version
 
 
+def check_for_updates():
+    """Check for new releases on GitHub"""
+    try:
+        # Get current version
+        current_version = get_app_version()
+
+        # Check GitHub releases API
+        response = requests.get(
+            "https://api.github.com/repos/techmore/NmapUI/releases/latest", timeout=10
+        )
+        response.raise_for_status()
+        latest_release = response.json()
+
+        latest_version = latest_release["tag_name"]
+
+        # Simple version comparison (assuming format v2026.1.9.12_01)
+        # For production, implement proper semantic comparison
+        if latest_version != current_version:
+            return {
+                "available": True,
+                "latest_version": latest_version,
+                "download_url": latest_release["assets"][0]["browser_download_url"]
+                if latest_release["assets"]
+                else None,
+                "release_notes": latest_release["body"],
+            }
+        return {"available": False}
+
+    except Exception as e:
+        logger.error(f"Failed to check for updates: {e}")
+        return {"available": False, "error": str(e)}
+    except Exception as e:
+        logger.error(f"Failed to check for updates: {e}")
+        return False
+
+
+def restart_application():
+    """Restart the application process"""
+    logger.info("Restarting application...")
+    try:
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception as e:
+        logger.error(f"Failed to restart application: {e}")
+        sys.exit(1)
+
+
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
@@ -830,6 +876,64 @@ def load_current_assignment():
 def get_versions_event():
     """Send version information to the client"""
     emit("versions", get_versions())
+
+
+@socketio.on("check_app_updates")
+def check_app_updates_event():
+    """Check for application updates and notify the client"""
+    update_info = check_for_updates()
+    if isinstance(update_info, dict):
+        emit("app_update_available", update_info)
+    else:
+        emit("app_update_available", {"available": False})
+
+
+@socketio.on("perform_app_update")
+def perform_app_update_event():
+    """Guide user to download and install new version"""
+    try:
+        # For packaged applications, don't perform self-update
+        # Instead, provide download instructions
+        emit("update_status", {"message": "Opening download page..."})
+        socketio.sleep(1)
+
+        # Check for updates to get download URL
+        update_info = check_for_updates()
+        if (
+            isinstance(update_info, dict)
+            and update_info.get("available")
+            and update_info.get("download_url")
+        ):
+            # Open download URL
+            subprocess.run(["open", str(update_info["download_url"])], check=False)
+            emit(
+                "update_status",
+                {
+                    "message": "Download page opened. Please download and install the new version manually."
+                },
+            )
+        else:
+            # Fallback: open releases page
+            subprocess.run(
+                ["open", "https://github.com/techmore/NmapUI/releases"], check=False
+            )
+            emit(
+                "update_status",
+                {
+                    "message": "Releases page opened. Please download the latest .dmg or .pkg file."
+                },
+            )
+
+        emit(
+            "update_complete",
+            {
+                "message": "Update initiated. Please install the new version and restart the application."
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Update failed: {e}")
+        emit("update_error", {"message": f"Failed to open download: {str(e)}"})
 
 
 @socketio.on("get_local_ip")
