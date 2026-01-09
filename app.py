@@ -93,9 +93,13 @@ class IdleStateManager:
     def _trigger_auto_update_banner(self):
         """Trigger the auto-update banner display"""
         update_info = check_for_updates()
+        logger.info(f"Auto-update check: {update_info}")
         if isinstance(update_info, dict) and update_info.get("available"):
             self.countdown_active = True
+            logger.info("Showing auto-update banner")
             safe_emit("show_auto_update_banner", update_info)
+        else:
+            logger.info("No update available or invalid update info")
 
     def cancel_countdown(self):
         """Cancel active countdown"""
