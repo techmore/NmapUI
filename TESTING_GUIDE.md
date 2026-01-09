@@ -102,7 +102,7 @@ open data/scans/CustomerName/YYYY-MM-DD/scan_HHMMSS_Range/scan_pdf.html
 
 **Steps**:
 1. Generate 2-3 reports with different targets
-2. Click **"View History"** button (olive-600 color)
+2. Click **"Report History"** button (olive-600 color)
 3. Modal should open showing all scans
 4. Test filters:
    - Customer dropdown: Filter by customer

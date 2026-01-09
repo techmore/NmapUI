@@ -79,7 +79,7 @@ The system will:
 ## Using the Historical Viewer
 
 ### Opening the Viewer
-Click the **View History** button (purple button with clock icon)
+Click the **Report History** button (purple button with clock icon)
 
 ### Filtering Scans
 - **Customer Filter**: Select customer from dropdown to show only their scans

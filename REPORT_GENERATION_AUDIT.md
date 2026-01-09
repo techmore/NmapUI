@@ -73,7 +73,7 @@
 - **Icon**: Download/document icon (SVG)
 - **Function**: Triggers `generate_report` SocketIO event
 
-### ✅ View History Button
+### ✅ Report History Button
 - **Location**: Next to Generate Report button
 - **Color**: Olive-600 (matches theme)
 - **Icon**: Clock icon (SVG)

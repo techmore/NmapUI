@@ -323,7 +323,7 @@
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            View History
+            Report History
             <span id="history-badge" class="hidden absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-sm">0</span>
         </button>
     </div>
@@ -716,6 +716,9 @@
             
             // Stop the timer
             stopReportTimer();
+
+            // Refresh history counts to update the real-time badge
+            socket.emit('get_history_counts');
 
             // Optionally reload history
             if (!document.getElementById('history-modal').classList.contains('hidden')) {

@@ -120,7 +120,7 @@ data/scans/
 
 ### Viewing Scan History
 
-Click **View History** to:
+Click **Report History** to:
 - Browse all saved scans
 - Filter by customer or date
 - View HTML reports in your browser
