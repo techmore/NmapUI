@@ -77,14 +77,26 @@ def is_private_ip(ip):
         return False
 
 
+def safe_emit(event, data=None):
+    """Emit a Socket.IO event only if in a request context"""
+    try:
+        if data is None:
+            emit(event)
+        else:
+            emit(event, data)
+    except RuntimeError:
+        # Not in a request context, skip emit
+        pass
+
+
 def run_traceroute(target="1.1.1.1"):
     global network_key, current_customer
     try:
-        emit("customer_identification_start")
+        safe_emit("customer_identification_start")
         socketio.sleep(0)
 
         logger.info(f"Running traceroute to {target}...")
-        emit(
+        safe_emit(
             "customer_identification_progress",
             {"message": f"Running traceroute to {target}..."},
         )
@@ -139,14 +151,14 @@ def run_traceroute(target="1.1.1.1"):
         logger.info(
             f"Traceroute complete: {network_key['total_hops']} hops, {len(network_key['private_hops'])} private, {len(network_key['public_hops'])} public"
         )
-        emit(
+        safe_emit(
             "customer_identification_progress",
             {"message": f"Traceroute complete ({network_key['total_hops']} hops)"},
         )
         socketio.sleep(0)
 
         logger.info("Running customer identification...")
-        emit("customer_identification_progress", {"message": "Identifying customer..."})
+        safe_emit("customer_identification_progress", {"message": "Identifying customer..."})
         socketio.sleep(0)
 
         customer, confidence = customer_fingerprinter.match_customer(network_key)
@@ -164,7 +176,7 @@ def run_traceroute(target="1.1.1.1"):
             f"WAN: {network_key.get('public_ip', 'unknown')}",
         )
 
-        emit(
+        safe_emit(
             "customer_identified",
             {
                 "customer": current_customer,
@@ -177,8 +189,8 @@ def run_traceroute(target="1.1.1.1"):
             },
         )
 
-        emit("file_updated", {"file": "data/scan_history.json", "action": "saved"})
-        emit(
+        safe_emit("file_updated", {"file": "data/scan_history.json", "action": "saved"})
+        safe_emit(
             "file_updated",
             {"file": "data/customer_traceroutes.json", "action": "saved"},
         )
@@ -190,11 +202,11 @@ def run_traceroute(target="1.1.1.1"):
     except subprocess.TimeoutExpired:
         logger.error("Traceroute timed out")
         network_key["error"] = "Traceroute timed out"
-        emit("customer_identification_error", {"error": "Traceroute timed out"})
+        safe_emit("customer_identification_error", {"error": "Traceroute timed out"})
     except Exception as e:
         logger.error(f"Traceroute error: {e}")
         network_key["error"] = str(e)
-        emit("customer_identification_error", {"error": str(e)})
+        safe_emit("customer_identification_error", {"error": str(e)})
 
     return network_key
 
