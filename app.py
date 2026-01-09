@@ -1,6 +1,7 @@
 from flask import Flask, render_template, send_file, jsonify
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
+from typing import Dict, Optional
 import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml, logging, tempfile, glob as file_glob
 from datetime import datetime
 from pathlib import Path
@@ -40,7 +41,7 @@ customer_fingerprinter = CustomerFingerprinter()
 current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
 
 # Global version information - populated at startup
-versions: dict[str, str | None] = {
+versions: Dict[str, Optional[str]] = {
     "nmap": None,
     "vulners": None,
     "arp_scan": None,
@@ -52,7 +53,7 @@ customer_fingerprinter = CustomerFingerprinter()
 current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
 
 # Global version information - populated at startup
-versions: dict[str, str | None] = {
+versions: Dict[str, Optional[str]] = {
     "nmap": None,
     "vulners": None,
     "arp_scan": None,
