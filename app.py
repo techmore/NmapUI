@@ -3,8 +3,6 @@ from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml, logging, tempfile, glob as file_glob
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
 
@@ -17,33 +15,14 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
-XSL_STYLESHEET = BASE_DIR / "nmap-report-clean.xsl"
-XSL_STYLESHEET_PDF = BASE_DIR / "nmap-report-clean.xsl"
+XSL_STYLESHEET = BASE_DIR / "nmap-pdf-olive.xsl"
+XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive.xsl"
 SCANS_DIR = BASE_DIR / "data" / "scans"
-
-from reportlab.lib import colors, units, enums, styles, pagesizes
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Table,
-    TableStyle,
-    Paragraph,
-    PageBreak,
-    Image,
-    Spacer,
-)
-from reportlab.graphics.shapes import Line, Drawing
-from PIL import Image as PILImage
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.graphics.charts.piecharts import Pie
 
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
-# app.config['SECRET_KEY'] = 'your_secret_key'
-chrome_options = Options()
-chrome_options.add_argument("--headless")
 
 # Global network key - populated at startup
 network_key = {
@@ -55,6 +34,18 @@ network_key = {
     "target": "1.1.1.1",
     "raw": "",
 }
+
+# Global customer fingerprinter
+customer_fingerprinter = CustomerFingerprinter()
+current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
+
+# Global version information - populated at startup
+versions: dict[str, str | None] = {
+    "nmap": None,
+    "vulners": None,
+    "arp_scan": None,
+}
+
 
 # Global customer fingerprinter
 customer_fingerprinter = CustomerFingerprinter()
@@ -246,138 +237,6 @@ def run_traceroute(target="1.1.1.1"):
         safe_emit("customer_identification_error", {"error": str(e)})
 
     return network_key
-
-
-def generate_deep_pdf(output):
-    pdf = SimpleDocTemplate("Deep_Scan_Report.pdf", pagesize=letter)
-    styles_obj = getSampleStyleSheet()
-    data = []
-    for line in output:
-        logger.debug(f"line : {line}")
-        if "Nmap scan report for" in line:
-            ip_address = line.split("for")[-1].strip()
-            data.append(Paragraph(f"IP Address: {ip_address}", styles_obj["Normal"]))
-        elif "Nmap done:" in line:
-            pattern = re.compile(
-                r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
-            )
-            match = re.search(pattern, line)
-            if match:
-                total_ips = int(match.group(1))
-                hosts_up = int(match.group(2))
-                time_taken = float(match.group(3))
-                data.append(Paragraph(f"Total IPs: {total_ips}", styles_obj["Normal"]))
-                data.append(Paragraph(f"Hosts Up: {hosts_up}", styles_obj["Normal"]))
-                data.append(
-                    Paragraph(f"Time Taken: {time_taken} seconds", styles_obj["Normal"])
-                )
-        else:
-            data.append(Paragraph(line, styles_obj["Normal"]))
-        pdf.build(data)
-        print("end pdf")
-
-
-def generate_pdf(sorted_hosts):
-    pdf = SimpleDocTemplate("Network_Scan_Report.pdf", pagesize=letter)
-    styles = getSampleStyleSheet()
-    elements = []
-
-    # Title
-    title = Paragraph("Network Scan Report", styles["Heading1"])
-    elements.append(title)
-
-    # Add total hosts
-    total_hosts = Paragraph(f"Total Hosts: {len(sorted_hosts)}", styles["Normal"])
-    elements.append(total_hosts)
-
-    # Add a spacer
-    elements.append(Spacer(1, 12))
-
-    # Add pie chart for host types
-    drawing = Drawing(200, 200)
-    pie = Pie()
-    pie.x = 50
-    pie.y = 50
-    pie.data = [10, 20, 30, 40]  # Replace with your actual data
-    pie.labels = ["Windows", "Linux", "MacOS", "Other"]
-    drawing.add(pie)
-    elements.append(drawing)
-
-    # Add a spacer
-    elements.append(Spacer(1, 12))
-
-    # Add table for CVEs
-    cve_data = [["Host", "CVE", "Score"]]  # Table header
-
-    for host in sorted_hosts:
-        for cve in host.get("cves", []):
-            cve_data.append([host["ip"], cve["id"], cve["score"]])
-
-    cve_table = Table(cve_data)
-    cve_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 14),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                ("GRID", (0, 0), (-1, -1), 1, colors.black),
-            ]
-        )
-    )
-    elements.append(cve_table)
-
-    # Add a spacer
-    elements.append(Spacer(1, 12))
-
-    # try:
-    #    icon = PILImage.open("static/techmore.png")
-    #    elements.append(Image(icon, width=50, height=50))
-    # except FileNotFoundError:
-    #    print("Icon file not found. Skipping.")
-
-    # Table Header
-    data = [["IP Address", "Ports", "CVEs"]]
-    # Populate Table Data
-    for host in sorted_hosts:
-        ip_address = host["ip"]
-        ports = ", ".join([str(port["port"]) for port in host.get("ports", [])])
-        cves = []
-        row = [ip_address, ports, cves]
-        data.append(row)
-
-        # cves = "\n".join([cve['id'] for cve in host.get('cves', [])])  # Assuming 'cves' is a list of dictionaries with an 'id' key
-
-    # row = [ip_address, ports, cves]
-
-    # try:
-    #    row = [ip_address, ports, cves]
-    # except Exception as e:
-    #    print(f"Error: {e}")
-    # data.append(row)
-
-    # Create Table
-    table = Table(data)
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 14),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                ("GRID", (0, 0), (-1, -1), 1, colors.black),
-            ]
-        )
-    )
-
-    elements.append(table)
-    pdf.build(elements)
 
 
 def get_report_counts():
@@ -1039,26 +898,25 @@ def start_deep_scan(targets, is_gateway_phase=False):
                 ),
             )
             for line in lines:
-                print("line : " + line)
                 if "Nmap scan report for" in line:
                     current_host = {"ip": line.split(" ")[-1], "ports": []}
                     parsed_data.append(current_host)
-                elif "/tcp" in line:
+                elif "/tcp" in line and current_host:
                     port_info = re.search(r"(\d+)/tcp\s+(\w+)\s+(.*)", line)
-                    current_host["ports"].append(
-                        {
-                            "port": port_info.group(1),
-                            "state": port_info.group(2),
-                            "service": port_info.group(3),
-                        }
-                    )
-                # elif "CVE" in line: match = cve_pattern.search(line); cve_array.append({'id': match.group(0).split()[0], 'score': match.group(1), 'url': match.group(2)})
+                    if port_info:
+                        current_host["ports"].append(
+                            {
+                                "port": port_info.group(1),
+                                "state": port_info.group(2),
+                                "service": port_info.group(3),
+                            }
+                        )
                 elif "CVE" in line:
                     match = cve_pattern.search(line)
                     if match:
-                        cve_id = match.group(0).split()[0]  # Extract the CVE ID
-                        cve_score = match.group(1)  # Extract the CVE score
-                        cve_url = match.group(2)  # Extract the CVE URL
+                        cve_id = match.group(0).split()[0]
+                        cve_score = match.group(1)
+                        cve_url = match.group(2)
                         if float(cve_score) >= 7.0:
                             cve_array.append(
                                 {"id": cve_id, "score": cve_score, "url": cve_url}
@@ -1094,18 +952,37 @@ def start_scan(target):
 
         output = subprocess.check_output(["nmap", "-sn", target]).decode("utf-8")
         parsed_data, lines = [], output.split("\n")
-        ip_regex, host_status_regex, open_port_regex = (
-            re.compile(r"Nmap scan report for ([^\s]+)"),
-            re.compile(r"Host is (up|down) \(([\d.]+s latency\))"),
-            re.compile(r"(\d+)\/tcp\s+(\w+)\s+(\w+)"),
+        # Regex to capture IP (last distinct IP-like pattern in the line)
+        ip_regex = re.compile(
+            r"Nmap scan report for .*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
         )
+        # Regex to capture hostname (optional, before the IP in parens)
+        hostname_regex = re.compile(
+            r"Nmap scan report for ([^ ]+) \((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)"
+        )
+
+        host_status_regex = re.compile(r"Host is (up|down) \(([\d.]+s latency\))")
+        open_port_regex = re.compile(r"(\d+)\/tcp\s+(\w+)\s+(\w+)")
+
         hosts, current_host = [], None
+        total_ips, hosts_up, time_taken = 0, 0, 0.0
         for line in lines:
-            # print("line : " + line)
-            ip_match = ip_regex.match(line)
-            # if ip_match: current_host = {'ip': ip_match.group(1), 'status': None, 'ports': []}; hosts.append(current_host)
+            ip_match = ip_regex.search(line)
             if ip_match:
-                current_host = {"ip": ip_match.group(1), "status": None, "ports": []}
+                ip_addr = ip_match.group(1)
+                hostname = ""
+
+                # Check for hostname
+                hostname_match = hostname_regex.search(line)
+                if hostname_match:
+                    hostname = hostname_match.group(1)
+
+                current_host = {
+                    "ip": ip_addr,
+                    "hostname": hostname,
+                    "status": None,
+                    "ports": [],
+                }
                 hosts.append(current_host)
             elif "Nmap done:" in line:
                 pattern = re.compile(
@@ -1133,7 +1010,7 @@ def start_scan(target):
             else:
                 # Match host status and latency
                 host_status_match = host_status_regex.match(line)
-                if host_status_match:
+                if host_status_match and current_host:
                     current_host["status"] = host_status_match.group(1)
                 else:
                     # Match open ports
@@ -1142,17 +1019,13 @@ def start_scan(target):
                         port = open_port_match.group(1)
                         state = open_port_match.group(2)
                         service = open_port_match.group(3)
-                        version = open_port_match.group(4)
                         current_host["ports"].append(
                             {
                                 "port": port,
                                 "state": state,
                                 "service": service,
-                                "version": version,
                             }
                         )
-
-            # else: host_status_match = host_status_regex.match(line); current_host['status'] = host_status_match.group(1) if host_status_match else open_port_match.group(1) if (open_port_match := open_port_regex.match(line)) and current_host else None
 
         sorted_hosts = sorted(hosts, key=lambda x: ipaddress.IPv4Address(x["ip"]))
 
@@ -1178,7 +1051,30 @@ def start_scan(target):
         # Emit arp scan complete
         emit("arp_scan_complete")
 
-        emit("scan_results", sorted_hosts)
+        # Format hosts for the frontend table
+        display_hosts = []
+        for host in sorted_hosts:
+            display_host = host.copy()
+
+            # Format ports for display
+            ports_list = host.get("ports", [])
+            if ports_list:
+                display_host["open_ports"] = ", ".join(
+                    [f"{p['port']}/{p['service']}" for p in ports_list]
+                )
+            else:
+                display_host["open_ports"] = ""
+
+            # Ensure all required fields exist
+            display_host.setdefault("mac", "")
+            display_host.setdefault("vendor", "")
+            display_host.setdefault("hostname", "")
+            display_host.setdefault("version", "")
+            display_host.setdefault("cves", "")
+
+            display_hosts.append(display_host)
+
+        emit("scan_results", display_hosts)
 
         # Ensure events are flushed before starting deep scan
         socketio.sleep(0)
@@ -1195,9 +1091,6 @@ def start_scan(target):
 
         if gateway_targets:
             start_deep_scan(gateway_targets, is_gateway_phase=True)
-
-        # Generate PDF after deep scan completes (has complete data)
-        generate_pdf(sorted_hosts)
 
     except Exception as e:
         emit("scan_error", str(e))

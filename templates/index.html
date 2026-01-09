@@ -143,10 +143,10 @@
             </div>
         </div>
 
-        <div id="network-key-banner" class="p-3 bg-olive-400 text-white rounded-lg shadow-inner border border-olive-500">
+        <div id="network-key-banner" class="p-3 bg-olive-200 text-olive-900 rounded-lg shadow-inner border border-olive-300">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                    <span class="text-white/80 text-[10px] font-bold uppercase tracking-wider">Network Route</span>
+                    <span class="text-olive-700 text-[10px] font-bold uppercase tracking-wider">Network Route</span>
                     <div id="route-path" class="flex items-center flex-wrap gap-1 text-xs font-mono">
                         <span class="text-white/70 italic">Loading route...</span>
                     </div>
@@ -602,14 +602,14 @@
                 // Reverse the hops so it reads: internet -> ... -> local
                 const reversedHops = [...data.hops].reverse();
                 routePath.innerHTML = reversedHops.map((hop, i) => {
-                    const colorClass = hop.is_private ? 'text-amber-300' : 'text-emerald-300';
-                    const arrow = i < reversedHops.length - 1 ? '<span class="text-olive-500 mx-1">→</span>' : '';
+                    const colorClass = hop.is_private ? 'text-amber-700 font-medium' : 'text-emerald-700 font-medium';
+                    const arrow = i < reversedHops.length - 1 ? '<span class="text-olive-400 mx-1">→</span>' : '';
                     return `<span class="${colorClass}">${hop.ip}</span>${arrow}`;
                 }).join('');
             } else if (data.error) {
-                routePath.innerHTML = `<span class="text-red-400">${data.error}</span>`;
+                routePath.innerHTML = `<span class="text-red-700 font-medium">${data.error}</span>`;
             } else {
-                routePath.innerHTML = '<span class="text-olive-400">No route data available</span>';
+                routePath.innerHTML = '<span class="text-olive-500 italic">No route data available</span>';
             }
         });
 
