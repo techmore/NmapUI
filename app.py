@@ -296,6 +296,10 @@ def index():
 @socketio.on("get_network_key")
 def get_network_key_event():
     """Send the network key to the client"""
+    # If network_key is empty (no hops), run traceroute to populate it
+    if network_key.get("total_hops", 0) == 0:
+        print("Network key empty, running traceroute...")
+        run_traceroute("1.1.1.1")
     emit("network_key", network_key)
 
 
