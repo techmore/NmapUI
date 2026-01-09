@@ -1,0 +1,6 @@
+I've restored the missing stylesheets.
+
+1.  **Restored `nmap-pdf-olive.xsl`**: This matches the current configuration in `app.py` so your application should work again.
+2.  **Restored `nmap-modern.xsl`**: I found this in the git history and restored it as well, as you mentioned it was added recently.
+
+The application is currently configured to use `nmap-pdf-olive.xsl`. If you want to switch to `nmap-modern.xsl`, let me know!

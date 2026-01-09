@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Network Scanner GUI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        olive: {
+                            50: 'oklch(96% 0.015 110)',
+                            100: 'oklch(91% 0.020 110)',
+                            200: 'oklch(85% 0.028 110)',
+                            300: 'oklch(75% 0.040 110)',
+                            400: 'oklch(62% 0.055 110)',
+                            500: 'oklch(50% 0.065 110)',
+                            600: 'oklch(42% 0.055 110)',
+                            700: 'oklch(35% 0.045 110)',
+                            800: 'oklch(28% 0.035 110)',
+                            900: 'oklch(22% 0.025 110)',
+                            950: 'oklch(16% 0.015 110)',
+                        }
+                    },
+                    fontFamily: {
+                        display: ['Instrument Serif', 'serif'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<style>
+    body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background-color: oklch(91% 0.012 106.5);
+        color: oklch(15.3% 0.006 107.1);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    h1, h2, h3 {
+        font-family: 'Instrument Serif', serif;
+    }
+    ::selection {
+        background-color: oklch(75% 0.040 110);
+    }
+    input {
+        background-color: oklch(98% 0.008 110);
+        color: oklch(16% 0.015 110);
+        border: 1px solid oklch(75% 0.040 110);
+        padding: 8px 12px;
+        border-radius: 9999px;
+        outline: none;
+        transition: border-color 0.2s ease;
+    }
+    input:focus {
+        border-color: oklch(42% 0.055 110);
+    }
+    input::placeholder {
+        color: oklch(50% 0.065 110);
+    }
+    .open-ports-cell {
+        max-width: 200px;
+        overflow-wrap: break-word;
+    }
+    table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    th {
+        background-color: oklch(22% 0.025 110);
+        color: white;
+        font-weight: 500;
+    }
+    tbody tr:nth-child(even) {
+        background-color: oklch(96% 0.015 110);
+    }
+    tbody tr:hover {
+        background-color: oklch(85% 0.028 110);
+    }
+    .card-pulsing {
+        animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        border-color: oklch(22% 0.025 110) !important;
+        box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
+    }
+    @keyframes pulse-border {
+        0%, 100% {
+            box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
+        }
+        50% {
+            box-shadow: 0 0 0 12px oklch(62% 0.055 110 / 0.2);
+        }
+    }
+
+    @keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+    }
+</style>
+<body class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header with Title -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-6">
+            <img src="static/techmore.png" class="h-12 w-auto">
+            <div>
+                <h1 class="text-4xl font-display italic text-olive-950">Network Scanner</h1>
+                <div class="flex items-center gap-2">
+                    <div id="app-version" class="text-sm text-olive-600 font-medium">v--.--.--.__</div>
+                    <button id="app-update-badge" onclick="showUpdateModal()" class="hidden px-2 py-0.5 bg-amber-500 text-white text-[10px] font-bold rounded-full animate-pulse hover:bg-amber-600 transition-colors">
+                        Update Available
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="current-date-time" class="text-xl font-display text-olive-950 text-center"></div>
+        <div class="flex items-center gap-8">
+            <div id="versions" class="text-sm text-olive-600 space-y-1 text-right">
+                <div id="nmap-version">Nmap: --</div>
+                <div id="vulners-version">Vulners: --</div>
+                <div id="arpscan-version">ARP-Scan: --</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto-Update Banner -->
+    <div id="auto-update-banner" class="hidden fixed top-16 left-4 right-4 z-50 bg-gradient-to-r from-olive-600 to-olive-700 text-white p-4 rounded-lg shadow-lg border border-olive-500 max-w-2xl mx-auto">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="flex-shrink-0">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">Update Available!</h3>
+                    <p id="update-description" class="text-olive-100">NmapUI v2026.1.9.12_45 is ready to install</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-center">
+                    <div id="countdown-timer" class="text-3xl font-mono font-bold text-olive-100">
+                        30
+                    </div>
+                    <div class="text-xs text-olive-200">seconds</div>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="update-now-btn" class="bg-white text-olive-700 px-4 py-2 rounded-lg font-medium hover:bg-olive-50 transition-colors text-sm">
+                        Update Now
+                    </button>
+                    <button id="cancel-update-btn" class="bg-olive-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-olive-400 transition-colors text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <div class="bg-olive-500 rounded-full h-2 overflow-hidden">
+                <div id="progress-bar" class="bg-white h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden customer selector for JavaScript compatibility -->
+    <select id="current-customer" class="hidden">
+        <option value="">Auto-detect network...</option>
+    </select>
+
+    <!-- Local IP Info Panel -->
+    <div id="local-ip-panel" class="mt-4 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+            <div>
+                <span class="text-olive-500 block">Local IP</span>
+                <span id="local-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">Subnet Mask</span>
+                <span id="subnet-mask-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">CIDR</span>
+                <span id="cidr-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">Public IP</span>
+                <span id="public-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+        </div>
+
+        <div id="network-key-banner" class="p-3 bg-olive-200 text-olive-900 rounded-lg shadow-inner border border-olive-300">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-olive-700 text-[10px] font-bold uppercase tracking-wider">Network Route</span>
+                    <div id="route-path" class="flex items-center flex-wrap gap-1 text-xs font-mono">
+                        <span class="text-white/70 italic">Loading route...</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
+                    <div>
+                        <span class="text-white/60">Hops:</span>
+                        <span id="total-hops" class="ml-1">--</span>
+                    </div>
+                    <div>
+                        <span class="text-white/60">Private:</span>
+                        <span id="private-hops" class="ml-1 text-amber-200">--</span>
+                    </div>
+                    <div>
+                        <span class="text-white/60">Public:</span>
+                        <span id="public-hops" class="ml-1 text-emerald-200">--</span>
+                    </div>
+                    <div>
+                        <span class="text-white/60">Exit:</span>
+                        <span id="exit-ip" class="ml-1 text-sky-200">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Management Compact -->
+    <div class="mt-4 flex items-center justify-between px-1">
+        <div class="flex items-center gap-2">
+            <select id="customer-quick-add" class="px-3 py-1 bg-olive-100 border border-olive-300 rounded text-olive-700">
+                <option value="">Unassigned</option>
+            </select>
+            <button onclick="showCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded hover:bg-olive-700 transition-colors">
+                + Add Customer
+            </button>
+        </div>
+        <div id="last-scan-container" class="hidden flex items-center gap-2">
+            <span class="text-[10px] uppercase tracking-wider text-olive-500 font-bold">Last Report</span>
+            <span id="last-scan-days" class="px-3 py-1 rounded-full text-xs font-medium transition-all">--</span>
+        </div>
+    </div>
+    
+    <!-- Add Customer Form (Hidden by default) -->
+    <div id="add-customer-form" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-olive-900">Add Customer</h3>
+                <button onclick="hideCustomerForm()" class="text-olive-500 hover:text-olive-700">
+                    ✕
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer Name *</label>
+                    <input type="text" id="cust-name" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., TechCorp HQ">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer ID *</label>
+                    <input type="text" id="cust-id" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., techcorp_hq">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Description</label>
+                    <input type="text" id="cust-description" class="w-full p-2 border border-olive-300 rounded" placeholder="Brief description">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Location</label>
+                    <input type="text" id="cust-location" class="w-full p-2 border border-olive-300 rounded" placeholder="City, State/Country">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Connection Type</label>
+                    <select id="cust-connection-type" class="w-full p-2 border border-olive-300 rounded">
+                        <option value="direct">Direct</option>
+                        <option value="vpn">VPN</option>
+                        <option value="residential">Residential</option>
+                        <option value="mobile">Mobile/Cellular</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Gateway Pattern</label>
+                    <input type="text" id="cust-gateway" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 192.168.1.1">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Exit IP Pattern</label>
+                    <input type="text" id="cust-exit-pattern" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 203.0.113.*">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Hop Count Range</label>
+                    <input type="text" id="cust-hop-count" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 2-5">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Private IP Ranges</label>
+                    <input type="text" id="cust-private-ranges" class="w-full p-2 border border-olive-300 rounded" placeholder="192.168.0.0/16,10.0.0.0/8">
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="hideCustomerForm()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                    Cancel
+                </button>
+                <button onclick="addCustomer()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors">
+                    Add Customer
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Customer Messages -->
+    <div id="customer-messages" class="mt-4 hidden">
+        <div class="p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
+            <span id="customer-message"></span>
+        </div>
+    </div>
+
+    <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center">
+                <h2 class="text-2xl font-display italic text-olive-900">Scan History</h2>
+                <button onclick="hideHistoryModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div class="mb-4 flex gap-4">
+                    <select id="history-customer-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                        <option value="">All Customers</option>
+                    </select>
+                    <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                    <button onclick="loadScanHistory()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="history-list" class="space-y-3">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div id="update-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        <div class="bg-white rounded-lg max-w-2xl w-full flex flex-col shadow-2xl border border-olive-300">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50 rounded-t-lg">
+                <h2 class="text-2xl font-display italic text-olive-900">Application Update</h2>
+                <button onclick="hideUpdateModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-8">
+                <div id="update-initial" class="space-y-4">
+                    <p class="text-olive-800">A new version of NmapUI is available. Would you like to download it now?</p>
+                    <div id="update-release-notes" class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 max-h-32 overflow-y-auto">
+                        <strong>Release Notes:</strong><br>
+                        Loading...
+                    </div>
+                    <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                        <strong>Note:</strong> This will open your browser to download the new version. You'll need to install it manually.
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button onclick="hideUpdateModal()" class="px-5 py-2 text-olive-600 hover:text-olive-900 font-medium transition-colors">
+                            Later
+                        </button>
+                        <button onclick="startAppUpdate()" class="px-6 py-2 bg-amber-500 text-white font-bold rounded-full hover:bg-amber-600 shadow-sm transition-all">
+                            Download Update
+                        </button>
+                    </div>
+                </div>
+
+                <div id="update-progress" class="hidden space-y-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="update-current-status" class="text-olive-900 font-medium">Initializing update...</span>
+                        <span id="update-percentage" class="text-olive-600 text-sm">0%</span>
+                    </div>
+                    <div class="w-full bg-olive-100 rounded-full h-3 overflow-hidden shadow-inner">
+                        <div id="update-progress-bar" class="bg-amber-500 h-full w-0 transition-all duration-500 shadow-sm"></div>
+                    </div>
+                    <div id="update-terminal" class="mt-4 p-4 bg-zinc-900 text-zinc-300 font-mono text-xs rounded-lg h-48 overflow-y-auto shadow-inner border border-zinc-800">
+                        <div id="update-log"></div>
+                    </div>
+                </div>
+
+                <div id="update-complete" class="hidden text-center space-y-4">
+                    <div class="mx-auto size-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-display text-olive-950">Update Successful</h3>
+                    <p class="text-olive-700">The application is restarting. Please wait a moment...</p>
+                    <button onclick="window.location.reload()" class="mt-4 px-6 py-2 bg-olive-950 text-white rounded-full hover:bg-olive-800 transition-colors">
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Input & Controls -->
+    <div class="mt-6 flex flex-wrap items-center gap-4">
+        <div class="relative flex-1 min-w-[250px]">
+            <input type="text" id="scan-target" class="w-full" placeholder="Enter target IP or range">
+            <span id="info-icon" class="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-olive-400 hover:text-olive-600 transition-colors">?</span>
+            <div id="tooltip" class="hidden absolute top-full right-0 mt-2 bg-olive-50 p-3 rounded-lg shadow-lg border border-olive-300 text-sm text-olive-800 z-10">
+                You can use IP, range, or CIDR for scanning.
+            </div>
+        </div>
+        <button id="start-scan-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-950 text-white hover:bg-olive-800 font-medium py-2 px-5 text-sm transition-colors">
+            Start Scan
+        </button>
+    </div>
+
+    <!-- Scan Control Buttons -->
+    <div class="mt-4 flex flex-wrap gap-3">
+        <button id="stop-scan-btn" class="inline-flex items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-700 font-medium py-2 px-4 text-sm transition-colors">
+            Stop Scan
+        </button>
+        <button id="suspend-scan-btn" class="inline-flex items-center justify-center rounded-full bg-olive-400 text-white hover:bg-olive-500 font-medium py-2 px-4 text-sm transition-colors">
+            Suspend Scan
+        </button>
+        <button id="resume-scan-btn" class="inline-flex items-center justify-center rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors">
+            Resume Scan
+        </button>
+        <div class="flex flex-col items-center">
+            <button id="generate-report-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-700 text-white hover:bg-olive-800 font-medium py-2 px-4 text-sm transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Generate Report
+            </button>
+            <div id="last-scan-duration" class="mt-1 text-[10px] text-olive-600 font-medium hidden">
+                TLL: --
+            </div>
+        </div>
+        <button id="view-history-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors relative">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Report History
+            <span id="history-badge" class="hidden absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-sm">0</span>
+        </button>
+    </div>
+
+    <div id="report-status" class="hidden mt-4 p-4 rounded-lg">
+        <p id="report-status-text" class="text-sm font-medium"></p>
+    </div>
+
+    <!-- Scan Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+        <div id="quick-scan-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Quick Scan</h2>
+                <!-- Pulsing indicator - hidden by default -->
+                <span id="quick-scan-indicator" class="hidden relative flex size-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-600 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
+                </span>
+            </div>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="quick-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="quick-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="text-olive-500 text-xs mt-2 font-mono">nmap -sn</p>
+            </div>
+        </div>
+        <div id="deep-scan-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Deep Scan</h2>
+                <span id="deep-scan-indicator" class="hidden relative flex size-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-600 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
+                </span>
+            </div>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="deep-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="deep-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="deep-ports" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="deep-cves" class="font-medium text-olive-900">--</span></p>
+            </div>
+        </div>
+        <div class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
+            <h2 class="text-xl font-display italic text-olive-900 mb-3">Dragnet Scan</h2>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="dragnet-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="dragnet-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="dragnet-ports" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="dragnet-cves" class="font-medium text-olive-900">--</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Feedback Container -->
+    <div class="relative mt-6 hidden">
+        <div id="feedback-container" class="p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-900 space-y-2 empty:hidden min-h-[3rem] transition-all duration-500">
+        </div>
+        <div id="scan-timer-container" class="hidden absolute bottom-3 right-4 flex items-center gap-2 bg-white/70 backdrop-blur-sm px-3 py-1 rounded-full border border-olive-200 shadow-sm z-10">
+            <span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span id="scan-timer" class="font-mono text-xs font-bold text-amber-600">00:00</span>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="mt-8 bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-hidden">
+        <table id="discovery-table" class="min-w-full">
+                        <thead>
+                            <tr>
+                                <th class="w-12 px-4 py-3 text-left"></th>
+                                <th class="px-4 py-3 text-left">IP Address</th>
+                                <th class="px-4 py-3 text-left hidden md:table-cell">MAC Address</th>
+                                <th class="px-4 py-3 text-left hidden lg:table-cell">Vendor</th>
+                                <th class="px-4 py-3 text-left max-w-[150px]">Hostname</th>
+                                <th class="px-4 py-3 text-left">Open Ports</th>
+                                <th class="px-4 py-3 text-left">Version</th>
+                                <th class="px-4 py-3 text-left">CVEs</th>
+                                <th class="px-4 py-3 text-left">Actions</th>
+                            </tr>
+                        </thead>
+
+            <tbody class="text-sm"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Set current date and time
+        function updateDateTime() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            };
+            document.getElementById('current-date-time').textContent = now.toLocaleDateString('en-US', options);
+        }
+        updateDateTime();
+        // Update every minute to keep time current
+        setInterval(updateDateTime, 60000);
+
+        var socket = io.connect(`http://${document.domain}:${location.port}`);
+        socket.on('connect', () => console.log('Socket.IO connected'));
+        
+        // Quick scan indicator handlers
+        socket.on('quick_scan_start', () => {
+            console.log('Quick scan started - pulsing card');
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.add('card-pulsing');
+            }
+        });
+
+        socket.on('quick_scan_complete', () => {
+            console.log('Quick scan complete - stopping pulse');
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.remove('card-pulsing');
+            }
+        });
+
+        // ARP scan indicator handler (no visual pulse - happens between quick and deep)
+        socket.on('arp_scan_start', () => {
+            console.log('ARP scan started');
+            // No visual indicator - ARP scan is very quick and happens between phases
+        });
+
+        socket.on('arp_scan_complete', () => {
+            console.log('ARP scan complete');
+            // No visual indicator needed
+        });
+
+        // Deep scan indicator handlers
+        socket.on('deep_scan_start', () => {
+            console.log('Deep scan started - pulsing card');
+            // Stop quick scan card pulsing if still active
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.remove('card-pulsing');
+            }
+            // Start deep scan card pulsing
+            const deepCard = document.getElementById('deep-scan-card');
+            if (deepCard) {
+                deepCard.classList.add('card-pulsing');
+            }
+        });
+
+        socket.on('deep_scan_host_start', (data) => {
+            console.log('Deep scan started for host:', data.ip);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.ip) {
+                    row.cells[0].innerHTML = '<span class="relative flex size-3"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-400 opacity-75"></span><span class="relative inline-flex size-3 rounded-full bg-olive-500"></span></span>';
+                    break;
+                }
+            }
+        });
+
+        socket.on('deep_scan_host_complete', (data) => {
+            console.log('Deep scan complete for host:', data.ip);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.ip) {
+                    row.cells[0].innerHTML = '';
+                    break;
+                }
+            }
+        });
+
+        socket.on('deep_scan_complete', () => {
+            console.log('All deep scans complete - stopping pulse');
+            const deepCard = document.getElementById('deep-scan-card');
+            if (deepCard) {
+                deepCard.classList.remove('card-pulsing');
+            }
+            // Clear all status indicators
+            const tb = document.querySelector('#discovery-table tbody');
+            Array.from(tb.rows).forEach(row => {
+                row.cells[0].innerHTML = '';
+            });
+        });
+
+        socket.on('scan_feedback', msg => {
+            const container = document.getElementById('feedback-container');
+            // Ensure the container is visible when feedback starts
+            container.parentElement.classList.remove('hidden');
+            container.innerHTML += `<p>${msg}</p>`;
+        });
+
+        socket.on('local_ip', data => {
+            ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
+            
+            // Update CIDR display in info panel
+            document.getElementById('cidr-value').textContent = data.cidr || '';
+            
+            document.getElementById('scan-target').value = data.cidr;
+        });
+
+        socket.on('cve_array', data => {
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.target) { // IP is now column 1 (status is 0)
+                    let cell = row.cells[7]; // CVEs column (index 7 now with status column)
+                    cell.innerHTML = '';
+                    data.cve_array.forEach(cve => cell.innerHTML += `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`);
+                    break;
+                }
+            }
+        });
+
+        socket.on('service_info', data => {
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.target) { // IP is now column 1
+                    row.cells[4].innerHTML += `<div class="text-xs text-olive-600">${data.line}</div>`; // Hostname column (index 4 now)
+                    break;
+                }
+            }
+        });
+
+        socket.on('quickscan_results', data => {
+            console.log("Received quick_scan_results:", data);
+            document.getElementById('quick-time').textContent = data.time_taken + 's';
+            document.getElementById('quick-hosts').textContent = data.hosts_up;
+        });
+
+        socket.on('deep_scan_results', data => data.forEach(updateRowWithResults));
+
+        function updateRowWithResults(host) {
+            const tb = document.querySelector('#discovery-table tbody');
+            let rowToUpdate = Array.from(tb.rows).find(row => row.cells[1].textContent === host.ip); // IP is now column 1
+            if (rowToUpdate) {
+                rowToUpdate.cells[5].textContent = host.ports.map(port => port.port).join(', '); // Open Ports (index 5 now)
+                rowToUpdate.cells[6].textContent = host.ports.map(port => port.service).join(', '); // Version (index 6 now)
+            }
+        }
+
+        document.getElementById('start-scan-btn').addEventListener('click', () => {
+            const target = document.getElementById('scan-target').value;
+            socket.emit('start_scan', target);
+        });
+
+        socket.emit('get_local_ip');
+        socket.emit('get_network_key');
+        socket.emit('get_customer_info');
+        socket.emit('get_versions');
+        socket.emit('get_customers');
+        socket.emit('get_history_counts');
+
+        // Customer quick add dropdown handler
+        document.getElementById('customer-quick-add').addEventListener('change', function() {
+            const selectedId = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
+
+            // Update history badge for selected customer
+            updateHistoryBadge(selectedName);
+
+            if (selectedId) {
+                // Assign the selected customer to this network
+                socket.emit('assign_customer', {
+                    customer_id: selectedId,
+                    customer_name: selectedName
+                });
+            }
+        });
+
+        socket.on('network_key', data => {
+            console.log('Network key received:', data);
+            document.getElementById('total-hops').textContent = data.total_hops;
+            document.getElementById('private-hops').textContent = data.private_hops.length;
+            document.getElementById('public-hops').textContent = data.public_hops.length;
+            document.getElementById('exit-ip').textContent = data.exit_ip || '--';
+            
+            const routePath = document.getElementById('route-path');
+            if (data.hops && data.hops.length > 0) {
+                // Reverse the hops so it reads: internet -> ... -> local
+                const reversedHops = [...data.hops].reverse();
+                routePath.innerHTML = reversedHops.map((hop, i) => {
+                    const colorClass = hop.is_private ? 'text-amber-700 font-medium' : 'text-emerald-700 font-medium';
+                    const arrow = i < reversedHops.length - 1 ? '<span class="text-olive-400 mx-1">→</span>' : '';
+                    return `<span class="${colorClass}">${hop.ip}</span>${arrow}`;
+                }).join('');
+            } else if (data.error) {
+                routePath.innerHTML = `<span class="text-red-700 font-medium">${data.error}</span>`;
+            } else {
+                routePath.innerHTML = '<span class="text-olive-500 italic">No route data available</span>';
+            }
+        });
+
+        socket.on('customers_list', data => {
+            console.log('customers_list event received with data:', data);
+            populateCustomerDropdown(data);
+            // Request customer info again after dropdown is populated
+            // to ensure the correct selection is applied to the newly created options
+            socket.emit('get_customer_info');
+        });
+
+        socket.on('customer_info', data => {
+            console.log('Customer info received:', data);
+            // Store globally as a string for consistent matching
+            window.currentMatchedCustomerId = data.id ? String(data.id) : '';
+            updateCustomerSelection(data);
+            updateDropdownSelection(window.currentMatchedCustomerId, data.name);
+        });
+
+        socket.on('versions', data => {
+            console.log('Versions received:', data);
+            // Update version displays with formatted strings
+            const nmapVersion = data.nmap || 'Not found';
+            const vulnersVersion = data.vulners || 'Not found';
+            const arpScanVersion = data.arp_scan || 'Not found';
+            const appVersion = data.app || 'v--.--.--.__';
+
+            document.getElementById('app-version').textContent = appVersion;
+            document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
+            document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
+            document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
+
+            // Check for updates whenever version is received
+            socket.emit('check_app_updates');
+        });
+
+
+
+        socket.on('app_update_available', data => {
+            console.log('App update check result:', data);
+            const badge = document.getElementById('app-update-badge');
+            const notesDiv = document.getElementById('update-release-notes');
+            if (data.available) {
+                badge.classList.remove('hidden');
+                if (data.release_notes) {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>${data.release_notes.replace(/\n/g, '<br>')}`;
+                } else {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>New version ${data.latest_version} is available.`;
+                }
+            } else {
+                badge.classList.add('hidden');
+                notesDiv.innerHTML = `<strong>Release Notes:</strong><br>You are using the latest version.`;
+            }
+        });
+
+        socket.on('update_status', data => {
+            console.log('Update status:', data.message);
+            const log = document.getElementById('update-log');
+            const statusText = document.getElementById('update-current-status');
+            const progressBar = document.getElementById('update-progress-bar');
+            const percentageText = document.getElementById('update-percentage');
+
+            statusText.textContent = data.message;
+            log.innerHTML += `<div class="py-0.5"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+
+            // Simple progress simulation based on message content
+            let progress = 0;
+            if (data.message.includes('Starting')) progress = 10;
+            if (data.message.includes('Pulling')) progress = 30;
+            if (data.message.includes('Git Pull Output')) progress = 50;
+            if (data.message.includes('Updating dependencies')) progress = 70;
+            if (data.message.includes('Dependencies updated')) progress = 90;
+            if (data.message.includes('Update complete')) {
+                progress = 100;
+                setTimeout(() => {
+                    document.getElementById('update-progress').classList.add('hidden');
+                    document.getElementById('update-complete').classList.remove('hidden');
+                }, 1000);
+            }
+
+            if (progress > 0) {
+                progressBar.style.width = `${progress}%`;
+                percentageText.textContent = `${progress}%`;
+            }
+        });
+
+        socket.on('update_error', data => {
+            console.error('Update error:', data.message);
+            const log = document.getElementById('update-log');
+            log.innerHTML += `<div class="py-0.5 text-red-400 font-bold"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ERROR: ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+            document.getElementById('update-current-status').textContent = 'Update failed';
+            document.getElementById('update-current-status').classList.add('text-red-500');
+            document.getElementById('update-progress-bar').classList.add('bg-red-500');
+        });
+
+        function showUpdateModal() {
+            document.getElementById('update-modal').classList.remove('hidden');
+            document.getElementById('update-initial').classList.remove('hidden');
+            document.getElementById('update-progress').classList.add('hidden');
+            document.getElementById('update-complete').classList.add('hidden');
+        }
+
+        function hideUpdateModal() {
+            // Only allow closing if not in progress or complete
+            const progressVisible = !document.getElementById('update-progress').classList.contains('hidden');
+            if (!progressVisible) {
+                document.getElementById('update-modal').classList.add('hidden');
+            }
+        }
+
+        function startAppUpdate() {
+            document.getElementById('update-initial').classList.add('hidden');
+            document.getElementById('update-progress').classList.remove('hidden');
+            document.getElementById('update-log').innerHTML = '';
+            socket.emit('perform_app_update');
+        }
+
+        // Auto-Update Banner Logic
+        let countdownInterval = null;
+        let remainingSeconds = 30;
+        let bannerVisible = false;
+
+        socket.on('idle_state_changed', data => {
+            console.log('Idle state changed:', data);
+        });
+
+        socket.on('show_auto_update_banner', data => {
+            console.log('Showing auto-update banner:', data);
+            showAutoUpdateBanner(data);
+        });
+
+        socket.on('hide_auto_update_banner', () => {
+            console.log('Hiding auto-update banner');
+            hideAutoUpdateBanner();
+        });
+
+        function showAutoUpdateBanner(updateInfo) {
+            if (bannerVisible) return;
+
+            bannerVisible = true;
+            remainingSeconds = 30;
+
+            // Update description
+            const descElement = document.getElementById('update-description');
+            if (updateInfo.latest_version) {
+                descElement.textContent = `NmapUI ${updateInfo.latest_version} is ready to install`;
+            }
+
+            // Show banner with animation
+            const banner = document.getElementById('auto-update-banner');
+            banner.classList.remove('hidden');
+            banner.style.animation = 'slideDown 0.5s ease-out';
+
+            // Start countdown
+            startCountdown();
+        }
+
+        function hideAutoUpdateBanner() {
+            if (!bannerVisible) return;
+
+            bannerVisible = false;
+            clearInterval(countdownInterval);
+
+            const banner = document.getElementById('auto-update-banner');
+            banner.style.animation = 'slideUp 0.3s ease-in';
+            setTimeout(() => {
+                banner.classList.add('hidden');
+                banner.style.animation = '';
+            }, 300);
+        }
+
+        function startCountdown() {
+            const timerElement = document.getElementById('countdown-timer');
+            const progressBar = document.getElementById('progress-bar');
+
+            countdownInterval = setInterval(() => {
+                remainingSeconds--;
+                timerElement.textContent = remainingSeconds;
+
+                const progressPercent = ((30 - remainingSeconds) / 30) * 100;
+                progressBar.style.width = `${progressPercent}%`;
+
+                if (remainingSeconds <= 0) {
+                    performAutoUpdate();
+                }
+            }, 1000);
+        }
+
+        function performAutoUpdate() {
+            clearInterval(countdownInterval);
+            socket.emit('perform_app_update');
+            hideAutoUpdateBanner();
+        }
+
+        // Event listeners for banner buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('update-now-btn')?.addEventListener('click', () => {
+                performAutoUpdate();
+            });
+
+            document.getElementById('cancel-update-btn')?.addEventListener('click', () => {
+                socket.emit('cancel_auto_update');
+                hideAutoUpdateBanner();
+            });
+        });
+
+        socket.on('history_counts', data => {
+            console.log('History counts received:', data);
+            window.historyCounts = data;
+            
+            const dropdown = document.getElementById('customer-quick-add');
+            const currentCustomerName = dropdown.selectedOptions[0]?.text || 'Unassigned';
+            updateHistoryBadge(currentCustomerName);
+        });
+
+        function updateHistoryBadge(customerName) {
+            const badge = document.getElementById('history-badge');
+            const lastScanSpan = document.getElementById('last-scan-days');
+            if (!badge || !window.historyCounts) return;
+
+            // Normalize the name to use as key
+            const key = (customerName && customerName !== 'Unassigned') ? customerName.split(' (')[0] : 'Unassigned';
+            const count = window.historyCounts[key] || 0;
+            
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                
+                // Muted premium styling for the report count badge
+                badge.className = 'absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-olive-900 text-white text-[10px] font-bold shadow-sm transition-all scale-110';
+
+                // Add a little pop animation when it updates
+                badge.classList.remove('scale-110');
+                void badge.offsetWidth; // Trigger reflow
+                badge.classList.add('scale-110');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            // Handle Days Since Last Scan - Muted Premium Version
+            const lastScanTime = window.historyCounts.last_scans ? window.historyCounts.last_scans[key] : null;
+            const container = document.getElementById('last-scan-container');
+            if (lastScanTime && lastScanSpan) {
+                const lastDate = new Date(lastScanTime);
+                const now = new Date();
+                const diffTime = Math.abs(now - lastDate);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                lastScanSpan.textContent = diffDays === 0 ? 'Today' : `${diffDays} days ago`;
+                if (container) container.classList.remove('hidden');
+                
+                // Muted, theme-appropriate colors using the olive palette
+                lastScanSpan.className = 'px-3 py-1 rounded-full text-xs font-medium transition-all';
+                
+                if (diffDays <= 1) {
+                    lastScanSpan.classList.add('bg-olive-200', 'text-olive-900');
+                } else if (diffDays <= 7) {
+                    lastScanSpan.classList.add('bg-olive-100', 'text-olive-700');
+                } else {
+                    lastScanSpan.classList.add('bg-olive-50', 'text-olive-500');
+                }
+            } else if (container) {
+                container.classList.add('hidden');
+            }
+        }
+
+        socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
+        socket.on('scan_complete', msg => {
+            document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`;
+            // Refresh history counts as a new metadata file was likely saved
+            socket.emit('get_history_counts');
+        });
+        socket.on('scan_results', hosts => populateTableWithResults(hosts));
+        
+        // Report Generation socket listeners
+        socket.on('report_complete', function(data) {
+            showReportStatus('Report generated successfully! Check: ' + data.scan_dir, 'success');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+
+            // Refresh history counts to update the real-time badge
+            socket.emit('get_history_counts');
+
+            // Optionally reload history
+            if (!document.getElementById('history-modal').classList.contains('hidden')) {
+                loadScanHistory();
+            }
+        });
+
+        socket.on('report_error', function(data) {
+            showReportStatus('Error: ' + data.error, 'error');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+        });
+
+
+        socket.on('report_error', function(data) {
+            showReportStatus('Error: ' + data.error, 'error');
+        });
+
+        socket.on('arp_results', data => {
+            console.log('ARP results received:', data);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                const ip = row.cells[1].textContent; // IP is now column 1
+                if (data[ip]) {
+                    row.cells[2].textContent = data[ip].mac; // MAC is now column 2
+                    row.cells[3].textContent = data[ip].vendor; // Vendor is now column 3
+                }
+            }
+        });
+
+        function populateTableWithResults(data) {
+            const tb = document.querySelector('#discovery-table tbody');
+            tb.innerHTML = '';
+            data.forEach(result => {
+                const newRow = tb.insertRow(-1);
+                // Add status column first (empty for now)
+                const statusCell = newRow.insertCell(0);
+                statusCell.className = 'px-4 py-3 text-center';
+                statusCell.innerHTML = '';
+
+                // Add other columns
+                ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
+                    const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
+                    cell.textContent = result[col] || '';
+                    cell.className = 'px-4 py-3 text-olive-900';
+                    if (col === 'open_ports') cell.classList.add('open-ports-cell');
+                    if (col === 'mac') cell.classList.add('font-mono', 'text-xs');
+                    if (col === 'vendor') cell.classList.add('text-olive-600');
+                    if (col === 'hostname') {
+                        cell.classList.add('truncate', 'max-w-[150px]', 'block');
+                        cell.title = result[col]; // Add tooltip for full hostname
+                    }
+                });
+                const rescanCell = newRow.insertCell(-1);
+                rescanCell.className = 'px-4 py-3';
+                const rescanBtn = document.createElement('button');
+                rescanBtn.textContent = 'Rescan';
+                rescanBtn.classList.add('inline-flex', 'items-center', 'justify-center', 'rounded-full', 'bg-olive-950', 'text-white', 'hover:bg-olive-800', 'font-medium', 'py-1', 'px-3', 'text-xs', 'transition-colors');
+                rescanBtn.addEventListener('click', () => handleRescan(result['ip']));
+                rescanCell.appendChild(rescanBtn);
+            });
+        }
+
+        // Tooltip toggle
+        document.getElementById('info-icon').addEventListener('click', () => {
+            document.getElementById('tooltip').classList.toggle('hidden');
+        });
+
+        // Customer Management Functions
+        function showCustomerForm() {
+            document.getElementById('add-customer-form').classList.remove('hidden');
+        }
+
+        function hideCustomerForm() {
+            document.getElementById('add-customer-form').classList.add('hidden');
+        }
+
+        function addCustomer() {
+            const customerData = {
+                name: document.getElementById('cust-name').value,
+                id: document.getElementById('cust-id').value,
+                description: document.getElementById('cust-description').value,
+                location: document.getElementById('cust-location').value,
+                connection_type: document.getElementById('cust-connection-type').value,
+                gateway_pattern: document.getElementById('cust-gateway').value,
+                exit_pattern: document.getElementById('cust-exit-pattern').value,
+                hop_count: document.getElementById('cust-hop-count').value,
+                private_ranges: document.getElementById('cust-private-ranges').value,
+                confidence: 0.7
+            };
+
+            // Clear form
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-id').value = '';
+            document.getElementById('cust-description').value = '';
+            document.getElementById('cust-location').value = '';
+            document.getElementById('cust-gateway').value = '';
+            document.getElementById('cust-exit-pattern').value = '';
+            document.getElementById('cust-hop-count').value = '';
+            document.getElementById('cust-private-ranges').value = '';
+
+            // Hide form
+            hideCustomerForm();
+
+            // Send to server
+            socket.emit('add_customer', customerData);
+        }
+
+        function assignCustomer() {
+            const dropdown = document.getElementById('current-customer');
+            const selectedId = dropdown.value;
+            const selectedOption = dropdown.options[dropdown.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
+
+            if (!selectedId) {
+                showCustomerMessage('Please select a customer to assign', 'error');
+                return;
+            }
+
+            // Extract clean name (remove confidence if present)
+            const cleanName = selectedName.split(' (')[0];
+
+            socket.emit('assign_customer', {
+                customer_id: selectedId,
+                customer_name: cleanName
+            });
+        }
+
+        socket.on('customer_added', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to add customer', 'error');
+            }
+        });
+
+        socket.on('customer_assigned', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                // Update dropdown selection
+                updateDropdownSelection(data.customer.id, data.customer.name);
+            } else {
+                showCustomerMessage('Failed to assign customer', 'error');
+            }
+        });
+
+        socket.on('customer_identified', data => {
+            console.log('Customer identified:', data);
+            // Update dropdown to show auto-detected customer
+            if (data.customer && data.customer.id) {
+                updateDropdownSelection(data.customer.id, data.customer.name);
+                // Show confidence info if available
+                if (data.customer.confidence !== undefined) {
+                    console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
+                }
+            }
+        });
+
+        socket.on('customer_deleted', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to delete customer', 'error');
+            }
+        });
+
+        socket.on('customer_lookup_results', data => {
+            console.log('Customer lookup results:', data);
+            
+            if (data.success && data.matches.length > 0) {
+                showCustomerMessage(data.message, 'success');
+                
+                // Auto-select first matching customer
+                const match = data.matches[0];
+                const dropdown = document.getElementById('current-customer');
+                
+                dropdown.value = match.customer.id;
+                dropdown.dispatchEvent(new Event('change'));
+            } else {
+                showCustomerMessage(data.message, 'error');
+            }
+        });
+
+        socket.on('customer_error', message => {
+            showCustomerMessage(message, 'error');
+        });
+
+        function showCustomerList() {
+            socket.emit('get_customers');
+        }
+
+        function showCustomerMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('customer-messages');
+            const messageSpan = document.getElementById('customer-message');
+            
+            messagesDiv.classList.remove('hidden');
+            messageSpan.textContent = message;
+            
+            // Update styling based on type
+            messagesDiv.firstElementChild.className = `p-3 border rounded-lg text-sm ${
+                type === 'error' ? 'bg-red-100 border-red-300 text-red-800' :
+                type === 'success' ? 'bg-green-100 border-green-300 text-green-800' :
+                'bg-yellow-100 border-yellow-300 text-yellow-800'
+            }`;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messagesDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        function populateCustomerDropdown(customers) {
+            console.log('Populating customer dropdowns with', customers.length, 'customers');
+
+            const mainDropdown = document.getElementById('current-customer');
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+
+            if (!quickAddDropdown) return;
+
+            // Clear and add Unassigned
+            quickAddDropdown.innerHTML = '<option value="">Unassigned</option>';
+            if (mainDropdown) mainDropdown.innerHTML = '<option value="">Unassigned</option>';
+
+            customers.forEach(customer => {
+                const customerId = String(customer.id);
+                const customerName = customer.name;
+
+                if (!customerId || !customerName) return;
+
+                // Add to main dropdown if it exists
+                if (mainDropdown) {
+                    const mainOption = document.createElement('option');
+                    mainOption.value = customerId;
+                    mainOption.textContent = customerName;
+                    if (customerId === 'unknown') mainOption.classList.add('hidden');
+                    mainDropdown.appendChild(mainOption);
+                }
+
+                // Add to quick-add dropdown
+                const quickOption = document.createElement('option');
+                quickOption.value = customerId;
+                quickOption.textContent = customerName;
+                if (customerId === 'unknown') quickOption.classList.add('hidden');
+                quickAddDropdown.appendChild(quickOption);
+            });
+
+            // Target ID to select: preference is global matched ID, then current value
+            const targetId = window.currentMatchedCustomerId || '';
+            
+            if (targetId) {
+                console.log('Applying target customer selection:', targetId);
+                if (quickAddDropdown) quickAddDropdown.value = targetId;
+                if (mainDropdown) mainDropdown.value = targetId;
+                updateHistoryBadge(targetId);
+            } else {
+                updateHistoryBadge('');
+            }
+        }
+
+        function updateDropdownSelection(customerId, customerName) {
+            const idToSelect = customerId ? String(customerId) : '';
+            // Update the quick-add dropdown to show the selected customer
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+            if (quickAddDropdown) {
+                quickAddDropdown.value = idToSelect;
+                console.log(`Dropdown updated to customer ID: ${idToSelect}, Name: ${customerName}`);
+                // Update history badge when selection changes via detection
+                updateHistoryBadge(customerName);
+            }
+
+            // Also update main dropdown if it exists
+            const mainDropdown = document.getElementById('current-customer');
+            if (mainDropdown) {
+                mainDropdown.value = idToSelect;
+            }
+        }
+
+        function updateCustomerSelection(customer) {
+            const dropdown = document.getElementById('current-customer');
+
+            // If dropdown doesn't exist, skip update
+            if (!dropdown) {
+                console.log('current-customer dropdown not found, skipping update');
+                return;
+            }
+
+            if (customer.id && customer.name) {
+                // Update TLL display
+                const tllDiv = document.getElementById('last-scan-duration');
+                if (tllDiv) {
+                    if (customer.metadata && customer.metadata.last_scan_duration) {
+                        tllDiv.textContent = 'TLL: ' + customer.metadata.last_scan_duration;
+                        tllDiv.classList.remove('hidden');
+                    } else {
+                        tllDiv.classList.add('hidden');
+                    }
+                }
+
+                // Update dropdown to show selected customer
+                let customerExists = false;
+                for (let option of dropdown.options) {
+                    if (option.value === customer.id) {
+                        option.textContent = `${customer.name} (${customer.confidence.toFixed(2)} confidence)`;
+                        customerExists = true;
+                        break;
+                    }
+                }
+                
+                if (!customerExists) {
+                    // Add temporary option for current customer
+                    const option = document.createElement('option');
+                    option.value = customer.id;
+                    option.textContent = `${customer.name} (Manual Assignment)`;
+                    dropdown.appendChild(option);
+                }
+                
+                dropdown.value = customer.id;
+            } else {
+                dropdown.value = '';
+            }
+        }
+
+        function displayCustomerList(customers) {
+            // Create a simple modal or alert to show customers
+            const customerList = customers.map(c =>
+                `${c.name || c.get?.('name')} (ID: ${c.id || c.get?.('id')})`
+            ).join('\n');
+
+            showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
+        }
+
+        // Report Generation Functions
+        let lastScanTarget = '';
+        let lastScanResults = {};
+        let reportTimerInterval = null;
+        let reportStartTime = 0;
+
+        function startReportTimer() {
+            const container = document.getElementById('scan-timer-container');
+            const display = document.getElementById('scan-timer');
+            const feedbackBox = document.getElementById('feedback-container');
+            
+            container.classList.remove('hidden');
+            feedbackBox.classList.add('card-pulsing');
+            reportStartTime = Date.now();
+            
+            if (reportTimerInterval) clearInterval(reportTimerInterval);
+            
+            reportTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - reportStartTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                display.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopReportTimer() {
+            const feedbackBox = document.getElementById('feedback-container');
+            const timerContainer = document.getElementById('scan-timer-container');
+            
+            if (reportTimerInterval) {
+                clearInterval(reportTimerInterval);
+                reportTimerInterval = null;
+            }
+            
+            feedbackBox.classList.remove('card-pulsing');
+            
+            // Hide timer and clear feedback box after 5 seconds
+            setTimeout(() => {
+                timerContainer.classList.add('hidden');
+                feedbackBox.innerHTML = '';
+                // Also hide the feedback container parent div
+                feedbackBox.parentElement.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Store scan results globally for report generation
+        socket.on('scan_results', function(data) {
+            lastScanResults.quickScan = data;
+        });
+
+        socket.on('deep_scan_results', function(data) {
+            lastScanResults.deepScan = data;
+        });
+
+        socket.on('arp_results', function(data) {
+            lastScanResults.arpScan = data;
+        });
+
+        document.getElementById('generate-report-btn').addEventListener('click', function() {
+            const target = document.getElementById('scan-target').value || lastScanTarget;
+
+            if (!target) {
+                showReportStatus('Please enter a target or run a scan first', 'error');
+                return;
+            }
+
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Unknown';
+            
+            if (customerOption) {
+                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                customerName = customerOption.text.split(' (')[0];
+            }
+
+            // Add pulsing to the button
+            this.classList.add('card-pulsing');
+            
+            // Start the incrementing timer
+            startReportTimer();
+
+            socket.emit('generate_report', {
+                target: target,
+                customer_name: customerName,
+                scan_results: lastScanResults
+            });
+        });
+
+        // Pulsing Progress Card Helper Functions
+        function createReportProgressCard(message) {
+            const reportCard = document.createElement('div');
+            reportCard.id = 'report-progress-card';
+            reportCard.className = 'mt-4 bg-olive-50 p-4 rounded-xl border border-olive-300 card-pulsing';
+            reportCard.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="relative flex size-3">
+                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-500 opacity-75"></span>
+                        <span class="relative inline-flex size-3 rounded-full bg-olive-600"></span>
+                    </span>
+                    <p id="report-progress-text" class="text-sm font-medium text-olive-900">${message}</p>
+                </div>
+            `;
+            const statusDiv = document.getElementById('report-status');
+            statusDiv.parentNode.insertBefore(reportCard, statusDiv.nextSibling);
+        }
+
+        function updateReportProgress(message) {
+            const progressText = document.getElementById('report-progress-text');
+            if (progressText) {
+                progressText.textContent = message;
+            }
+        }
+
+        function removeReportProgressCard() {
+            const card = document.getElementById('report-progress-card');
+            if (card) {
+                card.remove();
+            }
+        }
+
+        function showReportStatus(message, type) {
+            const statusDiv = document.getElementById('report-status');
+            const statusText = document.getElementById('report-status-text');
+
+            statusDiv.classList.remove('hidden', 'bg-olive-100', 'bg-olive-200', 'bg-red-100', 'text-olive-800', 'text-olive-900', 'text-red-800');
+            statusDiv.classList.add(
+                type === 'error' ? 'bg-red-100' : 'bg-olive-100',
+                type === 'error' ? 'text-red-800' :
+                type === 'success' ? 'text-olive-900' :
+                'text-olive-800'
+            );
+
+            statusText.textContent = message;
+
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+            }
+        }
+
+        // Historical Scan Viewer Functions
+        document.getElementById('view-history-btn').addEventListener('click', function() {
+            showHistoryModal();
+        });
+
+        function showHistoryModal() {
+            const modal = document.getElementById('history-modal');
+            const customerDropdown = document.getElementById('current-customer');
+            const filter = document.getElementById('history-customer-filter');
+            
+            modal.classList.remove('hidden');
+            
+            // Get current customer name from the main UI
+            let currentName = '';
+            if (customerDropdown && customerDropdown.selectedOptions[0]) {
+                currentName = customerDropdown.selectedOptions[0].text.split(' (')[0];
+            }
+            
+            if (currentName && currentName !== 'Unassigned' && currentName !== 'Unknown Network' && currentName !== 'Auto-detect network...') {
+                // Set the filter to this customer by default
+                modal.dataset.defaultCustomer = currentName;
+            } else {
+                delete modal.dataset.defaultCustomer;
+            }
+            
+            loadScanHistory(true);
+        }
+
+        function hideHistoryModal() {
+            document.getElementById('history-modal').classList.add('hidden');
+        }
+
+        async function loadScanHistory(isInitialLoad = false) {
+            const modal = document.getElementById('history-modal');
+            const filter = document.getElementById('history-customer-filter');
+            const dateFilter = document.getElementById('history-date-filter').value;
+            
+            let customerFilter = filter.value;
+            
+            // On initial load, use the default customer from the modal dataset if filter is empty
+            if (isInitialLoad && !customerFilter && modal.dataset.defaultCustomer) {
+                customerFilter = modal.dataset.defaultCustomer;
+            }
+
+            try {
+                const response = await fetch('/api/scans');
+                const data = await response.json();
+
+                let scans = data.scans || [];
+
+                // Re-populate the customer filter list first so we can select the right one
+                populateCustomerFilter(scans, customerFilter);
+                
+                // Now get the possibly updated filter value (if populateCustomerFilter set it)
+                const activeFilter = filter.value;
+
+                // Apply filters
+                if (activeFilter) {
+                    scans = scans.filter(s => s.customer_name === activeFilter);
+                }
+                if (dateFilter) {
+                    scans = scans.filter(s => s.date === dateFilter);
+                }
+
+                displayScanHistory(scans);
+
+            } catch (error) {
+                console.error('Error loading scan history:', error);
+                document.getElementById('history-list').innerHTML =
+                    '<p class="text-red-600">Error loading scan history</p>';
+            }
+        }
+
+        function populateCustomerFilter(scans, defaultValue = '') {
+            const filter = document.getElementById('history-customer-filter');
+            const customers = [...new Set(scans.map(s => s.customer_name))].sort();
+
+            const currentValue = filter.value || defaultValue;
+            filter.innerHTML = '<option value="">All Customers</option>';
+
+            customers.forEach(customer => {
+                const option = document.createElement('option');
+                option.value = customer;
+                option.textContent = customer;
+                filter.appendChild(option);
+            });
+
+            // Set to current/default value if it exists in the new list
+            if (customers.includes(currentValue)) {
+                filter.value = currentValue;
+            } else {
+                filter.value = '';
+            }
+        }
+
+        function displayScanHistory(scans) {
+            const historyList = document.getElementById('history-list');
+
+            if (scans.length === 0) {
+                historyList.innerHTML = '<p class="text-olive-600">No scans found</p>';
+                return;
+            }
+
+            historyList.innerHTML = scans.map(scan => {
+                const date = new Date(scan.timestamp).toLocaleString();
+
+                return `
+                    <div class="bg-olive-50 p-4 rounded-lg border border-olive-300">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 class="font-display text-lg text-olive-900">${scan.customer_name || 'Unknown'}</h3>
+                                <p class="text-sm text-olive-600">${date}</p>
+                                <p class="text-sm text-olive-700 mt-1">Target: <span class="font-mono">${scan.target}</span></p>
+                            </div>
+                            <div class="flex gap-2">
+                                ${scan.has_html ? `
+                                    <a href="/api/scans/${scan.path}/html" target="_blank"
+                                       class="px-3 py-1 bg-olive-600 text-white rounded text-sm hover:bg-olive-700">
+                                        View HTML
+                                    </a>
+                                ` : ''}
+                                ${scan.has_pdf ? `
+                                    <a href="/api/scans/${scan.path}/pdf"
+                                       class="px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800">
+                                        Download PDF
+                                    </a>
+                                ` : ''}
+                                ${scan.has_xml ? `
+                                    <a href="/api/scans/${scan.path}/xml"
+                                       class="px-3 py-1 bg-olive-500 text-white rounded text-sm hover:bg-olive-600">
+                                        Download XML
+                                    </a>
+                                ` : ''}
+                                <button onclick="deleteScan('${scan.path}')"
+                                        class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deleteScan(path) {
+            if (!confirm('Are you sure you want to delete this scan?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/scans/${path}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadScanHistory(); // Reload list
+                } else {
+                    alert('Error deleting scan');
+                }
+            } catch (error) {
+                console.error('Error deleting scan:', error);
+                alert('Error deleting scan');
+            }
+        }
+
+        // Store last scan target
+        document.getElementById('start-scan-btn').addEventListener('click', function() {
+            lastScanTarget = document.getElementById('scan-target').value;
+        });
+    </script>
+</body>
+</html>
