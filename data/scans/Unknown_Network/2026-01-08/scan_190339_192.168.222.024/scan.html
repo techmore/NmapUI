@@ -1,0 +1,4733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"></script><link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs" crossorigin="anonymous"></script><script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script><script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script><script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script><script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.colVis.min.js"></script><script src="https://cdn.datatables.net/plug-ins/1.13.7/sorting/ip-address.js"></script><script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  olive: {
+                    50: 'oklch(96% 0.015 110)',
+                    100: 'oklch(91% 0.020 110)',
+                    200: 'oklch(85% 0.028 110)',
+                    300: 'oklch(75% 0.040 110)',
+                    400: 'oklch(62% 0.055 110)',
+                    500: 'oklch(50% 0.065 110)',
+                    600: 'oklch(42% 0.055 110)',
+                    700: 'oklch(35% 0.045 110)',
+                    800: 'oklch(28% 0.035 110)',
+                    900: 'oklch(22% 0.025 110)',
+                    950: 'oklch(16% 0.015 110)',
+                  }
+                },
+                fontFamily: {
+                  display: ['Instrument Serif', 'serif'],
+                  sans: ['Inter', 'system-ui', 'sans-serif'],
+                }
+              }
+            }
+          }
+        </script><style>
+          body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: oklch(91% 0.012 106.5);
+            color: oklch(15.3% 0.006 107.1);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+          }
+          
+          h1, h2, h3, h4, h5 {
+            font-family: 'Instrument Serif', serif;
+          }
+          
+          ::selection {
+            background-color: oklch(75% 0.040 110);
+            color: white;
+          }
+          
+          .nav-link {
+            position: relative;
+            transition: color 0.2s ease;
+          }
+          
+          .nav-link:hover {
+            color: oklch(42% 0.055 110);
+          }
+          
+          .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: oklch(42% 0.055 110);
+            transition: width 0.2s ease;
+          }
+          
+          .nav-link:hover::after {
+            width: 100%;
+          }
+          
+          .card {
+            background: white;
+            border: 1px solid oklch(85% 0.028 110);
+            border-radius: 12px;
+            transition: all 0.2s ease;
+          }
+          
+          .card:hover {
+            border-color: oklch(75% 0.040 110);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          }
+          
+          .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+          }
+          
+          .badge-success {
+            background-color: oklch(62% 0.055 110);
+            color: white;
+          }
+          
+          .badge-danger {
+            background-color: #ef4444;
+            color: white;
+          }
+          
+          .badge-warning {
+            background-color: #f59e0b;
+            color: white;
+          }
+          
+          table.dataTable {
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid oklch(85% 0.028 110);
+            border-radius: 12px;
+            overflow: hidden;
+          }
+          
+          table.dataTable thead th {
+            background-color: oklch(22% 0.025 110);
+            color: white;
+            font-weight: 500;
+            border: none;
+            padding: 12px 16px;
+          }
+          
+          table.dataTable tbody td {
+            border-top: 1px solid oklch(85% 0.028 110);
+            padding: 12px 16px;
+          }
+          
+          table.dataTable tbody tr:hover {
+            background-color: oklch(96% 0.015 110);
+          }
+          
+          .dt-buttons {
+            margin-bottom: 16px;
+          }
+          
+          .dt-button {
+            background-color: oklch(22% 0.025 110) !important;
+            color: white !important;
+            border: none !important;
+            padding: 8px 16px !important;
+            border-radius: 8px !important;
+            margin-right: 8px !important;
+            font-size: 0.875rem !important;
+            transition: background-color 0.2s ease !important;
+          }
+          
+          .dt-button:hover {
+            background-color: oklch(35% 0.045 110) !important;
+          }
+          
+          input[type="text"],
+          input[type="search"],
+          textarea {
+            background-color: white;
+            color: oklch(16% 0.015 110);
+            border: 1px solid oklch(75% 0.040 110);
+            padding: 8px 12px;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s ease;
+          }
+          
+          input:focus,
+          textarea:focus {
+            border-color: oklch(42% 0.055 110);
+          }
+          
+          button {
+            background-color: oklch(22% 0.025 110);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            font-weight: 500;
+          }
+          
+          button:hover {
+            background-color: oklch(35% 0.045 110);
+          }
+          
+          pre {
+            background-color: oklch(96% 0.015 110);
+            border: 1px solid oklch(85% 0.028 110);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+          }
+          
+          a {
+            color: oklch(42% 0.055 110);
+            text-decoration: none;
+            transition: color 0.2s ease;
+          }
+          
+          a:hover {
+            color: oklch(35% 0.045 110);
+            text-decoration: underline;
+          }
+          
+          .progress-bar {
+            height: 32px;
+            background-color: oklch(96% 0.015 110);
+            border-radius: 9999px;
+            overflow: hidden;
+            display: flex;
+          }
+          
+          .progress-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: width 0.3s ease;
+          }
+          
+          .progress-success {
+            background-color: oklch(62% 0.055 110);
+          }
+          
+          .progress-danger {
+            background-color: #ef4444;
+          }
+          
+          .highlight-keyword {
+            color: #ef4444;
+            font-weight: 600;
+          }
+          
+          .collapsible-header {
+            cursor: pointer;
+            user-select: none;
+          }
+          
+          .collapsible-header:hover {
+            background-color: oklch(96% 0.015 110);
+          }
+          
+          .chevron {
+            transition: transform 0.2s ease;
+          }
+          
+          .chevron.collapsed {
+            transform: rotate(-90deg);
+          }
+          
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          .fade-in {
+            animation: fadeIn 0.3s ease;
+          }
+        </style>
+<title>Nmap Scan Results</title>
+</head>
+<body class="min-h-screen">
+<nav class="fixed top-0 left-0 right-0 bg-white border-b border-olive-200 z-50 shadow-sm"><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="flex items-center justify-between h-16">
+<div class="flex items-center space-x-8">
+<span class="text-2xl font-display font-semibold text-olive-900">Nmap Results</span><div class="hidden md:flex space-x-6">
+<a href="#scannedhosts" class="nav-link text-sm font-medium text-olive-700">Scanned Hosts</a><a href="#openservices" class="nav-link text-sm font-medium text-olive-700">Open Services</a><a href="#webservices" class="nav-link text-sm font-medium text-olive-700">Web Services</a><a href="#productversions" class="nav-link text-sm font-medium text-olive-700">Product Versions</a><a href="#ssh-auth" class="nav-link text-sm font-medium text-olive-700">SSH Auth</a><a href="#onlinehosts" class="nav-link text-sm font-medium text-olive-700">Online Hosts</a>
+</div>
+</div>
+<div class="flex items-center space-x-4">
+<a href="https://www.pentestfactory.de/schwachstellendatenbank/" target="_blank" class="text-sm text-olive-600 hover:text-olive-800" title="Vulnerability Database">CVEs ↗</a><a href="https://www.ssllabs.com/ssltest/" target="_blank" class="text-sm text-olive-600 hover:text-olive-800" title="SSL Server Test">SSL/TLS ↗</a><a href="https://securityheaders.com/" target="_blank" class="text-sm text-olive-600 hover:text-olive-800" title="HTTP Header Test">Headers ↗</a>
+</div>
+</div></div></nav><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+<div class="card p-8 mb-8 fade-in">
+<h1 class="text-4xl font-display font-bold text-olive-900 mb-2">Nmap Port Scanning Results</h1>
+<p class="text-olive-600 mb-4">
+              Version 7.98 · 
+              Thu Jan  8 19:03:39 2026 – Thu Jan  8 19:13:18 2026</p>
+<div class="bg-olive-50 border border-olive-200 rounded-lg p-4 mb-6"><pre class="text-xs overflow-x-auto"><a target="_blank" class="text-olive-700 hover:text-olive-900" href="https://explainshell.com/explain?cmd=nmap%20-sS%20-T4%20-A%20-sC%20--script%20/Users/seandolbec/Desktop/Nmap-2026-ui-update/nmap-vulners/vulners.nse%20-oA%20/Users/seandolbec/Desktop/Nmap-2026-ui-update/data/scans/Unknown_Network/2026-01-08/scan_190339_192.168.222.024/scan%20192.168.222.0/24">nmap -sS -T4 -A -sC --script /Users/seandolbec/Desktop/Nmap-2026-ui-update/nmap-vulners/vulners.nse -oA /Users/seandolbec/Desktop/Nmap-2026-ui-update/data/scans/Unknown_Network/2026-01-08/scan_190339_192.168.222.024/scan 192.168.222.0/24</a></pre></div>
+<div class="grid grid-cols-3 gap-4 mb-6">
+<div class="text-center">
+<div class="text-3xl font-bold text-olive-900">256</div>
+<div class="text-sm text-olive-600">Total Hosts</div>
+</div>
+<div class="text-center">
+<div class="text-3xl font-bold text-olive-600">21</div>
+<div class="text-sm text-olive-600">Hosts Up</div>
+</div>
+<div class="text-center">
+<div class="text-3xl font-bold text-olive-400">235</div>
+<div class="text-sm text-olive-600">Hosts Down</div>
+</div>
+</div>
+<div class="progress-bar mb-6">
+<div class="progress-segment progress-success" style="width:8.203125%;">21 Up
+              </div>
+<div class="progress-segment progress-danger" style="width:91.796875%;">235 Down
+              </div>
+</div>
+<div class="border-t border-olive-200 pt-6">
+<label class="block text-sm font-medium text-olive-900 mb-2">Highlight Keywords in Services</label><textarea id="keyword-input" rows="2" placeholder="sha1, password, md5, login..." class="w-full mb-3">sha1,login,password,md5</textarea><div class="flex space-x-3">
+<button id="highlight-button" onclick="highlight()">Apply Highlighting</button><button onclick="document.location.reload(true);" class="bg-olive-400">Reset</button>
+</div>
+</div>
+</div>
+<div id="scannedhosts" class="mb-12 fade-in">
+<h2 class="text-3xl font-display font-bold text-olive-900 mb-6">
+              Scanned Hosts
+              </h2>
+<div class="card p-6"><table id="table-overview" class="w-full">
+<thead><tr>
+<th class="text-left">State</th>
+<th class="text-left">Address</th>
+<th class="text-left">Hostname</th>
+<th class="text-left">TCP (open)</th>
+<th class="text-left">UDP (open)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td class="text-olive-700">unifi.localdomain</td>
+<td class="text-center">5</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-7">192.168.222.7</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">2</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td class="text-center">7</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-11">192.168.222.11</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">0</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-12">192.168.222.12</a></td>
+<td class="text-olive-700">HS220.localdomain</td>
+<td class="text-center">1</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-17">192.168.222.17</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">1</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-19">192.168.222.19</a></td>
+<td class="text-olive-700">Techmore.localdomain</td>
+<td class="text-center">2</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-39">192.168.222.39</a></td>
+<td class="text-olive-700">HS103.localdomain</td>
+<td class="text-center">1</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-57">192.168.222.57</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">2</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-87">192.168.222.87</a></td>
+<td class="text-olive-700">SonosZP.localdomain</td>
+<td class="text-center">2</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-95">192.168.222.95</a></td>
+<td class="text-olive-700">espressif.localdomain</td>
+<td class="text-center">1</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-108">192.168.222.108</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">1</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-119">192.168.222.119</a></td>
+<td class="text-olive-700">Mac.localdomain</td>
+<td class="text-center">1</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-120">192.168.222.120</a></td>
+<td class="text-olive-700">Levoit-Humidifier.localdomain</td>
+<td class="text-center">0</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-150">192.168.222.150</a></td>
+<td class="text-olive-700">barn---patio.localdomain</td>
+<td class="text-center">2</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-166">192.168.222.166</a></td>
+<td class="text-olive-700">roborock-vacuum-a75.localdomain</td>
+<td class="text-center">0</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-222">192.168.222.222</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">2</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-236">192.168.222.236</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">2</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-251">192.168.222.251</a></td>
+<td class="text-olive-700"></td>
+<td class="text-center">0</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td class="text-center">8</td>
+<td class="text-center">0</td>
+</tr>
+<tr>
+<td><span class="badge badge-success">up</span></td>
+<td><a class="font-mono text-sm" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td class="text-center">8</td>
+<td class="text-center">0</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div id="openservices" class="mb-12 fade-in">
+<h2 class="text-3xl font-display font-bold text-olive-900 mb-6">Open Services</h2>
+<div class="card p-6"><table id="table-services" class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Hostname</th>
+<th class="text-left">Address</th>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra</th>
+<th class="text-left">SSL Cert</th>
+<th class="text-left">Title</th>
+<th class="text-left">CPE</th>
+</tr></thead>
+<tbody>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-80">80</a></td>
+<td>tcp</td>
+<td>http</td>
+<td>nginx</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:igor_sysoev:nginx</td>
+</tr>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-443">443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>nginx</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:igor_sysoev:nginx</td>
+</tr>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-6789">6789</a></td>
+<td>tcp</td>
+<td>ibm-db2-admin</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-8080">8080</a></td>
+<td>tcp</td>
+<td>http</td>
+<td>Apache Tomcat</td>
+<td></td>
+<td class="text-olive-600">language: en</td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:apache:tomcat</td>
+</tr>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-8443">8443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>Apache Tomcat</td>
+<td></td>
+<td class="text-olive-600">language: en</td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:apache:tomcat</td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-7">192.168.222.7</a></td>
+<td><a class="font-mono" href="#port-192-168-222-7-1443">1443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-7">192.168.222.7</a></td>
+<td><a class="font-mono" href="#port-192-168-222-7-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td><a class="font-mono" href="#port-192-168-222-10-53">53</a></td>
+<td>tcp</td>
+<td>domain</td>
+<td>Apple device dnsd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td><a class="font-mono" href="#port-192-168-222-10-5000">5000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td><a class="font-mono" href="#port-192-168-222-10-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td><a class="font-mono" href="#port-192-168-222-10-7100">7100</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td><a class="font-mono" href="#port-192-168-222-10-49152">49152</a></td>
+<td>tcp</td>
+<td>tcpwrapped</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td><a class="font-mono" href="#port-192-168-222-10-49153">49153</a></td>
+<td>tcp</td>
+<td></td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Eve1.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-10">192.168.222.10</a></td>
+<td><a class="font-mono" href="#port-192-168-222-10-62078">62078</a></td>
+<td>tcp</td>
+<td>tcpwrapped</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">HS220.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-12">192.168.222.12</a></td>
+<td><a class="font-mono" href="#port-192-168-222-12-9999">9999</a></td>
+<td>tcp</td>
+<td>abyss</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-17">192.168.222.17</a></td>
+<td><a class="font-mono" href="#port-192-168-222-17-9999">9999</a></td>
+<td>tcp</td>
+<td>abyss</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Techmore.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-19">192.168.222.19</a></td>
+<td><a class="font-mono" href="#port-192-168-222-19-49152">49152</a></td>
+<td>tcp</td>
+<td>tcpwrapped</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Techmore.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-19">192.168.222.19</a></td>
+<td><a class="font-mono" href="#port-192-168-222-19-62078">62078</a></td>
+<td>tcp</td>
+<td>iphone-sync</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">HS103.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-39">192.168.222.39</a></td>
+<td><a class="font-mono" href="#port-192-168-222-39-9999">9999</a></td>
+<td>tcp</td>
+<td>abyss</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-57">192.168.222.57</a></td>
+<td><a class="font-mono" href="#port-192-168-222-57-1443">1443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-57">192.168.222.57</a></td>
+<td><a class="font-mono" href="#port-192-168-222-57-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">SonosZP.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-87">192.168.222.87</a></td>
+<td><a class="font-mono" href="#port-192-168-222-87-1443">1443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">SonosZP.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-87">192.168.222.87</a></td>
+<td><a class="font-mono" href="#port-192-168-222-87-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">espressif.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-95">192.168.222.95</a></td>
+<td><a class="font-mono" href="#port-192-168-222-95-8080">8080</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>http-proxy</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-108">192.168.222.108</a></td>
+<td><a class="font-mono" href="#port-192-168-222-108-1443">1443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">Mac.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-119">192.168.222.119</a></td>
+<td><a class="font-mono" href="#port-192-168-222-119-22">22</a></td>
+<td>tcp</td>
+<td>ssh</td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td class="text-olive-600">protocol 2.0</td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><a target="_blank" class="text-olive-700" href="https://cve.pentestfactory.de/?cpe=cpe:/a:openbsd:openssh:10.0">cpe:/a:openbsd:openssh:10.0</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">barn---patio.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-150">192.168.222.150</a></td>
+<td><a class="font-mono" href="#port-192-168-222-150-80">80</a></td>
+<td>tcp</td>
+<td>http</td>
+<td>lighttpd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:lighttpd:lighttpd</td>
+</tr>
+<tr>
+<td class="text-olive-700">barn---patio.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-150">192.168.222.150</a></td>
+<td><a class="font-mono" href="#port-192-168-222-150-443">443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>lighttpd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:lighttpd:lighttpd</td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-222">192.168.222.222</a></td>
+<td><a class="font-mono" href="#port-192-168-222-222-1443">1443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-222">192.168.222.222</a></td>
+<td><a class="font-mono" href="#port-192-168-222-222-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-236">192.168.222.236</a></td>
+<td><a class="font-mono" href="#port-192-168-222-236-1443">1443</a></td>
+<td>tcp</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">N/A</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-236">192.168.222.236</a></td>
+<td><a class="font-mono" href="#port-192-168-222-236-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-22">22</a></td>
+<td>tcp</td>
+<td>ssh</td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td class="text-olive-600">protocol 2.0</td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><a target="_blank" class="text-olive-700" href="https://cve.pentestfactory.de/?cpe=cpe:/a:openbsd:openssh:10.0">cpe:/a:openbsd:openssh:10.0</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-88">88</a></td>
+<td>tcp</td>
+<td>kerberos-sec</td>
+<td>Heimdal Kerberos</td>
+<td></td>
+<td class="text-olive-600">server time: 2026-01-09 00:07:53Z</td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:heimdal:kerberos</td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-3031">3031</a></td>
+<td>tcp</td>
+<td>eppc</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-3283">3283</a></td>
+<td>tcp</td>
+<td>netassistant</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-5000">5000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-5900">5900</a></td>
+<td>tcp</td>
+<td>vnc</td>
+<td>Apple remote desktop vnc</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/o:apple:mac_os_x</td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-49155">49155</a></td>
+<td>tcp</td>
+<td></td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-22">22</a></td>
+<td>tcp</td>
+<td>ssh</td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td class="text-olive-600">protocol 2.0</td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><a target="_blank" class="text-olive-700" href="https://cve.pentestfactory.de/?cpe=cpe:/a:openbsd:openssh:10.0">cpe:/a:openbsd:openssh:10.0</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-88">88</a></td>
+<td>tcp</td>
+<td>kerberos-sec</td>
+<td>Heimdal Kerberos</td>
+<td></td>
+<td class="text-olive-600">server time: 2026-01-09 00:10:39Z</td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/a:heimdal:kerberos</td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-3031">3031</a></td>
+<td>tcp</td>
+<td>eppc</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-3283">3283</a></td>
+<td>tcp</td>
+<td>netassistant</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-5000">5000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-5900">5900</a></td>
+<td>tcp</td>
+<td>vnc</td>
+<td>Apple remote desktop vnc</td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs">cpe:/o:apple:mac_os_x</td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-7000">7000</a></td>
+<td>tcp</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-49155">49155</a></td>
+<td>tcp</td>
+<td></td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+<td class="text-xs"></td>
+<td class="italic text-olive-600"></td>
+<td class="font-mono text-xs"><span class="text-olive-400">unknown</span></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div id="webservices" class="mb-12 fade-in">
+<h2 class="text-3xl font-display font-bold text-olive-900 mb-6">Web Services</h2>
+<div class="card p-6"><table id="web-services" class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Hostname</th>
+<th class="text-left">Address</th>
+<th class="text-left">Port</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Title</th>
+<th class="text-left">SSL Cert</th>
+<th class="text-left">URL</th>
+</tr></thead>
+<tbody>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-80">80</a></td>
+<td>http</td>
+<td>nginx</td>
+<td></td>
+<td class="italic text-olive-600"></td>
+<td class="text-xs"></td>
+<td><a target="_blank" class="font-mono text-xs" href="http://unifi.localdomain:80">
+                                    http://unifi.localdomain:80</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-443">443</a></td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>nginx</td>
+<td></td>
+<td class="italic text-olive-600"></td>
+<td class="text-xs"></td>
+<td><a target="_blank" class="font-mono text-xs" href="https://unifi.localdomain:443">
+                                    https://unifi.localdomain:443</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-8080">8080</a></td>
+<td>http</td>
+<td>Apache Tomcat</td>
+<td></td>
+<td class="italic text-olive-600"></td>
+<td class="text-xs"></td>
+<td><a target="_blank" class="font-mono text-xs" href="http://unifi.localdomain:8080">
+                                    http://unifi.localdomain:8080</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">unifi.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-1">192.168.222.1</a></td>
+<td><a class="font-mono" href="#port-192-168-222-1-8443">8443</a></td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>Apache Tomcat</td>
+<td></td>
+<td class="italic text-olive-600"></td>
+<td class="text-xs"></td>
+<td><a target="_blank" class="font-mono text-xs" href="https://unifi.localdomain:8443">
+                                    https://unifi.localdomain:8443</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">espressif.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-95">192.168.222.95</a></td>
+<td><a class="font-mono" href="#port-192-168-222-95-8080">8080</a></td>
+<td>
+<span class="text-olive-600">ssl/</span>http-proxy</td>
+<td></td>
+<td></td>
+<td class="italic text-olive-600"></td>
+<td class="text-xs"></td>
+<td><a target="_blank" class="font-mono text-xs" href="https://espressif.localdomain:8080">
+                                    https://espressif.localdomain:8080</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">barn---patio.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-150">192.168.222.150</a></td>
+<td><a class="font-mono" href="#port-192-168-222-150-80">80</a></td>
+<td>http</td>
+<td>lighttpd</td>
+<td></td>
+<td class="italic text-olive-600"></td>
+<td class="text-xs"></td>
+<td><a target="_blank" class="font-mono text-xs" href="http://barn---patio.localdomain:80">
+                                    http://barn---patio.localdomain:80</a></td>
+</tr>
+<tr>
+<td class="text-olive-700">barn---patio.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-150">192.168.222.150</a></td>
+<td><a class="font-mono" href="#port-192-168-222-150-443">443</a></td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>lighttpd</td>
+<td></td>
+<td class="italic text-olive-600"></td>
+<td class="text-xs"></td>
+<td><a target="_blank" class="font-mono text-xs" href="https://barn---patio.localdomain:443">
+                                    https://barn---patio.localdomain:443</a></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div id="productversions" class="mb-12 fade-in">
+<h2 class="text-3xl font-display font-bold text-olive-900 mb-6">Product Versions</h2>
+<div class="card p-6"><table id="table-product-versions" class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Count</th>
+<th class="text-left">Host List</th>
+<th class="text-left">CPE</th>
+</tr></thead>
+<tbody><tr>
+<td class="font-medium">OpenSSH</td>
+<td>10.0</td>
+<td class="text-center font-medium text-olive-700">3</td>
+<td class="text-xs">
+<a class="inline-block mb-1" href="#port-192-168-222-119-22">Mac.localdomain (192.168.222.119)
+                              <span class="text-olive-600"> [TCP/22]</span></a>, <a class="inline-block mb-1" href="#port-192-168-222-246-22">MacBookPro.localdomain (192.168.222.246)
+                              <span class="text-olive-600"> [TCP/22]</span></a>, <a class="inline-block mb-1" href="#port-192-168-222-64-22">seans-MBP-5.localdomain (192.168.222.64)
+                              <span class="text-olive-600"> [TCP/22]</span></a>
+</td>
+<td class="font-mono text-xs"><a target="_blank" class="text-olive-700" href="https://cve.pentestfactory.de/?cpe=cpe:/a:openbsd:openssh:10.0">cpe:/a:openbsd:openssh:10.0</a></td>
+</tr></tbody>
+</table></div>
+</div>
+<div id="ssh-auth" class="mb-12 fade-in">
+<h2 class="text-3xl font-display font-bold text-olive-900 mb-6">SSH Authentication</h2>
+<div class="card p-6"><table id="table-ssh-auth" class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Host</th>
+<th class="text-left">IP</th>
+<th class="text-left">Port</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Auth Methods</th>
+</tr></thead>
+<tbody>
+<tr>
+<td class="text-olive-700">Mac.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-119">192.168.222.119</a></td>
+<td><a class="font-mono" href="#port-192-168-222-119-22">TCP/22</a></td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td>-</td>
+</tr>
+<tr>
+<td class="text-olive-700">MacBookPro.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-246">192.168.222.246</a></td>
+<td><a class="font-mono" href="#port-192-168-222-246-22">TCP/22</a></td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td>-</td>
+</tr>
+<tr>
+<td class="text-olive-700">seans-MBP-5.localdomain</td>
+<td><a class="font-mono" href="#onlinehosts-192-168-222-64">192.168.222.64</a></td>
+<td><a class="font-mono" href="#port-192-168-222-64-22">TCP/22</a></td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td>-</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div id="onlinehosts" class="mb-12 fade-in">
+<h2 class="text-3xl font-display font-bold text-olive-900 mb-6">Online Hosts</h2>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-1" onclick="toggleCollapse('192-168-222-1')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.1<span class="text-olive-600 font-normal"> – unifi.localdomain</span>
+</h3></div>
+<span class="badge badge-success">5 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-1">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">unifi.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-1-22">22</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ssh</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-1-53">53</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>domain</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-1-80">80</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>http</td>
+<td>nginx</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:igor_sysoev:nginx">cpe:/a:igor_sysoev:nginx</a></div></td></tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-1-110">110</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pop3</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-1-113">113</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ident</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-1-443">443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>nginx</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:igor_sysoev:nginx">cpe:/a:igor_sysoev:nginx</a></div></td></tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-1-554">554</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-1-6789">6789</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>ibm-db2-admin</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-1-8080">8080</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>http</td>
+<td>Apache Tomcat</td>
+<td></td>
+<td class="text-olive-600">language: en</td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:apache:tomcat">cpe:/a:apache:tomcat</a></div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-1-8443">8443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>Apache Tomcat</td>
+<td></td>
+<td class="text-olive-600">language: en</td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:apache:tomcat">cpe:/a:apache:tomcat</a></div></td></tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Android 10 - 12 (Linux 4.14 - 4.19)<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>GoogleAndroid10.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:google:android:10">cpe:/o:google:android:10</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>GoogleAndroid11.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:google:android:11">cpe:/o:google:android:11</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>GoogleAndroid12.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:google:android:12">cpe:/o:google:android:12</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 4.15 - 5.19<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux5.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:5">cpe:/o:linux:linux_kernel:5</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 2.6.32 - 3.10<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux2.6.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:2.6">cpe:/o:linux:linux_kernel:2.6</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Android 10 - 11 (Linux 4.14)<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>GoogleAndroid10.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:google:android:10">cpe:/o:google:android:10</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4.14">cpe:/o:linux:linux_kernel:4.14</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 5.10 - 5.19<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux5.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:5">cpe:/o:linux:linux_kernel:5</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Android 12 (Linux 5.4)<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>GoogleAndroid12.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:google:android:12">cpe:/o:google:android:12</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux5.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:5.4">cpe:/o:linux:linux_kernel:5.4</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Ubiquiti Dream Machine Pro gateway (Linux 4.19)<span class="text-olive-600">(95% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>router</div>
+<div>
+<span class="font-medium">Running:</span>Ubiquitiembedded (95%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>router</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (95%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4.19">cpe:/o:linux:linux_kernel:4.19</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Oracle VM Server 3.4.2 (Linux 4.1)<span class="text-olive-600">(95% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>OracleVM Server3.X (95%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:oracle:vm_server:3.4.2">cpe:/o:oracle:vm_server:3.4.2</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (95%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4.1">cpe:/o:linux:linux_kernel:4.1</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Symantec Web Gateway 5.2.0.361 (Linux 2.6)<span class="text-olive-600">(94% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>security-misc</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux2.6.X (94%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:2.6">cpe:/o:linux:linux_kernel:2.6</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>security-misc</div>
+<div>
+<span class="font-medium">Running:</span>Symantecembedded (94%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:symantec:web_gateway:5.2">cpe:/a:symantec:web_gateway:5.2</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-7" onclick="toggleCollapse('192-168-222-7')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.7</h3></div>
+<span class="badge badge-success">2 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-7">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-7-1443">1443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest, GetRequest, HTTPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  GenericLines: 
+    HTTP/1.1 408 Request Timeout
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/92.0-71170 (ZPS14)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 408&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 408&lt;/H1&gt;&lt;P&gt;Request Timeout&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  RTSPRequest, SIPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/92.0-71170 (ZPS14)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-7-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-10" onclick="toggleCollapse('192-168-222-10')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.10<span class="text-olive-600 font-normal"> – Eve1.localdomain</span>
+</h3></div>
+<span class="badge badge-success">7 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-10">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">Eve1.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-10-53">53</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>domain</td>
+<td>Apple device dnsd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-10-5000">5000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest: 
+    HTTP/1.1 404 Not Found
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 2
+    X-Apple-RequestReceivedTimestamp: 820650319
+  GetRequest: 
+    HTTP/1.1 404 Not Found
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 2
+    X-Apple-RequestReceivedTimestamp: 820645241
+  HTTPOptions: 
+    HTTP/1.1 200 OK
+    Date: Fri, 09 Jan 2026 00:04:50 GMT
+    Content-Length: 0
+    Public: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET, PUT
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 9
+    X-Apple-RequestReceivedTimestamp: 820650280
+  RTSPRequest: 
+    RTSP/1.0 200 OK
+    Date: Fri, 09 Jan 2026 00:04:45 GMT
+    Content-Length: 0
+    Public: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET, PUT
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 3
+    X-Apple-RequestReceivedTimestamp: 820645270
+  SIPOptions: 
+    RTSP/1.0 200 OK
+    Date: Fri, 09 Jan 2026 00:04:50 GMT
+    Content-Length: 0
+    Public: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET, PUT
+    Server: AirTunes/920.10.2
+    CSeq: 42 OPTIONS
+    X-Apple-ProcessingTime: 2
+    X-Apple-RequestReceivedTimestamp: 820650338</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-10-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest: 
+    HTTP/1.1 404 Not Found
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 2
+    X-Apple-RequestReceivedTimestamp: 820650290
+  GetRequest: 
+    HTTP/1.1 404 Not Found
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 3
+    X-Apple-RequestReceivedTimestamp: 820650239
+  HTTPOptions: 
+    HTTP/1.1 200 OK
+    Date: Fri, 09 Jan 2026 00:04:50 GMT
+    Content-Length: 0
+    Public: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET, PUT
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 3
+    X-Apple-RequestReceivedTimestamp: 820650257
+  RTSPRequest: 
+    RTSP/1.0 200 OK
+    Date: Fri, 09 Jan 2026 00:04:45 GMT
+    Content-Length: 0
+    Public: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET, PUT
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 9
+    X-Apple-RequestReceivedTimestamp: 820645228
+  SIPOptions: 
+    RTSP/1.0 200 OK
+    Date: Fri, 09 Jan 2026 00:04:50 GMT
+    Content-Length: 0
+    Public: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET, PUT
+    Server: AirTunes/920.10.2
+    CSeq: 42 OPTIONS
+    X-Apple-ProcessingTime: 1
+    X-Apple-RequestReceivedTimestamp: 820650322</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-10-7100">7100</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 0
+    X-Apple-RequestReceivedTimestamp: 820655326
+  GetRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 0
+    X-Apple-RequestReceivedTimestamp: 820645238
+  HTTPOptions: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 0
+    X-Apple-RequestReceivedTimestamp: 820650294
+  RTSPRequest: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 0
+    X-Apple-RequestReceivedTimestamp: 820650319
+  SIPOptions: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/920.10.2
+    X-Apple-ProcessingTime: 0
+    X-Apple-RequestReceivedTimestamp: 820655346</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-10-49152">49152</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>tcpwrapped</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-10-49153">49153</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td></td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-10-62078">62078</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>tcpwrapped</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple iOS 14.0 - 15.6 or tvOS 14.3 - 16.1 (Darwin 20.0.0 - 22.1.0)<span class="text-olive-600">(96% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>AppleiOS14.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:iphone_os:14">cpe:/o:apple:iphone_os:14</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>AppleiOS15.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:iphone_os:15">cpe:/o:apple:iphone_os:15</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>media device</div>
+<div>
+<span class="font-medium">Running:</span>AppletvOS14.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:tvos:14">cpe:/o:apple:tvos:14</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>media device</div>
+<div>
+<span class="font-medium">Running:</span>AppletvOS16.X (96%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:tvos:16">cpe:/o:apple:tvos:16</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple iOS 15.0 - 15.6 (Darwin 21.1.0 - 21.6.0)<span class="text-olive-600">(94% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>AppleiOS15.X (94%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:iphone_os:15">cpe:/o:apple:iphone_os:15</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 11 (Big Sur) - 13 (Ventura) or iOS 16 (Darwin 20.6.0 - 22.4.0)<span class="text-olive-600">(93% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS11.X (93%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:11">cpe:/o:apple:mac_os_x:11</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS12.X (93%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:12">cpe:/o:apple:mac_os_x:12</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS13.X (93%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:13">cpe:/o:apple:mac_os_x:13</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple watchOS 7 (Darwin 20.0.0)<span class="text-olive-600">(93% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>ApplewatchOS7.X (93%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:watchos:7">cpe:/o:apple:watchos:7</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 10.14 (Mojave) (Darwin 18.0.0)<span class="text-olive-600">(93% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS10.14.X (93%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:10.14">cpe:/o:apple:mac_os_x:10.14</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 13 (Ventura) (Darwin 22.0.0)<span class="text-olive-600">(92% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS13.X (92%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:13">cpe:/o:apple:mac_os_x:13</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 11 (Big Sur) (Darwin 20.0.0 - 20.6.0)<span class="text-olive-600">(92% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS11.X (92%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:11">cpe:/o:apple:mac_os_x:11</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple iOS 14.7<span class="text-olive-600">(91% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>AppleiOS14.X (91%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:iphone_os:14.7">cpe:/o:apple:iphone_os:14.7</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple iOS 16.0<span class="text-olive-600">(91% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>phone</div>
+<div>
+<span class="font-medium">Running:</span>AppleiOS16.X (91%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:iphone_os:16.0">cpe:/o:apple:iphone_os:16.0</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 12 (Monterey) (Darwin 21.2.0)<span class="text-olive-600">(91% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS12.X (91%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:12">cpe:/o:apple:mac_os_x:12</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-11" onclick="toggleCollapse('192-168-222-11')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.11</h3></div>
+<span class="badge badge-success">0 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-11"><div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div></div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-12" onclick="toggleCollapse('192-168-222-12')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.12<span class="text-olive-600 font-normal"> – HS220.localdomain</span>
+</h3></div>
+<span class="badge badge-success">1 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-12">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">HS220.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody><tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-12-9999">9999</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>abyss</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr></tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">lwIP 1.4.1 - 2.0.3<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip">cpe:/a:lwip_project:lwip</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-17" onclick="toggleCollapse('192-168-222-17')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.17</h3></div>
+<span class="badge badge-success">1 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-17">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody><tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-17-9999">9999</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>abyss</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr></tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Head Digital Medialink Black Panther cable receiver<span class="text-olive-600">(86% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>media device</div>
+<div>
+<span class="font-medium">Running:</span>Head Digitalembedded (86%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">KW-Software ProConOS<span class="text-olive-600">(86% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>KW-SoftwareProConOS (86%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:kw-software:proconos">cpe:/o:kw-software:proconos</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">AXIS 70U Network Document Server<span class="text-olive-600">(86% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>AXISembedded (86%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">IBM OS/2 Warp 2.0<span class="text-olive-600">(85% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>IBMOS/24.X (85%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:ibm:os2:4">cpe:/o:ibm:os2:4</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Roku SoundBridge M500 or M1000 music player<span class="text-olive-600">(85% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>media device</div>
+<div>
+<span class="font-medium">Running:</span>Rokuembedded (85%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/h:roku:soundbridge_m500">cpe:/h:roku:soundbridge_m500</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-19" onclick="toggleCollapse('192-168-222-19')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.19<span class="text-olive-600 font-normal"> – Techmore.localdomain</span>
+</h3></div>
+<span class="badge badge-success">2 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-19">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">Techmore.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-19-49152">49152</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>tcpwrapped</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-19-62078">62078</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>iphone-sync</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-39" onclick="toggleCollapse('192-168-222-39')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.39<span class="text-olive-600 font-normal"> – HS103.localdomain</span>
+</h3></div>
+<span class="badge badge-success">1 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-39">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">HS103.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody><tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-39-9999">9999</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>abyss</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr></tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">TP Link HS200 smart switch (lwIP 2.0 or later)<span class="text-olive-600">(99% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>TP-LINKembedded (99%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP (99%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip">cpe:/a:lwip_project:lwip</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Meross Smart Wi-Fi Hub<span class="text-olive-600">(94% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>Merossembedded (94%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Meross smart light bulb<span class="text-olive-600">(90% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>Merossembedded (90%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Meross smart plug<span class="text-olive-600">(90% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>Merossembedded (90%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">lwIP 2.1.0 - 2.2.0<span class="text-olive-600">(90% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP2.X (90%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:2">cpe:/a:lwip_project:lwip:2</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">lwIP 1.4.1 - 2.0.3<span class="text-olive-600">(90% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP (90%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip">cpe:/a:lwip_project:lwip</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">OSRAM Lightify ZigBee gateway<span class="text-olive-600">(89% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>OSRAMembedded (89%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/h:osram:lightify">cpe:/h:osram:lightify</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">lwIP 1.4.0 or earlier<span class="text-olive-600">(89% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP1.4.X (89%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:1.4.0">cpe:/a:lwip_project:lwip:1.4.0</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Philips Hue Bridge (lwIP 1.4.1)<span class="text-olive-600">(89% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>Philipsembedded (89%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/h:philips:hue_bridge">cpe:/h:philips:hue_bridge</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP (89%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip">cpe:/a:lwip_project:lwip</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-57" onclick="toggleCollapse('192-168-222-57')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.57</h3></div>
+<span class="badge badge-success">2 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-57">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-57-1443">1443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest, GetRequest, HTTPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  GenericLines: 
+    HTTP/1.1 408 Request Timeout
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 408&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 408&lt;/H1&gt;&lt;P&gt;Request Timeout&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  RTSPRequest, SIPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-57-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-87" onclick="toggleCollapse('192-168-222-87')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.87<span class="text-olive-600 font-normal"> – SonosZP.localdomain</span>
+</h3></div>
+<span class="badge badge-success">2 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-87">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">SonosZP.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-87-1443">1443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest, GetRequest, HTTPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  GenericLines: 
+    HTTP/1.1 408 Request Timeout
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 408&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 408&lt;/H1&gt;&lt;P&gt;Request Timeout&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  RTSPRequest, SIPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-87-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-95" onclick="toggleCollapse('192-168-222-95')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.95<span class="text-olive-600 font-normal"> – espressif.localdomain</span>
+</h3></div>
+<span class="badge badge-success">1 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-95">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">espressif.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody><tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-95-8080">8080</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>http-proxy</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr></tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Lovebox (lwIP 2.1.0 - 2.2.0)<span class="text-olive-600">(95% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>loveboxembedded (95%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP2.X (95%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:2">cpe:/a:lwip_project:lwip:2</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">M5Stack M5GO (lwIP 2.1.0 - 2.2.0)<span class="text-olive-600">(93% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>M5Stackembedded (93%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP2.X (93%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:2">cpe:/a:lwip_project:lwip:2</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">lwIP 2.1.0 - 2.2.0<span class="text-olive-600">(91% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP2.X (91%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:2">cpe:/a:lwip_project:lwip:2</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Gosund EP2 smart plug (lwIP 1.4.1 - 2.0.3)<span class="text-olive-600">(89% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>Gosundembedded (89%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP (89%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip">cpe:/a:lwip_project:lwip</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">lwIP 1.4.1 - 2.0.3<span class="text-olive-600">(89% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP (89%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip">cpe:/a:lwip_project:lwip</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Garmin Virb Elite action camera<span class="text-olive-600">(88% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>webcam</div>
+<div>
+<span class="font-medium">Running:</span>Garminembedded (88%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/h:garmin:virb_elite">cpe:/h:garmin:virb_elite</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">OSRAM Lightify ZigBee gateway<span class="text-olive-600">(86% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>OSRAMembedded (86%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/h:osram:lightify">cpe:/h:osram:lightify</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-108" onclick="toggleCollapse('192-168-222-108')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.108</h3></div>
+<span class="badge badge-success">1 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-108">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-21">21</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ftp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-22">22</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ssh</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-53">53</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>domain</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-110">110</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pop3</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-113">113</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ident</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-445">445</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>microsoft-ds</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-554">554</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-995">995</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pop3s</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-1025">1025</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>NFS-or-IIS</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-108-1443">1443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest, GetRequest, HTTPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  GenericLines: 
+    HTTP/1.1 408 Request Timeout
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/92.0-71170 (ZPS26)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 408&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 408&lt;/H1&gt;&lt;P&gt;Request Timeout&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  RTSPRequest, SIPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/92.0-71170 (ZPS26)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+</div></td></tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-108-8888">8888</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>sun-answerbook</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-119" onclick="toggleCollapse('192-168-222-119')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.119<span class="text-olive-600 font-normal"> – Mac.localdomain</span>
+</h3></div>
+<span class="badge badge-success">1 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-119">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">Mac.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-119-22">22</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>ssh</td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td class="text-olive-600">protocol 2.0</td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs">
+<div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:openbsd:openssh:10.0">cpe:/a:openbsd:openssh:10.0</a></div>
+<div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">vulners</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  cpe:/a:openbsd:openssh:10.0: 
+    	OSV:BELL-CVE-2025-61985	3.6	https://vulners.com/osv/OSV:BELL-CVE-2025-61985
+    	OSV:BELL-CVE-2025-61984	3.6	https://vulners.com/osv/OSV:BELL-CVE-2025-61984
+    	CVE-2025-61985	3.6	https://vulners.com/cve/CVE-2025-61985
+    	CVE-2025-61984	3.6	https://vulners.com/cve/CVE-2025-61984
+    	B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	3.6	https://vulners.com/githubexploit/B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	*EXPLOIT*
+    	4C6E2182-0E99-5626-83F6-1646DD648C57	3.6	https://vulners.com/githubexploit/4C6E2182-0E99-5626-83F6-1646DD648C57	*EXPLOIT*</pre>
+</div>
+</td></tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 11 (Big Sur) - 13 (Ventura) or iOS 16 (Darwin 20.6.0 - 22.4.0)<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS11.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:11">cpe:/o:apple:mac_os_x:11</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS12.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:12">cpe:/o:apple:mac_os_x:12</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS13.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:13">cpe:/o:apple:mac_os_x:13</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-120" onclick="toggleCollapse('192-168-222-120')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.120<span class="text-olive-600 font-normal"> – Levoit-Humidifier.localdomain</span>
+</h3></div>
+<span class="badge badge-success">0 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-120">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">Levoit-Humidifier.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody></tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Lovebox (lwIP 2.1.0 - 2.2.0)<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>loveboxembedded (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP2.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:2">cpe:/a:lwip_project:lwip:2</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">lwIP 2.1.0 - 2.2.0<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP2.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:2">cpe:/a:lwip_project:lwip:2</a>
+</div>
+</div>
+</div>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">M5Stack M5GO (lwIP 2.1.0 - 2.2.0)<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>M5Stackembedded (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version="></a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>specialized</div>
+<div>
+<span class="font-medium">Running:</span>lwIPlwIP2.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lwip_project:lwip:2">cpe:/a:lwip_project:lwip:2</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-150" onclick="toggleCollapse('192-168-222-150')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.150<span class="text-olive-600 font-normal"> – barn---patio.localdomain</span>
+</h3></div>
+<span class="badge badge-success">2 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-150">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">barn---patio.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-150-80">80</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>http</td>
+<td>lighttpd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lighttpd:lighttpd">cpe:/a:lighttpd:lighttpd</a></div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-150-443">443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>http</td>
+<td>lighttpd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:lighttpd:lighttpd">cpe:/a:lighttpd:lighttpd</a></div></td></tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-166" onclick="toggleCollapse('192-168-222-166')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.166<span class="text-olive-600 font-normal"> – roborock-vacuum-a75.localdomain</span>
+</h3></div>
+<span class="badge badge-success">0 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-166">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">roborock-vacuum-a75.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-21">21</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ftp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-22">22</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ssh</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-53">53</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>domain</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-110">110</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pop3</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-113">113</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ident</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-445">445</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>microsoft-ds</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-554">554</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-995">995</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pop3s</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-1025">1025</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>NFS-or-IIS</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-166-8888">8888</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>sun-answerbook</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-222" onclick="toggleCollapse('192-168-222-222')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.222</h3></div>
+<span class="badge badge-success">2 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-222">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-222-1443">1443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest, GetRequest, HTTPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  GenericLines: 
+    HTTP/1.1 408 Request Timeout
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 408&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 408&lt;/H1&gt;&lt;P&gt;Request Timeout&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  RTSPRequest, SIPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-222-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-236" onclick="toggleCollapse('192-168-222-236')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.236</h3></div>
+<span class="badge badge-success">2 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-236">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-236-1443">1443</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>
+<span class="text-olive-600">ssl/</span>upnp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest, GetRequest, HTTPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  GenericLines: 
+    HTTP/1.1 408 Request Timeout
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 408&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 408&lt;/H1&gt;&lt;P&gt;Request Timeout&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;
+  RTSPRequest, SIPOptions: 
+    HTTP/1.1 400 Bad Request
+    Content-type: text/html
+    X-Frame-Options: DENY
+    Content-Security-Policy: frame-ancestors 'none'
+    Server: Linux UPnP/1.0 Sonos/86.2-70230 (ZPS21)
+    Connection: close
+    &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Error 400&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;&lt;H1&gt;Error 400&lt;/H1&gt;&lt;P&gt;Bad Request&lt;/P&gt;&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-236-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td>Sonos speaker rtspd</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Linux 3.2 - 4.14<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux3.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:3">cpe:/o:linux:linux_kernel:3</a>
+</div>
+</div>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>LinuxLinux4.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:linux:linux_kernel:4">cpe:/o:linux:linux_kernel:4</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-251" onclick="toggleCollapse('192-168-222-251')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.251</h3></div>
+<span class="badge badge-success">0 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-251"><div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-21">21</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ftp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-22">22</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ssh</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-23">23</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>telnet</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-25">25</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>smtp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-53">53</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>domain</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-80">80</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>http</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-110">110</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pop3</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-111">111</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>rpcbind</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-113">113</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ident</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-135">135</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>msrpc</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-139">139</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>netbios-ssn</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-199">199</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>smux</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-445">445</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>microsoft-ds</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-554">554</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-993">993</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>imaps</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-995">995</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pop3s</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-1025">1025</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>NFS-or-IIS</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-1720">1720</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>h323q931</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-1723">1723</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>pptp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-3306">3306</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>mysql</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-3389">3389</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>ms-wbt-server</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-5900">5900</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>vnc</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-8080">8080</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>http-proxy</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-yellow-50">
+<td class="font-mono" id="port-192-168-222-251-8888">8888</td>
+<td>tcp</td>
+<td>
+<div>filtered</div>
+<div class="text-xs text-olive-600">no-response</div>
+</td>
+<td>sun-answerbook</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div></div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-64" onclick="toggleCollapse('192-168-222-64')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.64<span class="text-olive-600 font-normal"> – seans-MBP-5.localdomain</span>
+</h3></div>
+<span class="badge badge-success">8 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-64">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">seans-MBP-5.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-22">22</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>ssh</td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td class="text-olive-600">protocol 2.0</td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs">
+<div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:openbsd:openssh:10.0">cpe:/a:openbsd:openssh:10.0</a></div>
+<div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">vulners</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  cpe:/a:openbsd:openssh:10.0: 
+    	OSV:BELL-CVE-2025-61985	3.6	https://vulners.com/osv/OSV:BELL-CVE-2025-61985
+    	OSV:BELL-CVE-2025-61984	3.6	https://vulners.com/osv/OSV:BELL-CVE-2025-61984
+    	CVE-2025-61985	3.6	https://vulners.com/cve/CVE-2025-61985
+    	CVE-2025-61984	3.6	https://vulners.com/cve/CVE-2025-61984
+    	B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	3.6	https://vulners.com/githubexploit/B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	*EXPLOIT*
+    	4C6E2182-0E99-5626-83F6-1646DD648C57	3.6	https://vulners.com/githubexploit/4C6E2182-0E99-5626-83F6-1646DD648C57	*EXPLOIT*</pre>
+</div>
+</td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-88">88</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>kerberos-sec</td>
+<td>Heimdal Kerberos</td>
+<td></td>
+<td class="text-olive-600">server time: 2026-01-09 00:07:53Z</td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:heimdal:kerberos">cpe:/a:heimdal:kerberos</a></div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-3031">3031</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>eppc</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  X11Probe: 
+    PPCT</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-3283">3283</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>netassistant</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-5000">5000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6568232
+  GetRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6563120
+  HTTPOptions: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6568168
+  RTSPRequest: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6563153
+  SIPOptions: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    CSeq: 42 OPTIONS
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6568279</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-5900">5900</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>vnc</td>
+<td>Apple remote desktop vnc</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x">cpe:/o:apple:mac_os_x</a></div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 3
+    X-Apple-RequestReceivedTimestamp: 6568238
+  GetRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 4
+    X-Apple-RequestReceivedTimestamp: 6568142
+  HTTPOptions: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6568201
+  RTSPRequest: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 6
+    X-Apple-RequestReceivedTimestamp: 6563099
+  SIPOptions: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    CSeq: 42 OPTIONS
+    X-Apple-ProcessingTime: 6
+    X-Apple-RequestReceivedTimestamp: 6568295</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-64-49155">49155</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td></td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 12 (Monterey) (Darwin 21.1.0 - 21.6.0)<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS12.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:12">cpe:/o:apple:mac_os_x:12</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card mb-6">
+<div class="collapsible-header p-6 border-b border-olive-200" id="onlinehosts-192-168-222-246" onclick="toggleCollapse('192-168-222-246')"><div class="flex items-center justify-between">
+<div><h3 class="text-xl font-display font-bold text-olive-900">
+<span class="chevron inline-block mr-2">▼</span>192.168.222.246<span class="text-olive-600 font-normal"> – MacBookPro.localdomain</span>
+</h3></div>
+<span class="badge badge-success">8 open ports
+                    </span>
+</div></div>
+<div class="p-6" id="content-192-168-222-246">
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Hostnames</h4>
+<ul class="list-disc list-inside space-y-1"><li class="text-olive-700">MacBookPro.localdomain<span class="text-olive-500">(PTR)</span>
+</li></ul>
+</div>
+<div class="mb-6">
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">Ports</h4>
+<div class="overflow-x-auto"><table class="w-full text-sm">
+<thead><tr>
+<th class="text-left">Port</th>
+<th class="text-left">Protocol</th>
+<th class="text-left">State/Reason</th>
+<th class="text-left">Service</th>
+<th class="text-left">Product</th>
+<th class="text-left">Version</th>
+<th class="text-left">Extra Info</th>
+</tr></thead>
+<tbody>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-22">22</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>ssh</td>
+<td>OpenSSH</td>
+<td>10.0</td>
+<td class="text-olive-600">protocol 2.0</td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs">
+<div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:openbsd:openssh:10.0">cpe:/a:openbsd:openssh:10.0</a></div>
+<div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">vulners</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  cpe:/a:openbsd:openssh:10.0: 
+    	OSV:BELL-CVE-2025-61985	3.6	https://vulners.com/osv/OSV:BELL-CVE-2025-61985
+    	OSV:BELL-CVE-2025-61984	3.6	https://vulners.com/osv/OSV:BELL-CVE-2025-61984
+    	CVE-2025-61985	3.6	https://vulners.com/cve/CVE-2025-61985
+    	CVE-2025-61984	3.6	https://vulners.com/cve/CVE-2025-61984
+    	B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	3.6	https://vulners.com/githubexploit/B7EACB4F-A5CF-5C5A-809F-E03CCE2AB150	*EXPLOIT*
+    	4C6E2182-0E99-5626-83F6-1646DD648C57	3.6	https://vulners.com/githubexploit/4C6E2182-0E99-5626-83F6-1646DD648C57	*EXPLOIT*</pre>
+</div>
+</td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-88">88</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>kerberos-sec</td>
+<td>Heimdal Kerberos</td>
+<td></td>
+<td class="text-olive-600">server time: 2026-01-09 00:10:39Z</td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/a:heimdal:kerberos">cpe:/a:heimdal:kerberos</a></div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-3031">3031</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>eppc</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  X11Probe: 
+    PPCT</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-3283">3283</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>netassistant</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-5000">5000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 4
+    X-Apple-RequestReceivedTimestamp: 6733737
+  GetRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 4
+    X-Apple-RequestReceivedTimestamp: 6728642
+  HTTPOptions: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 4
+    X-Apple-RequestReceivedTimestamp: 6733688
+  RTSPRequest: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 4
+    X-Apple-RequestReceivedTimestamp: 6728694
+  SIPOptions: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    CSeq: 42 OPTIONS
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6733769</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-5900">5900</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>vnc</td>
+<td>Apple remote desktop vnc</td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-2"><a target="_blank" class="font-mono text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x">cpe:/o:apple:mac_os_x</a></div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-7000">7000</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td>rtsp</td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+<tr class="bg-olive-50"><td colspan="7" class="text-xs"><div class="mb-3">
+<h5 class="font-semibold text-olive-800 mb-1">fingerprint-strings</h5>
+<pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto">
+  FourOhFourRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 2
+    X-Apple-RequestReceivedTimestamp: 6733745
+  GetRequest: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 5
+    X-Apple-RequestReceivedTimestamp: 6733657
+  HTTPOptions: 
+    HTTP/1.1 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 4
+    X-Apple-RequestReceivedTimestamp: 6733721
+  RTSPRequest: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    X-Apple-ProcessingTime: 7
+    X-Apple-RequestReceivedTimestamp: 6728605
+  SIPOptions: 
+    RTSP/1.0 403 Forbidden
+    Content-Length: 0
+    Server: AirTunes/925.5.1
+    CSeq: 42 OPTIONS
+    X-Apple-ProcessingTime: 2
+    X-Apple-RequestReceivedTimestamp: 6733778</pre>
+</div></td></tr>
+<tr class="bg-olive-50">
+<td class="font-mono" id="port-192-168-222-246-49155">49155</td>
+<td>tcp</td>
+<td>
+<div>open</div>
+<div class="text-xs text-olive-600">syn-ack</div>
+</td>
+<td></td>
+<td></td>
+<td></td>
+<td class="text-olive-600"></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div>
+<h4 class="text-lg font-display font-semibold text-olive-900 mb-3">OS Detection</h4>
+<div class="mb-4 p-4 bg-olive-50 rounded-lg border border-olive-200">
+<h5 class="font-semibold text-olive-900 mb-2">Apple macOS 12 (Monterey) (Darwin 21.1.0 - 21.6.0)<span class="text-olive-600">(100% accuracy)</span>
+</h5>
+<div class="text-sm text-olive-700 space-y-1">
+<div>
+<span class="font-medium">Device type:</span>general purpose</div>
+<div>
+<span class="font-medium">Running:</span>ApplemacOS12.X (100%)</div>
+<div>
+<span class="font-medium">OS CPE:</span><a target="_blank" class="font-mono text-xs text-olive-700" href="https://nvd.nist.gov/vuln/search/results?form_type=Advanced&amp;cves=on&amp;cpe_version=cpe:/o:apple:mac_os_x:12">cpe:/o:apple:mac_os_x:12</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class="bg-white border-t border-olive-200 py-12 mt-12"><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-olive-600">
+<p class="mb-2">
+              Report generated by <a href="https://pentestfactory.com" class="text-olive-700 hover:text-olive-900">Pentest Factory GmbH</a></p>
+<p class="mb-4">
+              Questions or problems? <a href="mailto:team@pentestfactory.de" class="text-olive-700 hover:text-olive-900">Contact us</a></p>
+<p class="text-xs">
+              ❤️ Original Bootstrap template by <a href="https://github.com/honze-net/nmap-bootstrap-xsl" target="_blank" class="text-olive-700">Andreas Hontzia</a> · 
+              Tweaks by <a href="https://github.com/l4rm4nd" target="_blank" class="text-olive-700">LRVT</a> · 
+              Modern design update 2026
+            </p>
+</div></footer><script>
+          function highlight() {
+            $("#table-services").dataTable().fnDestroy();
+            let keywords = document.getElementById('keyword-input').value.split(',');
+            let content = document.getElementById('table-services').innerHTML;
+            document.getElementById('table-services').innerHTML = transformContent(content, keywords);
+            initServicesTable();
+          }
+
+          function transformContent(content, keywords) {
+            let temp = content;
+            keywords.forEach(keyword => {
+              temp = temp.replace(new RegExp(keyword.trim(), 'ig'), 
+                (match) => `<span class="highlight-keyword">${match}</span>`);
+            });
+            return temp;
+          }
+
+          function toggleCollapse(id) {
+            const content = document.getElementById('content-' + id);
+            const header = document.getElementById('onlinehosts-' + id);
+            const chevron = header.querySelector('.chevron');
+            
+            if (content.style.display === 'none') {
+              content.style.display = 'block';
+              chevron.classList.remove('collapsed');
+            } else {
+              content.style.display = 'none';
+              chevron.classList.add('collapsed');
+            }
+          }
+
+          function initServicesTable() {
+            $('#table-services').DataTable({
+              lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+              order: [[0, 'asc']],
+              columnDefs: [
+                { targets: [1], type: 'ip-address' }
+              ],
+              dom: 'lBfrtip',
+              stateSave: true,
+              buttons: ['copy', 'csv', 'excel', 'pdf']
+            });
+          }
+
+          $(document).ready(function() {
+            // Initialize all tables
+            $('#table-overview').DataTable({
+              lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+              columnDefs: [{ targets: [1], type: 'ip-address' }]
+            });
+
+            initServicesTable();
+
+            $('#web-services').DataTable({
+              lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+              order: [[0, 'asc']],
+              columnDefs: [{ targets: [1], type: 'ip-address' }],
+              dom: 'lBfrtip',
+              stateSave: true,
+              buttons: ['copy', 'csv', 'excel', 'pdf']
+            });
+
+            $('#table-product-versions').DataTable({
+              lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+              order: [[0, 'asc'], [1, 'asc']],
+              dom: 'lBfrtip',
+              stateSave: true,
+              buttons: ['copy', 'csv', 'excel', 'pdf']
+            });
+
+            if ($('#table-ssh-auth').length) {
+              $('#table-ssh-auth').DataTable({
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                order: [[0, 'asc'], [2, 'asc']],
+                columnDefs: [{ targets: 1, type: 'ip-address' }],
+                dom: 'lBfrtip',
+                stateSave: true,
+                buttons: ['copy', 'csv', 'excel', 'pdf']
+              });
+            }
+
+            // Smooth scrolling for anchor links
+            $("a[href^='#']").click(function(e) {
+              e.preventDefault();
+              const target = $(this.hash);
+              if (target.length) {
+                $('html, body').animate({
+                  scrollTop: target.offset().top - 80
+                }, 500);
+              }
+            });
+          });
+        </script>
+</body>
+</html>

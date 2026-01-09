@@ -1,0 +1,74 @@
+# Nmap 7.98 scan initiated Thu Jan  8 09:04:09 2026 as: nmap -sS -T4 -A -sC -oA scanme2 --stylesheet /Users/seandolbec/Desktop/Nmap-2026-ui-update/nmap-modern.xsl 192.168.222.0/24
+Host: 192.168.222.1 ()	Status: Up
+Host: 192.168.222.1 ()	Ports: 53/open/tcp//domain//NLnet Labs NSD/, 80/open/tcp//http//nginx/, 443/open/tcp//ssl|http//nginx/, 6789/filtered/tcp//ibm-db2-admin///, 8080/open/tcp//http//Apache Tomcat (language: en)/, 8443/open/tcp//ssl|http//Apache Tomcat (language: en)/	Ignored State: closed (994)	Seq Index: 260	IP ID Seq: All zeros
+Host: 192.168.222.7 ()	Status: Up
+Host: 192.168.222.7 ()	Ports: 1443/open/tcp//ssl|upnp///, 7000/open/tcp//rtsp//Sonos speaker rtspd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 260	IP ID Seq: All zeros
+Host: 192.168.222.8 ()	Status: Up
+Host: 192.168.222.8 ()	Ports: 80/open/tcp//http//lighttpd/, 443/open/tcp//ssl|http//lighttpd/	Ignored State: closed (998)	OS: Linux 3.2 - 3.16	Seq Index: 256	IP ID Seq: All zeros
+Host: 192.168.222.9 ()	Status: Up
+Host: 192.168.222.9 ()	Ports: 80/open/tcp//http//lighttpd/, 443/open/tcp//ssl|http//lighttpd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 260	IP ID Seq: All zeros
+Host: 192.168.222.10 ()	Status: Up
+Host: 192.168.222.10 ()	Ports: 53/open/tcp//domain//Apple device dnsd/, 5000/open/tcp//rtsp///, 7000/open/tcp//rtsp///, 7100/open/tcp//rtsp///, 49152/open/tcp//tcpwrapped///, 49153/open/tcp/////, 62078/open/tcp//tcpwrapped///	Ignored State: closed (993)	Seq Index: 262	IP ID Seq: All zeros
+Host: 192.168.222.11 ()	Status: Up
+Host: 192.168.222.11 ()	Ports: 	Ignored State: closed (1000)
+Host: 192.168.222.12 ()	Status: Up
+Host: 192.168.222.12 ()	Ports: 9999/open/tcp//abyss?///	Ignored State: closed (999)	OS: lwIP 1.4.1 - 2.0.3	Seq Index: 0	IP ID Seq: Incremental
+Host: 192.168.222.17 ()	Status: Up
+Host: 192.168.222.17 ()	Ports: 9999/open/tcp//abyss?///	Ignored State: filtered (999)	Seq Index: 16	IP ID Seq: Incremental
+Host: 192.168.222.19 ()	Status: Up
+Host: 192.168.222.19 ()	Ports: 49152/open/tcp//tcpwrapped///, 62078/open/tcp//iphone-sync?///	Ignored State: closed (998)	OS: Apple iOS 15.0 - 15.6 (Darwin 21.1.0 - 21.6.0)	Seq Index: 262	IP ID Seq: All zeros
+Host: 192.168.222.34 ()	Status: Up
+Host: 192.168.222.34 ()	Ports: 22/open/tcp//ssh//OpenSSH 9.6p1 Ubuntu 3ubuntu13.14 (Ubuntu Linux; protocol 2.0)/	Ignored State: closed (999)	OS: Linux 4.15 - 5.19|OpenWrt 21.02 (Linux 5.4)|MikroTik RouterOS 7.2 - 7.5 (Linux 5.6.3)	Seq Index: 256	IP ID Seq: All zeros
+Host: 192.168.222.39 ()	Status: Up
+Host: 192.168.222.39 ()	Ports: 9999/open/tcp//abyss?///	Ignored State: closed (999)	Seq Index: 144	IP ID Seq: Incremental
+Host: 192.168.222.47 ()	Status: Up
+Host: 192.168.222.47 ()	Ports: 	Ignored State: closed (1000)
+Host: 192.168.222.57 ()	Status: Up
+Host: 192.168.222.57 ()	Ports: 1443/open/tcp//ssl|upnp///, 7000/open/tcp//rtsp//Sonos speaker rtspd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 260	IP ID Seq: All zeros
+Host: 192.168.222.86 ()	Status: Up
+Host: 192.168.222.86 ()	Ports: 21/open/tcp//ftp//Brother|HP printer ftpd 1.13/, 23/open/tcp//telnet//Brother|HP printer telnetd/, 80/open/tcp//http//Debut embedded httpd 1.30 (Brother|HP printer http admin)/, 443/open/tcp//ssl|https?///, 515/open/tcp//printer///, 631/open/tcp//ipp?///, 9100/open/tcp//jetdirect?///	Ignored State: closed (993)	OS: VxWorks	Seq Index: 261	IP ID Seq: Busy server or unknown class
+Host: 192.168.222.87 ()	Status: Up
+Host: 192.168.222.87 ()	Ports: 1443/open/tcp//ssl|upnp///, 7000/open/tcp//rtsp//Sonos speaker rtspd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 257	IP ID Seq: All zeros
+Host: 192.168.222.95 ()	Status: Up
+Host: 192.168.222.95 ()	Ports: 8080/open/tcp//ssl|http-proxy?///	Ignored State: closed (999)	Seq Index: 257	IP ID Seq: Incremental
+Host: 192.168.222.108 ()	Status: Up
+Host: 192.168.222.108 ()	Ports: 1443/open/tcp//ssl|upnp///	Ignored State: closed (999)	OS: Linux 3.2 - 4.14	Seq Index: 260	IP ID Seq: All zeros
+Host: 192.168.222.119 ()	Status: Up
+Host: 192.168.222.119 ()	Ports: 22/open/tcp//ssh//OpenSSH 10.0 (protocol 2.0)/	OS: Apple macOS 11 (Big Sur) - 13 (Ventura) or iOS 16 (Darwin 20.6.0 - 22.4.0)	Seq Index: 263	IP ID Seq: All zeros
+Host: 192.168.222.120 ()	Status: Up
+Host: 192.168.222.120 ()	Ports: 	Ignored State: closed (1000)	OS: Lovebox (lwIP 2.1.0 - 2.2.0)|lwIP 2.1.0 - 2.2.0|M5Stack M5GO (lwIP 2.1.0 - 2.2.0)
+Host: 192.168.222.121 ()	Status: Up
+Host: 192.168.222.121 ()	Ports: 	Ignored State: closed (1000)	OS: Lovebox (lwIP 2.1.0 - 2.2.0)|lwIP 2.1.0 - 2.2.0|M5Stack M5GO (lwIP 2.1.0 - 2.2.0)
+Host: 192.168.222.127 ()	Status: Up
+Host: 192.168.222.127 ()	Ports: 22/open/tcp//ssh//Dropbear sshd 2024.86 (protocol 2.0)/	Ignored State: closed (999)	Seq Index: 257	IP ID Seq: All zeros
+Host: 192.168.222.136 ()	Status: Up
+Host: 192.168.222.136 ()	Ports: 22/open/tcp//ssh//OpenSSH 10.0 (FreeBSD 20250801; protocol 2.0)/, 53/open/tcp//domain//dnsmasq 2.91/, 111/open/tcp//rpcbind//2-4 (RPC #100000)/, 2049/open/tcp//nfs//2-3 (RPC #100003)/	Ignored State: closed (996)	Seq Index: 263	IP ID Seq: All zeros
+Host: 192.168.222.150 ()	Status: Up
+Host: 192.168.222.150 ()	Ports: 80/open/tcp//http//lighttpd/, 443/open/tcp//ssl|http//lighttpd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 261	IP ID Seq: All zeros
+Host: 192.168.222.166 ()	Status: Up
+Host: 192.168.222.166 ()	Ports: 	Ignored State: closed (1000)
+Host: 192.168.222.192 ()	Status: Up
+Host: 192.168.222.192 ()	Ports: 80/open/tcp//http//nginx/, 443/open/tcp//ssl|http//nginx/, 7443/open/tcp//ssl|oracleas-https?///	Ignored State: closed (997)	OS: Linux 3.2 - 4.14	Seq Index: 258	IP ID Seq: All zeros
+Host: 192.168.222.200 ()	Status: Up
+Host: 192.168.222.200 ()	Ports: 80/open/tcp//http//lighttpd/, 443/open/tcp//ssl|http//lighttpd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 260	IP ID Seq: All zeros
+Host: 192.168.222.210 ()	Status: Up
+Host: 192.168.222.210 ()	Ports: 80/open/tcp//http//lighttpd/, 443/open/tcp//ssl|http//lighttpd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 263	IP ID Seq: All zeros
+Host: 192.168.222.222 ()	Status: Up
+Host: 192.168.222.222 ()	Ports: 1443/open/tcp//ssl|upnp///, 7000/open/tcp//rtsp//Sonos speaker rtspd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 255	IP ID Seq: All zeros
+Host: 192.168.222.223 ()	Status: Up
+Host: 192.168.222.223 ()	Ports: 	Ignored State: closed (1000)	OS: Lovebox (lwIP 2.1.0 - 2.2.0)|lwIP 2.1.0 - 2.2.0|M5Stack M5GO (lwIP 2.1.0 - 2.2.0)
+Host: 192.168.222.225 ()	Status: Up
+Host: 192.168.222.225 ()	Ports: 22/open/tcp//ssh//Dropbear sshd 2024.86 (protocol 2.0)/	Ignored State: closed (999)	Seq Index: 259	IP ID Seq: All zeros
+Host: 192.168.222.232 ()	Status: Up
+Host: 192.168.222.232 ()	Ports: 22/open/tcp//ssh//Dropbear sshd 2022.83 (protocol 2.0)/	Ignored State: closed (999)	OS: Netgear GS108Tv3, GS110Tv3, or GS308T switch (Linux 3.18.24)	Seq Index: 261	IP ID Seq: All zeros
+Host: 192.168.222.236 ()	Status: Up
+Host: 192.168.222.236 ()	Ports: 1443/open/tcp//ssl|upnp///, 7000/open/tcp//rtsp//Sonos speaker rtspd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 258	IP ID Seq: All zeros
+Host: 192.168.222.244 ()	Status: Up
+Host: 192.168.222.244 ()	Ports: 22/open/tcp//ssh//OpenSSH 9.2p1 Debian 2+deb12u6 (protocol 2.0)/, 80/open/tcp//http//nginx (reverse proxy)/, 139/open/tcp//netbios-ssn//Samba smbd 4/, 443/open/tcp//ssl|http//nginx (reverse proxy)/, 445/open/tcp//netbios-ssn//Samba smbd 4/, 3493/open/tcp//nut//Network UPS Tools upsd/, 8000/open/tcp//nagios-nsca//Nagios NSCA/, 9000/open/tcp//http//Golang net|http server/, 9999/open/tcp//http//nginx (reverse proxy)/, 49152/open/tcp//upnp//Portable SDK for UPnP devices 1.8.2 (Linux 6.12.30+; UPnP 1.0)/	Ignored State: closed (990)	OS: Linux 4.15 - 5.19|OpenWrt 21.02 (Linux 5.4)|MikroTik RouterOS 7.2 - 7.5 (Linux 5.6.3)	Seq Index: 257	IP ID Seq: All zeros
+Host: 192.168.222.245 ()	Status: Up
+Host: 192.168.222.245 ()	Ports: 5000/open/tcp//rtsp///, 7000/open/tcp//rtsp///, 7100/open/tcp//rtsp///, 49152/open/tcp//tcpwrapped///, 49153/open/tcp/////, 62078/open/tcp//tcpwrapped///	Ignored State: closed (994)	OS: Apple iOS 14.0 - 15.6 or tvOS 14.3 - 16.1 (Darwin 20.0.0 - 22.1.0)	Seq Index: 263	IP ID Seq: All zeros
+Host: 192.168.222.248 ()	Status: Up
+Host: 192.168.222.248 ()	Ports: 1443/open/tcp//ssl|upnp///, 7000/open/tcp//rtsp//Sonos speaker rtspd/	Ignored State: closed (998)	OS: Linux 3.2 - 4.14	Seq Index: 261	IP ID Seq: All zeros
+Host: 192.168.222.246 ()	Status: Up
+Host: 192.168.222.246 ()	Ports: 22/open/tcp//ssh//OpenSSH 10.0 (protocol 2.0)/, 88/open/tcp//kerberos-sec//Heimdal Kerberos (server time: 2026-01-08 14:11:47Z)/, 3031/open/tcp//eppc?///, 3283/open/tcp//netassistant?///, 5000/open/tcp//rtsp///, 5900/open/tcp//vnc//Apple remote desktop vnc/, 7000/open/tcp//rtsp///, 49158/open/tcp/////	Ignored State: closed (992)	OS: Apple macOS 12 (Monterey) (Darwin 21.1.0 - 21.6.0)	Seq Index: 259	IP ID Seq: All zeros
+# Nmap done at Thu Jan  8 09:14:34 2026 -- 256 IP addresses (36 hosts up) scanned in 624.31 seconds

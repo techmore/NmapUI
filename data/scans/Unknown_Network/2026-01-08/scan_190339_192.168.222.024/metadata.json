@@ -1,0 +1,128 @@
+{
+  "customer_name": "Unknown Network",
+  "target": "192.168.222.0/24",
+  "timestamp": "2026-01-08T19:13:21.389159",
+  "date": "2026-01-08",
+  "time": "19:13:21",
+  "network_key": {
+    "hops": [
+      {
+        "hop": 1,
+        "ip": "192.168.222.1",
+        "latency_ms": 0.65,
+        "is_private": true
+      },
+      {
+        "hop": 2,
+        "ip": "100.64.0.1",
+        "latency_ms": 28.03,
+        "is_private": true
+      },
+      {
+        "hop": 3,
+        "ip": "172.16.253.86",
+        "latency_ms": 30.21,
+        "is_private": true
+      },
+      {
+        "hop": 4,
+        "ip": "206.224.66.118",
+        "latency_ms": 30.27,
+        "is_private": false
+      },
+      {
+        "hop": 5,
+        "ip": "206.224.72.72",
+        "latency_ms": 31.93,
+        "is_private": false
+      },
+      {
+        "hop": 6,
+        "ip": "162.158.61.14",
+        "latency_ms": 30.28,
+        "is_private": false
+      },
+      {
+        "hop": 7,
+        "ip": "162.158.61.131",
+        "latency_ms": 26.52,
+        "is_private": false
+      },
+      {
+        "hop": 8,
+        "ip": "1.1.1.1",
+        "latency_ms": 30.25,
+        "is_private": false
+      }
+    ],
+    "total_hops": 8,
+    "private_hops": [
+      {
+        "hop": 1,
+        "ip": "192.168.222.1",
+        "latency_ms": 0.65,
+        "is_private": true
+      },
+      {
+        "hop": 2,
+        "ip": "100.64.0.1",
+        "latency_ms": 28.03,
+        "is_private": true
+      },
+      {
+        "hop": 3,
+        "ip": "172.16.253.86",
+        "latency_ms": 30.21,
+        "is_private": true
+      }
+    ],
+    "public_hops": [
+      {
+        "hop": 4,
+        "ip": "206.224.66.118",
+        "latency_ms": 30.27,
+        "is_private": false
+      },
+      {
+        "hop": 5,
+        "ip": "206.224.72.72",
+        "latency_ms": 31.93,
+        "is_private": false
+      },
+      {
+        "hop": 6,
+        "ip": "162.158.61.14",
+        "latency_ms": 30.28,
+        "is_private": false
+      },
+      {
+        "hop": 7,
+        "ip": "162.158.61.131",
+        "latency_ms": 26.52,
+        "is_private": false
+      },
+      {
+        "hop": 8,
+        "ip": "1.1.1.1",
+        "latency_ms": 30.25,
+        "is_private": false
+      }
+    ],
+    "exit_ip": "1.1.1.1",
+    "public_ip": "129.222.240.17",
+    "target": "1.1.1.1",
+    "raw": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  1.134 ms  0.443 ms  0.387 ms\n 2  100.64.0.1  25.628 ms  32.784 ms  25.687 ms\n 3  172.16.253.86  32.100 ms  26.581 ms  31.939 ms\n 4  206.224.66.118  32.083 ms  26.620 ms  32.098 ms\n 5  206.224.72.72  31.928 ms\n    206.224.72.70  26.644 ms  31.802 ms\n 6  162.158.61.14  26.817 ms  31.919 ms  32.100 ms\n 7  162.158.61.131  26.519 ms\n    162.158.61.115  42.776 ms\n    162.158.61.135  26.417 ms\n 8  1.1.1.1  32.113 ms  31.859 ms  26.781 ms\n"
+  },
+  "customer_info": {
+    "id": "unknown",
+    "name": "Unknown Network",
+    "confidence": 0.546
+  },
+  "files": {
+    "xml": "/Users/seandolbec/Desktop/Nmap-2026-ui-update/data/scans/Unknown_Network/2026-01-08/scan_190339_192.168.222.024/scan.xml",
+    "html": "/Users/seandolbec/Desktop/Nmap-2026-ui-update/data/scans/Unknown_Network/2026-01-08/scan_190339_192.168.222.024/scan.html",
+    "pdf": "/Users/seandolbec/Desktop/Nmap-2026-ui-update/data/scans/Unknown_Network/2026-01-08/scan_190339_192.168.222.024/scan_report.pdf",
+    "nmap": "/Users/seandolbec/Desktop/Nmap-2026-ui-update/data/scans/Unknown_Network/2026-01-08/scan_190339_192.168.222.024/scan.nmap",
+    "gnmap": "/Users/seandolbec/Desktop/Nmap-2026-ui-update/data/scans/Unknown_Network/2026-01-08/scan_190339_192.168.222.024/scan.gnmap"
+  }
+}

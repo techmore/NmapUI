@@ -3,9 +3,17 @@ import re
 import ipaddress
 import json
 import os
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
 
@@ -17,7 +25,11 @@ class CustomerFingerprinter:
         self.customers = []
         self.unknown_customer = None
         self.settings = {}
+        self.traceroutes_path = BASE_DIR / "data" / "customer_traceroutes.json"
+        self.customer_traceroutes = {}
+        self.last_match_method = "unknown"
         self.load_config()
+        self.load_traceroute_history()
 
     def load_config(self):
         try:
@@ -28,14 +40,77 @@ class CustomerFingerprinter:
             self.customers = self.config.get("customers", [])
             self.unknown_customer = self.config.get("unknown_customer", {})
 
-            print(f"Loaded {len(self.customers)} customer configurations")
+            logger.info(f"Loaded {len(self.customers)} customer configurations")
 
         except FileNotFoundError:
-            print(f"Warning: Customer config file not found at {self.config_path}")
+            logger.warning(f"Customer config file not found at {self.config_path}")
             self.config = {}
         except yaml.YAMLError as e:
-            print(f"Error parsing customer config: {e}")
+            logger.error(f"Error parsing customer config: {e}")
             self.config = {}
+
+    def load_traceroute_history(self):
+        try:
+            if not self.traceroutes_path.exists():
+                logger.warning(
+                    f"Traceroute history not found at {self.traceroutes_path}"
+                )
+                return
+
+            with open(self.traceroutes_path, "r") as f:
+                self.customer_traceroutes = json.load(f)
+
+            total_traceroutes = sum(
+                len(c.get("traceroutes", []))
+                for c in self.customer_traceroutes.values()
+            )
+            logger.info(
+                f"Loaded traceroute history: {len(self.customer_traceroutes)} customers, {total_traceroutes} total samples"
+            )
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing traceroute history: {e}")
+            self.customer_traceroutes = {}
+        except Exception as e:
+            logger.error(f"Error loading traceroute history: {e}")
+            self.customer_traceroutes = {}
+
+    def save_traceroute_to_history(
+        self, customer_id: str, network_key: Dict, label: str = None
+    ):
+        try:
+            traceroute_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "public_ip": network_key.get("public_ip"),
+                "exit_ip": network_key.get("exit_ip"),
+                "hop_count": len(network_key.get("hops", [])),
+                "network_signature": self.create_network_signature(network_key),
+                "label": label or network_key.get("public_ip", "unknown"),
+                "raw_traceroute": network_key.get("raw", ""),
+            }
+
+            if customer_id not in self.customer_traceroutes:
+                self.customer_traceroutes[customer_id] = {
+                    "name": self.customer_traceroutes.get(customer_id, {}).get(
+                        "name", customer_id
+                    ),
+                    "traceroutes": [],
+                }
+
+            self.customer_traceroutes[customer_id]["traceroutes"].append(
+                traceroute_entry
+            )
+
+            os.makedirs(os.path.dirname(self.traceroutes_path), exist_ok=True)
+            with open(self.traceroutes_path, "w") as f:
+                json.dump(self.customer_traceroutes, f, indent=2)
+
+            logger.info(
+                f"Saved traceroute to history for customer '{customer_id}': {network_key.get('public_ip')}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error saving traceroute to history: {e}")
 
     def match_ip_pattern(self, ip: str, pattern: str) -> bool:
         if pattern == "dynamic":
@@ -297,42 +372,162 @@ class CustomerFingerprinter:
         return 0.5
 
     def match_customer(self, network_key: Dict) -> Tuple[Optional[Dict], float]:
-        best_match = None
-        best_score = 0.0
+        current_public_ip = network_key.get("public_ip")
+        current_exit_ip = network_key.get("exit_ip")
+        current_signature = self.create_network_signature(network_key)
 
-        weights = self.settings.get(
-            "weights",
-            {"exit_ip": 0.3, "hop_pattern": 0.4, "latency": 0.2, "network_size": 0.1},
-        )
+        logger.info(f"Attempting customer identification...")
+        logger.info(f"Current public IP: {current_public_ip}")
+        logger.info(f"Current exit IP: {current_exit_ip}")
+        logger.info(f"Network signature: {current_signature}")
+
+        matched_customer = None
+        match_method = None
 
         for customer in self.customers:
-            fingerprints = customer.get("fingerprints", [])
-            customer_best_score = 0.0
+            customer_id = customer.get("id")
+            customer_name = customer.get("name")
 
-            for fingerprint in fingerprints:
-                exit_ip_score = self.calculate_exit_ip_score(network_key, customer)
-                hop_score = self.calculate_hop_pattern_score(network_key, fingerprint)
-                latency_score = self.calculate_latency_score(network_key, fingerprint)
-                size_score = self.calculate_network_size_score(network_key, customer)
+            logger.info(f"Checking customer: {customer_name} ({customer_id})")
 
-                total_score = (
-                    exit_ip_score * weights["exit_ip"]
-                    + hop_score * weights["hop_pattern"]
-                    + latency_score * weights["latency"]
-                    + size_score * weights["network_size"]
+            networks = customer.get("networks", {})
+
+            if self.match_by_public_ip(current_public_ip, networks):
+                matched_customer = customer
+                match_method = "public_ip"
+                logger.info(f"✓ MATCH found via public IP: {customer_name}")
+                break
+
+            if not matched_customer and customer_id in self.customer_traceroutes:
+                customer_traceroutes = self.customer_traceroutes[customer_id].get(
+                    "traceroutes", []
                 )
+                if self.match_by_traceroute_history(
+                    current_signature, current_public_ip, customer_traceroutes
+                ):
+                    matched_customer = customer
+                    match_method = "traceroute_history"
+                    logger.info(
+                        f"✓ MATCH found via traceroute history: {customer_name}"
+                    )
+                    break
 
-                customer_best_score = max(customer_best_score, total_score)
+            if not matched_customer and self.match_by_exit_ip(
+                current_exit_ip, networks
+            ):
+                matched_customer = customer
+                match_method = "exit_ip"
+                logger.info(f"✓ MATCH found via exit IP: {customer_name}")
+                break
 
-            if customer_best_score > best_score:
-                best_score = customer_best_score
-                best_match = customer
+            if not matched_customer:
+                logger.info(f"✗ No match for {customer_name}")
 
-        min_confidence = self.settings.get("min_confidence", 0.7)
-        if best_score >= min_confidence:
-            return best_match, best_score
+        if matched_customer:
+            logger.info(
+                f"Customer identified: {matched_customer['name']} (method: {match_method})"
+            )
+            confidence = 1.0
+        else:
+            matched_customer = self.unknown_customer
+            match_method = "none"
+            logger.warning(f"No customer match found - using 'Unknown Network'")
+            confidence = 0.0
 
-        return self.unknown_customer, best_score
+        return matched_customer, confidence
+
+    def match_by_public_ip(self, current_public_ip: str, networks: Dict) -> bool:
+        if not current_public_ip:
+            return False
+
+        public_ips = networks.get("public_ips", [])
+        public_ip_range = networks.get("public_ip")
+
+        if public_ip_range and public_ip_range != "dynamic":
+            try:
+                customer_network = ipaddress.ip_network(public_ip_range, strict=False)
+                current_ip = ipaddress.ip_address(current_public_ip)
+                if current_ip in customer_network:
+                    logger.debug(
+                        f"Public IP {current_public_ip} matches range {public_ip_range}"
+                    )
+                    return True
+            except Exception as e:
+                logger.debug(f"Error checking public IP range: {e}")
+
+        if isinstance(public_ips, list) and current_public_ip in public_ips:
+            logger.debug(f"Public IP {current_public_ip} matches explicit list")
+            return True
+
+        labeled_ips = networks.get("labeled_public_ips", {})
+        if labeled_ips:
+            for label, ip_info in labeled_ips.items():
+                if isinstance(ip_info, dict):
+                    ip_address = ip_info.get("address") or ""
+                else:
+                    ip_address = ip_info or ""
+                if current_public_ip == ip_address:
+                    logger.debug(
+                        f"Public IP {current_public_ip} matches labeled WAN: {label}"
+                    )
+                    return True
+
+        return False
+
+    def match_by_exit_ip(self, current_exit_ip: str, networks: Dict) -> bool:
+        if not current_exit_ip:
+            return False
+
+        exit_ips = networks.get("exit_ips", [])
+        if not exit_ips or exit_ips == "dynamic":
+            return False
+
+        exit_ips_list = exit_ips if isinstance(exit_ips, list) else [exit_ips]
+        for exit_ip_pattern in exit_ips_list:
+            if self.match_ip_pattern(current_exit_ip, exit_ip_pattern):
+                logger.debug(
+                    f"Exit IP {current_exit_ip} matches pattern {exit_ip_pattern}"
+                )
+                return True
+
+        return False
+
+    def match_by_traceroute_history(
+        self, current_signature: str, current_public_ip: str, history: List
+    ) -> bool:
+        if not history:
+            return False
+
+        for traceroute_entry in history:
+            history_signature = traceroute_entry.get("network_signature") or ""
+            history_public_ip = traceroute_entry.get("public_ip") or ""
+
+            if history_signature == current_signature:
+                logger.debug(f"Exact signature match found in history")
+                return True
+
+            if current_public_ip and history_public_ip == current_public_ip:
+                logger.debug(f"Public IP match found in history")
+                return True
+
+            if self.signature_similarity(current_signature, history_signature) > 0.8:
+                logger.debug(f"Similar signature found in history (80%+ match)")
+                return True
+
+        return False
+
+    def signature_similarity(self, sig1: str, sig2: str) -> float:
+        if not sig1 or not sig2:
+            return 0.0
+
+        hops1 = sig1.split(" -> ")
+        hops2 = sig2.split(" -> ")
+
+        if len(hops1) != len(hops2):
+            return 0.0
+
+        matches = sum(1 for h1, h2 in zip(hops1, hops2) if h1 == h2)
+        return matches / len(hops1) if hops1 else 0.0
 
     def identify_network_type(self, network_key: Dict) -> str:
         hops = network_key.get("hops", [])
@@ -397,8 +592,9 @@ class CustomerFingerprinter:
             with open(storage_path, "w") as f:
                 json.dump(history, f, indent=2)
 
+            logger.info(f"Scan result saved to {storage_path}")
         except Exception as e:
-            print(f"Error saving scan result: {e}")
+            logger.error(f"Error saving scan result: {e}")
 
     def create_network_signature(self, network_key: Dict) -> str:
         hops = network_key.get("hops", [])

@@ -1,0 +1,2 @@
+# Nmap 7.98 scan initiated Thu Jan  8 09:02:40 2026 as: nmap -sS -T4 -A -sC -oA scanme --stylesheet /Users/seandolbec/Desktop/Nmap-2026-ui-update/nmap-modern.xsl scanme.nmap.org
+# Nmap done at Thu Jan  8 09:02:43 2026 -- 1 IP address (0 hosts up) scanned in 2.46 seconds

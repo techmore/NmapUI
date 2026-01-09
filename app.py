@@ -1,12 +1,19 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml
+import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml, logging
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
@@ -71,10 +78,18 @@ def is_private_ip(ip):
 
 
 def run_traceroute(target="1.1.1.1"):
-    """Run traceroute and parse output into network key"""
     global network_key, current_customer
     try:
-        print(f"Running traceroute to {target}...")
+        emit("customer_identification_start")
+        socketio.sleep(0)
+
+        logger.info(f"Running traceroute to {target}...")
+        emit(
+            "customer_identification_progress",
+            {"message": f"Running traceroute to {target}..."},
+        )
+        socketio.sleep(0)
+
         output = subprocess.check_output(
             ["traceroute", "-n", target], stderr=subprocess.STDOUT, timeout=60
         ).decode("utf-8")
@@ -85,8 +100,6 @@ def run_traceroute(target="1.1.1.1"):
         network_key["private_hops"] = []
         network_key["public_hops"] = []
 
-        # Parse each hop line
-        # Format: " 1  192.168.222.1  4.318 ms  2.988 ms  1.790 ms"
         hop_pattern = re.compile(r"^\s*(\d+)\s+(\S+)\s+(.+)$", re.MULTILINE)
 
         for match in hop_pattern.finditer(output):
@@ -94,11 +107,9 @@ def run_traceroute(target="1.1.1.1"):
             ip_or_star = match.group(2)
             latencies = match.group(3)
 
-            # Skip header line and asterisks (timeouts)
             if ip_or_star == "*" or "traceroute" in ip_or_star.lower():
                 continue
 
-            # Extract average latency
             latency_matches = re.findall(r"([\d.]+)\s*ms", latencies)
             avg_latency = None
             if latency_matches:
@@ -122,15 +133,22 @@ def run_traceroute(target="1.1.1.1"):
 
         network_key["total_hops"] = len(network_key["hops"])
 
-        # Exit IP is the last public hop before target (or last hop)
         if network_key["hops"]:
             network_key["exit_ip"] = network_key["hops"][-1]["ip"]
 
-        print(
+        logger.info(
             f"Traceroute complete: {network_key['total_hops']} hops, {len(network_key['private_hops'])} private, {len(network_key['public_hops'])} public"
         )
+        emit(
+            "customer_identification_progress",
+            {"message": f"Traceroute complete ({network_key['total_hops']} hops)"},
+        )
+        socketio.sleep(0)
 
-        # Perform customer fingerprinting
+        logger.info("Running customer identification...")
+        emit("customer_identification_progress", {"message": "Identifying customer..."})
+        socketio.sleep(0)
+
         customer, confidence = customer_fingerprinter.match_customer(network_key)
         customer = customer or {}
         current_customer = {
@@ -139,19 +157,44 @@ def run_traceroute(target="1.1.1.1"):
             "confidence": confidence,
         }
 
-        # Save scan result to history
         customer_fingerprinter.save_scan_result(network_key, customer, confidence)
+        customer_fingerprinter.save_traceroute_to_history(
+            current_customer["id"],
+            network_key,
+            f"WAN: {network_key.get('public_ip', 'unknown')}",
+        )
 
-        print(
+        emit(
+            "customer_identified",
+            {
+                "customer": current_customer,
+                "match_method": getattr(
+                    customer_fingerprinter, "last_match_method", "unknown"
+                ),
+                "public_ip": network_key.get("public_ip"),
+                "exit_ip": network_key.get("exit_ip"),
+                "hop_count": network_key["total_hops"],
+            },
+        )
+
+        emit("file_updated", {"file": "data/scan_history.json", "action": "saved"})
+        emit(
+            "file_updated",
+            {"file": "data/customer_traceroutes.json", "action": "saved"},
+        )
+
+        logger.info(
             f"Customer identified: {current_customer['name']} (confidence: {confidence:.2f})"
         )
 
     except subprocess.TimeoutExpired:
-        print("Traceroute timed out")
+        logger.error("Traceroute timed out")
         network_key["error"] = "Traceroute timed out"
+        emit("customer_identification_error", {"error": "Traceroute timed out"})
     except Exception as e:
-        print(f"Traceroute error: {e}")
+        logger.error(f"Traceroute error: {e}")
         network_key["error"] = str(e)
+        emit("customer_identification_error", {"error": str(e)})
 
     return network_key
 
@@ -161,7 +204,7 @@ def generate_deep_pdf(output):
     styles_obj = getSampleStyleSheet()
     data = []
     for line in output:
-        print("line :" + line)
+        logger.debug(f"line : {line}")
         if "Nmap scan report for" in line:
             ip_address = line.split("for")[-1].strip()
             data.append(Paragraph(f"IP Address: {ip_address}", styles_obj["Normal"]))
@@ -557,12 +600,171 @@ def delete_customer_event(data):
             },
         )
 
+        logger.info(f"Customer '{customer_id}' deleted")
+
     except Exception as e:
+        logger.error(f"Failed to delete customer: {e}")
         emit("customer_error", f"Failed to delete customer: {str(e)}")
 
 
+@socketio.on("assign_report_to_customer")
+def assign_report_to_customer_event(data):
+    try:
+        report_path = data.get("report_path", "").strip()
+        customer_id = data.get("customer_id", "").strip()
+        label = data.get("label", "").strip()
+
+        if not report_path:
+            emit("customer_error", "Report path is required")
+            return
+
+        if not customer_id:
+            emit("customer_error", "Customer ID is required")
+            return
+
+        if not os.path.exists(report_path):
+            emit("customer_error", f"Report not found at {report_path}")
+            return
+
+        customer = None
+        for c in customer_fingerprinter.customers:
+            if c.get("id") == customer_id:
+                customer = c
+                break
+
+        if not customer:
+            emit("customer_error", f"Customer '{customer_id}' not found")
+            return
+
+        metadata_path = os.path.join(report_path, "metadata.json")
+        if not os.path.exists(metadata_path):
+            emit("customer_error", "Report metadata not found")
+            return
+
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
+
+        metadata["customer_id"] = customer_id
+        metadata["customer_name"] = customer.get("name")
+        metadata["assigned_at"] = datetime.now().isoformat()
+        if label:
+            metadata["assignment_label"] = label
+
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        logger.info(
+            f"Report {report_path} assigned to customer '{customer.get('name')}' ({customer_id})"
+        )
+
+        emit(
+            "report_assigned",
+            {
+                "success": True,
+                "report_path": report_path,
+                "customer_id": customer_id,
+                "customer_name": customer.get("name"),
+                "message": f"Report assigned to '{customer.get('name')}'",
+            },
+        )
+
+        emit("file_updated", {"file": metadata_path, "action": "updated"})
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Error reading report metadata: {e}")
+        emit("customer_error", f"Error reading report metadata: {str(e)}")
+    except Exception as e:
+        logger.error(f"Failed to assign report to customer: {e}")
+        emit("customer_error", f"Failed to assign report: {str(e)}")
+
+
+@socketio.on("get_customer_traceroutes")
+def get_customer_traceroutes_event(data):
+    try:
+        customer_id = data.get("customer_id", "").strip()
+
+        if not customer_id:
+            emit("customer_error", "Customer ID is required")
+            return
+
+        if customer_id not in customer_fingerprinter.customer_traceroutes:
+            emit(
+                "customer_traceroutes", {"customer_id": customer_id, "traceroutes": []}
+            )
+            return
+
+        traceroutes = customer_fingerprinter.customer_traceroutes[customer_id].get(
+            "traceroutes", []
+        )
+        emit(
+            "customer_traceroutes",
+            {"customer_id": customer_id, "traceroutes": traceroutes},
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get customer traceroutes: {e}")
+        emit("customer_error", f"Failed to get traceroutes: {str(e)}")
+
+
+@socketio.on("add_labeled_public_ip")
+def add_labeled_public_ip_event(data):
+    try:
+        customer_id = data.get("customer_id", "").strip()
+        label = data.get("label", "").strip()
+        ip_address = data.get("ip_address", "").strip()
+
+        if not customer_id or not label or not ip_address:
+            emit("customer_error", "Customer ID, label, and IP address are required")
+            return
+
+        customer = None
+        for c in customer_fingerprinter.customers:
+            if c.get("id") == customer_id:
+                customer = c
+                break
+
+        if not customer:
+            emit("customer_error", f"Customer '{customer_id}' not found")
+            return
+
+        if "networks" not in customer:
+            customer["networks"] = {}
+        if "labeled_public_ips" not in customer["networks"]:
+            customer["networks"]["labeled_public_ips"] = {}
+
+        customer["networks"]["labeled_public_ips"][label] = {
+            "address": ip_address,
+            "added_at": datetime.now().isoformat(),
+        }
+
+        save_customers_config()
+
+        logger.info(
+            f"Added labeled IP '{label}' ({ip_address}) to customer '{customer.get('name')}'"
+        )
+
+        emit(
+            "labeled_ip_added",
+            {
+                "success": True,
+                "customer_id": customer_id,
+                "label": label,
+                "ip_address": ip_address,
+                "message": f"Labeled IP '{label}' added to '{customer.get('name')}'",
+            },
+        )
+
+        emit(
+            "file_updated",
+            {"file": str(customer_fingerprinter.config_path), "action": "updated"},
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to add labeled public IP: {e}")
+        emit("customer_error", f"Failed to add labeled IP: {str(e)}")
+
+
 def save_customers_config():
-    """Save current customers configuration to YAML file"""
     try:
         config_data = {
             "version": customer_fingerprinter.config.get("version", "1.0"),
@@ -578,12 +780,13 @@ def save_customers_config():
         with open(customer_fingerprinter.config_path, "w") as f:
             yaml.dump(config_data, f, default_flow_style=False, indent=2)
 
+        logger.info(f"Customers config saved to {customer_fingerprinter.config_path}")
+
     except Exception as e:
-        print(f"Error saving customers config: {e}")
+        logger.error(f"Error saving customers config: {e}")
 
 
 def save_current_assignment():
-    """Save current customer assignment to file"""
     try:
         assignment_data = {
             "timestamp": datetime.now().isoformat(),
@@ -594,12 +797,13 @@ def save_current_assignment():
         with open(assignment_path, "w") as f:
             json.dump(assignment_data, f, indent=2)
 
+        logger.info(f"Current assignment saved to {assignment_path}")
+
     except Exception as e:
-        print(f"Error saving current assignment: {e}")
+        logger.error(f"Error saving current assignment: {e}")
 
 
 def load_current_assignment():
-    """Load current customer assignment from file"""
     global current_customer
     try:
         assignment_path = BASE_DIR / "data" / "current_assignment.json"
@@ -607,9 +811,12 @@ def load_current_assignment():
             with open(assignment_path, "r") as f:
                 data = json.load(f)
                 current_customer = data.get("customer", current_customer)
+                logger.info(
+                    f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
+                )
 
     except Exception as e:
-        print(f"Error loading current assignment: {e}")
+        logger.error(f"Error loading current assignment: {e}")
 
 
 @socketio.on("get_versions")
@@ -676,15 +883,12 @@ def identify_gateway_firewall_targets(hosts):
 
 def start_deep_scan(targets, is_gateway_phase=False):
     try:
-        # Emit deep scan start before the loop
         emit("deep_scan_start")
-        # Ensure event is flushed before starting scan loop
         socketio.sleep(0)
 
         for target in targets:
-            # Emit per-host start indicator
             emit("deep_scan_host_start", {"ip": target})
-            print("nmap -T3 -sV vulners " + target)
+            logger.info(f"nmap -T3 -sV vulners {target}")
             output = subprocess.check_output(
                 [
                     "nmap",
@@ -732,7 +936,7 @@ def start_deep_scan(targets, is_gateway_phase=False):
                                 {"id": cve_id, "score": cve_score, "url": cve_url}
                             )
                 elif "*EXPLOIT*" in line:
-                    print("Exploit : " + line)
+                    logger.warning(f"Exploit: {line}")
                 elif "Service Info: " in line:
                     trimmed_line = line.replace("Service Info: ", "")
                     if current_host:  # Make sure current_host is not None
@@ -755,7 +959,7 @@ def start_deep_scan(targets, is_gateway_phase=False):
 def start_scan(target):
     try:
         emit("quick_scan_start", f"Starting quick scan on {target}")
-        print("nmap -sn " + target)
+        logger.info(f"nmap -sn {target}")
         output = subprocess.check_output(["nmap", "-sn", target]).decode("utf-8")
         parsed_data, lines = [], output.split("\n")
         ip_regex, host_status_regex, open_port_regex = (
@@ -781,11 +985,11 @@ def start_scan(target):
                     hosts_up = int(match.group(2))
                     time_taken = float(match.group(3))
 
-                    print(f"Total IPs: {total_ips}")
-                    print(f"Hosts Up: {hosts_up}")
-                    print(f"Time Taken: {time_taken} seconds")
+                    logger.info(f"Total IPs: {total_ips}")
+                    logger.info(f"Hosts Up: {hosts_up}")
+                    logger.info(f"Time Taken: {time_taken} seconds")
                 else:
-                    print("No match found")
+                    logger.warning("No match found")
                 emit(
                     "quickscan_results",
                     {
@@ -851,8 +1055,8 @@ def start_scan(target):
         regular_targets = [host["ip"] for host in regular_hosts]
         gateway_targets = [host["ip"] for host in gateway_hosts]
 
-        print(f"Phase 1 - Regular hosts: {len(regular_targets)}")
-        print(f"Phase 2 - Gateway hosts: {len(gateway_targets)}")
+        logger.info(f"Phase 1 - Regular hosts: {len(regular_targets)}")
+        logger.info(f"Phase 2 - Gateway hosts: {len(gateway_targets)}")
 
         if regular_targets:
             start_deep_scan(regular_targets, is_gateway_phase=False)
@@ -868,10 +1072,8 @@ def start_scan(target):
 
 
 def run_arp_scan(target, interface="en0"):
-    """Run arp-scan and parse MAC/vendor info"""
     try:
-        print(f"arp-scan {target} -interface {interface}")
-        # arp-scan requires sudo, try without first
+        logger.info(f"arp-scan {target} -interface {interface}")
         try:
             output = subprocess.check_output(
                 ["arp-scan", target, "-interface", interface],
@@ -879,7 +1081,6 @@ def run_arp_scan(target, interface="en0"):
                 timeout=30,
             ).decode("utf-8")
         except subprocess.CalledProcessError:
-            # Try with sudo if regular call fails
             output = subprocess.check_output(
                 ["sudo", "arp-scan", target, "-interface", interface],
                 stderr=subprocess.STDOUT,
@@ -887,7 +1088,6 @@ def run_arp_scan(target, interface="en0"):
             ).decode("utf-8")
 
         arp_data = {}
-        # Parse lines like: 192.168.222.8   b4:fb:e4:7e:18:44       Ubiquiti Networks Inc.
         arp_pattern = re.compile(r"^(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F:]{17})\s+(.*)$")
 
         for line in output.split("\n"):
@@ -898,17 +1098,17 @@ def run_arp_scan(target, interface="en0"):
                 vendor = match.group(3).strip()
                 arp_data[ip] = {"mac": mac, "vendor": vendor}
 
-        print(f"ARP scan found {len(arp_data)} hosts with MAC addresses")
+        logger.info(f"ARP scan found {len(arp_data)} hosts with MAC addresses")
         return arp_data
 
     except FileNotFoundError:
-        print("arp-scan not found, skipping MAC/vendor detection")
+        logger.warning("arp-scan not found, skipping MAC/vendor detection")
         return {}
     except subprocess.TimeoutExpired:
-        print("arp-scan timed out")
+        logger.warning("arp-scan timed out")
         return {}
     except Exception as e:
-        print(f"arp-scan error: {e}")
+        logger.error(f"arp-scan error: {e}")
         return {}
 
 
@@ -924,32 +1124,32 @@ def check_arp_scan():
                 .decode()
                 .split("\n")[0]
             )
-            print(f"Found: {version}")
+            logger.info(f"Found: {version}")
             return True
         except:
-            print("Found: arp-scan (version unknown)")
+            logger.info("Found: arp-scan (version unknown)")
             return True
     else:
-        print("WARNING: arp-scan not found. MAC/vendor detection will be disabled.")
-        print("  macOS:  brew install arp-scan")
-        print("  Ubuntu: sudo apt install arp-scan")
+        logger.warning("arp-scan not found. MAC/vendor detection will be disabled.")
+        logger.info("  macOS:  brew install arp-scan")
+        logger.info("  Ubuntu: sudo apt install arp-scan")
         return False
 
 
 def check_nmap():
     nmap_path = shutil.which("nmap")
     if not nmap_path:
-        print("ERROR: nmap not found. Please install nmap:")
-        print("  macOS:  brew install nmap")
-        print("  Ubuntu: sudo apt install nmap")
+        logger.error("nmap not found. Please install nmap:")
+        logger.error("  macOS:  brew install nmap")
+        logger.error("  Ubuntu: sudo apt install nmap")
         sys.exit(1)
 
     try:
         version = subprocess.check_output(["nmap", "--version"]).decode().split("\n")[0]
-        print(f"Found: {version}")
+        logger.info(f"Found: {version}")
         return version
     except Exception as e:
-        print(f"ERROR: Could not get nmap version: {e}")
+        logger.error(f"Could not get nmap version: {e}")
         sys.exit(1)
 
 
@@ -957,9 +1157,8 @@ def check_vulners():
     """Check if vulners script exists and update if possible"""
     vulners_dir = VULNERS_SCRIPT.parent
 
-    # If directory doesn't exist or script missing, try to clone
     if not VULNERS_SCRIPT.exists():
-        print("Installing vulners script...")
+        logger.info("Installing vulners script...")
         try:
             result = subprocess.run(
                 [
@@ -973,19 +1172,17 @@ def check_vulners():
                 text=True,
             )
             if result.returncode == 0:
-                print("Vulners script installed successfully")
+                logger.info("Vulners script installed successfully")
                 return True
             else:
-                print(f"Failed to install vulners: {result.stderr}")
+                logger.error(f"Failed to install vulners: {result.stderr}")
                 sys.exit(1)
         except Exception as e:
-            print(f"Failed to install vulners: {e}")
+            logger.error(f"Failed to install vulners: {e}")
             sys.exit(1)
 
-    # Always try to update
-    print("Updating vulners script...")
+    logger.info("Updating vulners script...")
     try:
-        # Initialize as git repo if needed
         if not (vulners_dir / ".git").exists():
             subprocess.run(["git", "init"], cwd=vulners_dir, capture_output=True)
             subprocess.run(
@@ -1000,7 +1197,6 @@ def check_vulners():
                 capture_output=True,
             )
 
-        # Pull updates
         result = subprocess.run(
             ["git", "pull", "origin", "master"],
             cwd=vulners_dir,
@@ -1008,7 +1204,6 @@ def check_vulners():
             text=True,
         )
         if result.returncode == 0:
-            # Get version info
             version_result = subprocess.run(
                 ["git", "log", "-1", "--oneline"],
                 cwd=vulners_dir,
@@ -1017,13 +1212,13 @@ def check_vulners():
             )
             if version_result.returncode == 0:
                 commit = version_result.stdout.strip()
-                print(f"Vulners updated: {commit}")
+                logger.info(f"Vulners updated: {commit}")
             else:
-                print("Vulners updated")
+                logger.info("Vulners updated")
         else:
-            print("Vulners already up-to-date")
+            logger.info("Vulners already up-to-date")
     except Exception as e:
-        print(f"Vulners update failed: {e}")
+        logger.error(f"Vulners update failed: {e}")
 
     return True
 
@@ -1035,19 +1230,18 @@ def get_versions():
 
 
 def startup_checks(quick=False):
-    print("\n" + "=" * 50)
-    print("NmapUI Startup Checks")
-    print("=" * 50)
+    logger.info("\n" + "=" * 50)
+    logger.info("NmapUI Startup Checks")
+    logger.info("=" * 50)
 
     if quick:
-        print("Quick mode: skipping dependency checks")
+        logger.info("Quick mode: skipping dependency checks")
     else:
-        print("\nChecking nmap...")
+        logger.info("\nChecking nmap...")
         versions["nmap"] = check_nmap()
 
-        print("\nChecking vulners script...")
+        logger.info("\nChecking vulners script...")
         check_vulners()
-        # Get vulners version info
         vulners_dir = VULNERS_SCRIPT.parent
         if vulners_dir.exists():
             try:
@@ -1071,7 +1265,7 @@ def startup_checks(quick=False):
             except:
                 versions["vulners"] = "Unknown"
 
-        print("\nChecking arp-scan...")
+        logger.info("\nChecking arp-scan...")
         if check_arp_scan():
             try:
                 version = (
@@ -1087,18 +1281,26 @@ def startup_checks(quick=False):
         else:
             versions["arp_scan"] = "Not installed"
 
-    print("\nLoading previous customer assignment...")
+    logger.info("\nLoading previous customer assignment...")
     load_current_assignment()
 
-    print("\nInitializing network key...")
-    run_traceroute("1.1.1.1")
+    logger.info("\nInitializing network key...")
+    try:
+        # Run simple traceroute for initialization without Socket.IO
+        output = subprocess.check_output(
+            ["traceroute", "-n", "1.1.1.1"], stderr=subprocess.STDOUT, timeout=60
+        ).decode("utf-8")
+        logger.info("Network key initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize network key: {e}")
+        logger.info("Continuing without network key...")
 
-    print("\n" + "=" * 50)
-    print("All checks passed. Starting server...")
-    print("=" * 50 + "\n")
+    logger.info("\n" + "=" * 50)
+    logger.info("All checks passed. Starting server...")
+    logger.info("=" * 50 + "\n")
 
 
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv
     startup_checks(quick=quick_mode)
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)

@@ -1,0 +1,2 @@
+# Nmap 7.98 scan initiated Thu Jan  8 08:59:29 2026 as: nmap -sS -T4 -A -sC -oA scanme --stylesheet https://raw.githubusercontent.com/honze-net/nmap-bootstrap-xsl/master/nmap-bootstrap.xsl scanme.nmap.org scanme2.nmap.org
+# Nmap done at Thu Jan  8 08:59:32 2026 -- 2 IP addresses (0 hosts up) scanned in 2.63 seconds
