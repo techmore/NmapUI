@@ -300,6 +300,8 @@ def get_network_key_event():
     if network_key.get("total_hops", 0) == 0:
         print("Network key empty, running traceroute...")
         run_traceroute("1.1.1.1")
+
+    print(f"Sending network_key to client: {network_key.get('total_hops', 0)} hops")
     emit("network_key", network_key)
 
 
@@ -1096,6 +1098,7 @@ def startup_checks(quick=False):
 
     print("\nInitializing network key...")
     run_traceroute("1.1.1.1")
+    print(f"Network key initialized with {network_key.get('total_hops', 0)} hops")
 
     print("\n" + "=" * 50)
     print("All checks passed. Starting server...")

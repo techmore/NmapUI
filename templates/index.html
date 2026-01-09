@@ -535,6 +535,8 @@
                 }).join('');
             } else if (data.error) {
                 routePath.innerHTML = `<span class="text-red-400">${data.error}</span>`;
+            } else {
+                routePath.innerHTML = '<span class="text-olive-400">No route data available</span>';
             }
         });
 
