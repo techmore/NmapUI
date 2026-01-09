@@ -15,6 +15,103 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
+
+
+class IdleStateManager:
+    """Manages application idle state for auto-update functionality"""
+
+    def __init__(self):
+        self.active_operations = set()
+        self.last_activity = datetime.now()
+        self.idle_threshold = 30  # seconds
+        self.idle_check_interval = 5  # seconds
+        self.idle_state = False
+        self.update_available = False
+        self.auto_update_enabled = True
+        self.countdown_active = False
+
+    def start_operation(self, operation_id: str):
+        """Mark an operation as started"""
+        self.active_operations.add(operation_id)
+        self.last_activity = datetime.now()
+        self._update_idle_state()
+        logger.debug(
+            f"Started operation: {operation_id}, active operations: {len(self.active_operations)}"
+        )
+
+    def end_operation(self, operation_id: str):
+        """Mark an operation as completed"""
+        self.active_operations.discard(operation_id)
+        self.last_activity = datetime.now()
+        self._update_idle_state()
+        logger.debug(
+            f"Ended operation: {operation_id}, active operations: {len(self.active_operations)}"
+        )
+
+    def _update_idle_state(self):
+        """Update idle state and notify if changed"""
+        was_idle = self.idle_state
+        self.idle_state = self._is_idle()
+
+        if was_idle != self.idle_state:
+            logger.info(
+                f"Idle state changed: {'idle' if self.idle_state else 'active'}"
+            )
+            safe_emit("idle_state_changed", {"idle": self.idle_state})
+
+            # If now idle and update available, trigger auto-update banner
+            if (
+                self.idle_state
+                and self.update_available
+                and self.auto_update_enabled
+                and not self.countdown_active
+            ):
+                self._trigger_auto_update_banner()
+
+    def _is_idle(self):
+        """Check if system is currently idle"""
+        if len(self.active_operations) > 0:
+            return False
+
+        time_since_activity = (datetime.now() - self.last_activity).seconds
+        return time_since_activity >= self.idle_threshold
+
+    def set_update_available(self, available: bool, update_info=None):
+        """Update availability status"""
+        self.update_available = available
+        if (
+            available
+            and self.idle_state
+            and self.auto_update_enabled
+            and not self.countdown_active
+        ):
+            self._trigger_auto_update_banner()
+        elif not available:
+            # Hide banner if update no longer available
+            safe_emit("hide_auto_update_banner")
+
+    def _trigger_auto_update_banner(self):
+        """Trigger the auto-update banner display"""
+        update_info = check_for_updates()
+        if isinstance(update_info, dict) and update_info.get("available"):
+            self.countdown_active = True
+            safe_emit("show_auto_update_banner", update_info)
+
+    def cancel_countdown(self):
+        """Cancel active countdown"""
+        self.countdown_active = False
+        safe_emit("hide_auto_update_banner")
+
+    def start_countdown(self):
+        """Start the countdown (called from frontend)"""
+        self.countdown_active = True
+
+    def complete_auto_update(self):
+        """Mark auto-update as completed"""
+        self.countdown_active = False
+        self.update_available = False
+
+
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
 XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"
 XSL_STYLESHEET_PDF = BASE_DIR / "nmap-modern.xsl"
@@ -105,17 +202,8 @@ network_key = {
     "raw": "",
 }
 
-# Global customer fingerprinter
-customer_fingerprinter = CustomerFingerprinter()
-current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
-
-# Global version information - populated at startup
-versions: Dict[str, Optional[str]] = {
-    "nmap": None,
-    "vulners": None,
-    "arp_scan": None,
-}
-
+# Global idle state manager
+idle_state_manager = IdleStateManager()
 
 # Global customer fingerprinter
 customer_fingerprinter = CustomerFingerprinter()
@@ -884,8 +972,11 @@ def check_app_updates_event():
     """Check for application updates and notify the client"""
     update_info = check_for_updates()
     if isinstance(update_info, dict):
+        available = update_info.get("available", False)
+        idle_state_manager.set_update_available(bool(available), update_info)
         emit("app_update_available", update_info)
     else:
+        idle_state_manager.set_update_available(False)
         emit("app_update_available", {"available": False})
 
 
@@ -935,6 +1026,19 @@ def perform_app_update_event():
     except Exception as e:
         logger.error(f"Update failed: {e}")
         emit("update_error", {"message": f"Failed to open download: {str(e)}"})
+
+
+@socketio.on("cancel_auto_update")
+def cancel_auto_update_event():
+    """Cancel the auto-update countdown"""
+    idle_state_manager.cancel_countdown()
+    emit("hide_auto_update_banner")
+
+
+@socketio.on("start_auto_update_countdown")
+def start_auto_update_countdown_event():
+    """Start the auto-update countdown (called when banner is shown)"""
+    idle_state_manager.start_countdown()
 
 
 @socketio.on("get_local_ip")
@@ -1073,6 +1177,7 @@ def start_deep_scan(targets, is_gateway_phase=False):
 @socketio.on("start_scan")
 def start_scan(target):
     try:
+        idle_state_manager.start_operation("quick_scan")
         emit("quick_scan_start", f"Starting quick scan on {target}")
         command_str = f"nmap -sn {target}"
         socketio.emit("scan_feedback", f"Executing: {command_str}")
@@ -1223,6 +1328,8 @@ def start_scan(target):
 
     except Exception as e:
         emit("scan_error", str(e))
+    finally:
+        idle_state_manager.end_operation("quick_scan")
 
 
 def run_arp_scan(target, interface="en0"):
@@ -1683,6 +1790,7 @@ def delete_scan(path):
 @socketio.on("generate_report")
 def generate_report_event(data):
     """Handle report generation request via SocketIO"""
+    idle_state_manager.start_operation("report_generation")
     target = data.get("target")
 
     # Use the provided customer name or fall back to the currently identified one
@@ -1699,6 +1807,7 @@ def generate_report_event(data):
 
     if not target:
         emit("report_error", {"error": "No target specified"})
+        idle_state_manager.end_operation("report_generation")
         return
 
     start_time = datetime.now()
@@ -1772,6 +1881,8 @@ def generate_report_event(data):
     except Exception as e:
         logger.exception("Report generation failed")
         emit("report_error", {"error": str(e)})
+    finally:
+        idle_state_manager.end_operation("report_generation")
 
 
 def startup_checks(quick=False):

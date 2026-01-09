@@ -97,6 +97,28 @@
             box-shadow: 0 0 0 12px oklch(62% 0.055 110 / 0.2);
         }
     }
+
+    @keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+    }
 </style>
 <body class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header with Title -->
@@ -123,7 +145,43 @@
         </div>
     </div>
 
-
+    <!-- Auto-Update Banner -->
+    <div id="auto-update-banner" class="hidden fixed top-16 left-4 right-4 z-50 bg-gradient-to-r from-olive-600 to-olive-700 text-white p-4 rounded-lg shadow-lg border border-olive-500 max-w-2xl mx-auto">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="flex-shrink-0">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">Update Available!</h3>
+                    <p id="update-description" class="text-olive-100">NmapUI v2026.1.9.12_45 is ready to install</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-center">
+                    <div id="countdown-timer" class="text-3xl font-mono font-bold text-olive-100">
+                        30
+                    </div>
+                    <div class="text-xs text-olive-200">seconds</div>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="update-now-btn" class="bg-white text-olive-700 px-4 py-2 rounded-lg font-medium hover:bg-olive-50 transition-colors text-sm">
+                        Update Now
+                    </button>
+                    <button id="cancel-update-btn" class="bg-olive-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-olive-400 transition-colors text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <div class="bg-olive-500 rounded-full h-2 overflow-hidden">
+                <div id="progress-bar" class="bg-white h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Hidden customer selector for JavaScript compatibility -->
     <select id="current-customer" class="hidden">
@@ -803,6 +861,95 @@
             document.getElementById('update-log').innerHTML = '';
             socket.emit('perform_app_update');
         }
+
+        // Auto-Update Banner Logic
+        let countdownInterval = null;
+        let remainingSeconds = 30;
+        let bannerVisible = false;
+
+        socket.on('idle_state_changed', data => {
+            console.log('Idle state changed:', data);
+        });
+
+        socket.on('show_auto_update_banner', data => {
+            console.log('Showing auto-update banner:', data);
+            showAutoUpdateBanner(data);
+        });
+
+        socket.on('hide_auto_update_banner', () => {
+            console.log('Hiding auto-update banner');
+            hideAutoUpdateBanner();
+        });
+
+        function showAutoUpdateBanner(updateInfo) {
+            if (bannerVisible) return;
+
+            bannerVisible = true;
+            remainingSeconds = 30;
+
+            // Update description
+            const descElement = document.getElementById('update-description');
+            if (updateInfo.latest_version) {
+                descElement.textContent = `NmapUI ${updateInfo.latest_version} is ready to install`;
+            }
+
+            // Show banner with animation
+            const banner = document.getElementById('auto-update-banner');
+            banner.classList.remove('hidden');
+            banner.style.animation = 'slideDown 0.5s ease-out';
+
+            // Start countdown
+            startCountdown();
+        }
+
+        function hideAutoUpdateBanner() {
+            if (!bannerVisible) return;
+
+            bannerVisible = false;
+            clearInterval(countdownInterval);
+
+            const banner = document.getElementById('auto-update-banner');
+            banner.style.animation = 'slideUp 0.3s ease-in';
+            setTimeout(() => {
+                banner.classList.add('hidden');
+                banner.style.animation = '';
+            }, 300);
+        }
+
+        function startCountdown() {
+            const timerElement = document.getElementById('countdown-timer');
+            const progressBar = document.getElementById('progress-bar');
+
+            countdownInterval = setInterval(() => {
+                remainingSeconds--;
+                timerElement.textContent = remainingSeconds;
+
+                const progressPercent = ((30 - remainingSeconds) / 30) * 100;
+                progressBar.style.width = `${progressPercent}%`;
+
+                if (remainingSeconds <= 0) {
+                    performAutoUpdate();
+                }
+            }, 1000);
+        }
+
+        function performAutoUpdate() {
+            clearInterval(countdownInterval);
+            socket.emit('perform_app_update');
+            hideAutoUpdateBanner();
+        }
+
+        // Event listeners for banner buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('update-now-btn')?.addEventListener('click', () => {
+                performAutoUpdate();
+            });
+
+            document.getElementById('cancel-update-btn')?.addEventListener('click', () => {
+                socket.emit('cancel_auto_update');
+                hideAutoUpdateBanner();
+            });
+        });
 
         socket.on('history_counts', data => {
             console.log('History counts received:', data);
