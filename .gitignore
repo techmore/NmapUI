@@ -3,3 +3,6 @@ oatmeal-olive-instrument/
 *.pdf
 __pycache__/
 *.pyc
+data/scans/
+config/customers.yaml
+data/*.json
