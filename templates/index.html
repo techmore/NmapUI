@@ -710,20 +710,18 @@
             const nmapVersion = data.nmap || 'Not found';
             const vulnersVersion = data.vulners || 'Not found';
             const arpScanVersion = data.arp_scan || 'Not found';
+            const appVersion = data.app || 'v--.--.--.__';
 
+            document.getElementById('app-version').textContent = appVersion;
             document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
             document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
             document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
-        });
 
-        socket.on('app_version', data => {
-            console.log('App version received:', data);
-            const appVersion = data.version || 'v--.--.--.__';
-            document.getElementById('app-version').textContent = appVersion;
-            
             // Check for updates whenever version is received
             socket.emit('check_app_updates');
         });
+
+
 
         socket.on('app_update_available', data => {
             console.log('App update check result:', data);

@@ -1836,8 +1836,11 @@ def startup_checks(quick=False):
     logger.info("All checks passed. Starting server...")
     logger.info("=" * 50 + "\n")
 
-    # Send app version to frontend
-    safe_emit("app_version", {"version": get_app_version()})
+    # Add app version to versions dict
+    versions["app"] = get_app_version()
+
+    # Send initial versions to any connected clients
+    safe_emit("versions", get_versions())
 
 
 if __name__ == "__main__":
