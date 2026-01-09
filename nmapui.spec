@@ -6,6 +6,14 @@ from pathlib import Path
 # Get the directory containing the spec file (current working directory when pyinstaller is run)
 spec_dir = Path.cwd()
 
+# Read version from VERSION file
+version_file = spec_dir / "VERSION"
+if version_file.exists():
+    with open(version_file, "r") as f:
+        app_version = f.read().strip()
+else:
+    app_version = "1.0.0"  # fallback
+
 a = Analysis(
     ['app.py'],
     pathex=[str(spec_dir)],
@@ -75,6 +83,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=app_version,  # Set version info for the executable
 )
 
 app = BUNDLE(
@@ -84,9 +93,11 @@ app = BUNDLE(
     name='NmapUI.app',
     icon=None,  # Can add an icon later
     bundle_identifier='com.techmore.nmapui',
-    version='1.0.0',
+    version=app_version,
     info_plist={
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.13.0',
+        'CFBundleShortVersionString': app_version,
+        'CFBundleVersion': app_version,
     },
 )
