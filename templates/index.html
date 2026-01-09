@@ -319,6 +319,10 @@
         </div>
     </div>
 
+    <!-- Scan Feedback Container -->
+    <div id="feedback-container" class="mt-6 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-700 space-y-2 empty:hidden">
+    </div>
+
     <!-- Results Table -->
     <div class="mt-8 bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-hidden">
         <table id="discovery-table" class="min-w-full">
@@ -527,6 +531,8 @@
                 }).join('');
             } else if (data.error) {
                 routePath.innerHTML = `<span class="text-red-400">${data.error}</span>`;
+            } else {
+                routePath.innerHTML = '<span class="text-olive-400">No route data available</span>';
             }
         });
 
@@ -635,7 +641,7 @@
             document.getElementById('cust-private-ranges').value = '';
 
             // Hide form
-            toggleCustomerForm();
+            hideCustomerForm();
 
             // Send to server
             socket.emit('add_customer', customerData);

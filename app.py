@@ -339,6 +339,12 @@ def index():
 @socketio.on("get_network_key")
 def get_network_key_event():
     """Send the network key to the client"""
+    # If network_key is empty (no hops), run traceroute to populate it
+    if network_key.get("total_hops", 0) == 0:
+        logger.info("Network key empty, running traceroute...")
+        run_traceroute("1.1.1.1")
+
+    logger.info(f"Sending network_key to client: {network_key.get('total_hops', 0)} hops")
     emit("network_key", network_key)
 
 
@@ -1285,15 +1291,8 @@ def startup_checks(quick=False):
     load_current_assignment()
 
     logger.info("\nInitializing network key...")
-    try:
-        # Run simple traceroute for initialization without Socket.IO
-        output = subprocess.check_output(
-            ["traceroute", "-n", "1.1.1.1"], stderr=subprocess.STDOUT, timeout=60
-        ).decode("utf-8")
-        logger.info("Network key initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize network key: {e}")
-        logger.info("Continuing without network key...")
+    run_traceroute("1.1.1.1")
+    logger.info(f"Network key initialized with {network_key.get('total_hops', 0)} hops")
 
     logger.info("\n" + "=" * 50)
     logger.info("All checks passed. Starting server...")
