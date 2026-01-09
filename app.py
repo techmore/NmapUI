@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
-XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"
+XSL_STYLESHEET = BASE_DIR / "nmap-pdf-olive.xsl"
 XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive.xsl"
 SCANS_DIR = BASE_DIR / "data" / "scans"
 from reportlab.lib import colors, units, enums, styles, pagesizes
@@ -380,8 +380,8 @@ def generate_pdf(sorted_hosts):
 
 
 def get_report_counts():
-    """Count reports per customer ID"""
-    counts = {"total": 0}
+    """Count reports and find last scan date per customer ID"""
+    counts = {"total": 0, "last_scans": {}}
     if not SCANS_DIR.exists():
         return counts
 
@@ -398,6 +398,20 @@ def get_report_counts():
                 key = str(cust_id) if cust_id else "unassigned"
                 counts[key] = counts.get(key, 0) + 1
                 counts["total"] = counts.get("total", 0) + 1
+
+                # Track last scan timestamp
+                timestamp = data.get("timestamp")
+                if timestamp:
+                    if (
+                        key not in counts["last_scans"]
+                        or timestamp > counts["last_scans"][key]
+                    ):
+                        counts["last_scans"][key] = timestamp
+                    if (
+                        "total" not in counts["last_scans"]
+                        or timestamp > counts["last_scans"]["total"]
+                    ):
+                        counts["last_scans"]["total"] = timestamp
         except:
             continue
 
@@ -991,7 +1005,11 @@ def start_deep_scan(targets, is_gateway_phase=False):
 
         for target in targets:
             emit("deep_scan_host_start", {"ip": target})
-            logger.info(f"nmap -T3 -sV vulners {target}")
+            command_str = f"nmap -T3 -sV --script {str(VULNERS_SCRIPT)} {target}"
+            socketio.emit("scan_feedback", f"Executing: {command_str}")
+            logger.info(command_str)
+            socketio.sleep(0)
+
             output = subprocess.check_output(
                 [
                     "nmap",
@@ -1062,7 +1080,11 @@ def start_deep_scan(targets, is_gateway_phase=False):
 def start_scan(target):
     try:
         emit("quick_scan_start", f"Starting quick scan on {target}")
-        logger.info(f"nmap -sn {target}")
+        command_str = f"nmap -sn {target}"
+        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        logger.info(command_str)
+        socketio.sleep(0)
+
         output = subprocess.check_output(["nmap", "-sn", target]).decode("utf-8")
         parsed_data, lines = [], output.split("\n")
         ip_regex, host_status_regex, open_port_regex = (
@@ -1176,13 +1198,18 @@ def start_scan(target):
 
 def run_arp_scan(target, interface="en0"):
     try:
-        logger.info(f"arp-scan {target} -interface {interface}")
+        command_str = f"arp-scan {target} -interface {interface}"
+        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        logger.info(command_str)
+        socketio.sleep(0)
+
         try:
             output = subprocess.check_output(
                 ["arp-scan", target, "-interface", interface],
                 stderr=subprocess.STDOUT,
                 timeout=30,
             ).decode("utf-8")
+
         except subprocess.CalledProcessError:
             output = subprocess.check_output(
                 ["sudo", "arp-scan", target, "-interface", interface],
@@ -1360,6 +1387,8 @@ def run_nmap_with_xml_output(target, output_base):
         "-sC",
         "--script",
         str(VULNERS_SCRIPT),
+        "--stylesheet",
+        str(XSL_STYLESHEET_PDF),
         "-oA",
         str(output_base),
         target,
@@ -1369,6 +1398,12 @@ def run_nmap_with_xml_output(target, output_base):
     if os.geteuid() != 0:
         cmd.insert(0, "sudo")
 
+    # Emit the command to the frontend console and logger
+    command_str = " ".join(cmd)
+    socketio.emit("scan_feedback", f"Executing: {command_str}")
+    logger.info(f"Executing: {command_str}")
+    socketio.sleep(0)
+
     try:
         subprocess.run(cmd, check=True, timeout=600)
         return True
@@ -1377,17 +1412,23 @@ def run_nmap_with_xml_output(target, output_base):
         return False
 
 
-def convert_xml_to_html(xml_path, html_path, pdf_optimized=False):
-    """Convert Nmap XML to HTML using xsltproc"""
-    stylesheet = XSL_STYLESHEET_PDF if pdf_optimized else XSL_STYLESHEET
+def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
+    """Convert Nmap XML to HTML using xsltproc - Use Olive PDF theme for all outputs"""
+    stylesheet = XSL_STYLESHEET_PDF
 
     if not stylesheet.exists():
         logger.error(f"XSL stylesheet not found: {stylesheet}")
         return False
 
+    cmd = ["xsltproc", "-o", str(html_path), str(stylesheet), str(xml_path)]
+    command_str = " ".join(cmd)
+    socketio.emit("scan_feedback", f"Executing: {command_str}")
+    logger.info(f"Executing: {command_str}")
+    socketio.sleep(0)
+
     try:
         subprocess.run(
-            ["xsltproc", str(stylesheet), str(xml_path), "-o", str(html_path)],
+            cmd,
             check=True,
         )
         return True
@@ -1401,29 +1442,34 @@ def convert_html_to_pdf(html_path, pdf_path):
     # Try wkhtmltopdf first
     wkhtml = shutil.which("wkhtmltopdf")
     if wkhtml:
+        cmd = [
+            wkhtml,
+            "--print-media-type",
+            "--margin-top",
+            "0.5in",
+            "--margin-right",
+            "0.5in",
+            "--margin-bottom",
+            "0.5in",
+            "--margin-left",
+            "0.5in",
+            "--page-size",
+            "Letter",
+            str(html_path),
+            str(pdf_path),
+        ]
+        command_str = " ".join(cmd)
+        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        socketio.sleep(0)
+
         try:
-            cmd = [
-                wkhtml,
-                "--print-media-type",
-                "--margin-top",
-                "0.5in",
-                "--margin-right",
-                "0.5in",
-                "--margin-bottom",
-                "0.5in",
-                "--margin-left",
-                "0.5in",
-                "--page-size",
-                "Letter",
-                str(html_path),
-                str(pdf_path),
-            ]
             subprocess.run(cmd, check=True)
             return True
         except Exception as e:
             logger.error(f"wkhtmltopdf failed: {e}")
 
     # Fallback to weasyprint
+    socketio.emit("scan_feedback", f"Falling back to weasyprint for PDF generation")
     try:
         from weasyprint import HTML
 
@@ -1464,6 +1510,12 @@ def list_scans():
             with open(metadata_path, "r") as f:
                 data = json.load(f)
 
+            # Ensure consistent naming for the UI
+            if "customer_name" not in data:
+                data["customer_name"] = data.get(
+                    "customer", data.get("customer_id", "Unknown")
+                )
+
             # Add path info for identification
             rel_path = metadata_path.parent.relative_to(SCANS_DIR)
             data["path"] = str(rel_path)
@@ -1473,6 +1525,7 @@ def list_scans():
                 metadata_path.parent / "scan.html"
             ).exists()
             data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
+            data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
 
             scans.append(data)
         except Exception as e:
@@ -1499,12 +1552,72 @@ def get_scan_html(path):
 
 @app.route("/api/scans/<path:path>/pdf")
 def get_scan_pdf(path):
-    """Download the PDF report for a scan"""
-    pdf_path = SCANS_DIR / path / "scan_report.pdf"
+    """Download the PDF report for a scan with a unique descriptive filename"""
+    scan_dir = SCANS_DIR / path
+    pdf_path = scan_dir / "scan_report.pdf"
     if not pdf_path.exists():
         return "PDF not found", 404
 
-    return send_file(pdf_path, as_attachment=True)
+    # Default fallback filename
+    download_name = "Nmap_Audit_Report.pdf"
+
+    metadata_path = scan_dir / "metadata.json"
+    if metadata_path.exists():
+        try:
+            with open(metadata_path, "r") as f:
+                meta = json.load(f)
+
+            customer = meta.get("customer_name", "Unknown").split(" (")[0]
+            target = meta.get("target", "scan").replace("/", "_")
+            date_str = meta.get("date", datetime.now().strftime("%Y-%m-%d"))
+            time_str = meta.get("time", "000000").replace(":", "")
+
+            # Sanitize names for filesystem safety
+            safe_cust = re.sub(r"[^\w\-]", "_", customer)
+            safe_target = re.sub(r"[^\w\.]", "_", target)
+
+            download_name = (
+                f"Nmap_Audit_{safe_cust}_{safe_target}_{date_str}_{time_str}.pdf"
+            )
+        except Exception as e:
+            logger.error(f"Error generating download name: {e}")
+
+    return send_file(pdf_path, as_attachment=True, download_name=download_name)
+
+
+@app.route("/api/scans/<path:path>/xml")
+def get_scan_xml(path):
+    """Download the raw Nmap XML for a scan with a unique descriptive filename"""
+    scan_dir = SCANS_DIR / path
+    xml_path = scan_dir / "scan.xml"
+    if not xml_path.exists():
+        return "XML not found", 404
+
+    # Default fallback filename
+    download_name = "Nmap_Raw_Data.xml"
+
+    metadata_path = scan_dir / "metadata.json"
+    if metadata_path.exists():
+        try:
+            with open(metadata_path, "r") as f:
+                meta = json.load(f)
+
+            customer = meta.get("customer_name", "Unknown").split(" (")[0]
+            target = meta.get("target", "scan").replace("/", "_")
+            date_str = meta.get("date", datetime.now().strftime("%Y-%m-%d"))
+            time_str = meta.get("time", "000000").replace(":", "")
+
+            # Sanitize names for filesystem safety
+            safe_cust = re.sub(r"[^\w\-]", "_", customer)
+            safe_target = re.sub(r"[^\w\.]", "_", target)
+
+            download_name = (
+                f"Nmap_Raw_{safe_cust}_{safe_target}_{date_str}_{time_str}.xml"
+            )
+        except Exception as e:
+            logger.error(f"Error generating download name: {e}")
+
+    return send_file(xml_path, as_attachment=True, download_name=download_name)
 
 
 @app.route("/api/scans/<path:path>", methods=["DELETE"])
@@ -1525,18 +1638,27 @@ def delete_scan(path):
 def generate_report_event(data):
     """Handle report generation request via SocketIO"""
     target = data.get("target")
-    customer_name = data.get("customer_name", "Unknown")
+
+    # Use the provided customer name or fall back to the currently identified one
+    customer_name = data.get("customer_name")
+    if not customer_name or customer_name in [
+        "Unknown",
+        "Unassigned",
+        "Unknown Network",
+    ]:
+        customer_name = current_customer.get("name", "Unknown")
+
+    # Final cleanup to ensure no confidence strings remain
+    customer_name = customer_name.split(" (")[0]
 
     if not target:
         emit("report_error", {"error": "No target specified"})
         return
 
     try:
-        emit("report_generating", {"status": "Initializing scan..."})
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
 
-        emit("report_generating", {"status": "Running nmap scan..."})
         if not run_nmap_with_xml_output(target, output_base):
             emit("report_error", {"error": "Nmap scan failed"})
             return
@@ -1546,16 +1668,11 @@ def generate_report_event(data):
         pdf_html_path = scan_dir / "scan_pdf.html"
         pdf_path = scan_dir / "scan_report.pdf"
 
-        emit("report_generating", {"status": "Converting to web HTML..."})
-        convert_xml_to_html(xml_path, web_html_path, pdf_optimized=False)
-
-        emit("report_generating", {"status": "Creating PDF-optimized HTML..."})
-        convert_xml_to_html(xml_path, pdf_html_path, pdf_optimized=True)
-
-        emit("report_generating", {"status": "Generating PDF report..."})
+        # Use the premium Olive PDF stylesheet for BOTH views for consistency
+        convert_xml_to_html(xml_path, web_html_path)
+        convert_xml_to_html(xml_path, pdf_html_path)
         convert_html_to_pdf(pdf_html_path, pdf_path)
 
-        emit("report_generating", {"status": "Saving metadata..."})
         files = {
             "xml": xml_path,
             "web_html": web_html_path,

@@ -91,17 +91,17 @@ Updated: 2026
               extend: {
                 colors: {
                   olive: {
-                    50: 'oklch(96% 0.015 110)',
-                    100: 'oklch(91% 0.020 110)',
-                    200: 'oklch(85% 0.028 110)',
-                    300: 'oklch(75% 0.040 110)',
-                    400: 'oklch(62% 0.055 110)',
-                    500: 'oklch(50% 0.065 110)',
-                    600: 'oklch(42% 0.055 110)',
-                    700: 'oklch(35% 0.045 110)',
-                    800: 'oklch(28% 0.035 110)',
-                    900: 'oklch(22% 0.025 110)',
-                    950: 'oklch(16% 0.015 110)',
+                    50: '#f5f6f3',
+                    100: '#e9ebe0',
+                    200: '#d8dbc7',
+                    300: '#bcc2a9',
+                    400: '#979f83',
+                    500: '#777f65',
+                    600: '#636b54',
+                    700: '#525845',
+                    800: '#414637',
+                    900: '#32382a',
+                    950: '#25291f',
                   }
                 },
                 fontFamily: {
@@ -116,8 +116,8 @@ Updated: 2026
         <style>
           body {
             font-family: 'Inter', system-ui, sans-serif;
-            background-color: oklch(91% 0.012 106.5);
-            color: oklch(15.3% 0.006 107.1);
+            background-color: #e9ebe0;
+            color: #262724;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
           }
@@ -127,7 +127,7 @@ Updated: 2026
           }
           
           ::selection {
-            background-color: oklch(75% 0.040 110);
+            background-color: #bcc2a9;
             color: white;
           }
           
@@ -137,7 +137,7 @@ Updated: 2026
           }
           
           .nav-link:hover {
-            color: oklch(42% 0.055 110);
+            color: #636b54;
           }
           
           .nav-link::after {
@@ -147,7 +147,7 @@ Updated: 2026
             left: 0;
             width: 0;
             height: 2px;
-            background-color: oklch(42% 0.055 110);
+            background-color: #636b54;
             transition: width 0.2s ease;
           }
           
@@ -157,13 +157,13 @@ Updated: 2026
           
           .card {
             background: white;
-            border: 1px solid oklch(85% 0.028 110);
+            border: 1px solid #d8dbc7;
             border-radius: 12px;
             transition: all 0.2s ease;
           }
           
           .card:hover {
-            border-color: oklch(75% 0.040 110);
+            border-color: #bcc2a9;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
           }
           
@@ -176,7 +176,7 @@ Updated: 2026
           }
           
           .badge-success {
-            background-color: oklch(62% 0.055 110);
+            background-color: #979f83;
             color: white;
           }
           
@@ -193,13 +193,13 @@ Updated: 2026
           table.dataTable {
             border-collapse: separate;
             border-spacing: 0;
-            border: 1px solid oklch(85% 0.028 110);
+            border: 1px solid #d8dbc7;
             border-radius: 12px;
             overflow: hidden;
           }
           
           table.dataTable thead th {
-            background-color: oklch(22% 0.025 110);
+            background-color: #32382a;
             color: white;
             font-weight: 500;
             border: none;
@@ -207,12 +207,12 @@ Updated: 2026
           }
           
           table.dataTable tbody td {
-            border-top: 1px solid oklch(85% 0.028 110);
+            border-top: 1px solid #d8dbc7;
             padding: 12px 16px;
           }
           
           table.dataTable tbody tr:hover {
-            background-color: oklch(96% 0.015 110);
+            background-color: #f5f6f3;
           }
           
           .dt-buttons {
@@ -220,7 +220,7 @@ Updated: 2026
           }
           
           .dt-button {
-            background-color: oklch(22% 0.025 110) !important;
+            background-color: #32382a !important;
             color: white !important;
             border: none !important;
             padding: 8px 16px !important;
@@ -231,15 +231,15 @@ Updated: 2026
           }
           
           .dt-button:hover {
-            background-color: oklch(35% 0.045 110) !important;
+            background-color: #525845 !important;
           }
           
           input[type="text"],
           input[type="search"],
           textarea {
             background-color: white;
-            color: oklch(16% 0.015 110);
-            border: 1px solid oklch(75% 0.040 110);
+            color: #25291f;
+            border: 1px solid #bcc2a9;
             padding: 8px 12px;
             border-radius: 8px;
             outline: none;
@@ -248,11 +248,11 @@ Updated: 2026
           
           input:focus,
           textarea:focus {
-            border-color: oklch(42% 0.055 110);
+            border-color: #636b54;
           }
           
           button {
-            background-color: oklch(22% 0.025 110);
+            background-color: #32382a;
             color: white;
             border: none;
             padding: 8px 16px;
@@ -263,31 +263,31 @@ Updated: 2026
           }
           
           button:hover {
-            background-color: oklch(35% 0.045 110);
+            background-color: #525845;
           }
           
           pre {
-            background-color: oklch(96% 0.015 110);
-            border: 1px solid oklch(85% 0.028 110);
+            background-color: #f5f6f3;
+            border: 1px solid #d8dbc7;
             border-radius: 8px;
             padding: 16px;
             overflow-x: auto;
           }
           
           a {
-            color: oklch(42% 0.055 110);
+            color: #636b54;
             text-decoration: none;
             transition: color 0.2s ease;
           }
           
           a:hover {
-            color: oklch(35% 0.045 110);
+            color: #525845;
             text-decoration: underline;
           }
           
           .progress-bar {
             height: 32px;
-            background-color: oklch(96% 0.015 110);
+            background-color: #f5f6f3;
             border-radius: 9999px;
             overflow: hidden;
             display: flex;
@@ -304,7 +304,7 @@ Updated: 2026
           }
           
           .progress-success {
-            background-color: oklch(62% 0.055 110);
+            background-color: #979f83;
           }
           
           .progress-danger {
@@ -322,7 +322,189 @@ Updated: 2026
           }
           
           .collapsible-header:hover {
-            background-color: oklch(96% 0.015 110);
+            background-color: #f5f6f3;
+          }
+          
+          .chevron {
+            transition: transform 0.2s ease;
+          }
+          
+          .chevron.collapsed {
+            transform: rotate(-90deg);
+          }
+          
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          .fade-in {
+            animation: fadeIn 0.3s ease;
+          }
+
+          
+          .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+          }
+          
+          .badge-success {
+            background-color: #979f83;
+            color: white;
+          }
+          
+          .badge-danger {
+            background-color: #ef4444;
+            color: white;
+          }
+          
+          .badge-warning {
+            background-color: #f59e0b;
+            color: white;
+          }
+          
+          table.dataTable {
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid #d8dbc7;
+            border-radius: 12px;
+            overflow: hidden;
+          }
+          
+          table.dataTable thead th {
+            background-color: #32382a;
+            color: white;
+            font-weight: 500;
+            border: none;
+            padding: 12px 16px;
+          }
+          
+          table.dataTable tbody td {
+            border-top: 1px solid #d8dbc7;
+            padding: 12px 16px;
+          }
+          
+          table.dataTable tbody tr:hover {
+            background-color: #f5f6f3;
+          }
+          
+          .dt-buttons {
+            margin-bottom: 16px;
+          }
+          
+          .dt-button {
+            background-color: #32382a !important;
+            color: white !important;
+            border: none !important;
+            padding: 8px 16px !important;
+            border-radius: 8px !important;
+            margin-right: 8px !important;
+            font-size: 0.875rem !important;
+            transition: background-color 0.2s ease !important;
+          }
+          
+          .dt-button:hover {
+            background-color: #525845 !important;
+          }
+          
+          input[type="text"],
+          input[type="search"],
+          textarea {
+            background-color: white;
+            color: #25291f;
+            border: 1px solid #bcc2a9;
+            padding: 8px 12px;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s ease;
+          }
+          
+          input:focus,
+          textarea:focus {
+            border-color: #636b54;
+          }
+          
+          button {
+            background-color: #32382a;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            font-weight: 500;
+          }
+          
+          button:hover {
+            background-color: #525845;
+          }
+          
+          pre {
+            background-color: #f5f6f3;
+            border: 1px solid #d8dbc7;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+          }
+          
+          a {
+            color: #636b54;
+            text-decoration: none;
+            transition: color 0.2s ease;
+          }
+          
+          a:hover {
+            color: #525845;
+            text-decoration: underline;
+          }
+          
+          .progress-bar {
+            height: 32px;
+            background-color: #f5f6f3;
+            border-radius: 9999px;
+            overflow: hidden;
+            display: flex;
+          }
+          
+          .progress-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: width 0.3s ease;
+          }
+          
+          .progress-success {
+            background-color: #979f83;
+          }
+          
+          .progress-danger {
+            background-color: #ef4444;
+          }
+          
+          .highlight-keyword {
+            color: #ef4444;
+            font-weight: 600;
+          }
+          
+          .collapsible-header {
+            cursor: pointer;
+            user-select: none;
+          }
+          
+          .collapsible-header:hover {
+            background-color: #f5f6f3;
           }
           
           .chevron {
@@ -431,7 +613,7 @@ Updated: 2026
 
             /* Remove hover effects */
             .card:hover {
-              border-color: oklch(85% 0.028 110);
+              border-color: #d8dbc7;
               box-shadow: none;
             }
 

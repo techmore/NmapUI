@@ -173,13 +173,19 @@
     </div>
 
     <!-- Customer Management Compact -->
-    <div class="mt-4 flex items-center gap-2">
-        <select id="customer-quick-add" class="px-3 py-1 bg-olive-100 border border-olive-300 rounded text-olive-700">
-            <option value="">Unassigned</option>
-        </select>
-        <button onclick="showCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded hover:bg-olive-700 transition-colors">
-            + Add Customer
-        </button>
+    <div class="mt-4 flex items-center justify-between px-1">
+        <div class="flex items-center gap-2">
+            <select id="customer-quick-add" class="px-3 py-1 bg-olive-100 border border-olive-300 rounded text-olive-700">
+                <option value="">Unassigned</option>
+            </select>
+            <button onclick="showCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded hover:bg-olive-700 transition-colors">
+                + Add Customer
+            </button>
+        </div>
+        <div id="last-scan-container" class="hidden flex items-center gap-2">
+            <span class="text-[10px] uppercase tracking-wider text-olive-500 font-bold">Last Report</span>
+            <span id="last-scan-days" class="px-3 py-1 rounded-full text-xs font-medium transition-all">--</span>
+        </div>
     </div>
     
     <!-- Add Customer Form (Hidden by default) -->
@@ -318,7 +324,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             View History
-            <span id="history-badge" class="hidden absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold border-2 border-white shadow-sm">0</span>
+            <span id="history-badge" class="hidden absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-sm">0</span>
         </button>
     </div>
 
@@ -370,7 +376,13 @@
     </div>
 
     <!-- Scan Feedback Container -->
-    <div id="feedback-container" class="mt-6 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-700 space-y-2 empty:hidden">
+    <div class="relative mt-6 hidden">
+        <div id="feedback-container" class="p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-900 space-y-2 empty:hidden min-h-[3rem] transition-all duration-500">
+        </div>
+        <div id="scan-timer-container" class="hidden absolute bottom-3 right-4 flex items-center gap-2 bg-white/70 backdrop-blur-sm px-3 py-1 rounded-full border border-olive-200 shadow-sm z-10">
+            <span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span id="scan-timer" class="font-mono text-xs font-bold text-amber-600">00:00</span>
+        </div>
     </div>
 
     <!-- Results Table -->
@@ -492,7 +504,12 @@
             });
         });
 
-        socket.on('scan_feedback', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
+        socket.on('scan_feedback', msg => {
+            const container = document.getElementById('feedback-container');
+            // Ensure the container is visible when feedback starts
+            container.parentElement.classList.remove('hidden');
+            container.innerHTML += `<p>${msg}</p>`;
+        });
 
         socket.on('local_ip', data => {
             ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
@@ -632,27 +649,53 @@
 
         function updateHistoryBadge(customerId) {
             const badge = document.getElementById('history-badge');
+            const lastScanSpan = document.getElementById('last-scan-days');
             if (!badge || !window.historyCounts) return;
 
-            const count = window.historyCounts[customerId || 'total'] || 0;
+            // If customerId is empty (Unassigned), show the "unassigned" count
+            // Alternatively, show "total" if you prefer to see all history when unassigned
+            const key = customerId ? String(customerId) : 'unassigned';
+            const count = window.historyCounts[key] || 0;
             
             if (count > 0) {
                 badge.textContent = count > 99 ? '99+' : count;
                 badge.classList.remove('hidden');
                 
-                // Color appropriate logic: red for few, amber for some, green for many?
-                // Or just keep red for attention. Let's use different shades based on count.
-                badge.className = 'absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-white text-[10px] font-bold border-2 border-white shadow-sm transition-all scale-110';
-                
-                if (count < 5) {
-                    badge.classList.add('bg-olive-400'); // Low count
-                } else if (count < 15) {
-                    badge.classList.add('bg-amber-500'); // Medium count
-                } else {
-                    badge.classList.add('bg-red-500'); // High count/Attention
-                }
+                // Muted premium styling for the report count badge
+                badge.className = 'absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-olive-900 text-white text-[10px] font-bold shadow-sm transition-all scale-110';
+
+                // Add a little pop animation when it updates
+                badge.classList.remove('scale-110');
+                void badge.offsetWidth; // Trigger reflow
+                badge.classList.add('scale-110');
             } else {
                 badge.classList.add('hidden');
+            }
+
+            // Handle Days Since Last Scan - Muted Premium Version
+            const lastScanTime = window.historyCounts.last_scans ? window.historyCounts.last_scans[key] : null;
+            const container = document.getElementById('last-scan-container');
+            if (lastScanTime && lastScanSpan) {
+                const lastDate = new Date(lastScanTime);
+                const now = new Date();
+                const diffTime = Math.abs(now - lastDate);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                lastScanSpan.textContent = diffDays === 0 ? 'Today' : `${diffDays} days ago`;
+                if (container) container.classList.remove('hidden');
+                
+                // Muted, theme-appropriate colors using the olive palette
+                lastScanSpan.className = 'px-3 py-1 rounded-full text-xs font-medium transition-all';
+                
+                if (diffDays <= 1) {
+                    lastScanSpan.classList.add('bg-olive-200', 'text-olive-900');
+                } else if (diffDays <= 7) {
+                    lastScanSpan.classList.add('bg-olive-100', 'text-olive-700');
+                } else {
+                    lastScanSpan.classList.add('bg-olive-50', 'text-olive-500');
+                }
+            } else if (container) {
+                container.classList.add('hidden');
             }
         }
 
@@ -665,19 +708,31 @@
         socket.on('scan_results', hosts => populateTableWithResults(hosts));
         
         // Report Generation socket listeners
-        socket.on('report_generating', function(data) {
-            showReportStatus(data.status, 'info');
-        });
-
         socket.on('report_complete', function(data) {
             showReportStatus('Report generated successfully! Check: ' + data.scan_dir, 'success');
-            // Refresh history counts to update badge
-            socket.emit('get_history_counts');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+
             // Optionally reload history
             if (!document.getElementById('history-modal').classList.contains('hidden')) {
                 loadScanHistory();
             }
         });
+
+        socket.on('report_error', function(data) {
+            showReportStatus('Error: ' + data.error, 'error');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+        });
+
 
         socket.on('report_error', function(data) {
             showReportStatus('Error: ' + data.error, 'error');
@@ -986,6 +1041,47 @@
         // Report Generation Functions
         let lastScanTarget = '';
         let lastScanResults = {};
+        let reportTimerInterval = null;
+        let reportStartTime = 0;
+
+        function startReportTimer() {
+            const container = document.getElementById('scan-timer-container');
+            const display = document.getElementById('scan-timer');
+            const feedbackBox = document.getElementById('feedback-container');
+            
+            container.classList.remove('hidden');
+            feedbackBox.classList.add('card-pulsing');
+            reportStartTime = Date.now();
+            
+            if (reportTimerInterval) clearInterval(reportTimerInterval);
+            
+            reportTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - reportStartTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                display.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopReportTimer() {
+            const feedbackBox = document.getElementById('feedback-container');
+            const timerContainer = document.getElementById('scan-timer-container');
+            
+            if (reportTimerInterval) {
+                clearInterval(reportTimerInterval);
+                reportTimerInterval = null;
+            }
+            
+            feedbackBox.classList.remove('card-pulsing');
+            
+            // Hide timer and clear feedback box after 5 seconds
+            setTimeout(() => {
+                timerContainer.classList.add('hidden');
+                feedbackBox.innerHTML = '';
+                // Also hide the feedback container parent div
+                feedbackBox.parentElement.classList.add('hidden');
+            }, 5000);
+        }
 
         // Store scan results globally for report generation
         socket.on('scan_results', function(data) {
@@ -1008,9 +1104,19 @@
                 return;
             }
 
-            const customerName = document.getElementById('current-customer').selectedOptions[0]?.text || 'Unknown';
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Unknown';
+            
+            if (customerOption) {
+                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                customerName = customerOption.text.split(' (')[0];
+            }
 
-            showReportStatus('Generating report...', 'info');
+            // Add pulsing to the button
+            this.classList.add('card-pulsing');
+            
+            // Start the incrementing timer
+            startReportTimer();
 
             socket.emit('generate_report', {
                 target: target,
@@ -1096,7 +1202,7 @@
 
                 // Apply filters
                 if (customerFilter) {
-                    scans = scans.filter(s => s.customer === customerFilter);
+                    scans = scans.filter(s => s.customer_name === customerFilter);
                 }
                 if (dateFilter) {
                     scans = scans.filter(s => s.date === dateFilter);
@@ -1114,7 +1220,7 @@
 
         function populateCustomerFilter(scans) {
             const filter = document.getElementById('history-customer-filter');
-            const customers = [...new Set(scans.map(s => s.customer))].sort();
+            const customers = [...new Set(scans.map(s => s.customer_name))].sort();
 
             const currentValue = filter.value;
             filter.innerHTML = '<option value="">All Customers</option>';
@@ -1144,7 +1250,7 @@
                     <div class="bg-olive-50 p-4 rounded-lg border border-olive-300">
                         <div class="flex justify-between items-start mb-2">
                             <div>
-                                <h3 class="font-display text-lg text-olive-900">${scan.customer}</h3>
+                                <h3 class="font-display text-lg text-olive-900">${scan.customer_name || 'Unknown'}</h3>
                                 <p class="text-sm text-olive-600">${date}</p>
                                 <p class="text-sm text-olive-700 mt-1">Target: <span class="font-mono">${scan.target}</span></p>
                             </div>
@@ -1159,6 +1265,12 @@
                                     <a href="/api/scans/${scan.path}/pdf"
                                        class="px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800">
                                         Download PDF
+                                    </a>
+                                ` : ''}
+                                ${scan.has_xml ? `
+                                    <a href="/api/scans/${scan.path}/xml"
+                                       class="px-3 py-1 bg-olive-500 text-white rounded text-sm hover:bg-olive-600">
+                                        Download XML
                                     </a>
                                 ` : ''}
                                 <button onclick="deleteScan('${scan.path}')"

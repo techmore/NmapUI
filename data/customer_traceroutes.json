@@ -321,6 +321,213 @@
         "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
         "label": "WAN: 129.222.240.17",
         "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.801 ms  3.379 ms  2.767 ms\n 2  100.64.0.1  21.183 ms  24.521 ms  22.340 ms\n 3  172.16.253.86  19.702 ms  20.220 ms  27.694 ms\n 4  206.224.66.118  29.599 ms  24.217 ms  29.119 ms\n 5  206.224.72.72  25.203 ms\n    206.224.72.70  26.370 ms  30.657 ms\n 6  162.158.61.14  24.268 ms  31.921 ms  30.631 ms\n 7  162.158.61.123  36.161 ms\n    162.158.61.107  41.846 ms\n    162.158.61.131  22.033 ms\n 8  1.1.1.1  28.645 ms  24.554 ms  32.710 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:22:18.973168",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.377 ms  4.554 ms  2.804 ms\n 2  100.64.0.1  29.766 ms  25.232 ms  22.791 ms\n 3  172.16.253.86  20.055 ms  23.859 ms  21.423 ms\n 4  206.224.66.118  23.991 ms  23.868 ms  28.395 ms\n 5  206.224.72.72  23.746 ms\n    206.224.72.70  22.584 ms  25.341 ms\n 6  162.158.61.14  22.606 ms  23.760 ms  29.482 ms\n 7  162.158.61.139  38.530 ms\n    162.158.61.127  21.214 ms\n    162.158.61.131  38.780 ms\n 8  1.1.1.1  23.954 ms  21.392 ms  23.833 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:25:28.883873",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  3.408 ms  2.916 ms  1.778 ms\n 2  100.64.0.1  22.332 ms  23.983 ms  23.998 ms\n 3  172.16.253.86  26.273 ms  24.051 ms  22.566 ms\n 4  206.224.66.112  20.327 ms  18.746 ms  24.755 ms\n 5  206.224.72.63  24.307 ms\n    206.224.72.67  30.324 ms  24.116 ms\n 6  162.158.61.14  22.623 ms  24.111 ms  26.854 ms\n 7  162.158.61.131  19.851 ms\n    162.158.61.111  25.225 ms\n    162.158.61.127  30.725 ms\n 8  1.1.1.1  23.332 ms  22.033 ms  31.465 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:25:49.027979",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  3.488 ms  10.831 ms  2.593 ms\n 2  100.64.0.1  22.765 ms  23.649 ms  27.243 ms\n 3  172.16.253.86  24.508 ms  27.981 ms  22.109 ms\n 4  206.224.66.114  26.293 ms  23.418 ms  23.676 ms\n 5  206.224.72.67  22.816 ms\n    206.224.72.63  21.486 ms  28.158 ms\n 6  162.158.61.14  27.303 ms  28.681 ms  24.074 ms\n 7  162.158.61.123  28.735 ms\n    162.158.61.119  24.224 ms\n    162.158.61.135  29.679 ms\n 8  1.1.1.1  24.339 ms  28.058 ms  26.727 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:25:52.512023",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  4.091 ms  4.578 ms  8.191 ms\n 2  100.64.0.1  22.876 ms  28.234 ms  23.936 ms\n 3  172.16.253.86  27.664 ms  26.292 ms  26.318 ms\n 4  206.224.66.116  23.825 ms  24.085 ms  31.951 ms\n 5  206.224.72.70  26.259 ms\n    206.224.72.72  20.288 ms  26.388 ms\n 6  162.158.61.14  21.610 ms  25.964 ms  29.949 ms\n 7  162.158.61.123  23.535 ms\n    162.158.61.131  28.437 ms\n    162.158.61.111  23.811 ms\n 8  1.1.1.1  29.931 ms  23.771 ms  28.165 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:26:00.316627",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  5.392 ms  3.412 ms  2.649 ms\n 2  100.64.0.1  24.893 ms  24.192 ms  27.421 ms\n 3  172.16.253.86  26.451 ms  20.945 ms  22.588 ms\n 4  206.224.66.112  22.961 ms  23.911 ms  27.838 ms\n 5  206.224.72.63  25.907 ms\n    206.224.72.67  31.657 ms  27.243 ms\n 6  162.158.61.14  23.851 ms  43.788 ms  25.080 ms\n 7  162.158.61.119  52.358 ms  33.046 ms\n    162.158.61.139  48.858 ms\n 8  1.1.1.1  25.206 ms  32.028 ms  34.210 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:27:49.691987",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  3.294 ms  2.163 ms  2.360 ms\n 2  100.64.0.1  31.764 ms  24.369 ms  24.057 ms\n 3  172.16.253.86  24.681 ms  43.932 ms  34.722 ms\n 4  206.224.66.112  25.203 ms  22.943 ms  39.750 ms\n 5  206.224.72.63  22.655 ms\n    206.224.72.67  25.038 ms  26.219 ms\n 6  162.158.61.14  29.845 ms  31.784 ms  46.899 ms\n 7  162.158.61.123  28.422 ms\n    162.158.61.135  50.459 ms\n    162.158.61.111  24.636 ms\n 8  1.1.1.1  28.508 ms  22.560 ms  24.163 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:28:06.542509",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.734 ms  2.767 ms  3.105 ms\n 2  100.64.0.1  24.120 ms  22.523 ms  25.101 ms\n 3  172.16.253.86  22.485 ms  22.185 ms  28.063 ms\n 4  206.224.66.116  27.444 ms  23.394 ms  24.166 ms\n 5  206.224.72.70  22.839 ms\n    206.224.72.72  23.814 ms  20.080 ms\n 6  162.158.61.14  20.167 ms  28.120 ms  30.815 ms\n 7  162.158.61.123  26.215 ms  23.033 ms\n    162.158.61.139  30.743 ms\n 8  1.1.1.1  25.013 ms  26.520 ms  27.958 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:28:21.422068",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  3.652 ms  4.152 ms  2.187 ms\n 2  100.64.0.1  20.237 ms  24.295 ms  25.246 ms\n 3  172.16.253.86  26.359 ms  24.164 ms  25.478 ms\n 4  206.224.66.118  27.431 ms  24.410 ms  26.671 ms\n 5  206.224.72.72  25.110 ms\n    206.224.72.70  21.614 ms  32.873 ms\n 6  162.158.61.14  21.654 ms  23.531 ms  22.943 ms\n 7  162.158.61.139  19.688 ms\n    162.158.61.119  26.026 ms\n    162.158.61.115  23.893 ms\n 8  1.1.1.1  26.610 ms  24.981 ms  23.492 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:28:24.982452",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.430 ms  2.050 ms  2.477 ms\n 2  100.64.0.1  31.261 ms  21.198 ms  22.642 ms\n 3  172.16.253.86  22.241 ms  42.367 ms  29.041 ms\n 4  206.224.66.114  30.879 ms  31.811 ms  27.876 ms\n 5  206.224.72.67  22.387 ms\n    206.224.72.63  20.025 ms  33.381 ms\n 6  162.158.61.14  23.894 ms  24.707 ms  27.514 ms\n 7  162.158.61.139  27.916 ms\n    162.158.61.119  25.511 ms\n    162.158.61.135  30.655 ms\n 8  1.1.1.1  28.264 ms  32.481 ms  31.398 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:28:49.154071",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.743 ms  2.878 ms  2.220 ms\n 2  100.64.0.1  21.546 ms  31.575 ms  25.071 ms\n 3  172.16.253.86  27.624 ms  32.351 ms  27.244 ms\n 4  206.224.66.116  23.746 ms  24.838 ms  23.482 ms\n 5  206.224.72.70  26.579 ms\n    206.224.72.72  25.323 ms  34.399 ms\n 6  162.158.61.14  28.004 ms  20.123 ms  24.045 ms\n 7  162.158.61.127  21.788 ms\n    162.158.61.115  32.182 ms\n    162.158.61.139  41.861 ms\n 8  1.1.1.1  32.564 ms  21.250 ms  30.175 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:31:32.071626",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.663 ms  3.130 ms  4.121 ms\n 2  100.64.0.1  24.106 ms  20.908 ms  26.718 ms\n 3  172.16.253.86  24.856 ms  24.277 ms  26.603 ms\n 4  206.224.66.118  23.642 ms  36.404 ms  28.290 ms\n 5  206.224.72.72  25.929 ms\n    206.224.72.70  23.753 ms  29.946 ms\n 6  162.158.61.14  30.427 ms  27.823 ms  24.034 ms\n 7  162.158.61.119  31.866 ms\n    162.158.61.139  39.356 ms\n    162.158.61.135  20.548 ms\n 8  1.1.1.1  20.044 ms  20.026 ms  25.492 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:32:35.693991",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  4.160 ms  3.067 ms  3.060 ms\n 2  100.64.0.1  19.626 ms  25.465 ms  24.012 ms\n 3  172.16.253.86  22.228 ms  28.242 ms  19.642 ms\n 4  206.224.66.118  21.064 ms  22.879 ms  21.192 ms\n 5  206.224.72.72  22.955 ms\n    206.224.72.70  21.642 ms  23.931 ms\n 6  162.158.61.14  24.056 ms  24.016 ms  22.693 ms\n 7  162.158.61.127  21.053 ms\n    162.158.61.135  36.564 ms  41.836 ms\n 8  1.1.1.1  26.188 ms  27.170 ms  24.393 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:32:40.176797",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  6.214 ms  3.594 ms  8.503 ms\n 2  100.64.0.1  31.256 ms  23.417 ms  26.537 ms\n 3  172.16.253.86  20.973 ms  21.291 ms  23.930 ms\n 4  206.224.66.116  27.747 ms  27.933 ms  24.508 ms\n 5  206.224.72.70  27.746 ms\n    206.224.72.72  24.951 ms  26.958 ms\n 6  162.158.61.14  23.402 ms  22.631 ms  24.109 ms\n 7  162.158.61.119  21.535 ms\n    162.158.61.111  23.324 ms\n    162.158.61.107  23.594 ms\n 8  1.1.1.1  25.078 ms  29.875 ms  31.648 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:33:58.467564",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  9.681 ms  4.369 ms  3.628 ms\n 2  100.64.0.1  25.977 ms  28.264 ms  27.705 ms\n 3  172.16.253.86  26.396 ms  22.269 ms  25.654 ms\n 4  206.224.66.118  25.662 ms  33.065 ms  21.319 ms\n 5  206.224.72.72  25.813 ms\n    206.224.72.70  33.349 ms  31.852 ms\n 6  162.158.61.14  69.324 ms  55.723 ms  45.505 ms\n 7  162.158.61.107  32.507 ms\n    162.158.61.127  29.791 ms\n    162.158.61.139  32.105 ms\n 8  1.1.1.1  35.833 ms  29.597 ms  23.147 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:34:06.928690",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  4.268 ms  3.811 ms  2.451 ms\n 2  100.64.0.1  22.043 ms  22.863 ms  24.408 ms\n 3  172.16.253.86  22.733 ms  20.258 ms  25.002 ms\n 4  206.224.66.114  29.371 ms  22.711 ms  23.726 ms\n 5  206.224.72.67  22.880 ms\n    206.224.72.63  25.302 ms  33.626 ms\n 6  162.158.61.14  27.366 ms  25.260 ms  40.758 ms\n 7  162.158.61.103  24.855 ms *\n    162.158.61.115  21.993 ms\n 8  1.1.1.1  31.060 ms  20.141 ms  28.073 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:34:13.507384",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  3.611 ms  3.531 ms  3.327 ms\n 2  100.64.0.1  28.881 ms  27.025 ms  24.767 ms\n 3  172.16.253.86  22.172 ms  29.235 ms  24.504 ms\n 4  206.224.66.112  23.279 ms  28.270 ms  24.144 ms\n 5  206.224.72.63  23.971 ms\n    206.224.72.67  28.637 ms  21.682 ms\n 6  162.158.61.14  25.747 ms  33.996 ms  56.017 ms\n 7  162.158.61.119  26.680 ms\n    162.158.61.127  25.239 ms\n    162.158.61.131  29.755 ms\n 8  1.1.1.1  22.200 ms  25.598 ms  24.332 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:35:18.344855",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.649 ms  1.645 ms  2.274 ms\n 2  100.64.0.1  25.885 ms  23.262 ms  28.014 ms\n 3  172.16.253.86  22.569 ms  29.924 ms  27.590 ms\n 4  206.224.66.116  26.842 ms  25.604 ms  23.702 ms\n 5  206.224.72.70  30.241 ms\n    206.224.72.72  22.124 ms  26.414 ms\n 6  162.158.61.14  43.647 ms  29.805 ms  46.242 ms\n 7  162.158.61.111  21.676 ms\n    162.158.61.135  44.105 ms\n    162.158.61.131  26.078 ms\n 8  1.1.1.1  24.066 ms  23.936 ms  22.203 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:46:35.821666",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.484 ms  1.870 ms  2.392 ms\n 2  100.64.0.1  20.802 ms  23.999 ms  20.019 ms\n 3  172.16.253.86  20.004 ms  23.943 ms  20.557 ms\n 4  206.224.66.116  27.561 ms  27.923 ms  28.153 ms\n 5  206.224.72.70  27.699 ms\n    206.224.72.72  20.133 ms  19.995 ms\n 6  162.158.61.14  23.947 ms  19.850 ms  32.139 ms\n 7  162.158.61.115  20.010 ms  19.865 ms\n    162.158.61.107  19.999 ms\n 8  1.1.1.1  20.129 ms  19.860 ms  20.013 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:47:12.464123",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.895 ms  2.423 ms  2.275 ms\n 2  100.64.0.1  30.656 ms  23.871 ms  20.045 ms\n 3  172.16.253.86  25.291 ms  22.767 ms  27.952 ms\n 4  206.224.66.114  23.915 ms  36.126 ms  72.998 ms\n 5  206.224.72.67  24.188 ms\n    206.224.72.63  28.092 ms  19.837 ms\n 6  162.158.61.14  19.913 ms  20.168 ms  27.814 ms\n 7  162.158.61.111  28.037 ms\n    162.158.61.107  36.206 ms\n    162.158.61.127  19.927 ms\n 8  1.1.1.1  21.099 ms  22.839 ms  20.116 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:47:56.116726",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.343 ms  2.201 ms  2.465 ms\n 2  100.64.0.1  27.767 ms  21.172 ms  21.540 ms\n 3  172.16.253.86  26.573 ms  21.278 ms  26.827 ms\n 4  206.224.66.116  21.250 ms  21.339 ms  21.681 ms\n 5  206.224.72.70  31.576 ms\n    206.224.72.72  21.444 ms  21.027 ms\n 6  162.158.61.14  21.369 ms  22.485 ms  30.783 ms\n 7  162.158.61.103  27.009 ms\n    162.158.61.119  31.289 ms\n    162.158.61.123  32.412 ms\n 8  1.1.1.1  26.355 ms  21.531 ms  21.232 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:49:40.247117",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  5.295 ms  4.214 ms  4.457 ms\n 2  100.64.0.1  23.299 ms  23.593 ms  23.164 ms\n 3  172.16.253.86  19.870 ms  24.031 ms  23.811 ms\n 4  206.224.66.112  21.249 ms  24.436 ms  22.924 ms\n 5  206.224.72.63  23.375 ms\n    206.224.72.67  21.043 ms  22.985 ms\n 6  162.158.61.14  25.135 ms  24.172 ms  26.549 ms\n 7  162.158.61.123  19.978 ms  25.315 ms\n    162.158.61.135  24.022 ms\n 8  1.1.1.1  22.934 ms  19.782 ms  24.016 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:50:26.069934",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.435 ms  1.873 ms  2.098 ms\n 2  100.64.0.1  22.739 ms  24.022 ms  32.098 ms\n 3  172.16.253.86  19.861 ms  32.079 ms  19.948 ms\n 4  206.224.66.116  31.896 ms  24.026 ms  24.004 ms\n 5  206.224.72.70  19.971 ms\n    206.224.72.72  23.837 ms  24.022 ms\n 6  162.158.61.14  40.112 ms  32.092 ms  27.840 ms\n 7  162.158.61.135  32.050 ms\n    162.158.61.131  24.246 ms  27.779 ms\n 8  1.1.1.1  25.305 ms  26.656 ms  20.134 ms\n"
+      },
+      {
+        "timestamp": "2026-01-09T00:55:50.384390",
+        "public_ip": "129.222.240.17",
+        "exit_ip": "1.1.1.1",
+        "hop_count": 8,
+        "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+        "label": "WAN: 129.222.240.17",
+        "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.733 ms  1.957 ms  1.744 ms\n 2  100.64.0.1  21.366 ms  23.883 ms  36.303 ms\n 3  172.16.253.86  24.053 ms  23.472 ms  20.096 ms\n 4  206.224.66.116  312.177 ms  304.184 ms  367.741 ms\n 5  206.224.72.70  20.109 ms\n    206.224.72.72  31.784 ms  24.029 ms\n 6  162.158.61.14  37.213 ms  39.896 ms  35.721 ms\n 7  162.158.61.139  31.150 ms\n    162.158.61.135  29.567 ms\n    162.158.61.127  40.840 ms\n 8  1.1.1.1  25.333 ms  24.171 ms  23.712 ms\n"
       }
     ]
   }
