@@ -161,8 +161,28 @@ def check_for_updates():
         latest_version = latest_release["tag_name"]
 
         # Simple version comparison (assuming format v2026.1.9.12_01)
-        # For production, implement proper semantic comparison
-        if latest_version != current_version:
+        # Parse versions and compare (format: vYYYY.M.D.HH_MM)
+        def parse_version(v):
+            if not v.startswith("v"):
+                return (0, 0, 0, 0, 0)
+            parts = v[1:].split(".")
+            if len(parts) != 4:
+                return (0, 0, 0, 0, 0)
+            try:
+                year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+                hour_min = parts[3].split("_")
+                hour, minute = (
+                    int(hour_min[0]),
+                    int(hour_min[1]) if len(hour_min) > 1 else 0,
+                )
+                return (year, month, day, hour, minute)
+            except (ValueError, IndexError):
+                return (0, 0, 0, 0, 0)
+
+        current_parsed = parse_version(current_version)
+        latest_parsed = parse_version(latest_version)
+
+        if latest_parsed > current_parsed:
             return {
                 "available": True,
                 "latest_version": latest_version,
@@ -176,9 +196,6 @@ def check_for_updates():
     except Exception as e:
         logger.error(f"Failed to check for updates: {e}")
         return {"available": False, "error": str(e)}
-    except Exception as e:
-        logger.error(f"Failed to check for updates: {e}")
-        return False
 
 
 def restart_application():
