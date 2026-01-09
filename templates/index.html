@@ -103,7 +103,10 @@
     <div class="flex items-center justify-between mb-8">
         <div class="flex items-center gap-6">
             <img src="static/techmore.png" class="h-12 w-auto">
-            <h1 class="text-4xl font-display italic text-olive-950">Network Scanner</h1>
+            <div>
+                <h1 class="text-4xl font-display italic text-olive-950">Network Scanner</h1>
+                <div id="app-version" class="text-sm text-olive-600 font-medium">v--.--.--.__</div>
+            </div>
         </div>
         <div id="current-date-time" class="text-xl font-display text-olive-950 text-center"></div>
         <div class="flex items-center gap-8">
@@ -641,10 +644,16 @@
             const nmapVersion = data.nmap || 'Not found';
             const vulnersVersion = data.vulners || 'Not found';
             const arpScanVersion = data.arp_scan || 'Not found';
-            
+
             document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
             document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
             document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
+        });
+
+        socket.on('app_version', data => {
+            console.log('App version received:', data);
+            const appVersion = data.version || 'v--.--.--.__';
+            document.getElementById('app-version').textContent = appVersion;
         });
 
         socket.on('history_counts', data => {

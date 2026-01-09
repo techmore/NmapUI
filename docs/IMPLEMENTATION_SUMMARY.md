@@ -321,15 +321,15 @@ This feature integrates with existing:
 ### New Feature: PDF-Optimized Olive Theme Reports
 
 **Files Modified**:
-1. **nmap-pdf-olive.xsl** - New PDF-optimized XSL stylesheet
+1. **nmap-pdf-olive-legacy.xsl** - New PDF-optimized XSL stylesheet
 2. **app.py** - Enhanced report generation pipeline
 3. **templates/index.html** - Added pulsing progress indicators
 
 ### PDF Optimization Changes
 
-**Created**: `nmap-pdf-olive.xsl` (1163 lines)
+**Created**: `nmap-pdf-olive-legacy.xsl` (1163 lines)
 - PDF-optimized CSS with higher information density
-- Olive color theme matching the UI (OKLCH colors)
+- Olive color theme matching UI (OKLCH colors)
 - Reduced font sizes: 10pt body (vs 14pt), 9pt tables
 - Tighter spacing: 1.3 line-height, 3-4pt cell padding
 - Print-specific media queries for PDF output
@@ -360,7 +360,7 @@ The system now generates TWO HTML versions:
    - Export buttons visible
 
 2. **scan_pdf.html** - Print-optimized version for PDF conversion
-   - Uses nmap-pdf-olive.xsl stylesheet
+   - Uses nmap-pdf-olive-legacy.xsl stylesheet
    - Static tables (no JavaScript)
    - High-density layout
    - Print-optimized CSS

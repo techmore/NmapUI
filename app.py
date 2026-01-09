@@ -18,6 +18,29 @@ VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
 XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"
 XSL_STYLESHEET_PDF = BASE_DIR / "nmap-modern.xsl"
 SCANS_DIR = BASE_DIR / "data" / "scans"
+VERSION_FILE = BASE_DIR / "VERSION"
+APP_VERSION = None
+
+
+def get_app_version():
+    """Read or generate app version based on timestamp"""
+    global APP_VERSION
+
+    if APP_VERSION:
+        return APP_VERSION
+
+    # Try to read from file first
+    if VERSION_FILE.exists():
+        with open(VERSION_FILE, "r") as f:
+            APP_VERSION = f.read().strip()
+        return APP_VERSION
+
+    # Generate version if file doesn't exist
+    now = datetime.now()
+    version = f"v{now.year}.{now.month}.{now.day}.{now.hour:02d}_{now.minute:02d}"
+    APP_VERSION = version
+
+    return version
 
 
 app = Flask(__name__)
@@ -1321,7 +1344,19 @@ def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
         logger.error(f"XSL stylesheet not found: {stylesheet}")
         return False
 
-    cmd = ["xsltproc", "-o", str(html_path), str(stylesheet), str(xml_path)]
+    # Get app version for reports
+    techmore_version = get_app_version()
+
+    cmd = [
+        "xsltproc",
+        "--stringparam",
+        "techmore_version",
+        techmore_version,
+        "-o",
+        str(html_path),
+        str(stylesheet),
+        str(xml_path),
+    ]
     command_str = " ".join(cmd)
     socketio.emit("scan_feedback", f"Executing: {command_str}")
     logger.info(f"Executing: {command_str}")
@@ -1696,6 +1731,9 @@ def startup_checks(quick=False):
     logger.info("\n" + "=" * 50)
     logger.info("All checks passed. Starting server...")
     logger.info("=" * 50 + "\n")
+
+    # Send app version to frontend
+    safe_emit("app_version", {"version": get_app_version()})
 
 
 if __name__ == "__main__":
