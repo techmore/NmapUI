@@ -934,5 +934,125 @@
       "target": "1.1.1.1",
       "raw": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  57.133 ms  3.719 ms  4.062 ms\n 2  100.64.0.1  22.627 ms  26.644 ms  24.633 ms\n 3  172.16.251.146  25.718 ms  26.986 ms  23.948 ms\n 4  206.224.64.192  21.443 ms  21.289 ms  24.287 ms\n 5  206.224.72.72  24.627 ms\n    206.224.72.67  26.398 ms  23.904 ms\n 6  162.158.61.14  31.705 ms  27.203 ms  23.781 ms\n 7  162.158.61.135  27.153 ms\n    162.158.61.123  21.246 ms *\n 8  * * 1.1.1.1  22.307 ms\n"
     }
+  },
+  {
+    "timestamp": "2026-01-09T01:22:57.887774",
+    "customer_id": "unknown",
+    "customer_name": "Unknown Network",
+    "confidence_score": 0.546,
+    "exit_ip": "1.1.1.1",
+    "hop_count": 8,
+    "private_hop_count": 3,
+    "public_hop_count": 5,
+    "network_signature": "private:192.168.x.x -> private:100.64.x.x -> private:172.16.x.x -> public:206.224.x.x -> public:206.224.x.x -> public:162.158.x.x -> public:162.158.x.x -> public:1.1.x.x",
+    "raw_traceroute": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.601 ms  2.073 ms  3.682 ms\n 2  100.64.0.1  20.390 ms  20.009 ms  19.924 ms\n 3  172.16.253.86  19.978 ms  19.985 ms  19.995 ms\n 4  206.224.66.116  19.996 ms  21.177 ms  22.749 ms\n 5  206.224.72.70  20.082 ms\n    206.224.72.72  20.018 ms  24.447 ms\n 6  162.158.61.14  23.571 ms  19.957 ms  19.873 ms\n 7  162.158.61.119  20.045 ms\n    162.158.61.127  28.228 ms\n    162.158.61.111  23.653 ms\n 8  1.1.1.1  20.303 ms  20.059 ms  23.628 ms\n",
+    "network_key": {
+      "hops": [
+        {
+          "hop": 1,
+          "ip": "192.168.222.1",
+          "latency_ms": 2.79,
+          "is_private": true
+        },
+        {
+          "hop": 2,
+          "ip": "100.64.0.1",
+          "latency_ms": 20.11,
+          "is_private": true
+        },
+        {
+          "hop": 3,
+          "ip": "172.16.253.86",
+          "latency_ms": 19.99,
+          "is_private": true
+        },
+        {
+          "hop": 4,
+          "ip": "206.224.66.116",
+          "latency_ms": 21.31,
+          "is_private": false
+        },
+        {
+          "hop": 5,
+          "ip": "206.224.72.70",
+          "latency_ms": 20.08,
+          "is_private": false
+        },
+        {
+          "hop": 6,
+          "ip": "162.158.61.14",
+          "latency_ms": 21.13,
+          "is_private": false
+        },
+        {
+          "hop": 7,
+          "ip": "162.158.61.119",
+          "latency_ms": 20.05,
+          "is_private": false
+        },
+        {
+          "hop": 8,
+          "ip": "1.1.1.1",
+          "latency_ms": 21.33,
+          "is_private": false
+        }
+      ],
+      "total_hops": 8,
+      "private_hops": [
+        {
+          "hop": 1,
+          "ip": "192.168.222.1",
+          "latency_ms": 2.79,
+          "is_private": true
+        },
+        {
+          "hop": 2,
+          "ip": "100.64.0.1",
+          "latency_ms": 20.11,
+          "is_private": true
+        },
+        {
+          "hop": 3,
+          "ip": "172.16.253.86",
+          "latency_ms": 19.99,
+          "is_private": true
+        }
+      ],
+      "public_hops": [
+        {
+          "hop": 4,
+          "ip": "206.224.66.116",
+          "latency_ms": 21.31,
+          "is_private": false
+        },
+        {
+          "hop": 5,
+          "ip": "206.224.72.70",
+          "latency_ms": 20.08,
+          "is_private": false
+        },
+        {
+          "hop": 6,
+          "ip": "162.158.61.14",
+          "latency_ms": 21.13,
+          "is_private": false
+        },
+        {
+          "hop": 7,
+          "ip": "162.158.61.119",
+          "latency_ms": 20.05,
+          "is_private": false
+        },
+        {
+          "hop": 8,
+          "ip": "1.1.1.1",
+          "latency_ms": 21.33,
+          "is_private": false
+        }
+      ],
+      "exit_ip": "1.1.1.1",
+      "target": "1.1.1.1",
+      "raw": "traceroute to 1.1.1.1 (1.1.1.1), 64 hops max, 40 byte packets\n 1  192.168.222.1  2.601 ms  2.073 ms  3.682 ms\n 2  100.64.0.1  20.390 ms  20.009 ms  19.924 ms\n 3  172.16.253.86  19.978 ms  19.985 ms  19.995 ms\n 4  206.224.66.116  19.996 ms  21.177 ms  22.749 ms\n 5  206.224.72.70  20.082 ms\n    206.224.72.72  20.018 ms  24.447 ms\n 6  162.158.61.14  23.571 ms  19.957 ms  19.873 ms\n 7  162.158.61.119  20.045 ms\n    162.158.61.127  28.228 ms\n    162.158.61.111  23.653 ms\n 8  1.1.1.1  20.303 ms  20.059 ms  23.628 ms\n"
+    }
   }
 ]
