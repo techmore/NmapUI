@@ -237,8 +237,8 @@ last_scan_target = None
 # Auto Scan System
 auto_scan_config = {
     "enabled": False,
-    "start_time": "09:00",
-    "end_time": "17:00",
+    "start_time": "01:00",
+    "end_time": "06:00",
     "last_run": None,
 }
 
