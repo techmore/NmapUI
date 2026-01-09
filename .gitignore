@@ -6,3 +6,27 @@ __pycache__/
 data/scans/
 config/customers.yaml
 data/*.json
+
+# Build artifacts
+build/
+dist/
+*.dmg
+*.pkg
+*.app/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
