@@ -230,156 +230,83 @@ idle_state_manager = IdleStateManager()
 customer_fingerprinter = CustomerFingerprinter()
 current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
 
+# Global scan target tracking
+last_scan_target = None
 
-# Automated Scan Scheduler
-class AutomatedScanScheduler:
-    def __init__(self):
-        self.config = {
-            "enabled": False,
-            "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
-            "time_windows": [
-                {"start": "09:00", "end": "17:00", "type": "business_hours"}
-            ],
-            "scan_type": "quick_scan",
-            "max_runtime": 60,
-            "target_networks": ["192.168.1.0/24"],
-            "last_run": None,
-            "next_run": None,
-        }
-        self.load_config()
-        self.active_scan = False
 
-    def load_config(self):
-        """Load scheduler configuration from file"""
-        config_file = BASE_DIR / "scheduler_config.json"
-        if config_file.exists():
-            try:
-                self.config.update(json.loads(config_file.read_text()))
-            except Exception as e:
-                logger.warning(f"Failed to load scheduler config: {e}")
+# Auto Scan System
+auto_scan_config = {
+    "enabled": False,
+    "start_time": "09:00",
+    "end_time": "17:00",
+    "last_run": None,
+}
 
-    def save_config(self):
-        """Save scheduler configuration to file"""
-        config_file = BASE_DIR / "scheduler_config.json"
+
+def load_auto_scan_config():
+    """Load auto scan configuration"""
+    global auto_scan_config
+    config_file = BASE_DIR / "auto_scan_config.json"
+    if config_file.exists():
         try:
-            config_file.write_text(json.dumps(self.config, indent=2))
+            auto_scan_config.update(json.loads(config_file.read_text()))
         except Exception as e:
-            logger.error(f"Failed to save scheduler config: {e}")
+            logger.warning(f"Failed to load auto scan config: {e}")
 
-    def update_config(self, new_config):
-        """Update scheduler configuration"""
-        self.config.update(new_config)
-        self.save_config()
-        logger.info(f"Scheduler config updated: enabled={self.config['enabled']}")
 
-    def should_run_now(self):
-        """Check if scheduled scan should run now"""
-        if not self.config["enabled"]:
-            return False
+def save_auto_scan_config():
+    """Save auto scan configuration"""
+    config_file = BASE_DIR / "auto_scan_config.json"
+    try:
+        config_file.write_text(json.dumps(auto_scan_config, indent=2))
+    except Exception as e:
+        logger.error(f"Failed to save auto scan config: {e}")
 
-        now = datetime.now()
-        current_day = now.strftime("%A").lower()
-        current_time = now.strftime("%H:%M")
 
-        # Check if today is a scheduled day
-        if current_day not in self.config["days"]:
-            return False
-
-        # Check if within any time window
-        for window in self.config["time_windows"]:
-            if window["start"] <= current_time <= window["end"]:
-                return True
-
+def should_run_auto_scan():
+    """Check if auto scan should run now"""
+    if not auto_scan_config["enabled"]:
         return False
 
-    def execute_scheduled_scan(self):
-        """Execute the scheduled scan and generate report"""
-        if self.active_scan:
-            logger.info("Scheduled scan already running, skipping")
-            return
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
 
-        self.active_scan = True
-        idle_state_manager.start_operation("scheduled_scan")
-
-        try:
-            # Get target network
-            target_network = (
-                self.config["target_networks"][0]
-                if self.config["target_networks"]
-                else "192.168.1.0/24"
-            )
-
-            # Create scan folder
-            customer_name = current_customer.get("name", "Scheduled Scan")
-            scan_dir = create_scan_folder(customer_name, target_network)
-            output_base = scan_dir / "scan"
-
-            # Execute scan (basic for now - can be enhanced later)
-            success = run_nmap_with_xml_output(target_network, output_base)
-
-            if success:
-                # Generate reports (mimic the report generation process)
-                xml_path = scan_dir / "scan.xml"
-                web_html_path = scan_dir / "scan_web.html"
-                pdf_html_path = scan_dir / "scan_pdf.html"
-                pdf_path = scan_dir / "scan_report.pdf"
-
-                # Convert XML to HTML and PDF
-                convert_xml_to_html(xml_path, web_html_path)
-                convert_xml_to_html(xml_path, pdf_html_path)
-                convert_html_to_pdf(pdf_html_path, pdf_path)
-
-                # Save scan metadata
-                files = {
-                    "xml": xml_path,
-                    "web_html": web_html_path,
-                    "pdf_html": pdf_html_path,
-                    "pdf": pdf_path,
-                    "nmap": scan_dir / "scan.nmap",
-                    "gnmap": scan_dir / "scan.gnmap",
-                }
-                save_scan_metadata(scan_dir, customer_name, target_network, files)
-
-                # Update last run time
-                self.config["last_run"] = datetime.now().isoformat()
-                self.save_config()
-
-                # Emit success to UI
-                safe_emit(
-                    "scheduled_scan_complete",
-                    {
-                        "scan_dir": str(scan_dir),
-                        "target": target_network,
-                        "scan_type": self.config["scan_type"],
-                    },
-                )
-
-                logger.info(f"Scheduled scan completed: {target_network}")
-            else:
-                logger.error(f"Scheduled scan failed: {target_network}")
-                safe_emit("scheduled_scan_error", {"error": "Scan execution failed"})
-
-        except Exception as e:
-            logger.error(f"Scheduled scan error: {e}")
-            safe_emit("scheduled_scan_error", {"error": str(e)})
-        finally:
-            self.active_scan = False
-            idle_state_manager.end_operation("scheduled_scan")
-
-    def test_schedule(self):
-        """Test the current schedule configuration"""
-        should_run = self.should_run_now()
-        return {
-            "should_run": should_run,
-            "current_time": datetime.now().strftime("%H:%M"),
-            "current_day": datetime.now().strftime("%A").lower(),
-            "enabled_days": self.config["days"],
-            "time_windows": self.config["time_windows"],
-        }
+    return (
+        auto_scan_config["start_time"] <= current_time <= auto_scan_config["end_time"]
+    )
 
 
-# Global scan scheduler
-scan_scheduler = AutomatedScanScheduler()
+def execute_auto_scan():
+    """Execute automatic scan using current target"""
+    # Use the last scan target or current network
+    target = last_scan_target or network_key.get("cidr", "192.168.1.0/24")
+
+    if not target:
+        logger.warning("No target available for auto scan")
+        return
+
+    # Get current customer
+    customer_name = current_customer.get("name", "Auto Scan")
+    customer_name = customer_name.split(" (")[0]  # Remove confidence
+
+    try:
+        # Trigger the same report generation process
+        socketio.emit(
+            "generate_report", {"target": target, "customer_name": customer_name}
+        )
+
+        auto_scan_config["last_run"] = datetime.now().isoformat()
+        save_auto_scan_config()
+
+        logger.info(f"Auto scan executed for target: {target}")
+
+    except Exception as e:
+        logger.error(f"Auto scan failed: {e}")
+        safe_emit("auto_scan_error", {"error": str(e)})
+
+
+# Load auto scan config on startup
+load_auto_scan_config()
 
 # Global version information - populated at startup
 versions: Dict[str, Optional[str]] = {
@@ -2089,6 +2016,20 @@ def generate_report_event(data):
         idle_state_manager.end_operation("report_generation")
 
 
+# Auto Scan SocketIO Events
+@socketio.on("update_auto_scan")
+def update_auto_scan_event(data):
+    """Update auto scan configuration"""
+    global auto_scan_config
+    auto_scan_config.update(data)
+    save_auto_scan_config()
+
+    # Broadcast updated status to all clients
+    emit("auto_scan_status", auto_scan_config, broadcast=True)
+
+    logger.info(f"Auto scan updated: {auto_scan_config}")
+
+
 def startup_checks(quick=False):
     logger.info("\n" + "=" * 50)
     logger.info("NmapUI Startup Checks")
@@ -2158,60 +2099,66 @@ def startup_checks(quick=False):
     # Send initial versions to any connected clients
     safe_emit("versions", get_versions())
 
-
-# Scheduler API Routes
-@app.route("/api/scheduler/config", methods=["GET"])
-def get_scheduler_config():
-    """Get current scheduler configuration"""
-    return jsonify(scan_scheduler.config)
+    # Send initial auto scan status
+    safe_emit("auto_scan_status", auto_scan_config)
 
 
-@app.route("/api/scheduler/config", methods=["POST"])
-def update_scheduler_config():
-    """Update scheduler configuration"""
+# Auto Scan API Routes
+@app.route("/api/auto_scan/status")
+def get_auto_scan_status():
+    """Get auto scan status"""
+    return jsonify(auto_scan_config)
+
+
+@app.route("/api/auto_scan/update", methods=["POST"])
+def update_auto_scan():
+    """Update auto scan configuration"""
+    global auto_scan_config
     config = request.json
-    scan_scheduler.update_config(config)
+
+    auto_scan_config.update(config)
+    save_auto_scan_config()
+
+    logger.info(f"Auto scan config updated: {auto_scan_config}")
     return jsonify({"success": True})
 
 
-@app.route("/api/scheduler/test", methods=["POST"])
-def test_scheduler():
-    """Test current scheduler configuration"""
-    result = scan_scheduler.test_schedule()
-    return jsonify(result)
+# Background auto scan loop
+def auto_scan_loop():
+    """Background loop to check and execute auto scans"""
+    last_check_minute = None
 
-
-@app.route("/api/scheduler/status")
-def get_scheduler_status():
-    """Get scheduler status"""
-    return jsonify(
-        {
-            "enabled": scan_scheduler.config["enabled"],
-            "active_scan": scan_scheduler.active_scan,
-            "last_run": scan_scheduler.config.get("last_run"),
-            "next_run": scan_scheduler.config.get("next_run"),
-        }
-    )
-
-
-# Background scheduler loop
-def scheduler_loop():
-    """Background loop to check and execute scheduled scans"""
     while True:
         try:
-            if scan_scheduler.should_run_now() and not scan_scheduler.active_scan:
-                logger.info("Executing scheduled scan")
-                scan_scheduler.execute_scheduled_scan()
+            now = datetime.now()
+            current_minute = now.strftime("%H:%M")
+
+            # Only check once per minute
+            if current_minute != last_check_minute:
+                last_check_minute = current_minute
+
+                if should_run_auto_scan():
+                    # Check if we haven't run in the last hour to avoid spam
+                    last_run = auto_scan_config.get("last_run")
+                    if last_run:
+                        last_run_time = datetime.fromisoformat(last_run)
+                        if (now - last_run_time).total_seconds() < 3600:  # 1 hour
+                            socketio.sleep(60)
+                            continue
+
+                    logger.info("Executing auto scan")
+                    execute_auto_scan()
+
         except Exception as e:
-            logger.error(f"Scheduler loop error: {e}")
+            logger.error(f"Auto scan loop error: {e}")
 
         # Check every minute
         socketio.sleep(60)
 
 
-# Start scheduler thread
-scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
-scheduler_thread.start()
+# Start auto scan thread
+auto_scan_thread = threading.Thread(target=auto_scan_loop, daemon=True)
+auto_scan_thread.start()
 
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv

@@ -459,12 +459,16 @@
             Report History
             <span id="history-badge" class="hidden absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-sm">0</span>
         </button>
-        <button onclick="showScanScheduler()" class="inline-flex items-center justify-center gap-2 rounded-full bg-purple-600 text-white hover:bg-purple-700 font-medium py-2 px-4 text-sm transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0zM3.05 11a9 9 0 0115.9 0" />
-            </svg>
-            Schedule Scans
-        </button>
+        <div class="flex items-center gap-2">
+            <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="auto-scan-toggle" class="sr-only peer">
+                <div class="relative w-11 h-6 bg-olive-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-olive-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive-600"></div>
+                <span class="ml-3 text-sm font-medium text-olive-900">Auto Scan</span>
+            </label>
+            <div id="auto-scan-times" class="hidden text-xs text-olive-600 bg-olive-100 px-2 py-1 rounded">
+                <span id="auto-scan-window">--:-- to --:--</span>
+            </div>
+        </div>
     </div>
 
     <div id="report-status" class="hidden mt-4 p-4 rounded-lg">
@@ -1682,370 +1686,123 @@
             lastScanTarget = document.getElementById('scan-target').value;
         });
 
-        // Scan Scheduler Functions
-        function showScanScheduler() {
-            document.getElementById('scan-scheduler-panel').classList.remove('hidden');
-            loadSchedulerSettings();
-        }
+        // Auto Scan Toggle
+        let autoScanEnabled = false;
+        let autoScanStartTime = '09:00';
+        let autoScanEndTime = '17:00';
 
-        function hideScanScheduler() {
-            document.getElementById('scan-scheduler-panel').classList.add('hidden');
-        }
+        document.getElementById('auto-scan-toggle').addEventListener('change', function() {
+            autoScanEnabled = this.checked;
+            const timesDiv = document.getElementById('auto-scan-times');
 
-        function addTimeWindow() {
-            const timeWindowsList = document.getElementById('time-windows-list');
-            const newWindow = document.createElement('div');
-            newWindow.className = 'time-window-item flex items-center space-x-4 p-4 bg-white rounded-lg border border-olive-200';
-            newWindow.innerHTML = `
-                <div class="flex items-center space-x-2">
-                    <label class="text-sm font-medium text-olive-700">Start:</label>
-                    <input type="time" class="schedule-start-time border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="09:00">
-                </div>
-                <div class="flex items-center space-x-2">
-                    <label class="text-sm font-medium text-olive-700">End:</label>
-                    <input type="time" class="schedule-end-time border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="17:00">
-                </div>
-                <div class="flex items-center space-x-2">
-                    <label class="text-sm font-medium text-olive-700">Type:</label>
-                    <select class="schedule-type border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent">
-                        <option value="business_hours">Business Hours</option>
-                        <option value="maintenance">Maintenance</option>
-                        <option value="off_hours">Off Hours</option>
-                    </select>
-                </div>
-                <button onclick="removeTimeWindow(this)" class="text-red-500 hover:text-red-700 text-xl">&times;</button>
-            `;
-            timeWindowsList.appendChild(newWindow);
-        }
-
-        function removeTimeWindow(button) {
-            button.closest('.time-window-item').remove();
-        }
-
-        function addTargetNetwork() {
-            const networksList = document.getElementById('target-networks-list');
-            const newNetwork = document.createElement('div');
-            newNetwork.className = 'target-network-item flex items-center space-x-2';
-            newNetwork.innerHTML = `
-                <input type="text" class="target-network flex-1 border border-olive-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-olive-500 focus:border-transparent" placeholder="192.168.1.0/24">
-                <button onclick="removeTargetNetwork(this)" class="text-red-500 hover:text-red-700 text-xl">&times;</button>
-            `;
-            networksList.appendChild(newNetwork);
-        }
-
-        function removeTargetNetwork(button) {
-            button.closest('.target-network-item').remove();
-        }
-
-        function loadSchedulerSettings() {
-            socket.emit('get_scheduler_config');
-        }
-
-        function saveSchedulerSettings() {
-            const config = {
-                enabled: document.getElementById('scheduler-enabled').checked,
-                days: getSelectedDays(),
-                timeWindows: getTimeWindows(),
-                scanType: document.getElementById('schedule-scan-type').value,
-                maxRuntime: parseInt(document.getElementById('schedule-max-runtime').value),
-                targetNetworks: getTargetNetworks()
-            };
-
-            socket.emit('update_scheduler_config', config);
-        }
-
-        function getSelectedDays() {
-            const days = [];
-            const dayMap = {
-                'day-mon': 'monday',
-                'day-tue': 'tuesday',
-                'day-wed': 'wednesday',
-                'day-thu': 'thursday',
-                'day-fri': 'friday',
-                'day-sat': 'saturday',
-                'day-sun': 'sunday'
-            };
-
-            Object.keys(dayMap).forEach(id => {
-                if (document.getElementById(id).checked) {
-                    days.push(dayMap[id]);
-                }
-            });
-
-            return days;
-        }
-
-        function getTimeWindows() {
-            const windows = [];
-            const windowItems = document.querySelectorAll('.time-window-item');
-
-            windowItems.forEach(item => {
-                const startTime = item.querySelector('.schedule-start-time').value;
-                const endTime = item.querySelector('.schedule-end-time').value;
-                const type = item.querySelector('.schedule-type').value;
-
-                if (startTime && endTime) {
-                    windows.push({
-                        start: startTime,
-                        end: endTime,
-                        type: type
-                    });
-                }
-            });
-
-            return windows;
-        }
-
-        function getTargetNetworks() {
-            const networks = [];
-            const networkInputs = document.querySelectorAll('.target-network');
-
-            networkInputs.forEach(input => {
-                const value = input.value.trim();
-                if (value) {
-                    networks.push(value);
-                }
-            });
-
-            return networks;
-        }
-
-        function testScheduler() {
-            socket.emit('test_scheduler');
-        }
-
-        // Scheduler Socket Events
-        socket.on('scheduler_config', function(config) {
-            // Load existing configuration
-            document.getElementById('scheduler-enabled').checked = config.enabled || false;
-            document.getElementById('schedule-scan-type').value = config.scanType || 'quick_scan';
-            document.getElementById('schedule-max-runtime').value = config.maxRuntime || 60;
-
-            // Load days
-            const dayMap = {
-                'monday': 'day-mon',
-                'tuesday': 'day-tue',
-                'wednesday': 'day-wed',
-                'thursday': 'day-thu',
-                'friday': 'day-fri',
-                'saturday': 'day-sat',
-                'sunday': 'day-sun'
-            };
-
-            Object.keys(dayMap).forEach(day => {
-                document.getElementById(dayMap[day]).checked = config.days && config.days.includes(day);
-            });
-
-            // Load time windows
-            const timeWindowsList = document.getElementById('time-windows-list');
-            timeWindowsList.innerHTML = '';
-            if (config.timeWindows && config.timeWindows.length > 0) {
-                config.timeWindows.forEach(window => {
-                    const windowDiv = document.createElement('div');
-                    windowDiv.className = 'time-window-item flex items-center space-x-4 p-4 bg-white rounded-lg border border-olive-200';
-                    windowDiv.innerHTML = `
-                        <div class="flex items-center space-x-2">
-                            <label class="text-sm font-medium text-olive-700">Start:</label>
-                            <input type="time" class="schedule-start-time border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="${window.start || '09:00'}">
-                        </div>
-                        <div class="flex items-center space-x-2">
-                            <label class="text-sm font-medium text-olive-700">End:</label>
-                            <input type="time" class="schedule-end-time border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="${window.end || '17:00'}">
-                        </div>
-                        <div class="flex items-center space-x-2">
-                            <label class="text-sm font-medium text-olive-700">Type:</label>
-                            <select class="schedule-type border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent">
-                                <option value="business_hours" ${window.type === 'business_hours' ? 'selected' : ''}>Business Hours</option>
-                                <option value="maintenance" ${window.type === 'maintenance' ? 'selected' : ''}>Maintenance</option>
-                                <option value="off_hours" ${window.type === 'off_hours' ? 'selected' : ''}>Off Hours</option>
-                            </select>
-                        </div>
-                        <button onclick="removeTimeWindow(this)" class="text-red-500 hover:text-red-700 text-xl">&times;</button>
-                    `;
-                    timeWindowsList.appendChild(windowDiv);
-                });
-            }
-
-            // Load target networks
-            const networksList = document.getElementById('target-networks-list');
-            networksList.innerHTML = '';
-            if (config.targetNetworks && config.targetNetworks.length > 0) {
-                config.targetNetworks.forEach(network => {
-                    const networkDiv = document.createElement('div');
-                    networkDiv.className = 'target-network-item flex items-center space-x-2';
-                    networkDiv.innerHTML = `
-                        <input type="text" class="target-network flex-1 border border-olive-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="${network}">
-                        <button onclick="removeTargetNetwork(this)" class="text-red-500 hover:text-red-700 text-xl">&times;</button>
-                    `;
-                    networksList.appendChild(networkDiv);
-                });
-            }
-
-            updateSchedulerStatus(config);
-        });
-
-        socket.on('scheduler_status', function(status) {
-            updateSchedulerStatus(status);
-        });
-
-        socket.on('scheduler_test_result', function(result) {
-            if (result.success) {
-                showReportStatus('Scheduler test successful: ' + result.message, 'success');
+            if (autoScanEnabled) {
+                // Show time selection modal
+                showAutoScanTimeModal();
             } else {
-                showReportStatus('Scheduler test failed: ' + result.message, 'error');
+                // Disable auto scanning
+                timesDiv.classList.add('hidden');
+                socket.emit('update_auto_scan', { enabled: false });
+                showReportStatus('Automatic scanning disabled', 'info');
             }
         });
 
-        function updateSchedulerStatus(config) {
-            const statusDiv = document.getElementById('scheduler-status');
-            if (config.enabled) {
-                statusDiv.innerHTML = 'Status: <span class="font-medium text-green-600">Enabled</span>';
-            } else {
-                statusDiv.innerHTML = 'Status: <span class="font-medium text-olive-600">Disabled</span>';
-            }
+        function showAutoScanTimeModal() {
+            const modal = document.getElementById('auto-scan-modal');
+            modal.classList.remove('hidden');
+
+            // Pre-fill with current values
+            document.getElementById('auto-start-time').value = autoScanStartTime;
+            document.getElementById('auto-end-time').value = autoScanEndTime;
         }
+
+        function hideAutoScanTimeModal() {
+            document.getElementById('auto-scan-modal').classList.add('hidden');
+        }
+
+        function saveAutoScanTimes() {
+            const startTime = document.getElementById('auto-start-time').value;
+            const endTime = document.getElementById('auto-end-time').value;
+
+            if (!startTime || !endTime) {
+                showReportStatus('Please select both start and end times', 'error');
+                return;
+            }
+
+            autoScanStartTime = startTime;
+            autoScanEndTime = endTime;
+
+            // Update display
+            document.getElementById('auto-scan-window').textContent = `${startTime} to ${endTime}`;
+            document.getElementById('auto-scan-times').classList.remove('hidden');
+
+            // Enable auto scanning
+            socket.emit('update_auto_scan', {
+                enabled: true,
+                start_time: startTime,
+                end_time: endTime
+            });
+
+            hideAutoScanTimeModal();
+            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
+        }
+
+        // Auto scan status updates
+        socket.on('auto_scan_status', function(status) {
+            autoScanEnabled = status.enabled || false;
+            document.getElementById('auto-scan-toggle').checked = autoScanEnabled;
+
+            if (status.start_time && status.end_time) {
+                autoScanStartTime = status.start_time;
+                autoScanEndTime = status.end_time;
+                document.getElementById('auto-scan-window').textContent = `${status.start_time} to ${status.end_time}`;
+                document.getElementById('auto-scan-times').classList.remove('hidden');
+            } else {
+                document.getElementById('auto-scan-times').classList.add('hidden');
+            }
+        });
+
+        socket.on('auto_scan_executed', function(data) {
+            showReportStatus(`Automatic scan completed: ${data.target}`, 'success');
+        });
+
+        socket.on('auto_scan_error', function(data) {
+            showReportStatus(`Automatic scan error: ${data.error}`, 'error');
+        });
     </script>
 
-    <!-- Scan Scheduler Panel -->
-    <div id="scan-scheduler-panel" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div class="p-8 border-b border-olive-200">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-3xl font-display italic text-olive-900">Automated Scan Scheduler</h2>
-                    <button onclick="hideScanScheduler()" class="text-olive-500 hover:text-olive-700 text-2xl">&times;</button>
-                </div>
-                <p class="text-olive-600 mt-2">Schedule automatic network scans with report generation</p>
+    <!-- Auto Scan Time Modal -->
+    <div id="auto-scan-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-display italic text-olive-900">Set Auto Scan Times</h3>
+                <button onclick="hideAutoScanTimeModal()" class="text-olive-500 hover:text-olive-700 text-xl">&times;</button>
             </div>
 
-            <div class="p-8 space-y-8">
-                <!-- Master Toggle -->
-                <div class="flex items-center justify-between p-6 bg-olive-50 rounded-xl border border-olive-200">
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <h3 class="text-xl font-semibold text-olive-900">Enable Daily Scans</h3>
-                        <p class="text-olive-600 text-sm mt-1">Automatically run scans and generate reports on schedule</p>
+                        <label class="block text-sm font-medium text-olive-700 mb-1">Start Time</label>
+                        <input type="time" id="auto-start-time" class="w-full px-3 py-2 border border-olive-300 rounded-lg focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="09:00">
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="scheduler-enabled" class="sr-only peer">
-                        <div class="w-14 h-8 bg-olive-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-olive-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-olive-600"></div>
-                    </label>
-                </div>
-
-                <!-- Day Selection -->
-                <div class="bg-olive-50 rounded-xl p-6 border border-olive-200">
-                    <h3 class="text-xl font-semibold text-olive-900 mb-4">Scan Days</h3>
-                    <div class="grid grid-cols-7 gap-3">
-                        <label class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg hover:bg-olive-100 transition-colors">
-                            <input type="checkbox" id="day-mon" class="rounded border-olive-300 text-olive-600 focus:ring-olive-500">
-                            <span class="text-sm font-medium text-olive-800">Mon</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg hover:bg-olive-100 transition-colors">
-                            <input type="checkbox" id="day-tue" class="rounded border-olive-300 text-olive-600 focus:ring-olive-500">
-                            <span class="text-sm font-medium text-olive-800">Tue</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg hover:bg-olive-100 transition-colors">
-                            <input type="checkbox" id="day-wed" class="rounded border-olive-300 text-olive-600 focus:ring-olive-500">
-                            <span class="text-sm font-medium text-olive-800">Wed</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg hover:bg-olive-100 transition-colors">
-                            <input type="checkbox" id="day-thu" class="rounded border-olive-300 text-olive-600 focus:ring-olive-500">
-                            <span class="text-sm font-medium text-olive-800">Thu</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg hover:bg-olive-100 transition-colors">
-                            <input type="checkbox" id="day-fri" class="rounded border-olive-300 text-olive-600 focus:ring-olive-500">
-                            <span class="text-sm font-medium text-olive-800">Fri</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg hover:bg-olive-100 transition-colors">
-                            <input type="checkbox" id="day-sat" class="rounded border-olive-300 text-olive-600 focus:ring-olive-500">
-                            <span class="text-sm font-medium text-olive-800">Sat</span>
-                        </label>
-                        <label class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg hover:bg-olive-100 transition-colors">
-                            <input type="checkbox" id="day-sun" class="rounded border-olive-300 text-olive-600 focus:ring-olive-500">
-                            <span class="text-sm font-medium text-olive-800">Sun</span>
-                        </label>
+                    <div>
+                        <label class="block text-sm font-medium text-olive-700 mb-1">End Time</label>
+                        <input type="time" id="auto-end-time" class="w-full px-3 py-2 border border-olive-300 rounded-lg focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="17:00">
                     </div>
                 </div>
 
-                <!-- Time Windows -->
-                <div class="bg-olive-50 rounded-xl p-6 border border-olive-200">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-xl font-semibold text-olive-900">Time Windows</h3>
-                        <button onclick="addTimeWindow()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
-                            + Add Window
-                        </button>
-                    </div>
-
-                    <div id="time-windows-list" class="space-y-3">
-                        <div class="time-window-item flex items-center space-x-4 p-4 bg-white rounded-lg border border-olive-200">
-                            <div class="flex items-center space-x-2">
-                                <label class="text-sm font-medium text-olive-700">Start:</label>
-                                <input type="time" class="schedule-start-time border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="09:00">
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <label class="text-sm font-medium text-olive-700">End:</label>
-                                <input type="time" class="schedule-end-time border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="17:00">
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <label class="text-sm font-medium text-olive-700">Type:</label>
-                                <select class="schedule-type border border-olive-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-olive-500 focus:border-transparent">
-                                    <option value="business_hours">Business Hours</option>
-                                    <option value="maintenance">Maintenance</option>
-                                    <option value="off_hours">Off Hours</option>
-                                </select>
-                            </div>
-                            <button onclick="removeTimeWindow(this)" class="text-red-500 hover:text-red-700 text-xl">&times;</button>
-                        </div>
-                    </div>
+                <div class="bg-olive-50 p-3 rounded-lg">
+                    <p class="text-sm text-olive-700">
+                        <strong>Automatic Mode:</strong> During these hours, the system will automatically run scans and generate reports using the current network target.
+                    </p>
                 </div>
 
-                <!-- Scan Configuration -->
-                <div class="bg-olive-50 rounded-xl p-6 border border-olive-200">
-                    <h3 class="text-xl font-semibold text-olive-900 mb-4">Scan Configuration</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label class="block text-sm font-medium text-olive-700 mb-2">Scan Type</label>
-                            <select id="schedule-scan-type" class="w-full border border-olive-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-olive-500 focus:border-transparent">
-                                <option value="quick_scan">Quick Scan</option>
-                                <option value="deep_scan">Deep Scan</option>
-                                <option value="comprehensive">Comprehensive</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-olive-700 mb-2">Max Runtime (minutes)</label>
-                            <input type="number" id="schedule-max-runtime" class="w-full border border-olive-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="60" min="5" max="480">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Target Networks -->
-                <div class="bg-olive-50 rounded-xl p-6 border border-olive-200">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-xl font-semibold text-olive-900">Target Networks</h3>
-                        <button onclick="addTargetNetwork()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
-                            + Add Network
-                        </button>
-                    </div>
-
-                    <div id="target-networks-list" class="space-y-2">
-                        <div class="target-network-item flex items-center space-x-2">
-                            <input type="text" class="target-network flex-1 border border-olive-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-olive-500 focus:border-transparent" placeholder="192.168.1.0/24" value="192.168.1.0/24">
-                            <button onclick="removeTargetNetwork(this)" class="text-red-500 hover:text-red-700 text-xl">&times;</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Status & Controls -->
-                <div class="flex items-center justify-between pt-6 border-t border-olive-200">
-                    <div id="scheduler-status" class="text-sm text-olive-600">
-                        Status: <span class="font-medium">Disabled</span>
-                    </div>
-                    <div class="flex space-x-3">
-                        <button onclick="testScheduler()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors text-sm">
-                            Test Schedule
-                        </button>
-                        <button onclick="saveSchedulerSettings()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
-                            Save Settings
-                        </button>
-                    </div>
+                <div class="flex gap-3 pt-4">
+                    <button onclick="saveAutoScanTimes()" class="flex-1 bg-olive-600 text-white py-2 px-4 rounded-lg hover:bg-olive-700 transition-colors">
+                        Enable Auto Scan
+                    </button>
+                    <button onclick="hideAutoScanTimeModal()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                        Cancel
+                    </button>
                 </div>
             </div>
         </div>
