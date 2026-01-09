@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
-XSL_STYLESHEET = BASE_DIR / "nmap-pdf-olive.xsl"
-XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive.xsl"
+XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"
+XSL_STYLESHEET_PDF = BASE_DIR / "nmap-modern.xsl"
 SCANS_DIR = BASE_DIR / "data" / "scans"
 
 
@@ -320,6 +320,7 @@ def get_customer_info_event():
                 "id": customer.get("id"),
                 "name": customer.get("name"),
                 "confidence": confidence,
+                "metadata": customer.get("metadata", {}),
             }
 
     emit("customer_info", current_customer)
@@ -1345,14 +1346,15 @@ def convert_html_to_pdf(html_path, pdf_path):
         cmd = [
             wkhtml,
             "--print-media-type",
+            "--background",  # Enable background colors in PDF
             "--margin-top",
-            "0.5in",
+            "0mm",
             "--margin-right",
-            "0.5in",
+            "0mm",
             "--margin-bottom",
-            "0.5in",
+            "0mm",
             "--margin-left",
-            "0.5in",
+            "0mm",
             "--page-size",
             "Letter",
             str(html_path),
@@ -1559,6 +1561,8 @@ def generate_report_event(data):
         emit("report_error", {"error": "No target specified"})
         return
 
+    start_time = datetime.now()
+
     try:
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
@@ -1586,6 +1590,35 @@ def generate_report_event(data):
             "gnmap": scan_dir / "scan.gnmap",
         }
         save_scan_metadata(scan_dir, customer_name, target, files)
+
+        # Calculate duration and update customer
+        end_time = datetime.now()
+        duration = end_time - start_time
+        duration_minutes = int(duration.total_seconds() // 60)
+        duration_seconds = int(duration.total_seconds() % 60)
+        duration_str = f"{duration_minutes}m{duration_seconds}s"
+
+        # Find customer ID to update
+        cust_id = None
+        # Try to find by name match
+        for c in customer_fingerprinter.customers:
+            if c.get("name") == customer_name:
+                cust_id = c.get("id")
+                break
+
+        # If not found by name, check if it matches the current customer ID
+        if not cust_id and current_customer.get("name") == customer_name:
+            cust_id = current_customer.get("id")
+
+        if cust_id and cust_id != "unknown":
+            customer_fingerprinter.update_last_scan_duration(cust_id, duration_str)
+
+            # Update global current_customer to reflect change immediately
+            if current_customer.get("id") == cust_id:
+                if "metadata" not in current_customer:
+                    current_customer["metadata"] = {}
+                current_customer["metadata"]["last_scan_duration"] = duration_str
+                safe_emit("customer_info", current_customer)
 
         emit(
             "report_complete",

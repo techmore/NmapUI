@@ -536,6 +536,44 @@ class CustomerFingerprinter:
         except Exception as e:
             logger.error(f"Error saving scan result: {e}")
 
+    def update_last_scan_duration(self, customer_id: str, duration_str: str):
+        found = False
+        for customer in self.customers:
+            if customer.get("id") == customer_id:
+                if "metadata" not in customer:
+                    customer["metadata"] = {}
+                customer["metadata"]["last_scan_duration"] = duration_str
+                customer["metadata"]["last_scan_date"] = datetime.now().isoformat()
+                found = True
+                break
+
+        if found:
+            self.save_customers_config()
+            logger.info(f"Updated last scan duration for {customer_id}: {duration_str}")
+            return True
+        return False
+
+    def save_customers_config(self):
+        try:
+            config_data = {
+                "version": self.config.get("version", "1.0"),
+                "description": self.config.get(
+                    "description", "Customer network fingerprinting database"
+                ),
+                "settings": self.settings,
+                "customers": self.customers,
+                "unknown_customer": self.unknown_customer,
+                "indexing": self.config.get("indexing", {}),
+            }
+
+            with open(self.config_path, "w") as f:
+                yaml.dump(config_data, f, default_flow_style=False, indent=2)
+
+            logger.info(f"Customers config saved to {self.config_path}")
+
+        except Exception as e:
+            logger.error(f"Error saving customers config: {e}")
+
     def create_network_signature(self, network_key: Dict) -> str:
         hops = network_key.get("hops", [])
         signature_parts = []

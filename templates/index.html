@@ -314,12 +314,17 @@
         <button id="resume-scan-btn" class="inline-flex items-center justify-center rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors">
             Resume Scan
         </button>
-        <button id="generate-report-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-700 text-white hover:bg-olive-800 font-medium py-2 px-4 text-sm transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Generate Report
-        </button>
+        <div class="flex flex-col items-center">
+            <button id="generate-report-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-700 text-white hover:bg-olive-800 font-medium py-2 px-4 text-sm transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Generate Report
+            </button>
+            <div id="last-scan-duration" class="mt-1 text-[10px] text-olive-600 font-medium hidden">
+                TLL: --
+            </div>
+        </div>
         <button id="view-history-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors relative">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -389,19 +394,20 @@
     <!-- Results Table -->
     <div class="mt-8 bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-hidden">
         <table id="discovery-table" class="min-w-full">
-            <thead>
-                <tr>
-                    <th class="px-4 py-3 text-left text-sm" style="width: 60px;">Status</th>
-                    <th class="px-4 py-3 text-left text-sm">IP Address</th>
-                    <th class="px-4 py-3 text-left text-sm">MAC Address</th>
-                    <th class="px-4 py-3 text-left text-sm">Vendor</th>
-                    <th class="px-4 py-3 text-left text-sm">Hostname</th>
-                    <th class="px-4 py-3 text-left text-sm">Open Ports</th>
-                    <th class="px-4 py-3 text-left text-sm">Version</th>
-                    <th class="px-4 py-3 text-left text-sm" style="width: 250px;">CVEs</th>
-                    <th class="px-4 py-3 text-left text-sm">Rescan</th>
-                </tr>
-            </thead>
+                        <thead>
+                            <tr>
+                                <th class="w-12 px-4 py-3 text-left"></th>
+                                <th class="px-4 py-3 text-left">IP Address</th>
+                                <th class="px-4 py-3 text-left hidden md:table-cell">MAC Address</th>
+                                <th class="px-4 py-3 text-left hidden lg:table-cell">Vendor</th>
+                                <th class="px-4 py-3 text-left max-w-[150px]">Hostname</th>
+                                <th class="px-4 py-3 text-left">Open Ports</th>
+                                <th class="px-4 py-3 text-left">Version</th>
+                                <th class="px-4 py-3 text-left">CVEs</th>
+                                <th class="px-4 py-3 text-left">Actions</th>
+                            </tr>
+                        </thead>
+
             <tbody class="text-sm"></tbody>
         </table>
     </div>
@@ -773,6 +779,10 @@
                     if (col === 'open_ports') cell.classList.add('open-ports-cell');
                     if (col === 'mac') cell.classList.add('font-mono', 'text-xs');
                     if (col === 'vendor') cell.classList.add('text-olive-600');
+                    if (col === 'hostname') {
+                        cell.classList.add('truncate', 'max-w-[150px]', 'block');
+                        cell.title = result[col]; // Add tooltip for full hostname
+                    }
                 });
                 const rescanCell = newRow.insertCell(-1);
                 rescanCell.className = 'px-4 py-3';
@@ -1010,6 +1020,17 @@
             }
 
             if (customer.id && customer.name) {
+                // Update TLL display
+                const tllDiv = document.getElementById('last-scan-duration');
+                if (tllDiv) {
+                    if (customer.metadata && customer.metadata.last_scan_duration) {
+                        tllDiv.textContent = 'TLL: ' + customer.metadata.last_scan_duration;
+                        tllDiv.classList.remove('hidden');
+                    } else {
+                        tllDiv.classList.add('hidden');
+                    }
+                }
+
                 // Update dropdown to show selected customer
                 let customerExists = false;
                 for (let option of dropdown.options) {
