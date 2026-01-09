@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "start_time": "01:00",
   "end_time": "06:00",
   "last_run": null

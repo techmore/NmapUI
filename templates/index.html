@@ -1774,8 +1774,17 @@
 
             // Immediately trigger a scan using generate_report
             setTimeout(() => {
-                const target = lastScanTarget || '192.168.1.0/24';
-                const customerName = current_customer?.name?.split(' (')[0] || 'Auto Scan';
+                // Use the same target selection logic as the main Generate Report button
+                const target = document.getElementById('scan-target').value || lastScanTarget || '192.168.1.0/24';
+
+                // Use the same customer name logic as the main Generate Report button
+                const customerOption = document.getElementById('current-customer').selectedOptions[0];
+                let customerName = 'Auto Scan'; // Default for auto scans
+
+                if (customerOption) {
+                    // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                    customerName = customerOption.text.split(' (')[0];
+                }
 
                 showReportStatus(`Starting scan of ${target}...`, 'info');
 
