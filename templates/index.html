@@ -145,6 +145,11 @@
         </div>
     </div>
 
+    <!-- Hidden customer selector for JavaScript compatibility -->
+    <select id="current-customer" class="hidden">
+        <option value="">Auto-detect network...</option>
+    </select>
+
     <!-- Local IP Info Panel -->
     <div id="local-ip" class="mt-4 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -249,6 +254,34 @@
         </div>
     </div>
 
+    <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center">
+                <h2 class="text-2xl font-display italic text-olive-900">Scan History</h2>
+                <button onclick="hideHistoryModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div class="mb-4 flex gap-4">
+                    <select id="history-customer-filter" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                        <option value="">All Customers</option>
+                    </select>
+                    <input type="date" id="history-date-filter" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                    <button onclick="loadScanHistory()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="history-list" class="space-y-3">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scan Input & Controls -->
     <div class="mt-6 flex flex-wrap items-center gap-4">
         <div class="relative flex-1 min-w-[250px]">
@@ -274,6 +307,23 @@
         <button id="resume-scan-btn" class="inline-flex items-center justify-center rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors">
             Resume Scan
         </button>
+        <button id="generate-report-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-700 text-white hover:bg-olive-800 font-medium py-2 px-4 text-sm transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Generate Report
+        </button>
+        <button id="view-history-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors relative">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            View History
+            <span id="history-badge" class="hidden absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold border-2 border-white shadow-sm">0</span>
+        </button>
+    </div>
+
+    <div id="report-status" class="hidden mt-4 p-4 rounded-lg">
+        <p id="report-status-text" class="text-sm font-medium"></p>
     </div>
 
     <!-- Scan Stats Cards -->
@@ -502,14 +552,23 @@
         socket.emit('get_customer_info');
         socket.emit('get_versions');
         socket.emit('get_customers');
+        socket.emit('get_history_counts');
 
         // Customer quick add dropdown handler
         document.getElementById('customer-quick-add').addEventListener('change', function() {
             const selectedId = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
+
+            // Update history badge for selected customer
+            updateHistoryBadge(selectedId);
+
             if (selectedId) {
-                showCustomerForm();
-                // Pre-fill form with selected customer for editing
-                // This allows quick editing of existing customers
+                // Assign the selected customer to this network
+                socket.emit('assign_customer', {
+                    customer_id: selectedId,
+                    customer_name: selectedName
+                });
             }
         });
 
@@ -537,12 +596,19 @@
         });
 
         socket.on('customers_list', data => {
+            console.log('customers_list event received with data:', data);
             populateCustomerDropdown(data);
+            // Request customer info again after dropdown is populated
+            // to ensure the correct selection is applied to the newly created options
+            socket.emit('get_customer_info');
         });
 
         socket.on('customer_info', data => {
             console.log('Customer info received:', data);
+            // Store globally as a string for consistent matching
+            window.currentMatchedCustomerId = data.id ? String(data.id) : '';
             updateCustomerSelection(data);
+            updateDropdownSelection(window.currentMatchedCustomerId);
         });
 
         socket.on('versions', data => {
@@ -557,10 +623,66 @@
             document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
         });
 
+        socket.on('history_counts', data => {
+            console.log('History counts received:', data);
+            window.historyCounts = data;
+            const currentCustomerId = document.getElementById('customer-quick-add').value;
+            updateHistoryBadge(currentCustomerId);
+        });
+
+        function updateHistoryBadge(customerId) {
+            const badge = document.getElementById('history-badge');
+            if (!badge || !window.historyCounts) return;
+
+            const count = window.historyCounts[customerId || 'total'] || 0;
+            
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                
+                // Color appropriate logic: red for few, amber for some, green for many?
+                // Or just keep red for attention. Let's use different shades based on count.
+                badge.className = 'absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-white text-[10px] font-bold border-2 border-white shadow-sm transition-all scale-110';
+                
+                if (count < 5) {
+                    badge.classList.add('bg-olive-400'); // Low count
+                } else if (count < 15) {
+                    badge.classList.add('bg-amber-500'); // Medium count
+                } else {
+                    badge.classList.add('bg-red-500'); // High count/Attention
+                }
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
         socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
-        socket.on('scan_complete', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
+        socket.on('scan_complete', msg => {
+            document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`;
+            // Refresh history counts as a new metadata file was likely saved
+            socket.emit('get_history_counts');
+        });
         socket.on('scan_results', hosts => populateTableWithResults(hosts));
         
+        // Report Generation socket listeners
+        socket.on('report_generating', function(data) {
+            showReportStatus(data.status, 'info');
+        });
+
+        socket.on('report_complete', function(data) {
+            showReportStatus('Report generated successfully! Check: ' + data.scan_dir, 'success');
+            // Refresh history counts to update badge
+            socket.emit('get_history_counts');
+            // Optionally reload history
+            if (!document.getElementById('history-modal').classList.contains('hidden')) {
+                loadScanHistory();
+            }
+        });
+
+        socket.on('report_error', function(data) {
+            showReportStatus('Error: ' + data.error, 'error');
+        });
+
         socket.on('arp_results', data => {
             console.log('ARP results received:', data);
             const tb = document.querySelector('#discovery-table tbody');
@@ -680,11 +802,21 @@
             if (data.success) {
                 showCustomerMessage(data.message, 'success');
                 // Update dropdown selection
-                const dropdown = document.getElementById('current-customer');
-                dropdown.value = data.customer.id;
-                dropdown.dispatchEvent(new Event('change'));
+                updateDropdownSelection(data.customer.id);
             } else {
                 showCustomerMessage('Failed to assign customer', 'error');
+            }
+        });
+
+        socket.on('customer_identified', data => {
+            console.log('Customer identified:', data);
+            // Update dropdown to show auto-detected customer
+            if (data.customer && data.customer.id) {
+                updateDropdownSelection(data.customer.id);
+                // Show confidence info if available
+                if (data.customer.confidence !== undefined) {
+                    console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
+                }
             }
         });
 
@@ -743,42 +875,80 @@
         }
 
         function populateCustomerDropdown(customers) {
+            console.log('Populating customer dropdowns with', customers.length, 'customers');
+
             const mainDropdown = document.getElementById('current-customer');
             const quickAddDropdown = document.getElementById('customer-quick-add');
-            const currentValue = mainDropdown.value;
-            
-            // Populate main dropdown
-            mainDropdown.innerHTML = '<option value="">Auto-detect network...</option>';
-            
-            // Populate quick-add dropdown
-            quickAddDropdown.innerHTML = '<option value="">Add Customer...</option>';
-            
+
+            if (!quickAddDropdown) return;
+
+            // Clear and add Unassigned
+            quickAddDropdown.innerHTML = '<option value="">Unassigned</option>';
+            if (mainDropdown) mainDropdown.innerHTML = '<option value="">Unassigned</option>';
+
             customers.forEach(customer => {
-                const customerId = customer.id || customer.get?.('id');
-                const customerName = customer.name || customer.get?.('name');
-                
-                // Add to main dropdown
-                const mainOption = document.createElement('option');
-                mainOption.value = customerId;
-                mainOption.textContent = customerName;
-                mainDropdown.appendChild(mainOption);
-                
+                const customerId = String(customer.id);
+                const customerName = customer.name;
+
+                if (!customerId || !customerName) return;
+
+                // Add to main dropdown if it exists
+                if (mainDropdown) {
+                    const mainOption = document.createElement('option');
+                    mainOption.value = customerId;
+                    mainOption.textContent = customerName;
+                    if (customerId === 'unknown') mainOption.classList.add('hidden');
+                    mainDropdown.appendChild(mainOption);
+                }
+
                 // Add to quick-add dropdown
                 const quickOption = document.createElement('option');
                 quickOption.value = customerId;
                 quickOption.textContent = customerName;
+                if (customerId === 'unknown') quickOption.classList.add('hidden');
                 quickAddDropdown.appendChild(quickOption);
             });
+
+            // Target ID to select: preference is global matched ID, then current value
+            const targetId = window.currentMatchedCustomerId || '';
             
-            // Restore previous selection if it still exists
-            if (currentValue) {
-                mainDropdown.value = currentValue;
+            if (targetId) {
+                console.log('Applying target customer selection:', targetId);
+                if (quickAddDropdown) quickAddDropdown.value = targetId;
+                if (mainDropdown) mainDropdown.value = targetId;
+                updateHistoryBadge(targetId);
+            } else {
+                updateHistoryBadge('');
+            }
+        }
+
+        function updateDropdownSelection(customerId) {
+            const idToSelect = customerId ? String(customerId) : '';
+            // Update the quick-add dropdown to show the selected customer
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+            if (quickAddDropdown) {
+                quickAddDropdown.value = idToSelect;
+                console.log(`Dropdown updated to customer ID: ${idToSelect}`);
+                // Update history badge when selection changes via detection
+                updateHistoryBadge(idToSelect);
+            }
+
+            // Also update main dropdown if it exists
+            const mainDropdown = document.getElementById('current-customer');
+            if (mainDropdown) {
+                mainDropdown.value = idToSelect;
             }
         }
 
         function updateCustomerSelection(customer) {
             const dropdown = document.getElementById('current-customer');
-            
+
+            // If dropdown doesn't exist, skip update
+            if (!dropdown) {
+                console.log('current-customer dropdown not found, skipping update');
+                return;
+            }
+
             if (customer.id && customer.name) {
                 // Update dropdown to show selected customer
                 let customerExists = false;
@@ -806,12 +976,227 @@
 
         function displayCustomerList(customers) {
             // Create a simple modal or alert to show customers
-            const customerList = customers.map(c => 
+            const customerList = customers.map(c =>
                 `${c.name || c.get?.('name')} (ID: ${c.id || c.get?.('id')})`
             ).join('\n');
-            
+
             showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
         }
+
+        // Report Generation Functions
+        let lastScanTarget = '';
+        let lastScanResults = {};
+
+        // Store scan results globally for report generation
+        socket.on('scan_results', function(data) {
+            lastScanResults.quickScan = data;
+        });
+
+        socket.on('deep_scan_results', function(data) {
+            lastScanResults.deepScan = data;
+        });
+
+        socket.on('arp_results', function(data) {
+            lastScanResults.arpScan = data;
+        });
+
+        document.getElementById('generate-report-btn').addEventListener('click', function() {
+            const target = document.getElementById('scan-target').value || lastScanTarget;
+
+            if (!target) {
+                showReportStatus('Please enter a target or run a scan first', 'error');
+                return;
+            }
+
+            const customerName = document.getElementById('current-customer').selectedOptions[0]?.text || 'Unknown';
+
+            showReportStatus('Generating report...', 'info');
+
+            socket.emit('generate_report', {
+                target: target,
+                customer_name: customerName,
+                scan_results: lastScanResults
+            });
+        });
+
+        // Pulsing Progress Card Helper Functions
+        function createReportProgressCard(message) {
+            const reportCard = document.createElement('div');
+            reportCard.id = 'report-progress-card';
+            reportCard.className = 'mt-4 bg-olive-50 p-4 rounded-xl border border-olive-300 card-pulsing';
+            reportCard.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="relative flex size-3">
+                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-500 opacity-75"></span>
+                        <span class="relative inline-flex size-3 rounded-full bg-olive-600"></span>
+                    </span>
+                    <p id="report-progress-text" class="text-sm font-medium text-olive-900">${message}</p>
+                </div>
+            `;
+            const statusDiv = document.getElementById('report-status');
+            statusDiv.parentNode.insertBefore(reportCard, statusDiv.nextSibling);
+        }
+
+        function updateReportProgress(message) {
+            const progressText = document.getElementById('report-progress-text');
+            if (progressText) {
+                progressText.textContent = message;
+            }
+        }
+
+        function removeReportProgressCard() {
+            const card = document.getElementById('report-progress-card');
+            if (card) {
+                card.remove();
+            }
+        }
+
+        function showReportStatus(message, type) {
+            const statusDiv = document.getElementById('report-status');
+            const statusText = document.getElementById('report-status-text');
+
+            statusDiv.classList.remove('hidden', 'bg-olive-100', 'bg-olive-200', 'bg-red-100', 'text-olive-800', 'text-olive-900', 'text-red-800');
+            statusDiv.classList.add(
+                type === 'error' ? 'bg-red-100' : 'bg-olive-100',
+                type === 'error' ? 'text-red-800' :
+                type === 'success' ? 'text-olive-900' :
+                'text-olive-800'
+            );
+
+            statusText.textContent = message;
+
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+            }
+        }
+
+        // Historical Scan Viewer Functions
+        document.getElementById('view-history-btn').addEventListener('click', function() {
+            showHistoryModal();
+        });
+
+        function showHistoryModal() {
+            document.getElementById('history-modal').classList.remove('hidden');
+            loadScanHistory();
+        }
+
+        function hideHistoryModal() {
+            document.getElementById('history-modal').classList.add('hidden');
+        }
+
+        async function loadScanHistory() {
+            const customerFilter = document.getElementById('history-customer-filter').value;
+            const dateFilter = document.getElementById('history-date-filter').value;
+
+            try {
+                const response = await fetch('/api/scans');
+                const data = await response.json();
+
+                let scans = data.scans || [];
+
+                // Apply filters
+                if (customerFilter) {
+                    scans = scans.filter(s => s.customer === customerFilter);
+                }
+                if (dateFilter) {
+                    scans = scans.filter(s => s.date === dateFilter);
+                }
+
+                displayScanHistory(scans);
+                populateCustomerFilter(scans);
+
+            } catch (error) {
+                console.error('Error loading scan history:', error);
+                document.getElementById('history-list').innerHTML =
+                    '<p class="text-red-600">Error loading scan history</p>';
+            }
+        }
+
+        function populateCustomerFilter(scans) {
+            const filter = document.getElementById('history-customer-filter');
+            const customers = [...new Set(scans.map(s => s.customer))].sort();
+
+            const currentValue = filter.value;
+            filter.innerHTML = '<option value="">All Customers</option>';
+
+            customers.forEach(customer => {
+                const option = document.createElement('option');
+                option.value = customer;
+                option.textContent = customer;
+                filter.appendChild(option);
+            });
+
+            filter.value = currentValue;
+        }
+
+        function displayScanHistory(scans) {
+            const historyList = document.getElementById('history-list');
+
+            if (scans.length === 0) {
+                historyList.innerHTML = '<p class="text-olive-600">No scans found</p>';
+                return;
+            }
+
+            historyList.innerHTML = scans.map(scan => {
+                const date = new Date(scan.timestamp).toLocaleString();
+
+                return `
+                    <div class="bg-olive-50 p-4 rounded-lg border border-olive-300">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 class="font-display text-lg text-olive-900">${scan.customer}</h3>
+                                <p class="text-sm text-olive-600">${date}</p>
+                                <p class="text-sm text-olive-700 mt-1">Target: <span class="font-mono">${scan.target}</span></p>
+                            </div>
+                            <div class="flex gap-2">
+                                ${scan.has_html ? `
+                                    <a href="/api/scans/${scan.path}/html" target="_blank"
+                                       class="px-3 py-1 bg-olive-600 text-white rounded text-sm hover:bg-olive-700">
+                                        View HTML
+                                    </a>
+                                ` : ''}
+                                ${scan.has_pdf ? `
+                                    <a href="/api/scans/${scan.path}/pdf"
+                                       class="px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800">
+                                        Download PDF
+                                    </a>
+                                ` : ''}
+                                <button onclick="deleteScan('${scan.path}')"
+                                        class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deleteScan(path) {
+            if (!confirm('Are you sure you want to delete this scan?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/scans/${path}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadScanHistory(); // Reload list
+                } else {
+                    alert('Error deleting scan');
+                }
+            } catch (error) {
+                console.error('Error deleting scan:', error);
+                alert('Error deleting scan');
+            }
+        }
+
+        // Store last scan target
+        document.getElementById('start-scan-btn').addEventListener('click', function() {
+            lastScanTarget = document.getElementById('scan-target').value;
+        });
     </script>
 </body>
 </html>

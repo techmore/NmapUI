@@ -1,7 +1,7 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, send_file, jsonify
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml, logging
+import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml, logging, tempfile, glob as file_glob
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
+XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"
+XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive.xsl"
+SCANS_DIR = BASE_DIR / "data" / "scans"
 from reportlab.lib import colors, units, enums, styles, pagesizes
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -148,6 +151,18 @@ def run_traceroute(target="1.1.1.1"):
         if network_key["hops"]:
             network_key["exit_ip"] = network_key["hops"][-1]["ip"]
 
+        # Get actual public IP (WAN IP) from external service
+        try:
+            import requests
+
+            network_key["public_ip"] = requests.get(
+                "https://api.ipify.org", timeout=5
+            ).text
+            logger.info(f"Detected public IP: {network_key['public_ip']}")
+        except Exception as e:
+            logger.warning(f"Could not detect public IP: {e}")
+            network_key["public_ip"] = None
+
         logger.info(
             f"Traceroute complete: {network_key['total_hops']} hops, {len(network_key['private_hops'])} private, {len(network_key['public_hops'])} public"
         )
@@ -158,18 +173,39 @@ def run_traceroute(target="1.1.1.1"):
         socketio.sleep(0)
 
         logger.info("Running customer identification...")
-        safe_emit("customer_identification_progress", {"message": "Identifying customer..."})
+        safe_emit(
+            "customer_identification_progress", {"message": "Identifying customer..."}
+        )
         socketio.sleep(0)
 
-        customer, confidence = customer_fingerprinter.match_customer(network_key)
-        customer = customer or {}
-        current_customer = {
-            "id": customer.get("id", "unknown"),
-            "name": customer.get("name", "Unknown Network"),
-            "confidence": confidence,
-        }
+        # Only auto-detect if no manual assignment exists
+        if not current_customer.get("manual_assignment"):
+            customer, confidence = customer_fingerprinter.match_customer(network_key)
+            if confidence > 0 and customer and customer.get("id") != "unknown":
+                current_customer = {
+                    "id": customer.get("id"),
+                    "name": customer.get("name"),
+                    "confidence": confidence,
+                }
+                logger.info(f"Auto-detected customer: {current_customer['name']}")
+                save_customer = customer
+            else:
+                current_customer = {
+                    "id": "",
+                    "name": "Unassigned",
+                    "confidence": 0.0,
+                }
+                logger.info("No customer match found, setting to Unassigned")
+                save_customer = customer_fingerprinter.unknown_customer or {}
+        else:
+            logger.info(f"Preserving manual assignment: {current_customer['name']}")
+            save_customer = {
+                "id": current_customer["id"],
+                "name": current_customer["name"],
+            }
+            confidence = current_customer.get("confidence", 1.0)
 
-        customer_fingerprinter.save_scan_result(network_key, customer, confidence)
+        customer_fingerprinter.save_scan_result(network_key, save_customer, confidence)
         customer_fingerprinter.save_traceroute_to_history(
             current_customer["id"],
             network_key,
@@ -343,6 +379,37 @@ def generate_pdf(sorted_hosts):
     pdf.build(elements)
 
 
+def get_report_counts():
+    """Count reports per customer ID"""
+    counts = {"total": 0}
+    if not SCANS_DIR.exists():
+        return counts
+
+    for metadata_path in SCANS_DIR.glob("**/metadata.json"):
+        try:
+            with open(metadata_path, "r") as f:
+                data = json.load(f)
+                customer_info = data.get("customer_info", {})
+                cust_id = customer_info.get("id", "")
+                if not cust_id:
+                    cust_id = data.get("customer_id", "")
+
+                # Normalize empty/None to "unassigned" key
+                key = str(cust_id) if cust_id else "unassigned"
+                counts[key] = counts.get(key, 0) + 1
+                counts["total"] = counts.get("total", 0) + 1
+        except:
+            continue
+
+    return counts
+
+
+@socketio.on("get_history_counts")
+def get_history_counts_event():
+    """Send report counts per customer to the client"""
+    emit("history_counts", get_report_counts())
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -356,13 +423,25 @@ def get_network_key_event():
         logger.info("Network key empty, running traceroute...")
         run_traceroute("1.1.1.1")
 
-    logger.info(f"Sending network_key to client: {network_key.get('total_hops', 0)} hops")
+    logger.info(
+        f"Sending network_key to client: {network_key.get('total_hops', 0)} hops"
+    )
     emit("network_key", network_key)
 
 
 @socketio.on("get_customer_info")
 def get_customer_info_event():
     """Send customer identification information to the client"""
+    global current_customer
+    if not current_customer.get("id") and not current_customer.get("manual_assignment"):
+        customer, confidence = customer_fingerprinter.match_customer(network_key)
+        if confidence > 0 and customer and customer.get("id") != "unknown":
+            current_customer = {
+                "id": customer.get("id"),
+                "name": customer.get("name"),
+                "confidence": confidence,
+            }
+
     emit("customer_info", current_customer)
 
 
@@ -581,8 +660,14 @@ def get_customers_event():
         customers = customer_fingerprinter.customers + [
             customer_fingerprinter.unknown_customer
         ]
+        logger.info(f"Sending {len(customers)} customers to client")
+        for customer in customers:
+            logger.info(
+                f"  - {customer.get('name', 'NO NAME')} (id: {customer.get('id', 'NO ID')})"
+            )
         emit("customers_list", customers)
     except Exception as e:
+        logger.error(f"Failed to get customers: {e}")
         emit("customer_error", f"Failed to get customers: {str(e)}")
 
 
@@ -1245,6 +1330,254 @@ def get_versions():
     """Get version information for all tools"""
     global versions
     return versions
+
+
+def create_scan_folder(customer_name, target):
+    """Create organized folder structure: CustomerName/Date/scan_HHMMSS_Target/"""
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    time_str = datetime.now().strftime("%H%M%S")
+
+    # Clean customer name and target for folder path
+    safe_customer = re.sub(r"[^\w\-]", "_", customer_name)
+    safe_target = re.sub(r"[^\w\.]", "_", target)
+
+    folder_name = f"scan_{time_str}_{safe_target}"
+    scan_dir = SCANS_DIR / safe_customer / date_str / folder_name
+    scan_dir.mkdir(parents=True, exist_ok=True)
+
+    return scan_dir
+
+
+def run_nmap_with_xml_output(target, output_base):
+    """Run nmap with all formats output (-oA)"""
+    logger.info(f"Running comprehensive scan on {target}...")
+
+    cmd = [
+        "nmap",
+        "-sS",
+        "-T4",
+        "-A",
+        "-sC",
+        "--script",
+        str(VULNERS_SCRIPT),
+        "-oA",
+        str(output_base),
+        target,
+    ]
+
+    # Check if running as root for -sS
+    if os.geteuid() != 0:
+        cmd.insert(0, "sudo")
+
+    try:
+        subprocess.run(cmd, check=True, timeout=600)
+        return True
+    except Exception as e:
+        logger.error(f"Nmap scan failed: {e}")
+        return False
+
+
+def convert_xml_to_html(xml_path, html_path, pdf_optimized=False):
+    """Convert Nmap XML to HTML using xsltproc"""
+    stylesheet = XSL_STYLESHEET_PDF if pdf_optimized else XSL_STYLESHEET
+
+    if not stylesheet.exists():
+        logger.error(f"XSL stylesheet not found: {stylesheet}")
+        return False
+
+    try:
+        subprocess.run(
+            ["xsltproc", str(stylesheet), str(xml_path), "-o", str(html_path)],
+            check=True,
+        )
+        return True
+    except Exception as e:
+        logger.error(f"XML to HTML conversion failed: {e}")
+        return False
+
+
+def convert_html_to_pdf(html_path, pdf_path):
+    """Convert HTML to PDF using wkhtmltopdf or weasyprint"""
+    # Try wkhtmltopdf first
+    wkhtml = shutil.which("wkhtmltopdf")
+    if wkhtml:
+        try:
+            cmd = [
+                wkhtml,
+                "--print-media-type",
+                "--margin-top",
+                "0.5in",
+                "--margin-right",
+                "0.5in",
+                "--margin-bottom",
+                "0.5in",
+                "--margin-left",
+                "0.5in",
+                "--page-size",
+                "Letter",
+                str(html_path),
+                str(pdf_path),
+            ]
+            subprocess.run(cmd, check=True)
+            return True
+        except Exception as e:
+            logger.error(f"wkhtmltopdf failed: {e}")
+
+    # Fallback to weasyprint
+    try:
+        from weasyprint import HTML
+
+        HTML(str(html_path)).write_pdf(str(pdf_path))
+        return True
+    except Exception as e:
+        logger.error(f"weasyprint failed: {e}")
+
+    return False
+
+
+def save_scan_metadata(scan_dir, customer_name, target, files):
+    """Save scan metadata to JSON file"""
+    metadata = {
+        "customer_name": customer_name,
+        "target": target,
+        "timestamp": datetime.now().isoformat(),
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "network_key": network_key,
+        "customer_info": current_customer,
+        "files": {k: str(v) for k, v in files.items()},
+    }
+
+    with open(scan_dir / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+
+
+@app.route("/api/scans")
+def list_scans():
+    """List all saved scans from directory structure"""
+    scans = []
+    if not SCANS_DIR.exists():
+        return jsonify({"scans": []})
+
+    for metadata_path in SCANS_DIR.glob("**/metadata.json"):
+        try:
+            with open(metadata_path, "r") as f:
+                data = json.load(f)
+
+            # Add path info for identification
+            rel_path = metadata_path.parent.relative_to(SCANS_DIR)
+            data["path"] = str(rel_path)
+
+            # Check for existing files
+            data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
+                metadata_path.parent / "scan.html"
+            ).exists()
+            data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
+
+            scans.append(data)
+        except Exception as e:
+            logger.error(f"Error reading metadata at {metadata_path}: {e}")
+
+    # Sort by timestamp descending
+    scans.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return jsonify({"scans": scans})
+
+
+@app.route("/api/scans/<path:path>/html")
+def get_scan_html(path):
+    """Serve the HTML report for a scan"""
+    scan_dir = SCANS_DIR / path
+    html_path = scan_dir / "scan_web.html"
+    if not html_path.exists():
+        html_path = scan_dir / "scan.html"
+
+    if not html_path.exists():
+        return "Report not found", 404
+
+    return send_file(html_path)
+
+
+@app.route("/api/scans/<path:path>/pdf")
+def get_scan_pdf(path):
+    """Download the PDF report for a scan"""
+    pdf_path = SCANS_DIR / path / "scan_report.pdf"
+    if not pdf_path.exists():
+        return "PDF not found", 404
+
+    return send_file(pdf_path, as_attachment=True)
+
+
+@app.route("/api/scans/<path:path>", methods=["DELETE"])
+def delete_scan(path):
+    """Delete a scan directory"""
+    scan_dir = SCANS_DIR / path
+    if not scan_dir.exists() or SCANS_DIR not in scan_dir.parents:
+        return jsonify({"success": False, "error": "Invalid path"}), 400
+
+    try:
+        shutil.rmtree(scan_dir)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@socketio.on("generate_report")
+def generate_report_event(data):
+    """Handle report generation request via SocketIO"""
+    target = data.get("target")
+    customer_name = data.get("customer_name", "Unknown")
+
+    if not target:
+        emit("report_error", {"error": "No target specified"})
+        return
+
+    try:
+        emit("report_generating", {"status": "Initializing scan..."})
+        scan_dir = create_scan_folder(customer_name, target)
+        output_base = scan_dir / "scan"
+
+        emit("report_generating", {"status": "Running nmap scan..."})
+        if not run_nmap_with_xml_output(target, output_base):
+            emit("report_error", {"error": "Nmap scan failed"})
+            return
+
+        xml_path = scan_dir / "scan.xml"
+        web_html_path = scan_dir / "scan_web.html"
+        pdf_html_path = scan_dir / "scan_pdf.html"
+        pdf_path = scan_dir / "scan_report.pdf"
+
+        emit("report_generating", {"status": "Converting to web HTML..."})
+        convert_xml_to_html(xml_path, web_html_path, pdf_optimized=False)
+
+        emit("report_generating", {"status": "Creating PDF-optimized HTML..."})
+        convert_xml_to_html(xml_path, pdf_html_path, pdf_optimized=True)
+
+        emit("report_generating", {"status": "Generating PDF report..."})
+        convert_html_to_pdf(pdf_html_path, pdf_path)
+
+        emit("report_generating", {"status": "Saving metadata..."})
+        files = {
+            "xml": xml_path,
+            "web_html": web_html_path,
+            "pdf_html": pdf_html_path,
+            "pdf": pdf_path,
+            "nmap": scan_dir / "scan.nmap",
+            "gnmap": scan_dir / "scan.gnmap",
+        }
+        save_scan_metadata(scan_dir, customer_name, target, files)
+
+        emit(
+            "report_complete",
+            {
+                "status": "success",
+                "path": str(scan_dir.relative_to(SCANS_DIR)),
+                "scan_dir": str(scan_dir),
+            },
+        )
+
+    except Exception as e:
+        logger.exception("Report generation failed")
+        emit("report_error", {"error": str(e)})
 
 
 def startup_checks(quick=False):

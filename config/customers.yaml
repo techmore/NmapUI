@@ -127,20 +127,27 @@ customers:
       public_ip: dynamic
 
   - id: '12'
+    name: techmore
+    description: TechMore network with multiple connection paths
+    confidence: 0.8
     metadata:
       connection_type:
       - direct
+      - vpn
       isp: Unknown
       last_updated: '2026-01-08'
       location: ''
       network_size: medium
-    name: techmore
     networks:
       exit_ips:
+      - 206.224.*.*
+      - 162.158.*.*
       - 1.1.1.1
       gateway_pattern: 192.168.222.1
       private_ranges:
       - 192.168.0.0/16
+      - 100.64.0.0/10
+      - 172.16.0.0/12
       - 10.0.0.0/8
       public_ip: dynamic
       public_ips:
@@ -158,6 +165,28 @@ customers:
           address: 10.0.0.1
           description: Corporate VPN gateway
           added_at: '2026-01-08'
+    fingerprints:
+    - type: direct
+      description: Primary network path via ISP
+      hop_count: 6-10
+      private_hop_pattern:
+      - ip_pattern: 192.168.222.*
+        is_private: true
+        position: 1
+      - ip_pattern: 100.64.*.*
+        is_private: true
+        position: 2
+      - ip_pattern: 172.16.*.*
+        is_private: true
+        position: 3
+      public_exit_pattern:
+      - ip_pattern: 206.224.*.*
+        is_private: false
+        position: 4
+      latency_profile:
+        first_hop: <5ms
+        exit_hop: 20-50ms
+        total_time: <100ms
 
 description: Customer network fingerprinting database
 indexing:
