@@ -339,7 +339,9 @@ class CustomerFingerprinter:
 
             networks = customer.get("networks", {})
 
-            if current_public_ip and self.match_by_public_ip(current_public_ip, networks):
+            if current_public_ip and self.match_by_public_ip(
+                current_public_ip, networks
+            ):
                 matched_customer = customer
                 match_method = "public_ip"
                 logger.info(f"✓ MATCH found via public IP: {customer_name}")
@@ -359,8 +361,10 @@ class CustomerFingerprinter:
                     )
                     break
 
-            if not matched_customer and current_exit_ip and self.match_by_exit_ip(
-                current_exit_ip, networks
+            if (
+                not matched_customer
+                and current_exit_ip
+                and self.match_by_exit_ip(current_exit_ip, networks)
             ):
                 matched_customer = customer
                 match_method = "exit_ip"
@@ -558,7 +562,16 @@ class CustomerFingerprinter:
             self.save_customers_config()
             logger.info(f"Updated last scan duration for {customer_id}: {duration_str}")
             return True
+
+        logger.warning(f"Customer {customer_id} not found for duration update")
         return False
+
+    def get_customer_by_id(self, customer_id: str):
+        """Get customer configuration by ID"""
+        for customer in self.customers:
+            if customer.get("id") == customer_id:
+                return customer
+        return None
 
     def save_customers_config(self):
         try:
@@ -597,7 +610,9 @@ class CustomerFingerprinter:
 
         return " -> ".join(signature_parts)
 
-    def get_scan_history(self, customer_id: Optional[str] = None, limit: int = 50) -> List[Dict]:
+    def get_scan_history(
+        self, customer_id: Optional[str] = None, limit: int = 50
+    ) -> List[Dict]:
         indexing_config = (self.config or {}).get("indexing", {})
         storage_path = indexing_config.get("storage_path", "data/scan_history.json")
 

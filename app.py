@@ -341,6 +341,8 @@ def run_traceroute(target="1.1.1.1"):
                     "name": customer.get("name"),
                     "confidence": confidence,
                 }
+                # Merge metadata from saved customer configuration
+                current_customer = merge_customer_metadata(current_customer, customer)
                 logger.info(f"Auto-detected customer: {current_customer['name']}")
                 save_customer = customer
             else:
@@ -353,6 +355,15 @@ def run_traceroute(target="1.1.1.1"):
                 save_customer = customer_fingerprinter.unknown_customer or {}
         else:
             logger.info(f"Preserving manual assignment: {current_customer['name']}")
+            # For manual assignments, also merge metadata if customer exists
+            if current_customer.get("id"):
+                saved_customer = customer_fingerprinter.get_customer_by_id(
+                    current_customer["id"]
+                )
+                if saved_customer:
+                    current_customer = merge_customer_metadata(
+                        current_customer, saved_customer
+                    )
             save_customer = {
                 "id": current_customer["id"],
                 "name": current_customer["name"],
@@ -949,6 +960,16 @@ def save_current_assignment():
         logger.error(f"Error saving current assignment: {e}")
 
 
+def merge_customer_metadata(customer_dict, saved_customer):
+    """Merge metadata from saved customer configuration into customer dictionary"""
+    if saved_customer and "metadata" in saved_customer:
+        if "metadata" not in customer_dict:
+            customer_dict["metadata"] = {}
+        # Merge all metadata fields, preserving any existing ones
+        customer_dict["metadata"].update(saved_customer["metadata"])
+    return customer_dict
+
+
 def load_current_assignment():
     global current_customer
     try:
@@ -957,6 +978,17 @@ def load_current_assignment():
             with open(assignment_path, "r") as f:
                 data = json.load(f)
                 current_customer = data.get("customer", current_customer)
+
+                # Merge metadata from saved customer configuration
+                if current_customer.get("id"):
+                    saved_customer = customer_fingerprinter.get_customer_by_id(
+                        current_customer["id"]
+                    )
+                    if saved_customer:
+                        current_customer = merge_customer_metadata(
+                            current_customer, saved_customer
+                        )
+
                 logger.info(
                     f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
                 )
