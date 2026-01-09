@@ -1746,6 +1746,46 @@
             showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
         }
 
+        function saveAndTestScan() {
+            const startTime = document.getElementById('auto-start-time').value;
+            const endTime = document.getElementById('auto-end-time').value;
+
+            if (!startTime || !endTime) {
+                showReportStatus('Please select both start and end times', 'error');
+                return;
+            }
+
+            autoScanStartTime = startTime;
+            autoScanEndTime = endTime;
+
+            // Update display
+            document.getElementById('auto-scan-window').textContent = `${startTime} to ${endTime}`;
+            document.getElementById('auto-scan-times').classList.remove('hidden');
+
+            // Enable auto scanning
+            socket.emit('update_auto_scan', {
+                enabled: true,
+                start_time: startTime,
+                end_time: endTime
+            });
+
+            hideAutoScanTimeModal();
+            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
+
+            // Immediately trigger a test scan
+            setTimeout(() => {
+                const target = lastScanTarget || '192.168.1.0/24';
+                const customerName = current_customer?.name?.split(' (')[0] || 'Test Scan';
+
+                showReportStatus(`Starting test scan of ${target}...`, 'info');
+
+                socket.emit('generate_report', {
+                    target: target,
+                    customer_name: customerName
+                });
+            }, 500); // Small delay to let the status message show
+        }
+
         // Auto scan status updates
         socket.on('auto_scan_status', function(status) {
             autoScanEnabled = status.enabled || false;
@@ -1799,6 +1839,9 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="saveAutoScanTimes()" class="flex-1 bg-olive-600 text-white py-2 px-4 rounded-lg hover:bg-olive-700 transition-colors">
                         Enable Auto Scan
+                    </button>
+                    <button onclick="saveAndTestScan()" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        Save & Test Scan
                     </button>
                     <button onclick="hideAutoScanTimeModal()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
                         Cancel
