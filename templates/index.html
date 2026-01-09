@@ -117,42 +117,14 @@
 
 
 
-    <!-- Network Key Banner -->
-    <div id="network-key-banner" class="mb-4 p-4 bg-olive-800 text-white rounded-xl shadow-sm border border-olive-700">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-olive-300 text-sm font-medium">Network Route</span>
-            <div class="flex items-center gap-6 text-sm">
-                <div>
-                    <span class="text-olive-400">Hops:</span>
-                    <span id="total-hops" class="font-medium ml-1">--</span>
-                </div>
-                <div>
-                    <span class="text-olive-400">Private:</span>
-                    <span id="private-hops" class="font-medium ml-1 text-amber-300">--</span>
-                </div>
-                <div>
-                    <span class="text-olive-400">Public:</span>
-                    <span id="public-hops" class="font-medium ml-1 text-emerald-300">--</span>
-                </div>
-                <div>
-                    <span class="text-olive-400">Exit:</span>
-                    <span id="exit-ip" class="font-medium ml-1 text-sky-300">--</span>
-                </div>
-            </div>
-        </div>
-        <div id="route-path" class="flex items-center flex-wrap gap-1 text-sm font-mono">
-            <span class="text-olive-400">Loading...</span>
-        </div>
-    </div>
-
     <!-- Hidden customer selector for JavaScript compatibility -->
     <select id="current-customer" class="hidden">
         <option value="">Auto-detect network...</option>
     </select>
 
     <!-- Local IP Info Panel -->
-    <div id="local-ip" class="mt-4 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300">
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+    <div id="local-ip-panel" class="mt-4 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
             <div>
                 <span class="text-olive-500 block">Local IP</span>
                 <span id="local-ip-value" class="font-medium text-olive-950"></span>
@@ -168,6 +140,35 @@
             <div>
                 <span class="text-olive-500 block">Public IP</span>
                 <span id="public-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+        </div>
+
+        <div id="network-key-banner" class="p-3 bg-olive-400 text-white rounded-lg shadow-inner border border-olive-500">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-white/80 text-[10px] font-bold uppercase tracking-wider">Network Route</span>
+                    <div id="route-path" class="flex items-center flex-wrap gap-1 text-xs font-mono">
+                        <span class="text-white/70 italic">Loading route...</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
+                    <div>
+                        <span class="text-white/60">Hops:</span>
+                        <span id="total-hops" class="ml-1">--</span>
+                    </div>
+                    <div>
+                        <span class="text-white/60">Private:</span>
+                        <span id="private-hops" class="ml-1 text-amber-200">--</span>
+                    </div>
+                    <div>
+                        <span class="text-white/60">Public:</span>
+                        <span id="public-hops" class="ml-1 text-emerald-200">--</span>
+                    </div>
+                    <div>
+                        <span class="text-white/60">Exit:</span>
+                        <span id="exit-ip" class="ml-1 text-sky-200">--</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -273,10 +274,10 @@
 
             <div class="p-6 flex-1 overflow-y-auto">
                 <div class="mb-4 flex gap-4">
-                    <select id="history-customer-filter" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                    <select id="history-customer-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
                         <option value="">All Customers</option>
                     </select>
-                    <input type="date" id="history-date-filter" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                    <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
                     <button onclick="loadScanHistory()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
                         Refresh
                     </button>
@@ -578,7 +579,7 @@
             const selectedName = selectedOption?.textContent || '';
 
             // Update history badge for selected customer
-            updateHistoryBadge(selectedId);
+            updateHistoryBadge(selectedName);
 
             if (selectedId) {
                 // Assign the selected customer to this network
@@ -625,7 +626,7 @@
             // Store globally as a string for consistent matching
             window.currentMatchedCustomerId = data.id ? String(data.id) : '';
             updateCustomerSelection(data);
-            updateDropdownSelection(window.currentMatchedCustomerId);
+            updateDropdownSelection(window.currentMatchedCustomerId, data.name);
         });
 
         socket.on('versions', data => {
@@ -643,18 +644,19 @@
         socket.on('history_counts', data => {
             console.log('History counts received:', data);
             window.historyCounts = data;
-            const currentCustomerId = document.getElementById('customer-quick-add').value;
-            updateHistoryBadge(currentCustomerId);
+            
+            const dropdown = document.getElementById('customer-quick-add');
+            const currentCustomerName = dropdown.selectedOptions[0]?.text || 'Unassigned';
+            updateHistoryBadge(currentCustomerName);
         });
 
-        function updateHistoryBadge(customerId) {
+        function updateHistoryBadge(customerName) {
             const badge = document.getElementById('history-badge');
             const lastScanSpan = document.getElementById('last-scan-days');
             if (!badge || !window.historyCounts) return;
 
-            // If customerId is empty (Unassigned), show the "unassigned" count
-            // Alternatively, show "total" if you prefer to see all history when unassigned
-            const key = customerId ? String(customerId) : 'unassigned';
+            // Normalize the name to use as key
+            const key = (customerName && customerName !== 'Unassigned') ? customerName.split(' (')[0] : 'Unassigned';
             const count = window.historyCounts[key] || 0;
             
             if (count > 0) {
@@ -860,7 +862,7 @@
             if (data.success) {
                 showCustomerMessage(data.message, 'success');
                 // Update dropdown selection
-                updateDropdownSelection(data.customer.id);
+                updateDropdownSelection(data.customer.id, data.customer.name);
             } else {
                 showCustomerMessage('Failed to assign customer', 'error');
             }
@@ -870,7 +872,7 @@
             console.log('Customer identified:', data);
             // Update dropdown to show auto-detected customer
             if (data.customer && data.customer.id) {
-                updateDropdownSelection(data.customer.id);
+                updateDropdownSelection(data.customer.id, data.customer.name);
                 // Show confidence info if available
                 if (data.customer.confidence !== undefined) {
                     console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
@@ -980,15 +982,15 @@
             }
         }
 
-        function updateDropdownSelection(customerId) {
+        function updateDropdownSelection(customerId, customerName) {
             const idToSelect = customerId ? String(customerId) : '';
             // Update the quick-add dropdown to show the selected customer
             const quickAddDropdown = document.getElementById('customer-quick-add');
             if (quickAddDropdown) {
                 quickAddDropdown.value = idToSelect;
-                console.log(`Dropdown updated to customer ID: ${idToSelect}`);
+                console.log(`Dropdown updated to customer ID: ${idToSelect}, Name: ${customerName}`);
                 // Update history badge when selection changes via detection
-                updateHistoryBadge(idToSelect);
+                updateHistoryBadge(customerName);
             }
 
             // Also update main dropdown if it exists
@@ -1185,17 +1187,43 @@
         });
 
         function showHistoryModal() {
-            document.getElementById('history-modal').classList.remove('hidden');
-            loadScanHistory();
+            const modal = document.getElementById('history-modal');
+            const customerDropdown = document.getElementById('current-customer');
+            const filter = document.getElementById('history-customer-filter');
+            
+            modal.classList.remove('hidden');
+            
+            // Get current customer name from the main UI
+            let currentName = '';
+            if (customerDropdown && customerDropdown.selectedOptions[0]) {
+                currentName = customerDropdown.selectedOptions[0].text.split(' (')[0];
+            }
+            
+            if (currentName && currentName !== 'Unassigned' && currentName !== 'Unknown Network' && currentName !== 'Auto-detect network...') {
+                // Set the filter to this customer by default
+                modal.dataset.defaultCustomer = currentName;
+            } else {
+                delete modal.dataset.defaultCustomer;
+            }
+            
+            loadScanHistory(true);
         }
 
         function hideHistoryModal() {
             document.getElementById('history-modal').classList.add('hidden');
         }
 
-        async function loadScanHistory() {
-            const customerFilter = document.getElementById('history-customer-filter').value;
+        async function loadScanHistory(isInitialLoad = false) {
+            const modal = document.getElementById('history-modal');
+            const filter = document.getElementById('history-customer-filter');
             const dateFilter = document.getElementById('history-date-filter').value;
+            
+            let customerFilter = filter.value;
+            
+            // On initial load, use the default customer from the modal dataset if filter is empty
+            if (isInitialLoad && !customerFilter && modal.dataset.defaultCustomer) {
+                customerFilter = modal.dataset.defaultCustomer;
+            }
 
             try {
                 const response = await fetch('/api/scans');
@@ -1203,16 +1231,21 @@
 
                 let scans = data.scans || [];
 
+                // Re-populate the customer filter list first so we can select the right one
+                populateCustomerFilter(scans, customerFilter);
+                
+                // Now get the possibly updated filter value (if populateCustomerFilter set it)
+                const activeFilter = filter.value;
+
                 // Apply filters
-                if (customerFilter) {
-                    scans = scans.filter(s => s.customer_name === customerFilter);
+                if (activeFilter) {
+                    scans = scans.filter(s => s.customer_name === activeFilter);
                 }
                 if (dateFilter) {
                     scans = scans.filter(s => s.date === dateFilter);
                 }
 
                 displayScanHistory(scans);
-                populateCustomerFilter(scans);
 
             } catch (error) {
                 console.error('Error loading scan history:', error);
@@ -1221,11 +1254,11 @@
             }
         }
 
-        function populateCustomerFilter(scans) {
+        function populateCustomerFilter(scans, defaultValue = '') {
             const filter = document.getElementById('history-customer-filter');
             const customers = [...new Set(scans.map(s => s.customer_name))].sort();
 
-            const currentValue = filter.value;
+            const currentValue = filter.value || defaultValue;
             filter.innerHTML = '<option value="">All Customers</option>';
 
             customers.forEach(customer => {
@@ -1235,7 +1268,12 @@
                 filter.appendChild(option);
             });
 
-            filter.value = currentValue;
+            // Set to current/default value if it exists in the new list
+            if (customers.includes(currentValue)) {
+                filter.value = currentValue;
+            } else {
+                filter.value = '';
+            }
         }
 
         function displayScanHistory(scans) {

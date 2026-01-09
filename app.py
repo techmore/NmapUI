@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
-XSL_STYLESHEET = BASE_DIR / "nmap-pdf-olive.xsl"
-XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive.xsl"
+XSL_STYLESHEET = BASE_DIR / "nmap-report-clean.xsl"
+XSL_STYLESHEET_PDF = BASE_DIR / "nmap-report-clean.xsl"
 SCANS_DIR = BASE_DIR / "data" / "scans"
+
 from reportlab.lib import colors, units, enums, styles, pagesizes
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -380,7 +381,7 @@ def generate_pdf(sorted_hosts):
 
 
 def get_report_counts():
-    """Count reports and find last scan date per customer ID"""
+    """Count reports and find last scan date per customer name"""
     counts = {"total": 0, "last_scans": {}}
     if not SCANS_DIR.exists():
         return counts
@@ -389,13 +390,19 @@ def get_report_counts():
         try:
             with open(metadata_path, "r") as f:
                 data = json.load(f)
-                customer_info = data.get("customer_info", {})
-                cust_id = customer_info.get("id", "")
-                if not cust_id:
-                    cust_id = data.get("customer_id", "")
 
-                # Normalize empty/None to "unassigned" key
-                key = str(cust_id) if cust_id else "unassigned"
+                # Use normalized customer name as the key
+                name = data.get("customer_name")
+                if not name:
+                    customer_info = data.get("customer_info", {})
+                    name = customer_info.get("name")
+                if not name:
+                    name = data.get("customer", "Unassigned")
+
+                # Normalize: remove confidence score if present
+                name = name.split(" (")[0]
+                key = name if name else "Unassigned"
+
                 counts[key] = counts.get(key, 0) + 1
                 counts["total"] = counts.get("total", 0) + 1
 
@@ -1515,6 +1522,10 @@ def list_scans():
                 data["customer_name"] = data.get(
                     "customer", data.get("customer_id", "Unknown")
                 )
+
+            # Normalize: remove confidence score
+            if data["customer_name"]:
+                data["customer_name"] = data["customer_name"].split(" (")[0]
 
             # Add path info for identification
             rel_path = metadata_path.parent.relative_to(SCANS_DIR)
