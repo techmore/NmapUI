@@ -148,7 +148,7 @@
         transition: color 0.2s ease;
     }
 </style>
-<body class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <body class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header with Title -->
     <div class="flex items-center justify-between mb-8">
         <div class="flex items-center gap-6">
@@ -260,7 +260,6 @@
             <div class="flex flex-col gap-4">
                 <div class="flex items-center justify-between border-b border-olive-100 pb-3">
                     <div class="flex items-center gap-3">
-                        <div class="size-2.5 rounded-full bg-olive-500"></div>
                         <span class="text-olive-600 text-xs font-bold uppercase tracking-widest">Network Topology</span>
                     </div>
                     <div class="flex items-center gap-8">
@@ -644,9 +643,11 @@
         </div>
     </div>
 
-    <!-- Results Table -->
-    <div class="mt-8 bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-hidden">
-        <table id="discovery-table" class="min-w-full">
+    <!-- Results Table - Wider breakout section -->
+    </div>
+    <div class="mt-8 mx-auto max-w-[2400px] px-4">
+        <div class="bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-x-auto">
+            <table id="discovery-table" class="min-w-full">
                         <thead>
                             <tr>
                                 <th class="sortable w-12 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="status" data-type="text">
@@ -759,7 +760,9 @@
 
             <tbody class="text-sm"></tbody>
         </table>
+        </div>
     </div>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
     <script>
         // Set current date and time
@@ -1364,32 +1367,32 @@
             const tb = document.querySelector('#discovery-table tbody');
             tb.innerHTML = '';
             data.forEach(result => {
-                const newRow = tb.insertRow(-1);
-                // Add status column first (empty for now)
-                const statusCell = newRow.insertCell(0);
-                statusCell.className = 'px-4 py-3 text-center';
-                statusCell.innerHTML = '';
+            const newRow = tb.insertRow(-1);
+            // Add status column first
+            const statusCell = newRow.insertCell(0);
+            statusCell.className = 'px-4 py-3 text-center';
+            statusCell.innerHTML = '';
 
-                // Add other columns
-                ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
-                    const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
-                    cell.textContent = result[col] || '';
-                    cell.className = 'px-4 py-3 text-olive-900';
-                    if (col === 'open_ports') cell.classList.add('open-ports-cell');
-                    if (col === 'mac') cell.classList.add('font-mono', 'text-xs');
-                    if (col === 'vendor') cell.classList.add('text-olive-600');
-                    if (col === 'hostname') {
-                        cell.classList.add('truncate', 'max-w-[150px]', 'block');
-                        cell.title = result[col]; // Add tooltip for full hostname
-                    }
-                });
-                const rescanCell = newRow.insertCell(-1);
-                rescanCell.className = 'px-4 py-3';
-                const rescanBtn = document.createElement('button');
-                rescanBtn.textContent = 'Rescan';
-                rescanBtn.classList.add('inline-flex', 'items-center', 'justify-center', 'rounded-full', 'bg-olive-950', 'text-white', 'hover:bg-olive-800', 'font-medium', 'py-1', 'px-3', 'text-xs', 'transition-colors');
-                rescanBtn.addEventListener('click', () => handleRescan(result['ip']));
-                rescanCell.appendChild(rescanBtn);
+            // Add other columns
+            ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
+                const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
+                cell.textContent = result[col] || '';
+                cell.className = 'px-4 py-3 text-olive-900';
+                if (col === 'open_ports') cell.classList.add('open-ports-cell');
+                if (col === 'mac') cell.classList.add('font-mono', 'text-xs');
+                if (col === 'vendor') cell.classList.add('text-olive-600');
+                if (col === 'hostname') {
+                    cell.classList.add('truncate', 'max-w-[150px]', 'block');
+                    cell.title = result[col]; // Add tooltip for full hostname
+                }
+            });
+            const rescanCell = newRow.insertCell(-1);
+            rescanCell.className = 'px-4 py-3';
+            const rescanBtn = document.createElement('button');
+            rescanBtn.textContent = 'Rescan';
+            rescanBtn.classList.add('inline-flex', 'items-center', 'justify-center', 'rounded-full', 'bg-olive-950', 'text-white', 'hover:bg-olive-800', 'font-medium', 'py-1', 'px-3', 'text-xs', 'transition-colors');
+            rescanBtn.addEventListener('click', () => handleRescan(result['ip']));
+            rescanCell.appendChild(rescanBtn);
             });
         }
 
@@ -1983,7 +1986,7 @@
                 return `
                     <div class="bg-olive-50 p-4 rounded-lg border border-olive-300">
                         <div class="flex justify-between items-start mb-2">
-                            <div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                                 <h3 class="font-display text-lg text-olive-900">${scan.customer_name || 'Unknown'}</h3>
                                 <p class="text-sm text-olive-600">${date}</p>
                                 <p class="text-sm text-olive-700 mt-1">Target: <span class="font-mono">${scan.target}</span></p>
@@ -2090,8 +2093,10 @@
             autoScanEndTime = endTime;
 
             // Update display
-            document.getElementById('auto-scan-window').textContent = `${startTime} to ${endTime}`;
-            document.getElementById('auto-scan-times').classList.remove('hidden');
+            const windowEl = document.getElementById('auto-scan-window');
+            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
+            const timesDiv = document.getElementById('auto-scan-times');
+            if (timesDiv) timesDiv.classList.remove('hidden');
 
             // Enable auto scanning
             socket.emit('update_auto_scan', {
@@ -2113,12 +2118,17 @@
                 return;
             }
 
+            // Close modal immediately
+            hideAutoScanTimeModal();
+
             autoScanStartTime = startTime;
             autoScanEndTime = endTime;
 
             // Update display
-            document.getElementById('auto-scan-window').textContent = `${startTime} to ${endTime}`;
-            document.getElementById('auto-scan-times').classList.remove('hidden');
+            const windowEl = document.getElementById('auto-scan-window');
+            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
+            const timesDiv = document.getElementById('auto-scan-times');
+            if (timesDiv) timesDiv.classList.remove('hidden');
 
             // Enable auto scanning
             socket.emit('update_auto_scan', {
@@ -2131,27 +2141,28 @@
             showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
 
             // Immediately trigger a scan using generate_report
-            setTimeout(() => {
-                // Use the same target selection logic as the main Generate Report button
-                const target = document.getElementById('scan-target').value || lastScanTarget || '192.168.1.0/24';
+            // Use the same target selection logic as the main Generate Report button
+            const target = document.getElementById('scan-target').value || lastScanTarget || '127.0.0.1';
 
-                // Use the same customer name logic as the main Generate Report button
-                const customerOption = document.getElementById('current-customer').selectedOptions[0];
-                let customerName = 'Auto Scan'; // Default for auto scans
+            // Use the same customer name logic as the main Generate Report button
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Auto Scan'; // Default for auto scans
 
-                if (customerOption) {
-                    // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
-                    customerName = customerOption.text.split(' (')[0];
-                }
+            if (customerOption) {
+                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                customerName = customerOption.text.split(' (')[0];
+            }
 
-                showReportStatus(`Starting scan of ${target}...`, 'info');
+            console.log('About to emit generate_report with target:', target, 'customer:', customerName);
+            console.log('Socket connected:', socket.connected);
+            showReportStatus(`Starting scan of ${target}...`, 'info');
 
-                // Use the same generate_report event as the main Generate Report button
-                socket.emit('generate_report', {
-                    target: target,
-                    customer_name: customerName
-                });
-            }, 500); // Small delay to let the status message show
+            // Use the same generate_report event as the main Generate Report button
+            socket.emit('generate_report', {
+                target: target,
+                customer_name: customerName
+            });
+            console.log('generate_report emitted');
         }
 
         // Auto scan status updates
@@ -2162,10 +2173,13 @@
             if (status.start_time && status.end_time) {
                 autoScanStartTime = status.start_time;
                 autoScanEndTime = status.end_time;
-                document.getElementById('auto-scan-window').textContent = `${status.start_time} to ${status.end_time}`;
-                document.getElementById('auto-scan-times').classList.remove('hidden');
+                const windowEl = document.getElementById('auto-scan-window');
+                if (windowEl) windowEl.textContent = `${status.start_time} to ${status.end_time}`;
+                const timesDiv = document.getElementById('auto-scan-times');
+                if (timesDiv) timesDiv.classList.remove('hidden');
             } else {
-                document.getElementById('auto-scan-times').classList.add('hidden');
+                const timesDiv = document.getElementById('auto-scan-times');
+                if (timesDiv) timesDiv.classList.add('hidden');
             }
         });
 
