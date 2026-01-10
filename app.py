@@ -556,6 +556,18 @@ def get_report_counts():
     return counts
 
 
+@socketio.on("connect")
+def handle_connect():
+    """Handle client connection - send initial state"""
+    logger.info("Client connected")
+    # Send auto scan status to newly connected client
+    emit("auto_scan_status", auto_scan_config)
+    # Send version information
+    emit("versions", get_versions())
+    # Send history counts
+    emit("history_counts", get_report_counts())
+
+
 @socketio.on("get_history_counts")
 def get_history_counts_event():
     """Send report counts per customer to the client"""
