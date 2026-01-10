@@ -286,16 +286,101 @@
         </div>
     </div>
 
-    <!-- Customer Management Compact -->
-    <div class="mt-4 flex items-center justify-between px-1">
-        <div class="flex items-center gap-2">
-            <select id="customer-quick-add" class="px-3 py-1 bg-olive-100 border border-olive-300 rounded text-olive-700">
-                <option value="">Unassigned</option>
-            </select>
-            <button onclick="showCustomerForm()" class="px-3 py-1 bg-olive-600 text-white text-sm rounded hover:bg-olive-700 transition-colors">
-                + Add Customer
-            </button>
+    <div class="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-olive-200">
+        <div class="flex flex-col md:flex-row md:items-end gap-6">
+            <div class="flex-1 space-y-2">
+                <label for="scan-target" class="block text-xs font-bold uppercase tracking-wider text-olive-600 ml-1">Network Target</label>
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-olive-400 group-focus-within:text-olive-600 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                    </div>
+                    <input type="text" id="scan-target" class="w-full pl-11 pr-12 py-3 bg-olive-50 border-2 border-olive-100 rounded-xl text-olive-900 placeholder-olive-400 focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none" placeholder="192.168.1.0/24 or techmore.io" aria-label="Network target for scanning">
+                    <span id="info-icon" class="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-olive-300 hover:text-olive-600 transition-colors" title="Scan information">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </span>
+                    <div id="tooltip" class="hidden absolute top-full right-0 mt-3 w-64 bg-olive-900 text-white p-4 rounded-xl shadow-xl border border-olive-800 text-xs z-50 leading-relaxed">
+                        <p class="font-bold text-olive-400 mb-1 uppercase tracking-tighter">Valid Target Formats:</p>
+                        <ul class="space-y-1 opacity-90">
+                            <li>• IPv4 (e.g. 192.168.1.1)</li>
+                            <li>• Ranges (e.g. 192.168.1.1-254)</li>
+                            <li>• CIDR (e.g. 192.168.1.0/24)</li>
+                            <li>• Hostnames (e.g. scanme.nmap.org)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full md:w-64 space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <label for="customer-quick-add" class="block text-xs font-bold uppercase tracking-wider text-olive-600">Client Profile</label>
+                    <button onclick="showCustomerForm()" class="text-[10px] font-bold text-olive-600 hover:text-olive-800 uppercase tracking-wider underline underline-offset-4 decoration-olive-200 hover:decoration-olive-400 transition-all">
+                        + New Client
+                    </button>
+                </div>
+                <div class="relative">
+                    <select id="customer-quick-add" class="w-full appearance-none pl-4 pr-10 py-3 bg-olive-100 border-2 border-transparent rounded-xl text-olive-900 font-medium focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none cursor-pointer" aria-label="Select customer profile">
+                        <option value="">Unassigned Network</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-olive-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full md:w-auto">
+                <button id="start-scan-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Initialize network discovery">
+                    <span>Execute Scan</span>
+                    <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    </svg>
+                </button>
+            </div>
         </div>
+
+        <div class="mt-6 pt-6 border-t border-olive-100 flex flex-wrap items-center justify-between gap-6">
+            <div class="flex items-center gap-2">
+                <button id="stop-scan-btn" class="px-5 py-2 rounded-full bg-olive-100 text-olive-600 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-widest transition-all active:scale-95" aria-label="Terminate scanning operations">
+                    Stop
+                </button>
+                <div class="h-4 w-px bg-olive-200 mx-1"></div>
+                <button id="suspend-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Pause scan">
+                    Pause
+                </button>
+                <button id="resume-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Resume scan">
+                    Resume
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div id="last-scan-container" class="hidden flex items-center gap-3 px-4 py-2 bg-oatmeal-50 rounded-full border border-olive-100">
+                    <span class="text-[9px] font-black uppercase tracking-tighter text-olive-400">Baseline Health</span>
+                    <span id="last-scan-days" class="text-xs font-bold text-olive-900">--</span>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <button id="generate-report-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group" aria-label="Generate comprehensive PDF report">
+                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Export PDF
+                    </button>
+                    <button id="view-history-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group relative" aria-label="View historical scan archives">
+                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Archive
+                        <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3 ml-4">
+                    <label class="flex items-center cursor-pointer group">
+                        <input type="checkbox" id="auto-scan-toggle" class="sr-only peer" aria-label="Enable automated daily scans">
+                        <div class="relative w-10 h-5 bg-olive-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-olive-600"></div>
+                        <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 group-hover:text-olive-800 transition-colors">Auto-Monitor</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
         <div id="last-scan-container" class="hidden flex items-center gap-2">
             <span class="text-[10px] uppercase tracking-wider text-olive-500 font-bold">Last Report</span>
             <span id="last-scan-days" class="px-3 py-1 rounded-full text-xs font-medium transition-all">--</span>
@@ -463,57 +548,103 @@
         </div>
     </div>
 
-    <!-- Scan Input & Controls -->
-    <div class="mt-6 flex flex-wrap items-center gap-4">
-        <div class="relative flex-1 min-w-[250px]">
-            <input type="text" id="scan-target" class="w-full" placeholder="Enter target IP or range">
-            <span id="info-icon" class="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-olive-400 hover:text-olive-600 transition-colors">?</span>
-            <div id="tooltip" class="hidden absolute top-full right-0 mt-2 bg-olive-50 p-3 rounded-lg shadow-lg border border-olive-300 text-sm text-olive-800 z-10">
-                You can use IP, range, or CIDR for scanning.
+    <!-- Scan Command Center -->
+    <div class="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-olive-200">
+        <div class="flex flex-col md:flex-row md:items-end gap-6">
+            <!-- Target Input Group -->
+            <div class="flex-1 space-y-2">
+                <label for="scan-target" class="block text-xs font-bold uppercase tracking-wider text-olive-600 ml-1">Network Target</label>
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-olive-400 group-focus-within:text-olive-600 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                    </div>
+                    <input type="text" id="scan-target" class="w-full pl-11 pr-12 py-3 bg-olive-50 border-2 border-olive-100 rounded-xl text-olive-900 placeholder-olive-400 focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none" placeholder="192.168.1.0/24 or techmore.io" aria-label="Network target for scanning">
+                    <span id="info-icon" class="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-olive-300 hover:text-olive-600 transition-colors" title="Scan information">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </span>
+                    <div id="tooltip" class="hidden absolute top-full right-0 mt-3 w-64 bg-olive-900 text-white p-4 rounded-xl shadow-xl border border-olive-800 text-xs z-50 leading-relaxed">
+                        <p class="font-bold text-olive-400 mb-1 uppercase tracking-tighter">Valid Target Formats:</p>
+                        <ul class="space-y-1 opacity-90">
+                            <li>• IPv4 (e.g. 192.168.1.1)</li>
+                            <li>• Ranges (e.g. 192.168.1.1-254)</li>
+                            <li>• CIDR (e.g. 192.168.1.0/24)</li>
+                            <li>• Hostnames (e.g. scanme.nmap.org)</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
-        </div>
-        <button id="start-scan-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-950 text-white hover:bg-olive-800 font-medium py-2 px-5 text-sm transition-colors">
-            Start Scan
-        </button>
-    </div>
 
-    <!-- Scan Control Buttons -->
-    <div class="mt-4 flex flex-wrap gap-3">
-        <button id="stop-scan-btn" class="inline-flex items-center justify-center rounded-full bg-olive-900 text-white hover:bg-red-900 font-medium py-2 px-4 text-sm transition-all focus:ring-2 focus:ring-red-500 focus:outline-none" aria-label="Stop current scan">
-            Stop Scan
-        </button>
-        <button id="suspend-scan-btn" class="inline-flex items-center justify-center rounded-full bg-olive-400 text-white hover:bg-olive-500 font-medium py-2 px-4 text-sm transition-colors">
-            Suspend Scan
-        </button>
-        <button id="resume-scan-btn" class="inline-flex items-center justify-center rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors">
-            Resume Scan
-        </button>
-        <div class="flex flex-col items-center">
-            <button id="generate-report-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-700 text-white hover:bg-olive-800 font-medium py-2 px-4 text-sm transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Generate Report
-            </button>
-            <div id="last-scan-duration" class="mt-1 text-[10px] text-olive-600 font-medium hidden">
-                TLL: --
+            <!-- Client Selection Group -->
+            <div class="w-full md:w-64 space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <label for="customer-quick-add" class="block text-xs font-bold uppercase tracking-wider text-olive-600">Client Profile</label>
+                    <button onclick="showCustomerForm()" class="text-[10px] font-bold text-olive-600 hover:text-olive-800 uppercase tracking-wider underline underline-offset-4 decoration-olive-200 hover:decoration-olive-400 transition-all">
+                        + New Client
+                    </button>
+                </div>
+                <div class="relative">
+                    <select id="customer-quick-add" class="w-full appearance-none pl-4 pr-10 py-3 bg-olive-100 border-2 border-transparent rounded-xl text-olive-900 font-medium focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none cursor-pointer" aria-label="Select customer profile">
+                        <option value="">Unassigned Network</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-olive-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Primary Action -->
+            <div class="w-full md:w-auto">
+                <button id="start-scan-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Initialize network discovery">
+                    <span>Execute Scan</span>
+                    <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    </svg>
+                </button>
             </div>
         </div>
-        <button id="view-history-btn" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-600 text-white hover:bg-olive-700 font-medium py-2 px-4 text-sm transition-colors relative">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Report History
-            <span id="history-badge" class="hidden absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-sm">0</span>
-        </button>
-        <div class="flex items-center gap-2">
-            <label class="flex items-center cursor-pointer">
-                <input type="checkbox" id="auto-scan-toggle" class="sr-only peer">
-                <div class="relative w-11 h-6 bg-olive-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-olive-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive-600"></div>
-                <span class="ml-3 text-sm font-medium text-olive-900">Auto Scan</span>
-            </label>
-            <div id="auto-scan-times" class="hidden text-xs text-olive-600 bg-olive-100 px-2 py-1 rounded">
-                <span id="auto-scan-window">--:-- to --:--</span>
+
+        <!-- Secondary Controls & Status -->
+        <div class="mt-6 pt-6 border-t border-olive-100 flex flex-wrap items-center justify-between gap-6">
+            <div class="flex items-center gap-2">
+                <button id="stop-scan-btn" class="px-5 py-2 rounded-full bg-olive-100 text-olive-600 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-widest transition-all active:scale-95" aria-label="Terminate scanning operations">
+                    Stop
+                </button>
+                <div class="h-4 w-px bg-olive-200 mx-1"></div>
+                <button id="suspend-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Pause scan">
+                    Pause
+                </button>
+                <button id="resume-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Resume scan">
+                    Resume
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div id="last-scan-container" class="hidden flex items-center gap-3 px-4 py-2 bg-oatmeal-50 rounded-full border border-olive-100">
+                    <span class="text-[9px] font-black uppercase tracking-tighter text-olive-400">Baseline Health</span>
+                    <span id="last-scan-days" class="text-xs font-bold text-olive-900">--</span>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <button id="generate-report-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group" aria-label="Generate comprehensive PDF report">
+                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Export PDF
+                    </button>
+                    <button id="view-history-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group relative" aria-label="View historical scan archives">
+                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Archive
+                        <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3 ml-4">
+                    <label class="flex items-center cursor-pointer group">
+                        <input type="checkbox" id="auto-scan-toggle" class="sr-only peer" aria-label="Enable automated daily scans">
+                        <div class="relative w-10 h-5 bg-olive-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-olive-600"></div>
+                        <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 group-hover:text-olive-800 transition-colors">Auto-Monitor</span>
+                    </label>
+                </div>
             </div>
         </div>
     </div>
