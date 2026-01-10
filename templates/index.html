@@ -1378,9 +1378,23 @@
             // Add other columns
             ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
                 const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
-                cell.textContent = result[col] || '';
                 cell.className = 'px-4 py-3 text-olive-900';
-                if (col === 'open_ports') cell.classList.add('open-ports-cell');
+
+                // Format open_ports and cves with line breaks
+                if (col === 'open_ports' || col === 'cves') {
+                    const value = result[col] || '';
+                    if (value) {
+                        // Split by comma and create divs for each item
+                        const items = value.split(',').map(item => item.trim()).filter(item => item);
+                        cell.innerHTML = items.map(item => `<div class="whitespace-nowrap">${item}</div>`).join('');
+                    } else {
+                        cell.textContent = '';
+                    }
+                    if (col === 'open_ports') cell.classList.add('open-ports-cell');
+                } else {
+                    cell.textContent = result[col] || '';
+                }
+
                 if (col === 'mac') cell.classList.add('font-mono', 'text-xs');
                 if (col === 'vendor') cell.classList.add('text-olive-600');
                 if (col === 'hostname') {
