@@ -583,19 +583,36 @@
         // Set current date and time
         function updateDateTime() {
             const now = new Date();
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
             };
             document.getElementById('current-date-time').textContent = now.toLocaleDateString('en-US', options);
         }
-        updateDateTime();
-        // Update every minute to keep time current
-        setInterval(updateDateTime, 60000);
+
+        // Initialize clock with precise minute-boundary updates
+        function startPreciseClock() {
+            // Update immediately on page load
+            updateDateTime();
+
+            // Calculate milliseconds until next minute boundary (:00 seconds)
+            const now = new Date();
+            const secondsUntilNextMinute = 60 - now.getSeconds();
+            const msUntilNextMinute = secondsUntilNextMinute * 1000 - now.getMilliseconds();
+
+            // Schedule first update at minute boundary
+            setTimeout(() => {
+                updateDateTime();
+                // Then update every minute thereafter
+                setInterval(updateDateTime, 60000);
+            }, msUntilNextMinute);
+        }
+
+        startPreciseClock();
 
         var socket = io.connect(`http://${document.domain}:${location.port}`);
         socket.on('connect', () => console.log('Socket.IO connected'));
