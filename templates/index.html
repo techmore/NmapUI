@@ -748,17 +748,11 @@
             <table id="discovery-table" class="min-w-full">
                         <thead>
                             <tr>
-                                <th class="sortable w-12 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="status" data-type="text">
-                                    <div class="flex items-center space-x-1">
-                                        <span></span>
-                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
-                                            </svg>
-                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                            </svg>
-                                        </div>
+                                <th class="sortable w-12 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group bg-olive-100" data-column="status" data-type="text" title="Click any row to view asset details">
+                                    <div class="flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-olive-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
                                     </div>
                                 </th>
                                 <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip">
@@ -1481,17 +1475,21 @@
 
             // Make row clickable (except for the rescan button column)
             newRow.style.cursor = 'pointer';
-            newRow.classList.add('hover:bg-olive-100', 'transition-colors');
+            newRow.classList.add('bg-olive-50', 'hover:bg-olive-200', 'transition-colors', 'border-l-4', 'border-olive-400', 'hover:border-olive-600');
             newRow.addEventListener('click', (e) => {
                 // Don't open modal if clicking the rescan button
                 if (e.target.closest('button')) return;
                 showAssetDetailsModal(result);
             });
 
-            // Add status column first
+            // Add status column first with click indicator icon
             const statusCell = newRow.insertCell(0);
             statusCell.className = 'px-4 py-3 text-center';
-            statusCell.innerHTML = '';
+            statusCell.innerHTML = `
+                <svg class="w-4 h-4 inline-block text-olive-500 group-hover:text-olive-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            `;
 
             // Add other columns
             ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
