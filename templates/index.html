@@ -868,6 +868,11 @@
         });
 
         socket.on('scan_feedback', msg => {
+            // Hide feedback container for standard info messages if they are from recovery
+            if (msg.includes('Loaded') && msg.includes('assets from scan')) {
+                console.log('Suppressed recovery feedback in container');
+                return;
+            }
             const container = document.getElementById('feedback-container');
             // Ensure the container is visible when feedback starts
             container.parentElement.classList.remove('hidden');
