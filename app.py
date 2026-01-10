@@ -1984,9 +1984,8 @@ def generate_report_event(data):
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
 
-        # Use quick scan for auto scans, comprehensive for manual
-        scan_type = "quick" if is_auto_scan else "comprehensive"
-        if not run_nmap_with_xml_output(target, output_base, scan_type):
+        # All reports use comprehensive scan with XSL formatting
+        if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
             emit("report_error", {"error": "Nmap scan failed"})
             return
 
