@@ -1467,15 +1467,6 @@
 
             const newRow = tb.insertRow(-1);
 
-            // Make row clickable (except for the rescan button column)
-            newRow.style.cursor = 'pointer';
-            newRow.classList.add('hover:bg-olive-100', 'transition-colors');
-            newRow.addEventListener('click', (e) => {
-                // Don't open modal if clicking the rescan button
-                if (e.target.closest('button')) return;
-                showAssetDetailsModal(result);
-            });
-
             // Add status column first (keep empty for status indicators)
             const statusCell = newRow.insertCell(0);
             statusCell.className = 'px-4 py-3 text-center';
@@ -1484,7 +1475,7 @@
             // Add other columns
             ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
                 const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
-                cell.className = 'px-4 py-3 text-olive-700 font-semibold hover:text-olive-950';
+                cell.className = 'px-4 py-3 text-olive-900';
 
                 // Format open_ports, version, and cves with line breaks
                 if (col === 'open_ports' || col === 'version' || col === 'cves') {
@@ -1492,7 +1483,15 @@
                     if (value) {
                         // Split by comma and create divs for each item
                         const items = value.split(',').map(item => item.trim()).filter(item => item);
-                        cell.innerHTML = items.map(item => `<div class="whitespace-nowrap">${item}</div>`).join('');
+
+                        // Make CVEs clickable with purple color
+                        if (col === 'cves') {
+                            cell.innerHTML = items.map(item =>
+                                `<div class="whitespace-nowrap text-purple-600 hover:text-purple-800 cursor-pointer underline" onclick="event.stopPropagation(); showAssetDetailsModal(window.assetData['${result.ip}'])">${item}</div>`
+                            ).join('');
+                        } else {
+                            cell.innerHTML = items.map(item => `<div class="whitespace-nowrap">${item}</div>`).join('');
+                        }
                     } else {
                         cell.textContent = '';
                     }
