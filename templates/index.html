@@ -528,6 +528,36 @@
         </div>
     </div>
 
+    <!-- Historical Data Banner (hidden by default) -->
+    <div id="historical-data-banner" class="mt-8 hidden">
+        <div class="bg-olive-100 border-l-4 border-olive-600 p-4 rounded-lg shadow-sm">
+            <div class="flex items-start justify-between">
+                <div class="flex items-start space-x-3">
+                    <span class="text-2xl">📅</span>
+                    <div class="flex-1">
+                        <h3 class="font-medium text-olive-900">
+                            <span id="historical-title">Historical Scan Data</span>
+                        </h3>
+                        <p class="text-sm text-olive-700 mt-1">
+                            <span id="historical-details"></span>
+                        </p>
+                        <div class="flex items-center space-x-4 mt-2 text-xs text-olive-600">
+                            <span id="historical-hosts"></span>
+                            <span id="historical-vulns"></span>
+                            <span id="historical-exploits"></span>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="runNewScanFromBanner()" class="ml-4 inline-flex items-center px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white text-sm font-medium rounded-lg transition-colors">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Run New Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Results Table -->
     <div class="mt-8 bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-hidden">
         <table id="discovery-table" class="min-w-full">
@@ -770,6 +800,34 @@
             window.currentMatchedCustomerId = data.id ? String(data.id) : '';
             updateCustomerSelection(data);
             updateDropdownSelection(window.currentMatchedCustomerId, data.name);
+
+            // Check for resumable scan data when customer is identified
+            if (data.id && data.id !== 'unknown') {
+                socket.emit('check_resumable_scan', {
+                    customer_id: data.id,
+                    max_days: 7
+                });
+            }
+        });
+
+        // Historical data / asset resume socket handlers
+        socket.on('resumable_scan_check', data => {
+            if (data.available) {
+                console.log('Resumable scan available:', data);
+                // Auto-resume from last scan
+                socket.emit('resume_from_last_scan', {
+                    customer_id: window.currentMatchedCustomerId,
+                    max_days: 7
+                });
+            } else {
+                // No historical data available, hide banner
+                hideHistoricalDataBanner();
+            }
+        });
+
+        socket.on('resume_scan_error', data => {
+            console.error('Resume scan error:', data.error);
+            hideHistoricalDataBanner();
         });
 
         socket.on('versions', data => {
@@ -1027,7 +1085,19 @@
             // Refresh history counts as a new metadata file was likely saved
             socket.emit('get_history_counts');
         });
-        socket.on('scan_results', hosts => populateTableWithResults(hosts));
+        socket.on('scan_results', function(data) {
+            // Handle both old format (array) and new format (object with metadata)
+            const hosts = Array.isArray(data) ? data : data.hosts;
+            const isHistorical = data.is_historical || false;
+
+            if (isHistorical) {
+                showHistoricalDataBanner(data);
+            } else {
+                hideHistoricalDataBanner();
+            }
+
+            populateTableWithResults(hosts);
+        });
         
         // Report Generation socket listeners
         socket.on('report_complete', function(data) {
@@ -1112,6 +1182,67 @@
         document.getElementById('info-icon').addEventListener('click', () => {
             document.getElementById('tooltip').classList.toggle('hidden');
         });
+
+        // Historical Data Functions
+        function showHistoricalDataBanner(data) {
+            const banner = document.getElementById('historical-data-banner');
+            const title = document.getElementById('historical-title');
+            const details = document.getElementById('historical-details');
+            const hosts = document.getElementById('historical-hosts');
+            const vulns = document.getElementById('historical-vulns');
+            const exploits = document.getElementById('historical-exploits');
+
+            // Calculate age and format message
+            const ageDays = data.age_days || 0;
+            let ageText = '';
+            let bannerColor = 'bg-olive-100 border-olive-600'; // Default
+
+            if (ageDays === 0) {
+                ageText = 'today';
+                title.textContent = 'Scan from Today';
+                bannerColor = 'bg-olive-100 border-olive-600';
+            } else if (ageDays === 1) {
+                ageText = 'yesterday';
+                title.textContent = 'Scan from Yesterday';
+                bannerColor = 'bg-amber-50 border-amber-500';
+            } else {
+                ageText = `${ageDays} days ago`;
+                title.textContent = `Scan from ${ageDays} Days Ago`;
+                bannerColor = 'bg-amber-100 border-amber-600';
+            }
+
+            // Format scan date
+            const scanDate = new Date(data.scan_date);
+            const dateStr = scanDate.toLocaleString();
+
+            details.textContent = `Scanned ${ageText} on ${dateStr} • Target: ${data.target || 'Unknown'}`;
+            hosts.textContent = `📊 ${data.total || 0} hosts`;
+            vulns.textContent = `🔒 ${data.total_vulnerabilities || 0} CVEs`;
+            exploits.textContent = `⚠️  ${data.total_exploits || 0} exploits`;
+
+            // Update banner styling based on age
+            const bannerInner = banner.querySelector('div');
+            bannerInner.className = `${bannerColor} border-l-4 p-4 rounded-lg shadow-sm`;
+
+            // Show the banner
+            banner.classList.remove('hidden');
+        }
+
+        function hideHistoricalDataBanner() {
+            const banner = document.getElementById('historical-data-banner');
+            banner.classList.add('hidden');
+        }
+
+        function runNewScanFromBanner() {
+            // Trigger the main scan with current target
+            const target = document.getElementById('scan-target').value;
+            if (target) {
+                hideHistoricalDataBanner();
+                socket.emit('start_scan', { target });
+            } else {
+                alert('Please enter a target IP or network range');
+            }
+        }
 
         // Customer Management Functions
         function showCustomerForm() {
