@@ -389,6 +389,26 @@
         </div>
     </div>
 
+    <!-- Asset Details Modal -->
+    <div id="asset-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center">
+                <h2 id="asset-modal-title" class="text-2xl font-display italic text-olive-900">Asset Details</h2>
+                <button onclick="hideAssetModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div id="asset-modal-content" class="space-y-6">
+                    <!-- Asset details will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Update Modal -->
     <div id="update-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-lg max-w-2xl w-full flex flex-col shadow-2xl border border-olive-300">
@@ -1380,8 +1400,8 @@
                 const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
                 cell.className = 'px-4 py-3 text-olive-900';
 
-                // Format open_ports and cves with line breaks
-                if (col === 'open_ports' || col === 'cves') {
+                // Format open_ports, version, and cves with line breaks
+                if (col === 'open_ports' || col === 'version' || col === 'cves') {
                     const value = result[col] || '';
                     if (value) {
                         // Split by comma and create divs for each item
