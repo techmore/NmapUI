@@ -2028,8 +2028,9 @@ def parse_scan_xml_for_assets(xml_path):
                 if hostname is not None:
                     asset["hostname"] = hostname.get('name', '')
 
-            # Extract open ports and vulnerabilities
+            # Extract open ports, versions, and vulnerabilities
             ports_elem = host.find('ports')
+            version_info = []
             if ports_elem is not None:
                 open_ports = []
                 for port in ports_elem.findall('port'):
@@ -2039,12 +2040,20 @@ def parse_scan_xml_for_assets(xml_path):
                         service = port.find('service')
                         service_name = service.get('name', '') if service is not None else ''
                         service_product = service.get('product', '') if service is not None else ''
+                        service_version = service.get('version', '') if service is not None else ''
 
                         # Format port with service name
                         if service_name:
                             open_ports.append(f"{port_id} ({service_name})")
                         else:
                             open_ports.append(port_id)
+
+                        # Collect version information
+                        if service_product:
+                            version_str = service_product
+                            if service_version:
+                                version_str += f" {service_version}"
+                            version_info.append(f"{port_id}:{version_str}")
 
                         # Extract vulnerability data from vulners script
                         for script in port.findall('script'):
@@ -2053,6 +2062,21 @@ def parse_scan_xml_for_assets(xml_path):
                                 asset["vulnerabilities"].extend(vulns)
 
                 asset["ports"] = ", ".join(open_ports)
+
+            # Transform to match frontend expected format
+            asset["open_ports"] = asset["ports"]  # Frontend expects 'open_ports'
+            asset["version"] = ", ".join(version_info) if version_info else ""
+
+            # Format CVEs as comma-separated string with counts
+            cve_list = [v.get('cve_id', '') for v in asset["vulnerabilities"] if v.get('cve_id')]
+            if cve_list:
+                # Show count if more than 3, otherwise show all
+                if len(cve_list) > 3:
+                    asset["cves"] = f"{len(cve_list)} CVEs found"
+                else:
+                    asset["cves"] = ", ".join(cve_list[:3])
+            else:
+                asset["cves"] = ""
 
             # Only add assets that have an IP address
             if asset["ip"]:
