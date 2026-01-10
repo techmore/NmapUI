@@ -504,24 +504,53 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                         </svg>
                     </button>
-                    <button id="deep-scan-btn" onclick="startDeepScan()" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Initialize deep vulnerability scan">
-                        <span>Deep Scan</span>
+                    <button id="generate-report-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Generate comprehensive PDF report">
+                        <span>Generate PDF</span>
                         <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
+                    </button>
+                </div>
+                <div id="last-scan-duration" class="text-center text-[10px] text-olive-500 font-bold uppercase tracking-widest hidden">
+                    Last Duration: <span id="last-scan-time-val">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Secondary Controls & Status -->
+        <div class="mt-6 pt-6 border-t border-olive-100 flex flex-wrap items-center justify-between gap-6">
+            <div class="flex items-center gap-2">
+                <button id="stop-scan-btn" class="px-5 py-2 rounded-full bg-olive-100 text-olive-600 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-widest transition-all active:scale-95" aria-label="Terminate scanning operations">
+                    Stop
+                </button>
+                <div class="h-4 w-px bg-olive-200 mx-1"></div>
+                <button id="suspend-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Pause scan">
+                    Pause
+                </button>
+                <button id="resume-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Resume scan">
+                    Resume
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div id="last-scan-container" class="hidden flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-olive-100">
+                    <span class="text-[9px] font-black uppercase tracking-tighter text-olive-400">Baseline Health</span>
+                    <span id="last-scan-days" class="text-xs font-bold text-olive-900">--</span>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <button id="view-history-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group relative" aria-label="View historical scan archives">
+                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Archive
+                        <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
                     </button>
                 </div>
                 <div id="last-scan-duration" class="text-center text-[10px] text-olive-500 font-bold uppercase tracking-widest hidden">
                     Last: <span id="last-scan-time-val">--</span>
                 </div>
             </div>
-                <div id="last-scan-duration" class="text-center text-[10px] text-olive-500 font-bold uppercase tracking-widest hidden">
-                    Last: <span id="last-scan-time-val">--</span>
-                </div>
-            </div>
         </div>
 
-        <!-- Secondary Controls & Status -->
         <div class="mt-6 pt-6 border-t border-olive-100 flex flex-wrap items-center justify-between gap-6">
             <div class="flex items-center gap-2">
                 <button id="stop-scan-btn" class="px-5 py-2 rounded-full bg-olive-100 text-olive-600 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-widest transition-all active:scale-95" aria-label="Terminate scanning operations">
@@ -543,10 +572,6 @@
                 </div>
                 
                 <div class="flex items-center gap-6">
-                    <button id="generate-report-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group" aria-label="Generate comprehensive PDF report">
-                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        Export PDF
-                    </button>
                     <button id="view-history-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group relative" aria-label="View historical scan archives">
                         <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         Archive
