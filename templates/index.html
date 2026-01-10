@@ -1327,10 +1327,22 @@
             console.log('Customer identified:', data);
             // Update dropdown to show auto-detected customer
             if (data.customer && data.customer.id) {
+                // Store globally for resume functionality
+                window.currentMatchedCustomerId = String(data.customer.id);
+
                 updateDropdownSelection(data.customer.id, data.customer.name);
+
                 // Show confidence info if available
                 if (data.customer.confidence !== undefined) {
                     console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
+                }
+
+                // Check for resumable scan data when customer is auto-identified
+                if (data.customer.id !== 'unknown') {
+                    socket.emit('check_resumable_scan', {
+                        customer_id: data.customer.id,
+                        max_days: 7
+                    });
                 }
             }
         });
