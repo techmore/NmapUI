@@ -165,10 +165,29 @@
         </div>
         <div id="current-date-time" class="text-xl font-display text-olive-950 text-center"></div>
         <div class="flex items-center gap-8">
-            <div id="versions" class="text-sm text-olive-600 space-y-1 text-right">
-                <div id="nmap-version">Nmap: --</div>
-                <div id="vulners-version">Vulners: --</div>
-                <div id="arpscan-version">ARP-Scan: --</div>
+            <div class="relative group">
+                <button class="flex items-center justify-center w-8 h-8 rounded-full bg-olive-100 text-olive-600 hover:bg-olive-200 hover:text-olive-800 transition-all focus:ring-2 focus:ring-olive-500 focus:outline-none" aria-label="Software version information">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </button>
+                <div id="versions" class="invisible group-hover:visible absolute right-0 top-full mt-2 w-64 bg-olive-950 text-white p-4 rounded-xl shadow-xl border border-olive-800 z-50 transition-all opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 origin-top-right">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-olive-400 mb-3">Software Stack</h4>
+                    <div class="space-y-3 text-xs">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-olive-500 font-medium">Nmap Engine</span>
+                            <div id="nmap-version" class="font-mono bg-olive-900 p-2 rounded border border-olive-800 break-words">Nmap: --</div>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-olive-500 font-medium">Vulners Database</span>
+                            <div id="vulners-version" class="font-mono bg-olive-900 p-2 rounded border border-olive-800 break-words">Vulners: --</div>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-olive-500 font-medium">ARP-Scan Utility</span>
+                            <div id="arpscan-version" class="font-mono bg-olive-900 p-2 rounded border border-olive-800 break-words">ARP-Scan: --</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
