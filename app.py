@@ -290,9 +290,13 @@ def execute_auto_scan():
     customer_name = customer_name.split(" (")[0]  # Remove confidence
 
     try:
-        # Trigger the same report generation process
+        # Trigger visual feedback (pulsing) on generate report button
+        safe_emit("start_report_generation", {"auto_scan": True})
+
+        # Trigger the same report generation process with auto_scan flag
         socketio.emit(
-            "generate_report", {"target": target, "customer_name": customer_name}
+            "generate_report",
+            {"target": target, "customer_name": customer_name, "auto_scan": True},
         )
 
         auto_scan_config["last_run"] = datetime.now().isoformat()
@@ -1642,40 +1646,72 @@ def create_scan_folder(customer_name, target):
     return scan_dir
 
 
-def run_nmap_with_xml_output(target, output_base):
+def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
     """Run nmap with all formats output (-oA)"""
-    logger.info(f"Running comprehensive scan on {target}...")
+
+    if scan_type == "quick":
+        logger.info(f"Running quick scan on {target}...")
+        cmd = [
+            "nmap",
+            "-sS",  # SYN scan
+            "-T3",  # Polite timing
+            "--top-ports",
+            "100",  # Top 100 ports only
+            "-oA",
+            str(output_base),
+            target,
+        ]
+        timeout_seconds = 180  # 3 minutes for quick scan
+    else:
+        logger.info(f"Running comprehensive scan on {target}...")
+        cmd = [
+            "nmap",
+            "-sS",
+            "-T4",
+            "-A",
+            "-sC",
+            "--script",
+            str(VULNERS_SCRIPT),
+            "--stylesheet",
+            str(XSL_STYLESHEET_PDF),
+            "-oA",
+            str(output_base),
+            target,
+        ]
+        timeout_seconds = 600  # 10 minutes for comprehensive scan
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout_seconds
+        )
+        return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        logger.error(f"Nmap scan timed out after {timeout_seconds} seconds on {target}")
+        return False
+
+
+def run_quick_auto_scan(target, output_base):
+    """Run a quick scan suitable for automated overnight scanning"""
+    logger.info(f"Running auto scan on {target}...")
 
     cmd = [
         "nmap",
-        "-sS",
-        "-T4",
-        "-A",
-        "-sC",
-        "--script",
-        str(VULNERS_SCRIPT),
-        "--stylesheet",
-        str(XSL_STYLESHEET_PDF),
+        "-sS",  # SYN scan
+        "-T3",  # Polite timing (not aggressive)
+        "--top-ports",
+        "50",  # Only top 50 ports for speed
         "-oA",
         str(output_base),
         target,
     ]
 
-    # Check if running as root for -sS
-    if os.geteuid() != 0:
-        cmd.insert(0, "sudo")
-
-    # Emit the command to the frontend console and logger
-    command_str = " ".join(cmd)
-    socketio.emit("scan_feedback", f"Executing: {command_str}")
-    logger.info(f"Executing: {command_str}")
-    socketio.sleep(0)
-
     try:
-        subprocess.run(cmd, check=True, timeout=600)
-        return True
-    except Exception as e:
-        logger.error(f"Nmap scan failed: {e}")
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120
+        )  # 2 minute timeout
+        return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        logger.error(f"Auto scan timed out after 120 seconds on {target}")
         return False
 
 
@@ -1923,6 +1959,7 @@ def generate_report_event(data):
     """Handle report generation request via SocketIO"""
     idle_state_manager.start_operation("report_generation")
     target = data.get("target")
+    is_auto_scan = data.get("auto_scan", False)
 
     # Use the provided customer name or fall back to the currently identified one
     customer_name = data.get("customer_name")
@@ -1947,7 +1984,9 @@ def generate_report_event(data):
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
 
-        if not run_nmap_with_xml_output(target, output_base):
+        # Use quick scan for auto scans, comprehensive for manual
+        scan_type = "quick" if is_auto_scan else "comprehensive"
+        if not run_nmap_with_xml_output(target, output_base, scan_type):
             emit("report_error", {"error": "Nmap scan failed"})
             return
 

@@ -1818,6 +1818,15 @@
         socket.on('auto_scan_error', function(data) {
             showReportStatus(`Automatic scan error: ${data.error}`, 'error');
         });
+
+        // Handle report generation start (for pulsing effect)
+        socket.on('start_report_generation', function(data) {
+            const generateBtn = document.getElementById('generate-report-btn');
+            if (generateBtn) {
+                generateBtn.classList.add('card-pulsing');
+                startReportTimer();
+            }
+        });
     </script>
 
     <!-- Auto Scan Time Modal -->
