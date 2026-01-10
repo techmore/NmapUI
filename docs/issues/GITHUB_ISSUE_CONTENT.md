@@ -163,5 +163,5 @@ brew install gh
 gh auth login
 
 # Create issue directly
-gh issue create --title "Feature: Resume asset display from previous scan with date indication" --body "$(cat GITHUB_ISSUE_CONTENT.md)"
+gh issue create --title "Feature: Resume asset display from previous scan with date indication" --body "$(cat docs/issues/GITHUB_ISSUE_CONTENT.md)"
 ```

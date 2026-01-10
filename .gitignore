@@ -4,6 +4,7 @@ oatmeal-olive-instrument/
 __pycache__/
 *.pyc
 data/scans/
+scans/
 config/customers.yaml
 data/*.json
 
@@ -30,3 +31,5 @@ logs/
 # Environment
 .env
 .env.local
+.claude
+reports/

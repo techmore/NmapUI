@@ -119,6 +119,34 @@
             opacity: 0;
         }
     }
+
+    /* Sortable table styles */
+    .sortable {
+        user-select: none;
+    }
+
+    .sortable:hover .sort-indicators {
+        opacity: 1 !important;
+    }
+
+    .sorted-asc .sort-asc {
+        color: oklch(22% 0.025 110); /* olive-800 equivalent */
+    }
+
+    .sorted-desc .sort-desc {
+        color: oklch(22% 0.025 110); /* olive-800 equivalent */
+    }
+
+    .sort-indicators {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-left: 0.25rem;
+    }
+
+    .sort-asc, .sort-desc {
+        transition: color 0.2s ease;
+    }
 </style>
 <body class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header with Title -->
@@ -563,14 +591,110 @@
         <table id="discovery-table" class="min-w-full">
                         <thead>
                             <tr>
-                                <th class="w-12 px-4 py-3 text-left"></th>
-                                <th class="px-4 py-3 text-left">IP Address</th>
-                                <th class="px-4 py-3 text-left hidden md:table-cell">MAC Address</th>
-                                <th class="px-4 py-3 text-left hidden lg:table-cell">Vendor</th>
-                                <th class="px-4 py-3 text-left max-w-[150px]">Hostname</th>
-                                <th class="px-4 py-3 text-left">Open Ports</th>
-                                <th class="px-4 py-3 text-left">Version</th>
-                                <th class="px-4 py-3 text-left">CVEs</th>
+                                <th class="sortable w-12 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="status" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span></span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip">
+                                    <div class="flex items-center space-x-1">
+                                        <span>IP Address</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left hidden md:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac">
+                                    <div class="flex items-center space-x-1">
+                                        <span>MAC Address</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left hidden lg:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="vendor" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Vendor</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left max-w-[150px] cursor-pointer hover:bg-olive-100 transition-colors group" data-column="hostname" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Hostname</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="open_ports" data-type="ports">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Open Ports</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="version" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Version</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="cves" data-type="number">
+                                    <div class="flex items-center space-x-1">
+                                        <span>CVEs</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
                                 <th class="px-4 py-3 text-left">Actions</th>
                             </tr>
                         </thead>
@@ -721,6 +845,7 @@
                     break;
                 }
             }
+            if (window.tableSorter) window.tableSorter.resort();
         });
 
         socket.on('service_info', data => {
@@ -731,6 +856,7 @@
                     break;
                 }
             }
+            if (window.tableSorter) window.tableSorter.resort();
         });
 
         socket.on('quickscan_results', data => {
@@ -739,7 +865,10 @@
             document.getElementById('quick-hosts').textContent = data.hosts_up;
         });
 
-        socket.on('deep_scan_results', data => data.forEach(updateRowWithResults));
+        socket.on('deep_scan_results', data => {
+            data.forEach(updateRowWithResults);
+            if (window.tableSorter) window.tableSorter.resort();
+        });
 
         function updateRowWithResults(host) {
             const tb = document.querySelector('#discovery-table tbody');
@@ -1114,6 +1243,7 @@
             }
 
             populateTableWithResults(hosts);
+            if (window.tableSorter) window.tableSorter.resort();
         });
         
         // Report Generation socket listeners
@@ -1160,6 +1290,7 @@
                     row.cells[3].textContent = data[ip].vendor; // Vendor is now column 3
                 }
             }
+            if (window.tableSorter) window.tableSorter.resort();
         });
 
         function populateTableWithResults(data) {
@@ -1986,6 +2117,179 @@
                 generateBtn.classList.add('card-pulsing');
                 startReportTimer();
             }
+        });
+
+        // TableSorter class for sortable table functionality
+        class TableSorter {
+            constructor(tableId) {
+                this.table = document.getElementById(tableId);
+                this.currentSort = { column: null, direction: 'asc' };
+                this.sortFunctions = {
+                    'ip': this.sortIPAddresses.bind(this),
+                    'mac': this.sortMACAddresses.bind(this),
+                    'text': this.sortText.bind(this),
+                    'number': this.sortNumbers.bind(this),
+                    'ports': this.sortPortCount.bind(this)
+                };
+                this.initializeSorting();
+                this.loadSortState();
+            }
+
+            initializeSorting() {
+                const headers = this.table.querySelectorAll('.sortable');
+                headers.forEach(header => {
+                    header.addEventListener('click', () => this.sortByColumn(header));
+                    header.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            this.sortByColumn(header);
+                        }
+                    });
+                    header.setAttribute('tabindex', '0');
+                });
+            }
+
+            sortByColumn(header) {
+                const column = header.dataset.column;
+                const type = header.dataset.type;
+
+                // Toggle sort direction if same column, otherwise default to ascending
+                if (this.currentSort.column === column) {
+                    this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.currentSort.column = column;
+                    this.currentSort.direction = 'asc';
+                }
+
+                this.sortTable(column, type, this.currentSort.direction);
+                this.updateVisualIndicators(header);
+                this.saveSortState();
+            }
+
+            sortTable(column, type, direction) {
+                const tbody = this.table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                rows.sort((a, b) => {
+                    const aValue = this.getCellValue(a, column);
+                    const bValue = this.getCellValue(b, column);
+
+                    const sortFn = this.sortFunctions[type] || this.sortFunctions.text;
+                    const result = sortFn(aValue, bValue);
+
+                    return direction === 'asc' ? result : -result;
+                });
+
+                // Reorder DOM elements
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            sortIPAddresses(a, b) {
+                // Convert IP addresses to comparable numbers
+                const aParts = a.split('.').map(Number);
+                const bParts = b.split('.').map(Number);
+
+                for (let i = 0; i < 4; i++) {
+                    if (aParts[i] !== bParts[i]) {
+                        return aParts[i] - bParts[i];
+                    }
+                }
+                return 0;
+            }
+
+            sortMACAddresses(a, b) {
+                // Remove colons and compare as hex
+                const aHex = a.replace(/:/g, '');
+                const bHex = b.replace(/:/g, '');
+                return parseInt(aHex, 16) - parseInt(bHex, 16);
+            }
+
+            sortText(a, b) {
+                return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+            }
+
+            sortNumbers(a, b) {
+                return parseFloat(a) - parseFloat(b);
+            }
+
+            sortPortCount(a, b) {
+                // Extract port count from "80/tcp, 443/tcp, 22/tcp" format
+                const aCount = (a || '').split(',').length;
+                const bCount = (b || '').split(',').length;
+                return aCount - bCount;
+            }
+
+            getCellValue(row, column) {
+                const columnIndex = this.getColumnIndex(column);
+                const cell = row.cells[columnIndex];
+                return cell ? cell.textContent.trim() : '';
+            }
+
+            getColumnIndex(column) {
+                // Map column names to table indices
+                const columnMap = {
+                    'status': 0,
+                    'ip': 1,
+                    'mac': 2,
+                    'vendor': 3,
+                    'hostname': 4,
+                    'open_ports': 5,
+                    'version': 6,
+                    'cves': 7
+                };
+                return columnMap[column] || 0;
+            }
+
+            updateVisualIndicators(activeHeader) {
+                // Clear all indicators
+                this.table.querySelectorAll('.sortable').forEach(header => {
+                    header.classList.remove('sorted-asc', 'sorted-desc');
+                });
+
+                // Set active indicator
+                const directionClass = this.currentSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc';
+                activeHeader.classList.add(directionClass);
+            }
+
+            saveSortState() {
+                const state = {
+                    column: this.currentSort.column,
+                    direction: this.currentSort.direction,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('tableSortState', JSON.stringify(state));
+            }
+
+            loadSortState() {
+                try {
+                    const state = JSON.parse(localStorage.getItem('tableSortState'));
+                    if (state && state.column) {
+                        this.currentSort = state;
+                        // Apply saved sort
+                        const header = this.table.querySelector(`[data-column="${state.column}"]`);
+                        if (header) {
+                            this.sortTable(state.column, header.dataset.type, state.direction);
+                            this.updateVisualIndicators(header);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to load sort state:', e);
+                }
+            }
+
+            resort() {
+                if (this.currentSort.column) {
+                    const header = this.table.querySelector(`[data-column="${this.currentSort.column}"]`);
+                    if (header) {
+                        this.sortTable(this.currentSort.column, header.dataset.type, this.currentSort.direction);
+                    }
+                }
+            }
+        }
+
+        // Initialize table sorter when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            window.tableSorter = new TableSorter('discovery-table');
         });
     </script>
 
