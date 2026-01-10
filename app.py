@@ -1096,6 +1096,106 @@ def load_current_assignment():
         logger.error(f"Error loading current assignment: {e}")
 
 
+# Asset Resume / Historical Data Socket Events
+@socketio.on("check_resumable_scan")
+def check_resumable_scan_event(data):
+    """
+    Check if there's a recent scan available for resumption.
+    Called when a customer is identified.
+    """
+    customer_id = data.get('customer_id')
+    max_days = data.get('max_days', 7)
+
+    if not customer_id or customer_id == 'unknown':
+        emit('resumable_scan_check', {'available': False})
+        return
+
+    xml_path, metadata = get_most_recent_scan_xml(customer_id, max_days)
+
+    if xml_path and metadata:
+        # Calculate scan age
+        scan_time = datetime.fromisoformat(metadata.get('timestamp'))
+        age_seconds = (datetime.now() - scan_time).total_seconds()
+        age_days = int(age_seconds / (24 * 3600))
+
+        # Parse XML to count assets
+        assets = parse_scan_xml_for_assets(xml_path)
+        total_vulns = sum(len(asset.get('vulnerabilities', [])) for asset in assets)
+
+        emit('resumable_scan_check', {
+            'available': True,
+            'scan_date': metadata.get('timestamp'),
+            'target': metadata.get('target'),
+            'duration': 'N/A',  # Can be calculated if needed
+            'total_hosts': len(assets),
+            'total_vulnerabilities': total_vulns,
+            'age_days': age_days,
+            'age_seconds': int(age_seconds)
+        })
+    else:
+        emit('resumable_scan_check', {'available': False})
+
+
+@socketio.on('resume_from_last_scan')
+def resume_from_last_scan_event(data):
+    """
+    Load and emit assets from the most recent scan XML.
+    """
+    customer_id = data.get('customer_id')
+    max_days = data.get('max_days', 7)
+
+    if not customer_id:
+        emit('resume_scan_error', {'error': 'No customer ID provided'})
+        return
+
+    xml_path, metadata = get_most_recent_scan_xml(customer_id, max_days)
+
+    if not xml_path:
+        emit('resume_scan_error', {'error': 'No recent scan found'})
+        return
+
+    # Parse XML to get assets with vulnerabilities
+    assets = parse_scan_xml_for_assets(xml_path)
+
+    if not assets:
+        emit('resume_scan_error', {'error': 'No assets found in scan'})
+        return
+
+    # Calculate statistics
+    total_vulns = sum(len(asset.get('vulnerabilities', [])) for asset in assets)
+    total_exploits = sum(
+        len([v for v in asset.get('vulnerabilities', []) if v.get('is_exploit')])
+        for asset in assets
+    )
+
+    scan_time = datetime.fromisoformat(metadata.get('timestamp'))
+    age_seconds = (datetime.now() - scan_time).total_seconds()
+    age_days = int(age_seconds / (24 * 3600))
+
+    # Emit assets with metadata indicating it's historical data
+    emit('scan_results', {
+        'hosts': assets,
+        'total': len(assets),
+        'is_historical': True,
+        'scan_date': metadata.get('timestamp'),
+        'target': metadata.get('target'),
+        'age_days': age_days,
+        'total_vulnerabilities': total_vulns,
+        'total_exploits': total_exploits
+    })
+
+    # Send feedback message
+    if age_days == 0:
+        age_str = "today"
+    elif age_days == 1:
+        age_str = "yesterday"
+    else:
+        age_str = f"{age_days} days ago"
+
+    emit('scan_feedback',
+         f"Loaded {len(assets)} assets from scan {age_str} ({total_vulns} vulnerabilities, {total_exploits} exploits)")
+
+
 @socketio.on("get_versions")
 def get_versions_event():
     """Send version information to the client"""
@@ -1858,6 +1958,257 @@ def save_scan_metadata(scan_dir, customer_name, target, files):
 
     with open(scan_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
+
+
+def parse_scan_xml_for_assets(xml_path):
+    """
+    Parse nmap XML file and extract asset data including CVE/vulnerability information.
+
+    Returns:
+        list: Asset data in format matching current scan output with vulnerabilities:
+        [
+            {
+                "ip": "192.168.222.1",
+                "hostname": "unifi.localdomain",
+                "mac": "1E:6A:1B:4B:6F:50",
+                "vendor": "Ubiquiti",
+                "ports": "80 (http), 443 (https)",
+                "status": "up",
+                "vulnerabilities": [
+                    {
+                        "cve_id": "CVE-2025-61985",
+                        "cvss": "3.6",
+                        "type": "cve",
+                        "is_exploit": false,
+                        "port": "22",
+                        "service": "ssh"
+                    },
+                    ...
+                ]
+            },
+            ...
+        ]
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        assets = []
+
+        for host in root.findall('host'):
+            # Skip hosts that are down
+            status = host.find('status')
+            if status is None or status.get('state') != 'up':
+                continue
+
+            asset = {
+                "ip": "",
+                "hostname": "",
+                "mac": "",
+                "vendor": "",
+                "ports": "",
+                "status": "up",
+                "vulnerabilities": []
+            }
+
+            # Extract IP address and MAC
+            for addr in host.findall('address'):
+                if addr.get('addrtype') == 'ipv4':
+                    asset["ip"] = addr.get('addr')
+                elif addr.get('addrtype') == 'mac':
+                    asset["mac"] = addr.get('addr')
+                    asset["vendor"] = addr.get('vendor', '')
+
+            # Extract hostname
+            hostnames = host.find('hostnames')
+            if hostnames is not None:
+                hostname = hostnames.find('hostname')
+                if hostname is not None:
+                    asset["hostname"] = hostname.get('name', '')
+
+            # Extract open ports and vulnerabilities
+            ports_elem = host.find('ports')
+            if ports_elem is not None:
+                open_ports = []
+                for port in ports_elem.findall('port'):
+                    state = port.find('state')
+                    if state is not None and state.get('state') == 'open':
+                        port_id = port.get('portid')
+                        service = port.find('service')
+                        service_name = service.get('name', '') if service is not None else ''
+                        service_product = service.get('product', '') if service is not None else ''
+
+                        # Format port with service name
+                        if service_name:
+                            open_ports.append(f"{port_id} ({service_name})")
+                        else:
+                            open_ports.append(port_id)
+
+                        # Extract vulnerability data from vulners script
+                        for script in port.findall('script'):
+                            if script.get('id') == 'vulners':
+                                vulns = parse_vulners_script(script, port_id, service_name or service_product)
+                                asset["vulnerabilities"].extend(vulns)
+
+                asset["ports"] = ", ".join(open_ports)
+
+            # Only add assets that have an IP address
+            if asset["ip"]:
+                assets.append(asset)
+
+        logger.info(f"Parsed {len(assets)} assets from XML: {xml_path}")
+        return assets
+
+    except Exception as e:
+        logger.error(f"Failed to parse XML for asset resumption: {e}")
+        return []
+
+
+def parse_vulners_script(script_elem, port_id, service_name):
+    """
+    Parse vulners NSE script output to extract CVE and exploit data.
+
+    Returns:
+        list: Vulnerability entries:
+        [
+            {
+                "cve_id": "CVE-2025-61985",
+                "cvss": "3.6",
+                "type": "cve",
+                "is_exploit": false,
+                "port": "22",
+                "service": "ssh",
+                "url": "https://vulners.com/cve/CVE-2025-61985"
+            },
+            ...
+        ]
+    """
+    vulnerabilities = []
+
+    try:
+        # The vulners script stores data in table elements
+        for table in script_elem.findall('.//table'):
+            cpe = table.get('key', '')
+
+            vuln = {
+                "port": port_id,
+                "service": service_name,
+                "cpe": cpe
+            }
+
+            # Extract vulnerability details from elem tags
+            elems = {}
+            for elem in table.findall('elem'):
+                key = elem.get('key')
+                value = elem.text or ''
+                elems[key] = value
+
+            # Build vulnerability entry
+            if 'id' in elems:
+                vuln['cve_id'] = elems['id']
+                vuln['type'] = elems.get('type', 'unknown')
+                vuln['is_exploit'] = elems.get('is_exploit', 'false').lower() == 'true'
+                vuln['cvss'] = elems.get('cvss', 'N/A')
+
+                # Construct vulnerability URL from ID
+                vuln_id = vuln['cve_id']
+                if vuln['type'] == 'cve':
+                    vuln['url'] = f"https://vulners.com/cve/{vuln_id}"
+                elif vuln['type'] == 'githubexploit':
+                    vuln['url'] = f"https://vulners.com/githubexploit/{vuln_id}"
+                else:
+                    vuln['url'] = f"https://vulners.com/{vuln['type']}/{vuln_id}"
+
+                vulnerabilities.append(vuln)
+
+    except Exception as e:
+        logger.error(f"Failed to parse vulners script: {e}")
+
+    return vulnerabilities
+
+
+def get_most_recent_scan_xml(customer_id, max_days=7):
+    """
+    Find the most recent scan XML file for a customer within max_days.
+
+    Returns:
+        tuple: (xml_path, metadata_dict) or (None, None) if not found
+    """
+    from datetime import timedelta
+
+    # Find customer by ID
+    customer = None
+    for c in customer_fingerprinter.customers:
+        if c.get('id') == customer_id:
+            customer = c
+            break
+
+    if not customer:
+        logger.warning(f"Customer not found for ID: {customer_id}")
+        return None, None
+
+    customer_name = customer.get('name', 'Unknown')
+
+    # Search in multiple possible locations
+    search_dirs = [
+        SCANS_DIR / customer_name,
+        SCANS_DIR / "Unknown_Network"  # Fallback for unassigned scans
+    ]
+
+    cutoff_date = datetime.now() - timedelta(days=max_days)
+    recent_scans = []
+
+    for customer_scans_dir in search_dirs:
+        if not customer_scans_dir.exists():
+            continue
+
+        # Walk through date directories and scan directories
+        for date_dir in customer_scans_dir.iterdir():
+            if not date_dir.is_dir():
+                continue
+
+            for scan_dir in date_dir.iterdir():
+                if not scan_dir.is_dir():
+                    continue
+
+                metadata_file = scan_dir / 'metadata.json'
+                xml_file = scan_dir / 'scan.xml'
+
+                if not (metadata_file.exists() and xml_file.exists()):
+                    continue
+
+                try:
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+
+                    scan_time_str = metadata.get('timestamp', '')
+                    if not scan_time_str:
+                        continue
+
+                    scan_time = datetime.fromisoformat(scan_time_str)
+
+                    if scan_time >= cutoff_date:
+                        recent_scans.append({
+                            'xml_path': xml_file,
+                            'metadata': metadata,
+                            'scan_time': scan_time
+                        })
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata from {metadata_file}: {e}")
+                    continue
+
+    if not recent_scans:
+        logger.info(f"No recent scans found for customer {customer_name} within {max_days} days")
+        return None, None
+
+    # Sort by scan time, most recent first
+    recent_scans.sort(key=lambda x: x['scan_time'], reverse=True)
+    most_recent = recent_scans[0]
+
+    logger.info(f"Found most recent scan for {customer_name}: {most_recent['xml_path']}")
+    return most_recent['xml_path'], most_recent['metadata']
 
 
 @app.route("/api/scans")
