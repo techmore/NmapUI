@@ -470,6 +470,82 @@
         </div>
     </div>
 
+    <!-- Asset Details Modal -->
+    <div id="asset-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-olive-300">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50">
+                <div>
+                    <h2 class="text-2xl font-display italic text-olive-900">Asset Details</h2>
+                    <p class="text-sm text-olive-600 mt-1">
+                        <span id="asset-detail-ip" class="font-mono font-bold"></span>
+                        <span id="asset-detail-hostname" class="ml-2"></span>
+                    </p>
+                </div>
+                <button onclick="closeAssetDetailsModal()" class="text-olive-400 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Basic Info Section -->
+                <div class="bg-olive-50 p-4 rounded-lg border border-olive-200">
+                    <h3 class="text-lg font-display italic text-olive-900 mb-3">Basic Information</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-olive-600 font-medium">MAC Address:</span>
+                            <span id="asset-detail-mac" class="ml-2 font-mono text-olive-900"></span>
+                        </div>
+                        <div>
+                            <span class="text-olive-600 font-medium">Vendor:</span>
+                            <span id="asset-detail-vendor" class="ml-2 text-olive-900"></span>
+                            <a id="asset-vendor-link" href="#" target="_blank" class="ml-2 text-olive-600 hover:text-olive-800 hidden">
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-olive-600 font-medium">Status:</span>
+                            <span id="asset-detail-status" class="ml-2 text-olive-900"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Services Section -->
+                <div class="bg-olive-50 p-4 rounded-lg border border-olive-200">
+                    <h3 class="text-lg font-display italic text-olive-900 mb-3">Services & Ports</h3>
+                    <div id="asset-detail-services" class="space-y-2">
+                        <!-- Services will be populated here -->
+                    </div>
+                </div>
+
+                <!-- CVE Vulnerabilities Section -->
+                <div id="asset-cve-section" class="bg-amber-50 p-4 rounded-lg border border-amber-200 hidden">
+                    <h3 class="text-lg font-display italic text-amber-900 mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Vulnerabilities (<span id="asset-cve-count">0</span> CVEs)
+                    </h3>
+                    <div id="asset-detail-cves" class="space-y-2 max-h-64 overflow-y-auto">
+                        <!-- CVEs will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-olive-300 bg-olive-50 flex justify-end">
+                <button onclick="closeAssetDetailsModal()" class="px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white font-medium rounded-lg transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scan Command Center -->
     <div class="mt-8 bg-olive-50 p-6 rounded-2xl shadow-sm border border-olive-200">
         <div class="flex flex-col md:flex-row md:items-end gap-6">
@@ -1385,11 +1461,33 @@
             if (window.tableSorter) window.tableSorter.resort();
         });
 
+        // Store asset data globally for modal access
+        window.assetData = {};
+
         function populateTableWithResults(data) {
             const tb = document.querySelector('#discovery-table tbody');
             tb.innerHTML = '';
+
+            // Store asset data for modal
+            window.assetData = {};
+
             data.forEach(result => {
+            // Store full asset data including vulnerabilities array
+            if (result.ip) {
+                window.assetData[result.ip] = result;
+            }
+
             const newRow = tb.insertRow(-1);
+
+            // Make row clickable (except for the rescan button column)
+            newRow.style.cursor = 'pointer';
+            newRow.classList.add('hover:bg-olive-100', 'transition-colors');
+            newRow.addEventListener('click', (e) => {
+                // Don't open modal if clicking the rescan button
+                if (e.target.closest('button')) return;
+                showAssetDetailsModal(result);
+            });
+
             // Add status column first
             const statusCell = newRow.insertCell(0);
             statusCell.className = 'px-4 py-3 text-center';
@@ -1427,7 +1525,10 @@
             const rescanBtn = document.createElement('button');
             rescanBtn.textContent = 'Rescan';
             rescanBtn.classList.add('inline-flex', 'items-center', 'justify-center', 'rounded-full', 'bg-olive-950', 'text-white', 'hover:bg-olive-800', 'font-medium', 'py-1', 'px-3', 'text-xs', 'transition-colors');
-            rescanBtn.addEventListener('click', () => handleRescan(result['ip']));
+            rescanBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent row click
+                handleRescan(result['ip']);
+            });
             rescanCell.appendChild(rescanBtn);
             });
         }
@@ -1436,6 +1537,120 @@
         document.getElementById('info-icon').addEventListener('click', () => {
             document.getElementById('tooltip').classList.toggle('hidden');
         });
+
+        // Asset Details Modal Functions
+        function showAssetDetailsModal(asset) {
+            const modal = document.getElementById('asset-details-modal');
+
+            // Populate basic info
+            document.getElementById('asset-detail-ip').textContent = asset.ip || 'Unknown';
+            document.getElementById('asset-detail-hostname').textContent = asset.hostname ? `(${asset.hostname})` : '';
+            document.getElementById('asset-detail-mac').textContent = asset.mac || 'N/A';
+            document.getElementById('asset-detail-vendor').textContent = asset.vendor || 'Unknown';
+            document.getElementById('asset-detail-status').textContent = asset.status || 'up';
+
+            // Vendor link
+            const vendorLink = document.getElementById('asset-vendor-link');
+            if (asset.vendor && asset.vendor !== 'Unknown') {
+                const vendorSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(asset.vendor + ' company website')}`;
+                vendorLink.href = vendorSearchUrl;
+                vendorLink.classList.remove('hidden');
+            } else {
+                vendorLink.classList.add('hidden');
+            }
+
+            // Populate services
+            const servicesContainer = document.getElementById('asset-detail-services');
+            servicesContainer.innerHTML = '';
+
+            if (asset.open_ports && asset.open_ports.trim()) {
+                const ports = asset.open_ports.split(',').map(p => p.trim()).filter(p => p);
+                const versions = asset.version ? asset.version.split(',').map(v => v.trim()).filter(v => v) : [];
+
+                // Create a map of port to version
+                const versionMap = {};
+                versions.forEach(v => {
+                    const match = v.match(/^(\d+):(.*)/);
+                    if (match) {
+                        versionMap[match[1]] = match[2];
+                    }
+                });
+
+                ports.forEach(port => {
+                    const portMatch = port.match(/^(\d+)\s*\(?(.*?)\)?$/);
+                    if (portMatch) {
+                        const portNum = portMatch[1];
+                        const serviceName = portMatch[2] || 'unknown';
+                        const version = versionMap[portNum] || '';
+
+                        const serviceDiv = document.createElement('div');
+                        serviceDiv.className = 'flex items-start p-3 bg-white rounded border border-olive-200';
+                        serviceDiv.innerHTML = `
+                            <div class="flex-shrink-0 w-20">
+                                <span class="font-mono text-sm font-bold text-olive-900">${portNum}</span>
+                                <span class="text-xs text-olive-600">/${serviceName}</span>
+                            </div>
+                            <div class="flex-1">
+                                ${version ? `<div class="text-sm text-olive-700">${version}</div>` : '<div class="text-xs text-olive-500 italic">No version detected</div>'}
+                            </div>
+                        `;
+                        servicesContainer.appendChild(serviceDiv);
+                    }
+                });
+            } else {
+                servicesContainer.innerHTML = '<p class="text-sm text-olive-500 italic">No open ports detected</p>';
+            }
+
+            // Populate CVEs
+            const cveSection = document.getElementById('asset-cve-section');
+            const cveContainer = document.getElementById('asset-detail-cves');
+            const cveCount = document.getElementById('asset-cve-count');
+
+            cveContainer.innerHTML = '';
+
+            if (asset.vulnerabilities && asset.vulnerabilities.length > 0) {
+                cveCount.textContent = asset.vulnerabilities.length;
+                cveSection.classList.remove('hidden');
+
+                asset.vulnerabilities.forEach(vuln => {
+                    const cveDiv = document.createElement('div');
+                    cveDiv.className = 'flex items-start justify-between p-3 bg-white rounded border border-amber-200';
+
+                    const isExploit = vuln.is_exploit || false;
+                    const cvss = vuln.cvss || 'N/A';
+
+                    cveDiv.innerHTML = `
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-sm font-bold text-amber-900">${vuln.cve_id || 'Unknown'}</span>
+                                ${isExploit ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded">EXPLOIT</span>' : ''}
+                            </div>
+                            <div class="text-xs text-amber-700 mt-1">
+                                Port ${vuln.port || 'N/A'} (${vuln.service || 'unknown'})
+                                ${cvss !== 'N/A' ? `• CVSS: ${cvss}` : ''}
+                            </div>
+                        </div>
+                        ${vuln.url ? `
+                            <a href="${vuln.url}" target="_blank" class="ml-2 text-amber-600 hover:text-amber-800">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        ` : ''}
+                    `;
+                    cveContainer.appendChild(cveDiv);
+                });
+            } else {
+                cveSection.classList.add('hidden');
+            }
+
+            // Show modal
+            modal.classList.remove('hidden');
+        }
+
+        function closeAssetDetailsModal() {
+            document.getElementById('asset-details-modal').classList.add('hidden');
+        }
 
         // Historical Data Functions
         function showHistoricalDataBanner(data) {
