@@ -2067,16 +2067,9 @@ def parse_scan_xml_for_assets(xml_path):
             asset["open_ports"] = asset["ports"]  # Frontend expects 'open_ports'
             asset["version"] = ", ".join(version_info) if version_info else ""
 
-            # Format CVEs as comma-separated string with counts
+            # Format CVEs as comma-separated string
             cve_list = [v.get('cve_id', '') for v in asset["vulnerabilities"] if v.get('cve_id')]
-            if cve_list:
-                # Show count if more than 3, otherwise show all
-                if len(cve_list) > 3:
-                    asset["cves"] = f"{len(cve_list)} CVEs found"
-                else:
-                    asset["cves"] = ", ".join(cve_list[:3])
-            else:
-                asset["cves"] = ""
+            asset["cves"] = ", ".join(cve_list) if cve_list else ""
 
             # Only add assets that have an IP address
             if asset["ip"]:
