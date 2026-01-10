@@ -1651,6 +1651,7 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
 
     if scan_type == "quick":
         logger.info(f"Running quick scan on {target}...")
+        socketio.emit("scan_feedback", f"Starting quick scan on {target}...")
         cmd = [
             "nmap",
             "-sS",  # SYN scan
@@ -1664,6 +1665,7 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
         timeout_seconds = 180  # 3 minutes for quick scan
     else:
         logger.info(f"Running comprehensive scan on {target}...")
+        socketio.emit("scan_feedback", f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...")
         cmd = [
             "nmap",
             "-sS",
@@ -1678,15 +1680,59 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
             str(output_base),
             target,
         ]
-        timeout_seconds = 600  # 10 minutes for comprehensive scan
+        timeout_seconds = 1200  # 20 minutes for comprehensive scan with vulners
+
+    # Log the full command for debugging
+    cmd_str = " ".join(cmd)
+    logger.info(f"Executing: {cmd_str}")
+    socketio.emit("scan_feedback", f"Command: {cmd_str}")
+    socketio.sleep(0)
+
+    # Record start time
+    from datetime import datetime
+    start_time = datetime.now()
+    logger.info(f"Scan started at {start_time.strftime('%H:%M:%S')}")
+    socketio.emit("scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}")
+    socketio.sleep(0)
 
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout_seconds
         )
+
+        # Log completion
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        logger.info(f"Scan completed in {duration:.1f} seconds")
+        socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
+        socketio.sleep(0)
+
+        # Log stdout/stderr for debugging
+        if result.stdout:
+            logger.info(f"Nmap stdout:\n{result.stdout}")
+        if result.stderr:
+            logger.warning(f"Nmap stderr:\n{result.stderr}")
+
+        if result.returncode != 0:
+            logger.error(f"Nmap failed with return code {result.returncode}")
+            socketio.emit("scan_feedback", f"❌ Nmap failed with return code {result.returncode}")
+            socketio.sleep(0)
+
         return result.returncode == 0
+
     except subprocess.TimeoutExpired:
-        logger.error(f"Nmap scan timed out after {timeout_seconds} seconds on {target}")
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds//60}min) on {target}"
+        logger.error(error_msg)
+        socketio.emit("scan_feedback", error_msg)
+        socketio.emit("report_error", {
+            "error": f"Scan timed out after {timeout_seconds//60} minutes. Your network requires a longer scan time.",
+            "timeout": True,
+            "timeout_seconds": timeout_seconds,
+            "elapsed_seconds": duration
+        })
+        socketio.sleep(0)
         return False
 
 
@@ -1978,25 +2024,53 @@ def generate_report_event(data):
         idle_state_manager.end_operation("report_generation")
         return
 
+    # Log report generation start
+    logger.info("="*60)
+    logger.info(f"REPORT GENERATION STARTED")
+    logger.info(f"  Target: {target}")
+    logger.info(f"  Customer: {customer_name}")
+    logger.info(f"  Auto Scan: {is_auto_scan}")
+    logger.info("="*60)
+
+    emit("scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}")
+    socketio.sleep(0)
+
     start_time = datetime.now()
 
     try:
+        # Phase 1: Create scan folder
+        emit("scan_feedback", "📁 Creating scan folder...")
+        socketio.sleep(0)
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
+        logger.info(f"Scan folder created: {scan_dir}")
+        emit("scan_feedback", f"✓ Scan folder: {scan_dir.name}")
+        socketio.sleep(0)
 
-        # All reports use comprehensive scan with XSL formatting
+        # Phase 2: Run nmap scan (this is the long-running part)
+        emit("scan_feedback", "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...")
+        socketio.sleep(0)
         if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
             emit("report_error", {"error": "Nmap scan failed"})
             return
 
+        # Phase 3: Convert to HTML/PDF
         xml_path = scan_dir / "scan.xml"
         web_html_path = scan_dir / "scan_web.html"
         pdf_html_path = scan_dir / "scan_pdf.html"
         pdf_path = scan_dir / "scan_report.pdf"
 
+        emit("scan_feedback", "📄 Converting XML to HTML (web view)...")
+        socketio.sleep(0)
         # Use the premium Olive PDF stylesheet for BOTH views for consistency
         convert_xml_to_html(xml_path, web_html_path)
+
+        emit("scan_feedback", "📄 Converting XML to HTML (PDF view)...")
+        socketio.sleep(0)
         convert_xml_to_html(xml_path, pdf_html_path)
+
+        emit("scan_feedback", "📑 Generating PDF report...")
+        socketio.sleep(0)
         convert_html_to_pdf(pdf_html_path, pdf_path)
 
         files = {
@@ -2007,6 +2081,9 @@ def generate_report_event(data):
             "nmap": scan_dir / "scan.nmap",
             "gnmap": scan_dir / "scan.gnmap",
         }
+
+        emit("scan_feedback", "💾 Saving scan metadata...")
+        socketio.sleep(0)
         save_scan_metadata(scan_dir, customer_name, target, files)
 
         # Calculate duration and update customer
@@ -2015,6 +2092,10 @@ def generate_report_event(data):
         duration_minutes = int(duration.total_seconds() // 60)
         duration_seconds = int(duration.total_seconds() % 60)
         duration_str = f"{duration_minutes}m{duration_seconds}s"
+
+        logger.info(f"Report generation completed in {duration_str}")
+        emit("scan_feedback", f"✅ Report generation completed in {duration_str}")
+        socketio.sleep(0)
 
         # Find customer ID to update
         cust_id = None
@@ -2038,6 +2119,12 @@ def generate_report_event(data):
                 current_customer["metadata"]["last_scan_duration"] = duration_str
                 safe_emit("customer_info", current_customer)
 
+        logger.info("="*60)
+        logger.info(f"REPORT GENERATION SUCCESSFUL")
+        logger.info(f"  Duration: {duration_str}")
+        logger.info(f"  Location: {scan_dir}")
+        logger.info("="*60)
+
         emit(
             "report_complete",
             {
@@ -2049,6 +2136,10 @@ def generate_report_event(data):
 
     except Exception as e:
         logger.exception("Report generation failed")
+        logger.error("="*60)
+        logger.error(f"REPORT GENERATION FAILED")
+        logger.error(f"  Error: {str(e)}")
+        logger.error("="*60)
         emit("report_error", {"error": str(e)})
     finally:
         idle_state_manager.end_operation("report_generation")
