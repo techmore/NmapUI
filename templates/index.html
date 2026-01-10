@@ -256,31 +256,37 @@
             </div>
         </div>
 
-        <div id="network-key-banner" class="p-3 bg-olive-200 text-olive-900 rounded-lg shadow-inner border border-olive-300">
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <span class="text-olive-700 text-[10px] font-bold uppercase tracking-wider">Network Route</span>
-                    <div id="route-path" class="flex items-center flex-wrap gap-1 text-xs font-mono">
-                        <span class="text-white/70 italic">Loading route...</span>
+        <div id="network-key-banner" class="p-4 bg-olive-950 text-white rounded-xl shadow-lg border border-olive-800">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-olive-800 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="size-2 rounded-full bg-olive-500"></div>
+                        <span class="text-olive-400 text-xs font-bold uppercase tracking-widest">Network Path Analysis</span>
+                    </div>
+                    <div class="flex items-center gap-6">
+                        <div class="flex flex-col items-end">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-500 font-bold">Total Hops</span>
+                            <span id="total-hops" class="text-sm font-mono font-bold">--</span>
+                        </div>
+                        <div class="w-px h-6 bg-olive-800"></div>
+                        <div class="flex flex-col items-end text-amber-400">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-500 font-bold">Private</span>
+                            <span id="private-hops" class="text-sm font-mono font-bold">--</span>
+                        </div>
+                        <div class="w-px h-6 bg-olive-800"></div>
+                        <div class="flex flex-col items-end text-emerald-400">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-500 font-bold">Public</span>
+                            <span id="public-hops" class="text-sm font-mono font-bold">--</span>
+                        </div>
+                        <div class="w-px h-6 bg-olive-800"></div>
+                        <div class="flex flex-col items-end text-sky-400">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-500 font-bold">Gateway Exit</span>
+                            <span id="exit-ip" class="text-sm font-mono font-bold text-sky-300">--</span>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
-                    <div>
-                        <span class="text-white/60">Hops:</span>
-                        <span id="total-hops" class="ml-1">--</span>
-                    </div>
-                    <div>
-                        <span class="text-white/60">Private:</span>
-                        <span id="private-hops" class="ml-1 text-amber-200">--</span>
-                    </div>
-                    <div>
-                        <span class="text-white/60">Public:</span>
-                        <span id="public-hops" class="ml-1 text-emerald-200">--</span>
-                    </div>
-                    <div>
-                        <span class="text-white/60">Exit:</span>
-                        <span id="exit-ip" class="ml-1 text-sky-200">--</span>
-                    </div>
+                <div id="route-path" class="flex items-center flex-wrap gap-2 text-xs font-mono py-1">
+                    <span class="text-olive-600 italic animate-pulse">Mapping network route...</span>
                 </div>
             </div>
         </div>
@@ -974,9 +980,12 @@
                 // Reverse the hops so it reads: internet -> ... -> local
                 const reversedHops = [...data.hops].reverse();
                 routePath.innerHTML = reversedHops.map((hop, i) => {
-                    const colorClass = hop.is_private ? 'text-amber-700 font-medium' : 'text-emerald-700 font-medium';
-                    const arrow = i < reversedHops.length - 1 ? '<span class="text-olive-400 mx-1">→</span>' : '';
-                    return `<span class="${colorClass}">${hop.ip}</span>${arrow}`;
+                    const bgClass = hop.is_private ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
+                    const arrow = i < reversedHops.length - 1 ? '<svg class="w-3 h-3 text-olive-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>' : '';
+                    return `<div class="flex items-center gap-2 px-2 py-1 rounded border ${bgClass}">
+                                <span class="text-[10px] opacity-50 font-bold">${reversedHops.length - i}</span>
+                                <span class="font-bold tracking-tight">${hop.ip}</span>
+                            </div>${arrow}`;
                 }).join('');
             } else if (data.error) {
                 routePath.innerHTML = `<span class="text-red-700 font-medium">${data.error}</span>`;
