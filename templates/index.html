@@ -545,39 +545,17 @@
                         <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
                     </button>
                 </div>
-                <div id="last-scan-duration" class="text-center text-[10px] text-olive-500 font-bold uppercase tracking-widest hidden">
-                    Last: <span id="last-scan-time-val">--</span>
+
+                <div class="flex items-center gap-3 ml-4">
+                    <label class="flex items-center cursor-pointer group">
+                        <input type="checkbox" id="auto-scan-toggle" class="sr-only peer" aria-label="Enable automated daily scans">
+                        <div class="relative w-10 h-5 bg-olive-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-olive-600"></div>
+                        <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 group-hover:text-olive-800 transition-colors">Auto-Monitor</span>
+                    </label>
                 </div>
             </div>
         </div>
-
-        <div class="mt-6 pt-6 border-t border-olive-100 flex flex-wrap items-center justify-between gap-6">
-            <div class="flex items-center gap-2">
-                <button id="stop-scan-btn" class="px-5 py-2 rounded-full bg-olive-100 text-olive-600 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-widest transition-all active:scale-95" aria-label="Terminate scanning operations">
-                    Stop
-                </button>
-                <div class="h-4 w-px bg-olive-200 mx-1"></div>
-                <button id="suspend-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Pause scan">
-                    Pause
-                </button>
-                <button id="resume-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Resume scan">
-                    Resume
-                </button>
-            </div>
-
-            <div class="flex items-center gap-4">
-                <div id="last-scan-container" class="hidden flex items-center gap-3 px-4 py-2 bg-oatmeal-50 rounded-full border border-olive-100">
-                    <span class="text-[9px] font-black uppercase tracking-tighter text-olive-400">Baseline Health</span>
-                    <span id="last-scan-days" class="text-xs font-bold text-olive-900">--</span>
-                </div>
-                
-                <div class="flex items-center gap-6">
-                    <button id="view-history-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group relative" aria-label="View historical scan archives">
-                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        Archive
-                        <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
-                    </button>
-                </div>
+    </div>
 
                 <div class="flex items-center gap-3 ml-4">
                     <label class="flex items-center cursor-pointer group">
