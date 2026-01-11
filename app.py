@@ -2492,7 +2492,7 @@ def generate_report_event(data):
     logger.info("=" * 60)
 
     emit(
-        "scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}"
+        "scan_feedback", f"Generating report for {customer_name} - Target: {target}"
     )
     socketio.sleep(0)
 
@@ -2500,12 +2500,13 @@ def generate_report_event(data):
 
     try:
         # Phase 1: Create scan folder
-        emit("scan_feedback", "📁 Creating scan folder...")
+        emit("scan_feedback", "Creating scan folder...")
+
         socketio.sleep(0)
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
         logger.info(f"Scan folder created: {scan_dir}")
-        emit("scan_feedback", f"✓ Scan folder: {scan_dir.name}")
+        emit("scan_feedback", f"Scan folder: {scan_dir.name}")
         socketio.sleep(0)
 
     # Phase 2: Run nmap scan (this is the long-running part)
