@@ -1103,86 +1103,92 @@ def check_resumable_scan_event(data):
     Check if there's a recent scan available for resumption.
     Called when a customer is identified.
     """
-    customer_id = data.get('customer_id')
-    max_days = data.get('max_days', 7)
+    customer_id = data.get("customer_id")
+    max_days = data.get("max_days", 7)
 
-    if not customer_id or customer_id == 'unknown':
-        emit('resumable_scan_check', {'available': False})
+    if not customer_id or customer_id == "unknown":
+        emit("resumable_scan_check", {"available": False})
         return
 
     xml_path, metadata = get_most_recent_scan_xml(customer_id, max_days)
 
     if xml_path and metadata:
         # Calculate scan age
-        scan_time = datetime.fromisoformat(metadata.get('timestamp'))
+        scan_time = datetime.fromisoformat(metadata.get("timestamp"))
         age_seconds = (datetime.now() - scan_time).total_seconds()
         age_days = int(age_seconds / (24 * 3600))
 
         # Parse XML to count assets
         assets = parse_scan_xml_for_assets(xml_path)
-        total_vulns = sum(len(asset.get('vulnerabilities', [])) for asset in assets)
+        total_vulns = sum(len(asset.get("vulnerabilities", [])) for asset in assets)
 
-        emit('resumable_scan_check', {
-            'available': True,
-            'scan_date': metadata.get('timestamp'),
-            'target': metadata.get('target'),
-            'duration': 'N/A',  # Can be calculated if needed
-            'total_hosts': len(assets),
-            'total_vulnerabilities': total_vulns,
-            'age_days': age_days,
-            'age_seconds': int(age_seconds)
-        })
+        emit(
+            "resumable_scan_check",
+            {
+                "available": True,
+                "scan_date": metadata.get("timestamp"),
+                "target": metadata.get("target"),
+                "duration": "N/A",  # Can be calculated if needed
+                "total_hosts": len(assets),
+                "total_vulnerabilities": total_vulns,
+                "age_days": age_days,
+                "age_seconds": int(age_seconds),
+            },
+        )
     else:
-        emit('resumable_scan_check', {'available': False})
+        emit("resumable_scan_check", {"available": False})
 
 
-@socketio.on('resume_from_last_scan')
+@socketio.on("resume_from_last_scan")
 def resume_from_last_scan_event(data):
     """
     Load and emit assets from the most recent scan XML.
     """
-    customer_id = data.get('customer_id')
-    max_days = data.get('max_days', 7)
+    customer_id = data.get("customer_id")
+    max_days = data.get("max_days", 7)
 
     if not customer_id:
-        emit('resume_scan_error', {'error': 'No customer ID provided'})
+        emit("resume_scan_error", {"error": "No customer ID provided"})
         return
 
     xml_path, metadata = get_most_recent_scan_xml(customer_id, max_days)
 
     if not xml_path:
-        emit('resume_scan_error', {'error': 'No recent scan found'})
+        emit("resume_scan_error", {"error": "No recent scan found"})
         return
 
     # Parse XML to get assets with vulnerabilities
     assets = parse_scan_xml_for_assets(xml_path)
 
     if not assets:
-        emit('resume_scan_error', {'error': 'No assets found in scan'})
+        emit("resume_scan_error", {"error": "No assets found in scan"})
         return
 
     # Calculate statistics
-    total_vulns = sum(len(asset.get('vulnerabilities', [])) for asset in assets)
+    total_vulns = sum(len(asset.get("vulnerabilities", [])) for asset in assets)
     total_exploits = sum(
-        len([v for v in asset.get('vulnerabilities', []) if v.get('is_exploit')])
+        len([v for v in asset.get("vulnerabilities", []) if v.get("is_exploit")])
         for asset in assets
     )
 
-    scan_time = datetime.fromisoformat(metadata.get('timestamp'))
+    scan_time = datetime.fromisoformat(metadata.get("timestamp"))
     age_seconds = (datetime.now() - scan_time).total_seconds()
     age_days = int(age_seconds / (24 * 3600))
 
     # Emit assets with metadata indicating it's historical data
-    emit('scan_results', {
-        'hosts': assets,
-        'total': len(assets),
-        'is_historical': True,
-        'scan_date': metadata.get('timestamp'),
-        'target': metadata.get('target'),
-        'age_days': age_days,
-        'total_vulnerabilities': total_vulns,
-        'total_exploits': total_exploits
-    })
+    emit(
+        "scan_results",
+        {
+            "hosts": assets,
+            "total": len(assets),
+            "is_historical": True,
+            "scan_date": metadata.get("timestamp"),
+            "target": metadata.get("target"),
+            "age_days": age_days,
+            "total_vulnerabilities": total_vulns,
+            "total_exploits": total_exploits,
+        },
+    )
 
     # Send feedback message
     if age_days == 0:
@@ -1192,8 +1198,10 @@ def resume_from_last_scan_event(data):
     else:
         age_str = f"{age_days} days ago"
 
-    emit('scan_feedback',
-         f"Loaded {len(assets)} assets from scan {age_str} ({total_vulns} vulnerabilities, {total_exploits} exploits)")
+    emit(
+        "scan_feedback",
+        f"Loaded {len(assets)} assets from scan {age_str} ({total_vulns} vulnerabilities, {total_exploits} exploits)",
+    )
 
 
 @socketio.on("get_versions")
@@ -1765,7 +1773,10 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
         timeout_seconds = 180  # 3 minutes for quick scan
     else:
         logger.info(f"Running comprehensive scan on {target}...")
-        socketio.emit("scan_feedback", f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...")
+        socketio.emit(
+            "scan_feedback",
+            f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
+        )
         cmd = [
             "nmap",
             "-sS",
@@ -1790,6 +1801,7 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
 
     # Record start time
     from datetime import datetime
+
     start_time = datetime.now()
     logger.info(f"Scan started at {start_time.strftime('%H:%M:%S')}")
     socketio.emit("scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}")
@@ -1815,7 +1827,9 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
 
         if result.returncode != 0:
             logger.error(f"Nmap failed with return code {result.returncode}")
-            socketio.emit("scan_feedback", f"❌ Nmap failed with return code {result.returncode}")
+            socketio.emit(
+                "scan_feedback", f"❌ Nmap failed with return code {result.returncode}"
+            )
             socketio.sleep(0)
 
         return result.returncode == 0
@@ -1823,15 +1837,18 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
     except subprocess.TimeoutExpired:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds//60}min) on {target}"
+        error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds // 60}min) on {target}"
         logger.error(error_msg)
         socketio.emit("scan_feedback", error_msg)
-        socketio.emit("report_error", {
-            "error": f"Scan timed out after {timeout_seconds//60} minutes. Your network requires a longer scan time.",
-            "timeout": True,
-            "timeout_seconds": timeout_seconds,
-            "elapsed_seconds": duration
-        })
+        socketio.emit(
+            "report_error",
+            {
+                "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
+                "timeout": True,
+                "timeout_seconds": timeout_seconds,
+                "elapsed_seconds": duration,
+            },
+        )
         socketio.sleep(0)
         return False
 
@@ -1943,14 +1960,42 @@ def convert_html_to_pdf(html_path, pdf_path):
     return False
 
 
-def save_scan_metadata(scan_dir, customer_name, target, files):
-    """Save scan metadata to JSON file"""
+def save_scan_metadata(scan_dir, customer_name, target, files, start_time=None, end_time=None):
+    """
+    Save scan metadata to JSON file with duration tracking.
+
+    Args:
+        scan_dir: Directory where scan results are stored
+        customer_name: Name of the customer
+        target: Scan target (IP/CIDR)
+        files: Dictionary of output files
+        start_time: Scan start datetime (optional)
+        end_time: Scan end datetime (optional)
+    """
+    # Calculate duration if both times provided
+    duration_seconds = None
+    duration_formatted = None
+
+    if start_time and end_time:
+        duration = end_time - start_time
+        duration_seconds = duration.total_seconds()
+        duration_minutes = int(duration_seconds // 60)
+        duration_secs = int(duration_seconds % 60)
+        duration_formatted = f"{duration_minutes}m{duration_secs}s"
+
     metadata = {
         "customer_name": customer_name,
         "target": target,
         "timestamp": datetime.now().isoformat(),
         "date": datetime.now().strftime("%Y-%m-%d"),
         "time": datetime.now().strftime("%H:%M:%S"),
+
+        # Duration tracking
+        "scan_start_time": start_time.isoformat() if start_time else None,
+        "scan_end_time": end_time.isoformat() if end_time else None,
+        "duration_seconds": duration_seconds,
+        "duration_formatted": duration_formatted,
+
         "network_key": network_key,
         "customer_info": current_customer,
         "files": {k: str(v) for k, v in files.items()},
@@ -1958,6 +2003,77 @@ def save_scan_metadata(scan_dir, customer_name, target, files):
 
     with open(scan_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
+
+
+def extract_scan_statistics(xml_path):
+    """
+    Extract comprehensive scan statistics from nmap XML output.
+
+    Args:
+        xml_path: Path to nmap XML file
+
+    Returns:
+        dict: Scan statistics including hosts, ports, timing, and CVE counts
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        stats = {
+            "total_hosts": 0,
+            "hosts_up": 0,
+            "hosts_down": 0,
+            "total_ports_found": 0,
+            "scan_elapsed_seconds": None,
+            "total_cves": 0,
+        }
+
+        # Extract from runstats element
+        runstats = root.find('runstats')
+        if runstats:
+            hosts_elem = runstats.find('hosts')
+            if hosts_elem:
+                stats["hosts_up"] = int(hosts_elem.get('up', 0))
+                stats["hosts_down"] = int(hosts_elem.get('down', 0))
+                stats["total_hosts"] = int(hosts_elem.get('total', 0))
+
+            finished = runstats.find('finished')
+            if finished:
+                stats["scan_elapsed_seconds"] = float(finished.get('elapsed', 0))
+
+        # Count open ports and CVEs
+        for host in root.findall('host'):
+            ports_elem = host.find('ports')
+            if ports_elem:
+                for port in ports_elem.findall('port'):
+                    state = port.find('state')
+                    if state and state.get('state') == 'open':
+                        stats["total_ports_found"] += 1
+
+                    # Count CVEs from vulners script
+                    for script in port.findall('script'):
+                        if script.get('id') == 'vulners':
+                            # Parse vulners output for CVE count
+                            for table in script.findall('.//table'):
+                                for elem in table.findall('elem'):
+                                    if elem.get('key') == 'id' and 'CVE' in (elem.text or ''):
+                                        stats["total_cves"] += 1
+
+        logger.info(f"Extracted scan statistics: {stats}")
+        return stats
+
+    except Exception as e:
+        logger.error(f"Failed to extract scan statistics from {xml_path}: {e}")
+        return {
+            "total_hosts": 0,
+            "hosts_up": 0,
+            "hosts_down": 0,
+            "total_ports_found": 0,
+            "scan_elapsed_seconds": None,
+            "total_cves": 0,
+        }
 
 
 def parse_scan_xml_for_assets(xml_path):
@@ -1997,10 +2113,10 @@ def parse_scan_xml_for_assets(xml_path):
 
         assets = []
 
-        for host in root.findall('host'):
+        for host in root.findall("host"):
             # Skip hosts that are down
-            status = host.find('status')
-            if status is None or status.get('state') != 'up':
+            status = host.find("status")
+            if status is None or status.get("state") != "up":
                 continue
 
             asset = {
@@ -2010,35 +2126,39 @@ def parse_scan_xml_for_assets(xml_path):
                 "vendor": "",
                 "ports": "",
                 "status": "up",
-                "vulnerabilities": []
+                "vulnerabilities": [],
             }
 
             # Extract IP address and MAC
-            for addr in host.findall('address'):
-                if addr.get('addrtype') == 'ipv4':
-                    asset["ip"] = addr.get('addr')
-                elif addr.get('addrtype') == 'mac':
-                    asset["mac"] = addr.get('addr')
-                    asset["vendor"] = addr.get('vendor', '')
+            for addr in host.findall("address"):
+                if addr.get("addrtype") == "ipv4":
+                    asset["ip"] = addr.get("addr")
+                elif addr.get("addrtype") == "mac":
+                    asset["mac"] = addr.get("addr")
+                    asset["vendor"] = addr.get("vendor", "")
 
             # Extract hostname
-            hostnames = host.find('hostnames')
+            hostnames = host.find("hostnames")
             if hostnames is not None:
-                hostname = hostnames.find('hostname')
+                hostname = hostnames.find("hostname")
                 if hostname is not None:
-                    asset["hostname"] = hostname.get('name', '')
+                    asset["hostname"] = hostname.get("name", "")
 
             # Extract open ports and vulnerabilities
-            ports_elem = host.find('ports')
+            ports_elem = host.find("ports")
             if ports_elem is not None:
                 open_ports = []
-                for port in ports_elem.findall('port'):
-                    state = port.find('state')
-                    if state is not None and state.get('state') == 'open':
-                        port_id = port.get('portid')
-                        service = port.find('service')
-                        service_name = service.get('name', '') if service is not None else ''
-                        service_product = service.get('product', '') if service is not None else ''
+                for port in ports_elem.findall("port"):
+                    state = port.find("state")
+                    if state is not None and state.get("state") == "open":
+                        port_id = port.get("portid")
+                        service = port.find("service")
+                        service_name = (
+                            service.get("name", "") if service is not None else ""
+                        )
+                        service_product = (
+                            service.get("product", "") if service is not None else ""
+                        )
 
                         # Format port with service name
                         if service_name:
@@ -2047,9 +2167,11 @@ def parse_scan_xml_for_assets(xml_path):
                             open_ports.append(port_id)
 
                         # Extract vulnerability data from vulners script
-                        for script in port.findall('script'):
-                            if script.get('id') == 'vulners':
-                                vulns = parse_vulners_script(script, port_id, service_name or service_product)
+                        for script in port.findall("script"):
+                            if script.get("id") == "vulners":
+                                vulns = parse_vulners_script(
+                                    script, port_id, service_name or service_product
+                                )
                                 asset["vulnerabilities"].extend(vulns)
 
                 asset["ports"] = ", ".join(open_ports)
@@ -2089,37 +2211,33 @@ def parse_vulners_script(script_elem, port_id, service_name):
 
     try:
         # The vulners script stores data in table elements
-        for table in script_elem.findall('.//table'):
-            cpe = table.get('key', '')
+        for table in script_elem.findall(".//table"):
+            cpe = table.get("key", "")
 
-            vuln = {
-                "port": port_id,
-                "service": service_name,
-                "cpe": cpe
-            }
+            vuln = {"port": port_id, "service": service_name, "cpe": cpe}
 
             # Extract vulnerability details from elem tags
             elems = {}
-            for elem in table.findall('elem'):
-                key = elem.get('key')
-                value = elem.text or ''
+            for elem in table.findall("elem"):
+                key = elem.get("key")
+                value = elem.text or ""
                 elems[key] = value
 
             # Build vulnerability entry
-            if 'id' in elems:
-                vuln['cve_id'] = elems['id']
-                vuln['type'] = elems.get('type', 'unknown')
-                vuln['is_exploit'] = elems.get('is_exploit', 'false').lower() == 'true'
-                vuln['cvss'] = elems.get('cvss', 'N/A')
+            if "id" in elems:
+                vuln["cve_id"] = elems["id"]
+                vuln["type"] = elems.get("type", "unknown")
+                vuln["is_exploit"] = elems.get("is_exploit", "false").lower() == "true"
+                vuln["cvss"] = elems.get("cvss", "N/A")
 
                 # Construct vulnerability URL from ID
-                vuln_id = vuln['cve_id']
-                if vuln['type'] == 'cve':
-                    vuln['url'] = f"https://vulners.com/cve/{vuln_id}"
-                elif vuln['type'] == 'githubexploit':
-                    vuln['url'] = f"https://vulners.com/githubexploit/{vuln_id}"
+                vuln_id = vuln["cve_id"]
+                if vuln["type"] == "cve":
+                    vuln["url"] = f"https://vulners.com/cve/{vuln_id}"
+                elif vuln["type"] == "githubexploit":
+                    vuln["url"] = f"https://vulners.com/githubexploit/{vuln_id}"
                 else:
-                    vuln['url'] = f"https://vulners.com/{vuln['type']}/{vuln_id}"
+                    vuln["url"] = f"https://vulners.com/{vuln['type']}/{vuln_id}"
 
                 vulnerabilities.append(vuln)
 
@@ -2141,7 +2259,7 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
     # Find customer by ID
     customer = None
     for c in customer_fingerprinter.customers:
-        if c.get('id') == customer_id:
+        if c.get("id") == customer_id:
             customer = c
             break
 
@@ -2149,12 +2267,12 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
         logger.warning(f"Customer not found for ID: {customer_id}")
         return None, None
 
-    customer_name = customer.get('name', 'Unknown')
+    customer_name = customer.get("name", "Unknown")
 
     # Search in multiple possible locations
     search_dirs = [
         SCANS_DIR / customer_name,
-        SCANS_DIR / "Unknown_Network"  # Fallback for unassigned scans
+        SCANS_DIR / "Unknown_Network",  # Fallback for unassigned scans
     ]
 
     cutoff_date = datetime.now() - timedelta(days=max_days)
@@ -2173,42 +2291,48 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
                 if not scan_dir.is_dir():
                     continue
 
-                metadata_file = scan_dir / 'metadata.json'
-                xml_file = scan_dir / 'scan.xml'
+                metadata_file = scan_dir / "metadata.json"
+                xml_file = scan_dir / "scan.xml"
 
                 if not (metadata_file.exists() and xml_file.exists()):
                     continue
 
                 try:
-                    with open(metadata_file, 'r') as f:
+                    with open(metadata_file, "r") as f:
                         metadata = json.load(f)
 
-                    scan_time_str = metadata.get('timestamp', '')
+                    scan_time_str = metadata.get("timestamp", "")
                     if not scan_time_str:
                         continue
 
                     scan_time = datetime.fromisoformat(scan_time_str)
 
                     if scan_time >= cutoff_date:
-                        recent_scans.append({
-                            'xml_path': xml_file,
-                            'metadata': metadata,
-                            'scan_time': scan_time
-                        })
+                        recent_scans.append(
+                            {
+                                "xml_path": xml_file,
+                                "metadata": metadata,
+                                "scan_time": scan_time,
+                            }
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to load metadata from {metadata_file}: {e}")
                     continue
 
     if not recent_scans:
-        logger.info(f"No recent scans found for customer {customer_name} within {max_days} days")
+        logger.info(
+            f"No recent scans found for customer {customer_name} within {max_days} days"
+        )
         return None, None
 
     # Sort by scan time, most recent first
-    recent_scans.sort(key=lambda x: x['scan_time'], reverse=True)
+    recent_scans.sort(key=lambda x: x["scan_time"], reverse=True)
     most_recent = recent_scans[0]
 
-    logger.info(f"Found most recent scan for {customer_name}: {most_recent['xml_path']}")
-    return most_recent['xml_path'], most_recent['metadata']
+    logger.info(
+        f"Found most recent scan for {customer_name}: {most_recent['xml_path']}"
+    )
+    return most_recent["xml_path"], most_recent["metadata"]
 
 
 @app.route("/api/scans")
@@ -2376,14 +2500,16 @@ def generate_report_event(data):
         return
 
     # Log report generation start
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info(f"REPORT GENERATION STARTED")
     logger.info(f"  Target: {target}")
     logger.info(f"  Customer: {customer_name}")
     logger.info(f"  Auto Scan: {is_auto_scan}")
-    logger.info("="*60)
+    logger.info("=" * 60)
 
-    emit("scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}")
+    emit(
+        "scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}"
+    )
     socketio.sleep(0)
 
     start_time = datetime.now()
@@ -2399,7 +2525,10 @@ def generate_report_event(data):
         socketio.sleep(0)
 
         # Phase 2: Run nmap scan (this is the long-running part)
-        emit("scan_feedback", "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...")
+        emit(
+            "scan_feedback",
+            "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
+        )
         socketio.sleep(0)
         if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
             emit("report_error", {"error": "Nmap scan failed"})
@@ -2433,16 +2562,31 @@ def generate_report_event(data):
             "gnmap": scan_dir / "scan.gnmap",
         }
 
-        emit("scan_feedback", "💾 Saving scan metadata...")
-        socketio.sleep(0)
-        save_scan_metadata(scan_dir, customer_name, target, files)
-
-        # Calculate duration and update customer
+        # Calculate duration
         end_time = datetime.now()
         duration = end_time - start_time
         duration_minutes = int(duration.total_seconds() // 60)
         duration_seconds = int(duration.total_seconds() % 60)
         duration_str = f"{duration_minutes}m{duration_seconds}s"
+
+        emit("scan_feedback", "💾 Saving scan metadata with duration...")
+        socketio.sleep(0)
+        save_scan_metadata(scan_dir, customer_name, target, files, start_time, end_time)
+
+        # Extract scan statistics from XML
+        emit("scan_feedback", "📊 Extracting scan statistics...")
+        socketio.sleep(0)
+        scan_stats = extract_scan_statistics(xml_path)
+
+        # Send scan summary banner to client
+        emit("scan_complete_summary", {
+            "duration_formatted": duration_str,
+            "hosts_up": scan_stats.get("hosts_up", 0) if scan_stats else 0,
+            "total_ports": scan_stats.get("total_ports_found", 0) if scan_stats else 0,
+            "total_cves": scan_stats.get("total_cves", 0) if scan_stats else 0,
+            "target": target,
+        })
+        socketio.sleep(0)
 
         logger.info(f"Report generation completed in {duration_str}")
         emit("scan_feedback", f"✅ Report generation completed in {duration_str}")
@@ -2470,11 +2614,11 @@ def generate_report_event(data):
                 current_customer["metadata"]["last_scan_duration"] = duration_str
                 safe_emit("customer_info", current_customer)
 
-        logger.info("="*60)
+        logger.info("=" * 60)
         logger.info(f"REPORT GENERATION SUCCESSFUL")
         logger.info(f"  Duration: {duration_str}")
         logger.info(f"  Location: {scan_dir}")
-        logger.info("="*60)
+        logger.info("=" * 60)
 
         emit(
             "report_complete",
@@ -2487,10 +2631,10 @@ def generate_report_event(data):
 
     except Exception as e:
         logger.exception("Report generation failed")
-        logger.error("="*60)
+        logger.error("=" * 60)
         logger.error(f"REPORT GENERATION FAILED")
         logger.error(f"  Error: {str(e)}")
-        logger.error("="*60)
+        logger.error("=" * 60)
         emit("report_error", {"error": str(e)})
     finally:
         idle_state_manager.end_operation("report_generation")
@@ -2643,4 +2787,4 @@ auto_scan_thread.start()
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv
     startup_checks(quick=quick_mode)
-    socketio.run(app, host='0.0.0.0', port=9000, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0", port=9000, debug=True, allow_unsafe_werkzeug=True)
