@@ -556,18 +556,6 @@ def get_report_counts():
     return counts
 
 
-@socketio.on("connect")
-def handle_connect():
-    """Handle client connection - send initial state"""
-    logger.info("Client connected")
-    # Send auto scan status to newly connected client
-    emit("auto_scan_status", auto_scan_config)
-    # Send version information
-    emit("versions", get_versions())
-    # Send history counts
-    emit("history_counts", get_report_counts())
-
-
 @socketio.on("get_history_counts")
 def get_history_counts_event():
     """Send report counts per customer to the client"""
@@ -1115,92 +1103,86 @@ def check_resumable_scan_event(data):
     Check if there's a recent scan available for resumption.
     Called when a customer is identified.
     """
-    customer_id = data.get("customer_id")
-    max_days = data.get("max_days", 7)
+    customer_id = data.get('customer_id')
+    max_days = data.get('max_days', 7)
 
-    if not customer_id or customer_id == "unknown":
-        emit("resumable_scan_check", {"available": False})
+    if not customer_id or customer_id == 'unknown':
+        emit('resumable_scan_check', {'available': False})
         return
 
     xml_path, metadata = get_most_recent_scan_xml(customer_id, max_days)
 
     if xml_path and metadata:
         # Calculate scan age
-        scan_time = datetime.fromisoformat(metadata.get("timestamp"))
+        scan_time = datetime.fromisoformat(metadata.get('timestamp'))
         age_seconds = (datetime.now() - scan_time).total_seconds()
         age_days = int(age_seconds / (24 * 3600))
 
         # Parse XML to count assets
         assets = parse_scan_xml_for_assets(xml_path)
-        total_vulns = sum(len(asset.get("vulnerabilities", [])) for asset in assets)
+        total_vulns = sum(len(asset.get('vulnerabilities', [])) for asset in assets)
 
-        emit(
-            "resumable_scan_check",
-            {
-                "available": True,
-                "scan_date": metadata.get("timestamp"),
-                "target": metadata.get("target"),
-                "duration": "N/A",  # Can be calculated if needed
-                "total_hosts": len(assets),
-                "total_vulnerabilities": total_vulns,
-                "age_days": age_days,
-                "age_seconds": int(age_seconds),
-            },
-        )
+        emit('resumable_scan_check', {
+            'available': True,
+            'scan_date': metadata.get('timestamp'),
+            'target': metadata.get('target'),
+            'duration': 'N/A',  # Can be calculated if needed
+            'total_hosts': len(assets),
+            'total_vulnerabilities': total_vulns,
+            'age_days': age_days,
+            'age_seconds': int(age_seconds)
+        })
     else:
-        emit("resumable_scan_check", {"available": False})
+        emit('resumable_scan_check', {'available': False})
 
 
-@socketio.on("resume_from_last_scan")
+@socketio.on('resume_from_last_scan')
 def resume_from_last_scan_event(data):
     """
     Load and emit assets from the most recent scan XML.
     """
-    customer_id = data.get("customer_id")
-    max_days = data.get("max_days", 7)
+    customer_id = data.get('customer_id')
+    max_days = data.get('max_days', 7)
 
     if not customer_id:
-        emit("resume_scan_error", {"error": "No customer ID provided"})
+        emit('resume_scan_error', {'error': 'No customer ID provided'})
         return
 
     xml_path, metadata = get_most_recent_scan_xml(customer_id, max_days)
 
     if not xml_path:
-        emit("resume_scan_error", {"error": "No recent scan found"})
+        emit('resume_scan_error', {'error': 'No recent scan found'})
         return
 
     # Parse XML to get assets with vulnerabilities
     assets = parse_scan_xml_for_assets(xml_path)
 
     if not assets:
-        emit("resume_scan_error", {"error": "No assets found in scan"})
+        emit('resume_scan_error', {'error': 'No assets found in scan'})
         return
 
     # Calculate statistics
-    total_vulns = sum(len(asset.get("vulnerabilities", [])) for asset in assets)
+    total_vulns = sum(len(asset.get('vulnerabilities', [])) for asset in assets)
     total_exploits = sum(
-        len([v for v in asset.get("vulnerabilities", []) if v.get("is_exploit")])
+        len([v for v in asset.get('vulnerabilities', []) if v.get('is_exploit')])
         for asset in assets
     )
 
-    scan_time = datetime.fromisoformat(metadata.get("timestamp"))
+    scan_time = datetime.fromisoformat(metadata.get('timestamp'))
     age_seconds = (datetime.now() - scan_time).total_seconds()
     age_days = int(age_seconds / (24 * 3600))
 
     # Emit assets with metadata indicating it's historical data
-    emit(
-        "scan_results",
-        {
-            "hosts": assets,
-            "total": len(assets),
-            "is_historical": True,
-            "scan_date": metadata.get("timestamp"),
-            "target": metadata.get("target"),
-            "age_days": age_days,
-            "total_vulnerabilities": total_vulns,
-            "total_exploits": total_exploits,
-        },
-    )
+    emit('scan_results', {
+        'hosts': assets,
+        'total': len(assets),
+        'is_historical': True,
+        'scan_date': metadata.get('timestamp'),
+        'target': metadata.get('target'),
+        'age_days': age_days,
+        'total_vulnerabilities': total_vulns,
+        'total_exploits': total_exploits
+    })
 
     # Send feedback message
     if age_days == 0:
@@ -1210,10 +1192,8 @@ def resume_from_last_scan_event(data):
     else:
         age_str = f"{age_days} days ago"
 
-    emit(
-        "scan_feedback",
-        f"Loaded {len(assets)} assets from scan {age_str} ({total_vulns} vulnerabilities, {total_exploits} exploits)",
-    )
+    emit('scan_feedback',
+         f"Loaded {len(assets)} assets from scan {age_str} ({total_vulns} vulnerabilities, {total_exploits} exploits)")
 
 
 @socketio.on("get_versions")
@@ -1766,291 +1746,8 @@ def create_scan_folder(customer_name, target):
     return scan_dir
 
 
-# Subnet Chunking Functions
-def calculate_subnet_size(target):
-    """
-    Calculate the number of hosts in a target subnet.
-
-    Args:
-        target: IP address or CIDR notation (e.g., "192.168.1.0/24")
-
-    Returns:
-        int: Number of hosts in the subnet, or 1 if single IP
-    """
-    try:
-        network = ipaddress.ip_network(target, strict=False)
-        # num_addresses includes network and broadcast addresses
-        # For practical purposes, we care about the total scope
-        return network.num_addresses
-    except ValueError:
-        # Single IP or hostname
-        return 1
-
-
-def chunk_subnet(target, chunk_size=254):
-    """
-    Break a large subnet into smaller chunks.
-
-    Args:
-        target: CIDR notation (e.g., "10.0.0.0/16")
-        chunk_size: Maximum hosts per chunk (default 254 for /24)
-
-    Returns:
-        list: List of smaller subnet CIDR strings
-
-    Example:
-        chunk_subnet("10.0.0.0/16", 254) returns ["10.0.0.0/24", "10.0.1.0/24", ...]
-    """
-    try:
-        network = ipaddress.ip_network(target, strict=False)
-
-        # Calculate new prefix length for desired chunk size
-        # chunk_size 254 = /24 (2^8 - 2 = 254 usable hosts)
-        # chunk_size 100 = ~128 hosts = /25
-        # chunk_size 50 = ~64 hosts = /26
-
-        import math
-        # Add 2 for network and broadcast addresses
-        hosts_needed = chunk_size + 2
-        # Calculate prefix length: 32 - log2(hosts_needed)
-        new_prefix = 32 - math.ceil(math.log2(hosts_needed))
-
-        # Don't make chunks smaller than /24 (too many chunks)
-        new_prefix = min(new_prefix, 24)
-        # Don't make chunks larger than the original network
-        new_prefix = max(new_prefix, network.prefixlen)
-
-        # Generate subnets
-        chunks = list(network.subnets(new_prefix=new_prefix))
-        chunk_strings = [str(chunk) for chunk in chunks]
-
-        logger.info(f"Chunked {target} ({network.num_addresses} hosts) into {len(chunk_strings)} chunks of /{new_prefix}")
-
-        return chunk_strings
-
-    except ValueError as e:
-        logger.error(f"Failed to chunk subnet {target}: {e}")
-        # Return original target if chunking fails
-        return [target]
-
-
-def should_chunk_subnet(target, threshold=1000):
-    """
-    Determine if a subnet should be chunked based on size.
-
-    Args:
-        target: IP address or CIDR notation
-        threshold: Minimum number of hosts to trigger chunking (default 1000)
-
-    Returns:
-        bool: True if subnet should be chunked
-    """
-    size = calculate_subnet_size(target)
-    should_chunk = size >= threshold
-
-    if should_chunk:
-        logger.info(f"Subnet {target} has {size} hosts (>= {threshold}), will chunk")
-    else:
-        logger.info(f"Subnet {target} has {size} hosts (< {threshold}), no chunking needed")
-
-    return should_chunk
-
-
-def merge_nmap_xml_files(xml_files, output_path):
-    """
-    Merge multiple nmap XML files into a single unified XML file.
-
-    Args:
-        xml_files: List of Path objects pointing to XML files
-        output_path: Path where merged XML should be saved
-
-    Returns:
-        bool: True if merge successful, False otherwise
-    """
-    import xml.etree.ElementTree as ET
-
-    try:
-        if not xml_files:
-            logger.error("No XML files to merge")
-            return False
-
-        if len(xml_files) == 1:
-            # Only one file, just copy it
-            shutil.copy(xml_files[0], output_path)
-            logger.info(f"Single XML file, copied to {output_path}")
-            return True
-
-        # Parse first file as base
-        base_tree = ET.parse(xml_files[0])
-        base_root = base_tree.getroot()
-
-        # Merge hosts from other files
-        hosts_merged = 0
-        for xml_file in xml_files[1:]:
-            try:
-                tree = ET.parse(xml_file)
-                root = tree.getroot()
-
-                # Find all host elements and append to base
-                for host in root.findall('host'):
-                    base_root.append(host)
-                    hosts_merged += 1
-
-            except Exception as e:
-                logger.warning(f"Failed to merge {xml_file}: {e}")
-                continue
-
-        # Update runstats to reflect merged data
-        runstats = base_root.find('runstats')
-        if runstats is not None:
-            hosts_elem = runstats.find('hosts')
-            if hosts_elem is not None:
-                total_hosts = len(base_root.findall('host'))
-                hosts_elem.set('up', str(total_hosts))
-                hosts_elem.set('total', str(total_hosts))
-
-        # Write merged XML
-        base_tree.write(output_path, encoding='unicode', xml_declaration=True)
-        logger.info(f"Merged {len(xml_files)} XML files ({hosts_merged} additional hosts) into {output_path}")
-
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to merge XML files: {e}")
-        return False
-
-
 def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
-    """
-    Run nmap with all formats output (-oA).
-    Automatically chunks large subnets for better reliability.
-
-    Args:
-        target: IP or CIDR notation
-        output_base: Base path for output files (without extension)
-        scan_type: "quick" or "comprehensive"
-
-    Returns:
-        bool: True if scan successful, False otherwise
-    """
-    # Check if subnet should be chunked
-    if should_chunk_subnet(target, threshold=1000):
-        return run_chunked_nmap_scan(target, output_base, scan_type)
-    else:
-        return run_single_nmap_scan(target, output_base, scan_type)
-
-
-def run_chunked_nmap_scan(target, output_base, scan_type="comprehensive"):
-    """
-    Run nmap scan on a large subnet by breaking it into chunks.
-
-    Args:
-        target: Large subnet in CIDR notation
-        output_base: Base path for output files
-        scan_type: "quick" or "comprehensive"
-
-    Returns:
-        bool: True if all chunks scanned and merged successfully
-    """
-    logger.info(f"Starting chunked scan for large subnet: {target}")
-    socketio.emit("scan_feedback", f"🔀 Large subnet detected - breaking into chunks for reliability...")
-    socketio.sleep(0)
-
-    # Break subnet into chunks
-    chunks = chunk_subnet(target, chunk_size=254)
-    total_chunks = len(chunks)
-
-    logger.info(f"Subnet chunked into {total_chunks} pieces")
-    socketio.emit("scan_feedback", f"📦 Divided into {total_chunks} chunks (scanning sequentially)...")
-    socketio.sleep(0)
-
-    # Create temp directory for chunk outputs
-    import tempfile
-    temp_dir = Path(tempfile.mkdtemp(prefix="nmap_chunks_"))
-    logger.info(f"Created temp directory for chunks: {temp_dir}")
-
-    xml_files = []
-    successful_chunks = 0
-
-    # Scan each chunk
-    for idx, chunk in enumerate(chunks, 1):
-        chunk_output_base = temp_dir / f"chunk_{idx:04d}"
-
-        logger.info(f"Scanning chunk {idx}/{total_chunks}: {chunk}")
-        socketio.emit("scan_feedback", f"🔍 Scanning chunk {idx}/{total_chunks}: {chunk}")
-        socketio.sleep(0)
-
-        try:
-            # Run scan on this chunk
-            success = run_single_nmap_scan(str(chunk), str(chunk_output_base), scan_type)
-
-            if success:
-                xml_file = chunk_output_base.with_suffix('.xml')
-                if xml_file.exists():
-                    xml_files.append(xml_file)
-                    successful_chunks += 1
-                    logger.info(f"Chunk {idx}/{total_chunks} completed successfully")
-                else:
-                    logger.warning(f"Chunk {idx}/{total_chunks} completed but XML not found")
-            else:
-                logger.warning(f"Chunk {idx}/{total_chunks} failed")
-
-            # Emit progress
-            progress = int((idx / total_chunks) * 100)
-            socketio.emit("scan_feedback", f"📊 Progress: {successful_chunks}/{total_chunks} chunks completed ({progress}%)")
-            socketio.sleep(0)
-
-        except Exception as e:
-            logger.error(f"Error scanning chunk {idx}/{total_chunks}: {e}")
-            continue
-
-    # Merge all XML files
-    if not xml_files:
-        logger.error("No successful chunk scans to merge")
-        socketio.emit("scan_feedback", "❌ All chunk scans failed")
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        return False
-
-    logger.info(f"Merging {len(xml_files)} XML files...")
-    socketio.emit("scan_feedback", f"🔗 Merging {len(xml_files)} chunk results into final report...")
-    socketio.sleep(0)
-
-    output_xml = output_base.with_suffix('.xml') if isinstance(output_base, Path) else Path(str(output_base) + '.xml')
-    merge_success = merge_nmap_xml_files(xml_files, output_xml)
-
-    if merge_success:
-        logger.info(f"Successfully merged {successful_chunks}/{total_chunks} chunks")
-        socketio.emit("scan_feedback", f"✅ Chunked scan complete: {successful_chunks}/{total_chunks} chunks merged")
-
-        # Also create .nmap and .gnmap files from the merged XML
-        # Note: These will be basic conversions, full format may differ from single scan
-        try:
-            nmap_output = output_base.with_suffix('.nmap') if isinstance(output_base, Path) else Path(str(output_base) + '.nmap')
-            gnmap_output = output_base.with_suffix('.gnmap') if isinstance(output_base, Path) else Path(str(output_base) + '.gnmap')
-
-            # Create placeholder files
-            nmap_output.write_text(f"# Nmap scan from chunked subnet scan\n# Original target: {target}\n# Chunks: {total_chunks}\n# See XML file for complete results\n")
-            gnmap_output.write_text(f"# Gnmap from chunked subnet scan - see XML for complete results\n")
-
-        except Exception as e:
-            logger.warning(f"Failed to create supplementary output files: {e}")
-    else:
-        logger.error("Failed to merge XML files")
-        socketio.emit("scan_feedback", "❌ Failed to merge chunk results")
-
-    # Cleanup temp directory
-    try:
-        shutil.rmtree(temp_dir)
-        logger.info("Cleaned up temporary chunk files")
-    except Exception as e:
-        logger.warning(f"Failed to cleanup temp directory: {e}")
-
-    socketio.sleep(0)
-    return merge_success
-
-
-def run_single_nmap_scan(target, output_base, scan_type="comprehensive"):
-    """Run a single nmap scan without chunking"""
+    """Run nmap with all formats output (-oA)"""
 
     if scan_type == "quick":
         logger.info(f"Running quick scan on {target}...")
@@ -2068,10 +1765,7 @@ def run_single_nmap_scan(target, output_base, scan_type="comprehensive"):
         timeout_seconds = 180  # 3 minutes for quick scan
     else:
         logger.info(f"Running comprehensive scan on {target}...")
-        socketio.emit(
-            "scan_feedback",
-            f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
-        )
+        socketio.emit("scan_feedback", f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...")
         cmd = [
             "nmap",
             "-sS",
@@ -2096,79 +1790,48 @@ def run_single_nmap_scan(target, output_base, scan_type="comprehensive"):
 
     # Record start time
     from datetime import datetime
-
     start_time = datetime.now()
     logger.info(f"Scan started at {start_time.strftime('%H:%M:%S')}")
     socketio.emit("scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}")
     socketio.sleep(0)
 
     try:
-        # Use Popen to stream output in real-time with timeout reset per chunk
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout_seconds
         )
-
-        # Stream output line by line with terminal feedback
-        output_lines = []
-        try:
-            for line in process.stdout:
-                line = line.strip()
-                if line:
-                    output_lines.append(line)
-                    # Send meaningful progress lines to terminal
-                    if any(keyword in line.lower() for keyword in ['nmap', 'scanning', 'discovered', 'completed', 'host', 'ports']):
-                        logger.info(f"[nmap] {line}")
-                        socketio.emit("scan_feedback", f"  {line}")
-                        socketio.sleep(0)
-
-            # Wait for process to complete with timeout
-            process.wait(timeout=timeout_seconds)
-            returncode = process.returncode
-
-        except subprocess.TimeoutExpired:
-            logger.error(f"Scan timeout after {timeout_seconds} seconds")
-            process.kill()
-            process.wait()
-            socketio.emit("scan_feedback", f"⏱️ Scan timeout after {timeout_seconds} seconds - chunk may be too large")
-            socketio.sleep(0)
-            return False
 
         # Log completion
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         logger.info(f"Scan completed in {duration:.1f} seconds")
-        socketio.emit("scan_feedback", f"✅ Chunk scan completed in {duration:.1f} seconds")
+        socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
         socketio.sleep(0)
 
-        if returncode != 0:
-            logger.error(f"Nmap failed with return code {returncode}")
-            socketio.emit(
-                "scan_feedback", f"❌ Nmap failed with return code {returncode}"
-            )
+        # Log stdout/stderr for debugging
+        if result.stdout:
+            logger.info(f"Nmap stdout:\n{result.stdout}")
+        if result.stderr:
+            logger.warning(f"Nmap stderr:\n{result.stderr}")
+
+        if result.returncode != 0:
+            logger.error(f"Nmap failed with return code {result.returncode}")
+            socketio.emit("scan_feedback", f"❌ Nmap failed with return code {result.returncode}")
             socketio.sleep(0)
 
-        return returncode == 0
+        return result.returncode == 0
 
     except subprocess.TimeoutExpired:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds // 60}min) on {target}"
+        error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds//60}min) on {target}"
         logger.error(error_msg)
         socketio.emit("scan_feedback", error_msg)
-        socketio.emit(
-            "report_error",
-            {
-                "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
-                "timeout": True,
-                "timeout_seconds": timeout_seconds,
-                "elapsed_seconds": duration,
-            },
-        )
+        socketio.emit("report_error", {
+            "error": f"Scan timed out after {timeout_seconds//60} minutes. Your network requires a longer scan time.",
+            "timeout": True,
+            "timeout_seconds": timeout_seconds,
+            "elapsed_seconds": duration
+        })
         socketio.sleep(0)
         return False
 
@@ -2334,10 +1997,10 @@ def parse_scan_xml_for_assets(xml_path):
 
         assets = []
 
-        for host in root.findall("host"):
+        for host in root.findall('host'):
             # Skip hosts that are down
-            status = host.find("status")
-            if status is None or status.get("state") != "up":
+            status = host.find('status')
+            if status is None or status.get('state') != 'up':
                 continue
 
             asset = {
@@ -2347,43 +2010,35 @@ def parse_scan_xml_for_assets(xml_path):
                 "vendor": "",
                 "ports": "",
                 "status": "up",
-                "vulnerabilities": [],
+                "vulnerabilities": []
             }
 
             # Extract IP address and MAC
-            for addr in host.findall("address"):
-                if addr.get("addrtype") == "ipv4":
-                    asset["ip"] = addr.get("addr")
-                elif addr.get("addrtype") == "mac":
-                    asset["mac"] = addr.get("addr")
-                    asset["vendor"] = addr.get("vendor", "")
+            for addr in host.findall('address'):
+                if addr.get('addrtype') == 'ipv4':
+                    asset["ip"] = addr.get('addr')
+                elif addr.get('addrtype') == 'mac':
+                    asset["mac"] = addr.get('addr')
+                    asset["vendor"] = addr.get('vendor', '')
 
             # Extract hostname
-            hostnames = host.find("hostnames")
+            hostnames = host.find('hostnames')
             if hostnames is not None:
-                hostname = hostnames.find("hostname")
+                hostname = hostnames.find('hostname')
                 if hostname is not None:
-                    asset["hostname"] = hostname.get("name", "")
+                    asset["hostname"] = hostname.get('name', '')
 
-            # Extract open ports, versions, and vulnerabilities
-            ports_elem = host.find("ports")
-            version_info = []
+            # Extract open ports and vulnerabilities
+            ports_elem = host.find('ports')
             if ports_elem is not None:
                 open_ports = []
-                for port in ports_elem.findall("port"):
-                    state = port.find("state")
-                    if state is not None and state.get("state") == "open":
-                        port_id = port.get("portid")
-                        service = port.find("service")
-                        service_name = (
-                            service.get("name", "") if service is not None else ""
-                        )
-                        service_product = (
-                            service.get("product", "") if service is not None else ""
-                        )
-                        service_version = (
-                            service.get("version", "") if service is not None else ""
-                        )
+                for port in ports_elem.findall('port'):
+                    state = port.find('state')
+                    if state is not None and state.get('state') == 'open':
+                        port_id = port.get('portid')
+                        service = port.find('service')
+                        service_name = service.get('name', '') if service is not None else ''
+                        service_product = service.get('product', '') if service is not None else ''
 
                         # Format port with service name
                         if service_name:
@@ -2391,32 +2046,13 @@ def parse_scan_xml_for_assets(xml_path):
                         else:
                             open_ports.append(port_id)
 
-                        # Collect version information
-                        if service_product:
-                            version_str = service_product
-                            if service_version:
-                                version_str += f" {service_version}"
-                            version_info.append(f"{port_id}:{version_str}")
-
                         # Extract vulnerability data from vulners script
-                        for script in port.findall("script"):
-                            if script.get("id") == "vulners":
-                                vulns = parse_vulners_script(
-                                    script, port_id, service_name or service_product
-                                )
+                        for script in port.findall('script'):
+                            if script.get('id') == 'vulners':
+                                vulns = parse_vulners_script(script, port_id, service_name or service_product)
                                 asset["vulnerabilities"].extend(vulns)
 
                 asset["ports"] = ", ".join(open_ports)
-
-            # Transform to match frontend expected format
-            asset["open_ports"] = asset["ports"]  # Frontend expects 'open_ports'
-            asset["version"] = ", ".join(version_info) if version_info else ""
-
-            # Format CVEs as comma-separated string
-            cve_list = [
-                v.get("cve_id", "") for v in asset["vulnerabilities"] if v.get("cve_id")
-            ]
-            asset["cves"] = ", ".join(cve_list) if cve_list else ""
 
             # Only add assets that have an IP address
             if asset["ip"]:
@@ -2453,33 +2089,37 @@ def parse_vulners_script(script_elem, port_id, service_name):
 
     try:
         # The vulners script stores data in table elements
-        for table in script_elem.findall(".//table"):
-            cpe = table.get("key", "")
+        for table in script_elem.findall('.//table'):
+            cpe = table.get('key', '')
 
-            vuln = {"port": port_id, "service": service_name, "cpe": cpe}
+            vuln = {
+                "port": port_id,
+                "service": service_name,
+                "cpe": cpe
+            }
 
             # Extract vulnerability details from elem tags
             elems = {}
-            for elem in table.findall("elem"):
-                key = elem.get("key")
-                value = elem.text or ""
+            for elem in table.findall('elem'):
+                key = elem.get('key')
+                value = elem.text or ''
                 elems[key] = value
 
             # Build vulnerability entry
-            if "id" in elems:
-                vuln["cve_id"] = elems["id"]
-                vuln["type"] = elems.get("type", "unknown")
-                vuln["is_exploit"] = elems.get("is_exploit", "false").lower() == "true"
-                vuln["cvss"] = elems.get("cvss", "N/A")
+            if 'id' in elems:
+                vuln['cve_id'] = elems['id']
+                vuln['type'] = elems.get('type', 'unknown')
+                vuln['is_exploit'] = elems.get('is_exploit', 'false').lower() == 'true'
+                vuln['cvss'] = elems.get('cvss', 'N/A')
 
                 # Construct vulnerability URL from ID
-                vuln_id = vuln["cve_id"]
-                if vuln["type"] == "cve":
-                    vuln["url"] = f"https://vulners.com/cve/{vuln_id}"
-                elif vuln["type"] == "githubexploit":
-                    vuln["url"] = f"https://vulners.com/githubexploit/{vuln_id}"
+                vuln_id = vuln['cve_id']
+                if vuln['type'] == 'cve':
+                    vuln['url'] = f"https://vulners.com/cve/{vuln_id}"
+                elif vuln['type'] == 'githubexploit':
+                    vuln['url'] = f"https://vulners.com/githubexploit/{vuln_id}"
                 else:
-                    vuln["url"] = f"https://vulners.com/{vuln['type']}/{vuln_id}"
+                    vuln['url'] = f"https://vulners.com/{vuln['type']}/{vuln_id}"
 
                 vulnerabilities.append(vuln)
 
@@ -2501,7 +2141,7 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
     # Find customer by ID
     customer = None
     for c in customer_fingerprinter.customers:
-        if c.get("id") == customer_id:
+        if c.get('id') == customer_id:
             customer = c
             break
 
@@ -2509,12 +2149,12 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
         logger.warning(f"Customer not found for ID: {customer_id}")
         return None, None
 
-    customer_name = customer.get("name", "Unknown")
+    customer_name = customer.get('name', 'Unknown')
 
     # Search in multiple possible locations
     search_dirs = [
         SCANS_DIR / customer_name,
-        SCANS_DIR / "Unknown_Network",  # Fallback for unassigned scans
+        SCANS_DIR / "Unknown_Network"  # Fallback for unassigned scans
     ]
 
     cutoff_date = datetime.now() - timedelta(days=max_days)
@@ -2533,48 +2173,42 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
                 if not scan_dir.is_dir():
                     continue
 
-                metadata_file = scan_dir / "metadata.json"
-                xml_file = scan_dir / "scan.xml"
+                metadata_file = scan_dir / 'metadata.json'
+                xml_file = scan_dir / 'scan.xml'
 
                 if not (metadata_file.exists() and xml_file.exists()):
                     continue
 
                 try:
-                    with open(metadata_file, "r") as f:
+                    with open(metadata_file, 'r') as f:
                         metadata = json.load(f)
 
-                    scan_time_str = metadata.get("timestamp", "")
+                    scan_time_str = metadata.get('timestamp', '')
                     if not scan_time_str:
                         continue
 
                     scan_time = datetime.fromisoformat(scan_time_str)
 
                     if scan_time >= cutoff_date:
-                        recent_scans.append(
-                            {
-                                "xml_path": xml_file,
-                                "metadata": metadata,
-                                "scan_time": scan_time,
-                            }
-                        )
+                        recent_scans.append({
+                            'xml_path': xml_file,
+                            'metadata': metadata,
+                            'scan_time': scan_time
+                        })
                 except Exception as e:
                     logger.warning(f"Failed to load metadata from {metadata_file}: {e}")
                     continue
 
     if not recent_scans:
-        logger.info(
-            f"No recent scans found for customer {customer_name} within {max_days} days"
-        )
+        logger.info(f"No recent scans found for customer {customer_name} within {max_days} days")
         return None, None
 
     # Sort by scan time, most recent first
-    recent_scans.sort(key=lambda x: x["scan_time"], reverse=True)
+    recent_scans.sort(key=lambda x: x['scan_time'], reverse=True)
     most_recent = recent_scans[0]
 
-    logger.info(
-        f"Found most recent scan for {customer_name}: {most_recent['xml_path']}"
-    )
-    return most_recent["xml_path"], most_recent["metadata"]
+    logger.info(f"Found most recent scan for {customer_name}: {most_recent['xml_path']}")
+    return most_recent['xml_path'], most_recent['metadata']
 
 
 @app.route("/api/scans")
@@ -2717,57 +2351,9 @@ def delete_scan(path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def split_subnet_into_chunks(target):
-    """Split large subnets into /24 chunks for manageable scanning"""
-    try:
-        network = ipaddress.ip_network(target, strict=False)
-        if network.num_addresses <= 256:  # /24 or smaller
-            return [target]
-
-        # Split into /24 chunks
-        chunks = []
-        for subnet in network.subnets(new_prefix=24):
-            if subnet.num_addresses > 0:
-                chunks.append(str(subnet))
-            if len(chunks) >= 256:  # Limit to prevent excessive chunks
-                break
-        return chunks[:256]  # Max 256 chunks
-    except ValueError:
-        # Not a valid subnet, return as-is
-        return [target]
-
-
-def merge_nmap_xml_files(xml_files, output_path):
-    """Merge multiple Nmap XML files into one"""
-    import xml.etree.ElementTree as ET
-
-    if not xml_files:
-        raise ValueError("No XML files to merge")
-
-    # Parse first file as base
-    base_tree = ET.parse(xml_files[0])
-    base_root = base_tree.getroot()
-
-    # Find the nmaprun element
-    nmaprun = base_root
-
-    # For subsequent files, append their host elements
-    for xml_file in xml_files[1:]:
-        tree = ET.parse(xml_file)
-        root = tree.getroot()
-
-        # Find all host elements in this file
-        for host in root.findall("host"):
-            nmaprun.append(host)
-
-    # Write merged XML
-    base_tree.write(str(output_path), encoding="utf-8", xml_declaration=True)
-
-
 @socketio.on("generate_report")
 def generate_report_event(data):
     """Handle report generation request via SocketIO"""
-    logger.info("generate_report event received with data: %s", data)
     idle_state_manager.start_operation("report_generation")
     target = data.get("target")
     is_auto_scan = data.get("auto_scan", False)
@@ -2789,59 +2375,54 @@ def generate_report_event(data):
         idle_state_manager.end_operation("report_generation")
         return
 
-
-
     # Log report generation start
-    logger.info("=" * 60)
+    logger.info("="*60)
     logger.info(f"REPORT GENERATION STARTED")
     logger.info(f"  Target: {target}")
     logger.info(f"  Customer: {customer_name}")
     logger.info(f"  Auto Scan: {is_auto_scan}")
-    logger.info("=" * 60)
+    logger.info("="*60)
 
-    emit(
-        "scan_feedback", f"Generating report for {customer_name} - Target: {target}"
-    )
+    emit("scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}")
     socketio.sleep(0)
 
     start_time = datetime.now()
 
     try:
         # Phase 1: Create scan folder
-        emit("scan_feedback", "Creating scan folder...")
-
+        emit("scan_feedback", "📁 Creating scan folder...")
         socketio.sleep(0)
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
         logger.info(f"Scan folder created: {scan_dir}")
-        emit("scan_feedback", f"Scan folder: {scan_dir.name}")
+        emit("scan_feedback", f"✓ Scan folder: {scan_dir.name}")
         socketio.sleep(0)
 
-    # Phase 2: Run nmap scan (this is the long-running part)
-    emit("scan_feedback", "Starting nmap comprehensive scan (this may take 5-10 minutes)...")
-    socketio.sleep(0)
-    if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
-        emit("report_error", {"error": "Nmap scan failed"})
-        return
+        # Phase 2: Run nmap scan (this is the long-running part)
+        emit("scan_feedback", "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...")
+        socketio.sleep(0)
+        if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
+            emit("report_error", {"error": "Nmap scan failed"})
+            return
 
-    # Phase 3: Convert to HTML/PDF
-    xml_path = scan_dir / "scan.xml"
-    web_html_path = scan_dir / "scan_web.html"
-    pdf_html_path = scan_dir / "scan_pdf.html"
-    pdf_path = scan_dir / "scan_report.pdf"
+        # Phase 3: Convert to HTML/PDF
+        xml_path = scan_dir / "scan.xml"
+        web_html_path = scan_dir / "scan_web.html"
+        pdf_html_path = scan_dir / "scan_pdf.html"
+        pdf_path = scan_dir / "scan_report.pdf"
 
-    emit("scan_feedback", "Converting XML to HTML (web view)...")
-    socketio.sleep(0)
-    # Use the premium Olive PDF stylesheet for BOTH views for consistency
-    convert_xml_to_html(xml_path, web_html_path)
+        emit("scan_feedback", "📄 Converting XML to HTML (web view)...")
+        socketio.sleep(0)
+        # Use the premium Olive PDF stylesheet for BOTH views for consistency
+        convert_xml_to_html(xml_path, web_html_path)
 
-    emit("scan_feedback", "Converting XML to HTML (PDF view)...")
-    socketio.sleep(0)
-    convert_xml_to_html(xml_path, pdf_html_path)
+        emit("scan_feedback", "📄 Converting XML to HTML (PDF view)...")
+        socketio.sleep(0)
+        convert_xml_to_html(xml_path, pdf_html_path)
 
-    emit("scan_feedback", "Generating PDF report...")
-    socketio.sleep(0)
-    convert_html_to_pdf(pdf_html_path, pdf_path)
+        emit("scan_feedback", "📑 Generating PDF report...")
+        socketio.sleep(0)
+        convert_html_to_pdf(pdf_html_path, pdf_path)
 
         files = {
             "xml": xml_path,
@@ -2889,11 +2470,11 @@ def generate_report_event(data):
                 current_customer["metadata"]["last_scan_duration"] = duration_str
                 safe_emit("customer_info", current_customer)
 
-        logger.info("=" * 60)
+        logger.info("="*60)
         logger.info(f"REPORT GENERATION SUCCESSFUL")
         logger.info(f"  Duration: {duration_str}")
         logger.info(f"  Location: {scan_dir}")
-        logger.info("=" * 60)
+        logger.info("="*60)
 
         emit(
             "report_complete",
@@ -2906,10 +2487,10 @@ def generate_report_event(data):
 
     except Exception as e:
         logger.exception("Report generation failed")
-        logger.error("=" * 60)
+        logger.error("="*60)
         logger.error(f"REPORT GENERATION FAILED")
         logger.error(f"  Error: {str(e)}")
-        logger.error("=" * 60)
+        logger.error("="*60)
         emit("report_error", {"error": str(e)})
     finally:
         idle_state_manager.end_operation("report_generation")
@@ -3062,4 +2643,4 @@ auto_scan_thread.start()
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv
     startup_checks(quick=quick_mode)
-    socketio.run(app, debug=True, port=9000, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
