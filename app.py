@@ -276,6 +276,56 @@ def should_run_auto_scan():
     )
 
 
+def split_subnet_into_chunks(target):
+    """Split large subnets into /26 chunks (~64 hosts each) for manageable scanning"""
+    import ipaddress
+
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+        if network.num_addresses <= 64:  # /26 or smaller
+            return [target]
+
+        # Split into /26 chunks (~64 hosts each)
+        chunks = []
+        for subnet in network.subnets(new_prefix=26):
+            if subnet.num_addresses > 0:
+                chunks.append(str(subnet))
+            if len(chunks) >= 256:  # Limit to prevent excessive chunks
+                break
+        return chunks[:256]  # Max 256 chunks
+    except ValueError:
+        # Not a valid subnet, return as-is
+        return [target]
+
+
+def merge_nmap_xml_files(xml_files, output_path):
+    """Merge multiple Nmap XML files into one"""
+    import xml.etree.ElementTree as ET
+
+    if not xml_files:
+        raise ValueError("No XML files to merge")
+
+    # Parse first file as base
+    base_tree = ET.parse(xml_files[0])
+    base_root = base_tree.getroot()
+
+    # Find the nmaprun element
+    nmaprun = base_root
+
+    # For subsequent files, append their host elements
+    for xml_file in xml_files[1:]:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        # Find all host elements in this file
+        for host in root.findall("host"):
+            nmaprun.append(host)
+
+    # Write merged XML
+    base_tree.write(str(output_path), encoding="utf-8", xml_declaration=True)
+
+
+
 def execute_auto_scan():
     """Execute automatic scan using current target"""
     # Use the last scan target or current network
@@ -285,19 +335,16 @@ def execute_auto_scan():
         logger.warning("No target available for auto scan")
         return
 
-    # Get current customer
-    customer_name = current_customer.get("name", "Auto Scan")
-    customer_name = customer_name.split(" (")[0]  # Remove confidence
+    customer_name = current_customer.get("name", "Unknown").split(" (")[0]  # Remove confidence
+
+    logger.info(f"Executing auto scan for target: {target}, customer: {customer_name}")
 
     try:
-        # Trigger visual feedback (pulsing) on generate report button
-        safe_emit("start_report_generation", {"auto_scan": True})
-
-        # Trigger the same report generation process with auto_scan flag
-        socketio.emit(
-            "generate_report",
-            {"target": target, "customer_name": customer_name, "auto_scan": True},
-        )
+        safe_emit("trigger_generate_report", {
+            "target": target,
+            "customer_name": customer_name,
+            "auto_scan": True
+        })
 
         auto_scan_config["last_run"] = datetime.now().isoformat()
         save_auto_scan_config()
@@ -2475,6 +2522,7 @@ def delete_scan(path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+
 @socketio.on("generate_report")
 def generate_report_event(data):
     """Handle report generation request via SocketIO"""
@@ -2498,6 +2546,17 @@ def generate_report_event(data):
         emit("report_error", {"error": "No target specified"})
         idle_state_manager.end_operation("report_generation")
         return
+
+    # Split large subnets into manageable chunks
+    targets = split_subnet_into_chunks(target)
+    num_chunks = len(targets)
+    logger.info(f"Target split into {num_chunks} chunks: {targets}")
+
+    if num_chunks > 1:
+        emit(
+            "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks"
+        )
+        socketio.sleep(0)
 
     # Log report generation start
     logger.info("=" * 60)
@@ -2525,14 +2584,33 @@ def generate_report_event(data):
         socketio.sleep(0)
 
         # Phase 2: Run nmap scan (this is the long-running part)
-        emit(
-            "scan_feedback",
-            "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
-        )
-        socketio.sleep(0)
-        if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
-            emit("report_error", {"error": "Nmap scan failed"})
-            return
+        xml_files = []
+        for i, chunk_target in enumerate(targets):
+            if num_chunks > 1:
+                emit("scan_feedback", f"🔍 Scanning chunk {i+1}/{num_chunks}: {chunk_target}")
+            else:
+                emit("scan_feedback", "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...")
+            socketio.sleep(0)
+
+            if num_chunks == 1:
+                chunk_output_base = output_base
+            else:
+                chunk_output_base = scan_dir / f"scan_chunk_{i}"
+
+            if not run_nmap_with_xml_output(chunk_target, chunk_output_base, "comprehensive"):
+                emit("report_error", {"error": f"Nmap scan failed on chunk {i+1}"})
+                return
+
+            xml_files.append(chunk_output_base.with_suffix('.xml'))
+
+        # If multiple chunks, merge XML files
+        if num_chunks > 1:
+            emit("scan_feedback", "🔀 Merging scan results from chunks...")
+            socketio.sleep(0)
+            xml_path = scan_dir / "scan.xml"
+            merge_nmap_xml_files(xml_files, xml_path)
+        else:
+            xml_path = output_base.with_suffix('.xml')
 
         # Phase 3: Convert to HTML/PDF
         xml_path = scan_dir / "scan.xml"
@@ -2543,15 +2621,33 @@ def generate_report_event(data):
         emit("scan_feedback", "📄 Converting XML to HTML (web view)...")
         socketio.sleep(0)
         # Use the premium Olive PDF stylesheet for BOTH views for consistency
-        convert_xml_to_html(xml_path, web_html_path)
+        if convert_xml_to_html(xml_path, web_html_path):
+            file_size = web_html_path.stat().st_size if web_html_path.exists() else 0
+            logger.info(f"✓ Web HTML created: {web_html_path} ({file_size} bytes)")
+            emit("scan_feedback", f"✓ Web HTML: {file_size} bytes")
+        else:
+            logger.error("✗ Web HTML conversion failed")
+            emit("scan_feedback", "✗ Web HTML conversion failed")
 
         emit("scan_feedback", "📄 Converting XML to HTML (PDF view)...")
         socketio.sleep(0)
-        convert_xml_to_html(xml_path, pdf_html_path)
+        if convert_xml_to_html(xml_path, pdf_html_path):
+            file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
+            logger.info(f"✓ PDF HTML created: {pdf_html_path} ({file_size} bytes)")
+            emit("scan_feedback", f"✓ PDF HTML: {file_size} bytes")
+        else:
+            logger.error("✗ PDF HTML conversion failed")
+            emit("scan_feedback", "✗ PDF HTML conversion failed")
 
         emit("scan_feedback", "📑 Generating PDF report...")
         socketio.sleep(0)
-        convert_html_to_pdf(pdf_html_path, pdf_path)
+        if convert_html_to_pdf(pdf_html_path, pdf_path):
+            file_size = pdf_path.stat().st_size if pdf_path.exists() else 0
+            logger.info(f"✓ PDF created: {pdf_path} ({file_size} bytes)")
+            emit("scan_feedback", f"✓ PDF: {file_size} bytes")
+        else:
+            logger.error("✗ PDF generation failed")
+            emit("scan_feedback", "✗ PDF generation failed")
 
         files = {
             "xml": xml_path,
