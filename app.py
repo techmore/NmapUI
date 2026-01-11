@@ -2103,31 +2103,56 @@ def run_single_nmap_scan(target, output_base, scan_type="comprehensive"):
     socketio.sleep(0)
 
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout_seconds
+        # Use Popen to stream output in real-time with timeout reset per chunk
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
         )
+
+        # Stream output line by line with terminal feedback
+        output_lines = []
+        try:
+            for line in process.stdout:
+                line = line.strip()
+                if line:
+                    output_lines.append(line)
+                    # Send meaningful progress lines to terminal
+                    if any(keyword in line.lower() for keyword in ['nmap', 'scanning', 'discovered', 'completed', 'host', 'ports']):
+                        logger.info(f"[nmap] {line}")
+                        socketio.emit("scan_feedback", f"  {line}")
+                        socketio.sleep(0)
+
+            # Wait for process to complete with timeout
+            process.wait(timeout=timeout_seconds)
+            returncode = process.returncode
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"Scan timeout after {timeout_seconds} seconds")
+            process.kill()
+            process.wait()
+            socketio.emit("scan_feedback", f"⏱️ Scan timeout after {timeout_seconds} seconds - chunk may be too large")
+            socketio.sleep(0)
+            return False
 
         # Log completion
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         logger.info(f"Scan completed in {duration:.1f} seconds")
-        socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
+        socketio.emit("scan_feedback", f"✅ Chunk scan completed in {duration:.1f} seconds")
         socketio.sleep(0)
 
-        # Log stdout/stderr for debugging
-        if result.stdout:
-            logger.info(f"Nmap stdout:\n{result.stdout}")
-        if result.stderr:
-            logger.warning(f"Nmap stderr:\n{result.stderr}")
-
-        if result.returncode != 0:
-            logger.error(f"Nmap failed with return code {result.returncode}")
+        if returncode != 0:
+            logger.error(f"Nmap failed with return code {returncode}")
             socketio.emit(
-                "scan_feedback", f"❌ Nmap failed with return code {result.returncode}"
+                "scan_feedback", f"❌ Nmap failed with return code {returncode}"
             )
             socketio.sleep(0)
 
-        return result.returncode == 0
+        return returncode == 0
 
     except subprocess.TimeoutExpired:
         end_time = datetime.now()
