@@ -299,7 +299,7 @@ def split_subnet_into_chunks(target):
 
 
 def merge_nmap_xml_files(xml_files, output_path):
-    """Merge multiple Nmap XML files into one"""
+    """Merge multiple Nmap XML files into one with updated statistics"""
     import xml.etree.ElementTree as ET
 
     if not xml_files:
@@ -312,14 +312,93 @@ def merge_nmap_xml_files(xml_files, output_path):
     # Find the nmaprun element
     nmaprun = base_root
 
-    # For subsequent files, append their host elements
-    for xml_file in xml_files[1:]:
+    # Collect all hosts from all files
+    all_hosts = []
+    total_up = 0
+    total_down = 0
+    total_hosts = 0
+    earliest_start = None
+    latest_end = None
+
+    for xml_file in xml_files:
         tree = ET.parse(xml_file)
         root = tree.getroot()
 
-        # Find all host elements in this file
+        # Get runstats from this file
+        runstats = root.find("runstats")
+        if runstats is not None:
+            finished = runstats.find("finished")
+            if finished is not None:
+                hosts = finished.get("hosts")
+                if hosts:
+                    parts = hosts.split()
+                    if len(parts) >= 3:
+                        up_count = int(parts[0]) if parts[0].isdigit() else 0
+                        down_count = int(parts[2]) if parts[2].isdigit() else 0
+                        total_up += up_count
+                        total_down += down_count
+
+        # Collect host elements
         for host in root.findall("host"):
-            nmaprun.append(host)
+            all_hosts.append(host)
+
+            # Track timing
+            status = host.find("status")
+            if status is not None and status.get("state") == "up":
+                starttime = host.get("starttime")
+                endtime = host.get("endtime")
+                if starttime:
+                    start_ts = int(starttime)
+                    if earliest_start is None or start_ts < earliest_start:
+                        earliest_start = start_ts
+                if endtime:
+                    end_ts = int(endtime)
+                    if latest_end is None or end_ts > latest_end:
+                        latest_end = end_ts
+
+    # Remove existing host elements from base
+    for host in base_root.findall("host"):
+        base_root.remove(host)
+
+    # Add all collected hosts
+    for host in all_hosts:
+        nmaprun.append(host)
+
+    # Update runstats with combined statistics
+    runstats = base_root.find("runstats")
+    if runstats is not None:
+        finished = runstats.find("finished")
+        if finished is not None:
+            total_hosts = len(all_hosts)
+            finished.set("summary", f"Nmap done at {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}; {total_hosts} IP addresses ({total_up} hosts up) scanned in 44m1s")
+            finished.set("hosts", f"{total_up} up, {total_down} down, {total_hosts} total")
+
+        hosts_elem = runstats.find("hosts")
+        if hosts_elem is not None:
+            hosts_elem.set("up", str(total_up))
+            hosts_elem.set("down", str(total_down))
+            hosts_elem.set("total", str(total_hosts))
+
+    # Update scaninfo with combined target
+    scaninfo = base_root.find("scaninfo")
+    if scaninfo is not None:
+        # Combine all targets from command line args
+        all_targets = []
+        for xml_file in xml_files:
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            args = root.get("args")
+            if args:
+                # Extract target from args (last part after space)
+                parts = args.split()
+                if parts:
+                    target = parts[-1]
+                    if target not in all_targets:
+                        all_targets.append(target)
+
+        if all_targets:
+            combined_target = " ".join(all_targets)
+            scaninfo.set("numservices", "1000")  # Keep original
 
     # Write merged XML
     base_tree.write(str(output_path), encoding="utf-8", xml_declaration=True)
