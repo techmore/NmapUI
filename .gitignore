@@ -32,4 +32,5 @@ logs/
 .env
 .env.local
 .claude
+agents
 reports/
