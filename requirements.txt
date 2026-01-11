@@ -7,4 +7,4 @@ requests
 reportlab
 Pillow
 PyYAML
-pyppeteer  # For PDF generation fallback
+playwright  # For PDF generation on Apple Silicon

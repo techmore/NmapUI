@@ -2083,28 +2083,47 @@ def convert_html_to_pdf(html_path, pdf_path):
     except Exception as e:
         logger.error(f"weasyprint failed: {e}")
 
-    # Final fallback to pyppeteer (Chromium-based)
-    socketio.emit("scan_feedback", f"Falling back to pyppeteer for PDF generation")
+    # Final fallback to playwright (Chromium-based)
+    socketio.emit("scan_feedback", f"Falling back to playwright for PDF generation")
     try:
         import asyncio
-        from pyppeteer import launch
+        from playwright.async_api import async_playwright
 
         async def generate_pdf():
-            browser = await launch(headless=True, args=['--no-sandbox'])
-            page = await browser.newPage()
-            await page.goto(f'file://{html_path.resolve()}')
-            await page.pdf({
-                'path': str(pdf_path),
-                'format': 'A4',
-                'printBackground': True,
-                'margin': {'top': '0mm', 'right': '0mm', 'bottom': '0mm', 'left': '0mm'}
-            })
-            await browser.close()
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True, args=['--no-sandbox'])
+                page = await browser.new_page()
+                await page.goto(f'file://{html_path.resolve()}')
+                await page.pdf(
+                    path=str(pdf_path),
+                    format='A4',
+                    print_background=True,
+                    margin={'top': '0mm', 'right': '0mm', 'bottom': '0mm', 'left': '0mm'}
+                )
+                await browser.close()
 
         asyncio.run(generate_pdf())
         return True
     except Exception as e:
-        logger.error(f"pyppeteer failed: {e}")
+        logger.error(f"playwright failed: {e}")
+
+    # Ultimate fallback to macOS textutil
+    socketio.emit("scan_feedback", f"Falling back to textutil for PDF generation")
+    try:
+        cmd = [
+            "textutil",
+            "-convert", "pdf",
+            "-output", str(pdf_path),
+            str(html_path)
+        ]
+        command_str = " ".join(cmd)
+        socketio.emit("scan_feedback", f"Executing: textutil HTML to PDF")
+        socketio.sleep(0)
+
+        subprocess.run(cmd, check=True, capture_output=True)
+        return True
+    except Exception as e:
+        logger.error(f"textutil failed: {e}")
 
     return False
 
