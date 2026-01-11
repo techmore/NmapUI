@@ -7,3 +7,4 @@ requests
 reportlab
 Pillow
 PyYAML
+pyppeteer  # For PDF generation fallback
