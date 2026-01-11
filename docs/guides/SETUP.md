@@ -11,7 +11,7 @@ chmod +x install.sh
 ./start.sh
 ```
 
-Then visit: http://127.0.0.1:5000
+Then visit: http://127.0.0.1:9000
 
 ## Manual Installation
 

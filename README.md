@@ -76,7 +76,7 @@ The app will:
 4. Run traceroute to establish network key
 5. Start the web server
 
-Open your browser to `http://127.0.0.1:5000`
+Open your browser to `http://127.0.0.1:9000`
 
 ### Quick Start (Skip Checks)
 

@@ -33,7 +33,7 @@ Repository conventions
   - python -m build
 - Local app run (manual):
   - python app.py
-  - Visit http://127.0.0.1:5000
+  - Visit http://127.0.0.1:9000
 - Documentation/test with CI-like checks:
   - Keep a minimal test matrix in CI (Python version, dependencies) to catch environment issues.
 
