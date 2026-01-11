@@ -2707,4 +2707,4 @@ auto_scan_thread.start()
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv
     startup_checks(quick=quick_mode)
-    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=True, port=9000, allow_unsafe_werkzeug=True)
