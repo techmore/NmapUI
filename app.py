@@ -2411,8 +2411,6 @@ def delete_scan(path):
 
 def split_subnet_into_chunks(target):
     """Split large subnets into /24 chunks for manageable scanning"""
-    import ipaddress
-
     try:
         network = ipaddress.ip_network(target, strict=False)
         if network.num_addresses <= 256:  # /24 or smaller
@@ -2483,16 +2481,7 @@ def generate_report_event(data):
         idle_state_manager.end_operation("report_generation")
         return
 
-    # Split large subnets into manageable chunks
-    targets = split_subnet_into_chunks(target)
-    num_chunks = len(targets)
-    logger.info(f"Target split into {num_chunks} chunks: {targets}")
 
-    if num_chunks > 1:
-        emit(
-            "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks"
-        )
-        socketio.sleep(0)
 
     # Log report generation start
     logger.info("=" * 60)
@@ -2520,52 +2509,30 @@ def generate_report_event(data):
         socketio.sleep(0)
 
     # Phase 2: Run nmap scan (this is the long-running part)
-    xml_files = []
-    for i, chunk_target in enumerate(targets):
-        if num_chunks > 1:
-            emit("scan_feedback", f"🔍 Scanning chunk {i+1}/{num_chunks}: {chunk_target}")
-        else:
-            emit("scan_feedback", "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...")
-        socketio.sleep(0)
+    emit("scan_feedback", "Starting nmap comprehensive scan (this may take 5-10 minutes)...")
+    socketio.sleep(0)
+    if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
+        emit("report_error", {"error": "Nmap scan failed"})
+        return
 
-        if num_chunks == 1:
-            chunk_output_base = output_base
-        else:
-            chunk_output_base = scan_dir / f"scan_chunk_{i}"
+    # Phase 3: Convert to HTML/PDF
+    xml_path = scan_dir / "scan.xml"
+    web_html_path = scan_dir / "scan_web.html"
+    pdf_html_path = scan_dir / "scan_pdf.html"
+    pdf_path = scan_dir / "scan_report.pdf"
 
-        if not run_nmap_with_xml_output(chunk_target, chunk_output_base, "comprehensive"):
-            emit("report_error", {"error": f"Nmap scan failed on chunk {i+1}"})
-            return
+    emit("scan_feedback", "Converting XML to HTML (web view)...")
+    socketio.sleep(0)
+    # Use the premium Olive PDF stylesheet for BOTH views for consistency
+    convert_xml_to_html(xml_path, web_html_path)
 
-        xml_files.append(chunk_output_base.with_suffix('.xml'))
+    emit("scan_feedback", "Converting XML to HTML (PDF view)...")
+    socketio.sleep(0)
+    convert_xml_to_html(xml_path, pdf_html_path)
 
-    # If multiple chunks, merge XML files
-    if num_chunks > 1:
-        emit("scan_feedback", "🔀 Merging scan results from chunks...")
-        socketio.sleep(0)
-        xml_path = scan_dir / "scan.xml"
-        merge_nmap_xml_files(xml_files, xml_path)
-    else:
-        xml_path = output_base.with_suffix('.xml')
-
-        # Phase 3: Convert to HTML/PDF
-        xml_path = scan_dir / "scan.xml"
-        web_html_path = scan_dir / "scan_web.html"
-        pdf_html_path = scan_dir / "scan_pdf.html"
-        pdf_path = scan_dir / "scan_report.pdf"
-
-        emit("scan_feedback", "📄 Converting XML to HTML (web view)...")
-        socketio.sleep(0)
-        # Use the premium Olive PDF stylesheet for BOTH views for consistency
-        convert_xml_to_html(xml_path, web_html_path)
-
-        emit("scan_feedback", "📄 Converting XML to HTML (PDF view)...")
-        socketio.sleep(0)
-        convert_xml_to_html(xml_path, pdf_html_path)
-
-        emit("scan_feedback", "📑 Generating PDF report...")
-        socketio.sleep(0)
-        convert_html_to_pdf(pdf_html_path, pdf_path)
+    emit("scan_feedback", "Generating PDF report...")
+    socketio.sleep(0)
+    convert_html_to_pdf(pdf_html_path, pdf_path)
 
         files = {
             "xml": xml_path,
