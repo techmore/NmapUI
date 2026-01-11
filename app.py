@@ -2409,6 +2409,55 @@ def delete_scan(path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def split_subnet_into_chunks(target):
+    """Split large subnets into /24 chunks for manageable scanning"""
+    import ipaddress
+
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+        if network.num_addresses <= 256:  # /24 or smaller
+            return [target]
+
+        # Split into /24 chunks
+        chunks = []
+        for subnet in network.subnets(new_prefix=24):
+            if subnet.num_addresses > 0:
+                chunks.append(str(subnet))
+            if len(chunks) >= 256:  # Limit to prevent excessive chunks
+                break
+        return chunks[:256]  # Max 256 chunks
+    except ValueError:
+        # Not a valid subnet, return as-is
+        return [target]
+
+
+def merge_nmap_xml_files(xml_files, output_path):
+    """Merge multiple Nmap XML files into one"""
+    import xml.etree.ElementTree as ET
+
+    if not xml_files:
+        raise ValueError("No XML files to merge")
+
+    # Parse first file as base
+    base_tree = ET.parse(xml_files[0])
+    base_root = base_tree.getroot()
+
+    # Find the nmaprun element
+    nmaprun = base_root
+
+    # For subsequent files, append their host elements
+    for xml_file in xml_files[1:]:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        # Find all host elements in this file
+        for host in root.findall("host"):
+            nmaprun.append(host)
+
+    # Write merged XML
+    base_tree.write(str(output_path), encoding="utf-8", xml_declaration=True)
+
+
 @socketio.on("generate_report")
 def generate_report_event(data):
     """Handle report generation request via SocketIO"""
@@ -2433,6 +2482,17 @@ def generate_report_event(data):
         emit("report_error", {"error": "No target specified"})
         idle_state_manager.end_operation("report_generation")
         return
+
+    # Split large subnets into manageable chunks
+    targets = split_subnet_into_chunks(target)
+    num_chunks = len(targets)
+    logger.info(f"Target split into {num_chunks} chunks: {targets}")
+
+    if num_chunks > 1:
+        emit(
+            "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks"
+        )
+        socketio.sleep(0)
 
     # Log report generation start
     logger.info("=" * 60)
@@ -2459,15 +2519,34 @@ def generate_report_event(data):
         emit("scan_feedback", f"✓ Scan folder: {scan_dir.name}")
         socketio.sleep(0)
 
-        # Phase 2: Run nmap scan (this is the long-running part)
-        emit(
-            "scan_feedback",
-            "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
-        )
+    # Phase 2: Run nmap scan (this is the long-running part)
+    xml_files = []
+    for i, chunk_target in enumerate(targets):
+        if num_chunks > 1:
+            emit("scan_feedback", f"🔍 Scanning chunk {i+1}/{num_chunks}: {chunk_target}")
+        else:
+            emit("scan_feedback", "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...")
         socketio.sleep(0)
-        if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
-            emit("report_error", {"error": "Nmap scan failed"})
+
+        if num_chunks == 1:
+            chunk_output_base = output_base
+        else:
+            chunk_output_base = scan_dir / f"scan_chunk_{i}"
+
+        if not run_nmap_with_xml_output(chunk_target, chunk_output_base, "comprehensive"):
+            emit("report_error", {"error": f"Nmap scan failed on chunk {i+1}"})
             return
+
+        xml_files.append(chunk_output_base.with_suffix('.xml'))
+
+    # If multiple chunks, merge XML files
+    if num_chunks > 1:
+        emit("scan_feedback", "🔀 Merging scan results from chunks...")
+        socketio.sleep(0)
+        xml_path = scan_dir / "scan.xml"
+        merge_nmap_xml_files(xml_files, xml_path)
+    else:
+        xml_path = output_base.with_suffix('.xml')
 
         # Phase 3: Convert to HTML/PDF
         xml_path = scan_dir / "scan.xml"
