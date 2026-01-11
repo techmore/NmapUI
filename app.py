@@ -1963,7 +1963,7 @@ def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
 
 
 def convert_html_to_pdf(html_path, pdf_path):
-    """Convert HTML to PDF using wkhtmltopdf or weasyprint"""
+    """Convert HTML to PDF using wkhtmltopdf, weasyprint, or pyppeteer"""
     # Try wkhtmltopdf first
     wkhtml = shutil.which("wkhtmltopdf")
     if wkhtml:
@@ -2003,6 +2003,29 @@ def convert_html_to_pdf(html_path, pdf_path):
         return True
     except Exception as e:
         logger.error(f"weasyprint failed: {e}")
+
+    # Final fallback to pyppeteer (Chromium-based)
+    socketio.emit("scan_feedback", f"Falling back to pyppeteer for PDF generation")
+    try:
+        import asyncio
+        from pyppeteer import launch
+
+        async def generate_pdf():
+            browser = await launch(headless=True, args=['--no-sandbox'])
+            page = await browser.newPage()
+            await page.goto(f'file://{html_path.resolve()}')
+            await page.pdf({
+                'path': str(pdf_path),
+                'format': 'A4',
+                'printBackground': True,
+                'margin': {'top': '0mm', 'right': '0mm', 'bottom': '0mm', 'left': '0mm'}
+            })
+            await browser.close()
+
+        asyncio.run(generate_pdf())
+        return True
+    except Exception as e:
+        logger.error(f"pyppeteer failed: {e}")
 
     return False
 
@@ -2646,8 +2669,9 @@ def generate_report_event(data):
             logger.info(f"✓ PDF created: {pdf_path} ({file_size} bytes)")
             emit("scan_feedback", f"✓ PDF: {file_size} bytes")
         else:
-            logger.error("✗ PDF generation failed")
-            emit("scan_feedback", "✗ PDF generation failed")
+            logger.warning("PDF generation failed - HTML reports are available")
+            emit("scan_feedback", "⚠️ PDF generation failed - using HTML reports only")
+            emit("scan_feedback", f"📄 HTML reports available: {web_html_path.name}, {pdf_html_path.name}")
 
         files = {
             "xml": xml_path,
