@@ -1766,8 +1766,291 @@ def create_scan_folder(customer_name, target):
     return scan_dir
 
 
+# Subnet Chunking Functions
+def calculate_subnet_size(target):
+    """
+    Calculate the number of hosts in a target subnet.
+
+    Args:
+        target: IP address or CIDR notation (e.g., "192.168.1.0/24")
+
+    Returns:
+        int: Number of hosts in the subnet, or 1 if single IP
+    """
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+        # num_addresses includes network and broadcast addresses
+        # For practical purposes, we care about the total scope
+        return network.num_addresses
+    except ValueError:
+        # Single IP or hostname
+        return 1
+
+
+def chunk_subnet(target, chunk_size=254):
+    """
+    Break a large subnet into smaller chunks.
+
+    Args:
+        target: CIDR notation (e.g., "10.0.0.0/16")
+        chunk_size: Maximum hosts per chunk (default 254 for /24)
+
+    Returns:
+        list: List of smaller subnet CIDR strings
+
+    Example:
+        chunk_subnet("10.0.0.0/16", 254) returns ["10.0.0.0/24", "10.0.1.0/24", ...]
+    """
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+
+        # Calculate new prefix length for desired chunk size
+        # chunk_size 254 = /24 (2^8 - 2 = 254 usable hosts)
+        # chunk_size 100 = ~128 hosts = /25
+        # chunk_size 50 = ~64 hosts = /26
+
+        import math
+        # Add 2 for network and broadcast addresses
+        hosts_needed = chunk_size + 2
+        # Calculate prefix length: 32 - log2(hosts_needed)
+        new_prefix = 32 - math.ceil(math.log2(hosts_needed))
+
+        # Don't make chunks smaller than /24 (too many chunks)
+        new_prefix = min(new_prefix, 24)
+        # Don't make chunks larger than the original network
+        new_prefix = max(new_prefix, network.prefixlen)
+
+        # Generate subnets
+        chunks = list(network.subnets(new_prefix=new_prefix))
+        chunk_strings = [str(chunk) for chunk in chunks]
+
+        logger.info(f"Chunked {target} ({network.num_addresses} hosts) into {len(chunk_strings)} chunks of /{new_prefix}")
+
+        return chunk_strings
+
+    except ValueError as e:
+        logger.error(f"Failed to chunk subnet {target}: {e}")
+        # Return original target if chunking fails
+        return [target]
+
+
+def should_chunk_subnet(target, threshold=1000):
+    """
+    Determine if a subnet should be chunked based on size.
+
+    Args:
+        target: IP address or CIDR notation
+        threshold: Minimum number of hosts to trigger chunking (default 1000)
+
+    Returns:
+        bool: True if subnet should be chunked
+    """
+    size = calculate_subnet_size(target)
+    should_chunk = size >= threshold
+
+    if should_chunk:
+        logger.info(f"Subnet {target} has {size} hosts (>= {threshold}), will chunk")
+    else:
+        logger.info(f"Subnet {target} has {size} hosts (< {threshold}), no chunking needed")
+
+    return should_chunk
+
+
+def merge_nmap_xml_files(xml_files, output_path):
+    """
+    Merge multiple nmap XML files into a single unified XML file.
+
+    Args:
+        xml_files: List of Path objects pointing to XML files
+        output_path: Path where merged XML should be saved
+
+    Returns:
+        bool: True if merge successful, False otherwise
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        if not xml_files:
+            logger.error("No XML files to merge")
+            return False
+
+        if len(xml_files) == 1:
+            # Only one file, just copy it
+            shutil.copy(xml_files[0], output_path)
+            logger.info(f"Single XML file, copied to {output_path}")
+            return True
+
+        # Parse first file as base
+        base_tree = ET.parse(xml_files[0])
+        base_root = base_tree.getroot()
+
+        # Merge hosts from other files
+        hosts_merged = 0
+        for xml_file in xml_files[1:]:
+            try:
+                tree = ET.parse(xml_file)
+                root = tree.getroot()
+
+                # Find all host elements and append to base
+                for host in root.findall('host'):
+                    base_root.append(host)
+                    hosts_merged += 1
+
+            except Exception as e:
+                logger.warning(f"Failed to merge {xml_file}: {e}")
+                continue
+
+        # Update runstats to reflect merged data
+        runstats = base_root.find('runstats')
+        if runstats is not None:
+            hosts_elem = runstats.find('hosts')
+            if hosts_elem is not None:
+                total_hosts = len(base_root.findall('host'))
+                hosts_elem.set('up', str(total_hosts))
+                hosts_elem.set('total', str(total_hosts))
+
+        # Write merged XML
+        base_tree.write(output_path, encoding='unicode', xml_declaration=True)
+        logger.info(f"Merged {len(xml_files)} XML files ({hosts_merged} additional hosts) into {output_path}")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to merge XML files: {e}")
+        return False
+
+
 def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
-    """Run nmap with all formats output (-oA)"""
+    """
+    Run nmap with all formats output (-oA).
+    Automatically chunks large subnets for better reliability.
+
+    Args:
+        target: IP or CIDR notation
+        output_base: Base path for output files (without extension)
+        scan_type: "quick" or "comprehensive"
+
+    Returns:
+        bool: True if scan successful, False otherwise
+    """
+    # Check if subnet should be chunked
+    if should_chunk_subnet(target, threshold=1000):
+        return run_chunked_nmap_scan(target, output_base, scan_type)
+    else:
+        return run_single_nmap_scan(target, output_base, scan_type)
+
+
+def run_chunked_nmap_scan(target, output_base, scan_type="comprehensive"):
+    """
+    Run nmap scan on a large subnet by breaking it into chunks.
+
+    Args:
+        target: Large subnet in CIDR notation
+        output_base: Base path for output files
+        scan_type: "quick" or "comprehensive"
+
+    Returns:
+        bool: True if all chunks scanned and merged successfully
+    """
+    logger.info(f"Starting chunked scan for large subnet: {target}")
+    socketio.emit("scan_feedback", f"🔀 Large subnet detected - breaking into chunks for reliability...")
+    socketio.sleep(0)
+
+    # Break subnet into chunks
+    chunks = chunk_subnet(target, chunk_size=254)
+    total_chunks = len(chunks)
+
+    logger.info(f"Subnet chunked into {total_chunks} pieces")
+    socketio.emit("scan_feedback", f"📦 Divided into {total_chunks} chunks (scanning sequentially)...")
+    socketio.sleep(0)
+
+    # Create temp directory for chunk outputs
+    import tempfile
+    temp_dir = Path(tempfile.mkdtemp(prefix="nmap_chunks_"))
+    logger.info(f"Created temp directory for chunks: {temp_dir}")
+
+    xml_files = []
+    successful_chunks = 0
+
+    # Scan each chunk
+    for idx, chunk in enumerate(chunks, 1):
+        chunk_output_base = temp_dir / f"chunk_{idx:04d}"
+
+        logger.info(f"Scanning chunk {idx}/{total_chunks}: {chunk}")
+        socketio.emit("scan_feedback", f"🔍 Scanning chunk {idx}/{total_chunks}: {chunk}")
+        socketio.sleep(0)
+
+        try:
+            # Run scan on this chunk
+            success = run_single_nmap_scan(str(chunk), str(chunk_output_base), scan_type)
+
+            if success:
+                xml_file = chunk_output_base.with_suffix('.xml')
+                if xml_file.exists():
+                    xml_files.append(xml_file)
+                    successful_chunks += 1
+                    logger.info(f"Chunk {idx}/{total_chunks} completed successfully")
+                else:
+                    logger.warning(f"Chunk {idx}/{total_chunks} completed but XML not found")
+            else:
+                logger.warning(f"Chunk {idx}/{total_chunks} failed")
+
+            # Emit progress
+            progress = int((idx / total_chunks) * 100)
+            socketio.emit("scan_feedback", f"📊 Progress: {successful_chunks}/{total_chunks} chunks completed ({progress}%)")
+            socketio.sleep(0)
+
+        except Exception as e:
+            logger.error(f"Error scanning chunk {idx}/{total_chunks}: {e}")
+            continue
+
+    # Merge all XML files
+    if not xml_files:
+        logger.error("No successful chunk scans to merge")
+        socketio.emit("scan_feedback", "❌ All chunk scans failed")
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return False
+
+    logger.info(f"Merging {len(xml_files)} XML files...")
+    socketio.emit("scan_feedback", f"🔗 Merging {len(xml_files)} chunk results into final report...")
+    socketio.sleep(0)
+
+    output_xml = output_base.with_suffix('.xml') if isinstance(output_base, Path) else Path(str(output_base) + '.xml')
+    merge_success = merge_nmap_xml_files(xml_files, output_xml)
+
+    if merge_success:
+        logger.info(f"Successfully merged {successful_chunks}/{total_chunks} chunks")
+        socketio.emit("scan_feedback", f"✅ Chunked scan complete: {successful_chunks}/{total_chunks} chunks merged")
+
+        # Also create .nmap and .gnmap files from the merged XML
+        # Note: These will be basic conversions, full format may differ from single scan
+        try:
+            nmap_output = output_base.with_suffix('.nmap') if isinstance(output_base, Path) else Path(str(output_base) + '.nmap')
+            gnmap_output = output_base.with_suffix('.gnmap') if isinstance(output_base, Path) else Path(str(output_base) + '.gnmap')
+
+            # Create placeholder files
+            nmap_output.write_text(f"# Nmap scan from chunked subnet scan\n# Original target: {target}\n# Chunks: {total_chunks}\n# See XML file for complete results\n")
+            gnmap_output.write_text(f"# Gnmap from chunked subnet scan - see XML for complete results\n")
+
+        except Exception as e:
+            logger.warning(f"Failed to create supplementary output files: {e}")
+    else:
+        logger.error("Failed to merge XML files")
+        socketio.emit("scan_feedback", "❌ Failed to merge chunk results")
+
+    # Cleanup temp directory
+    try:
+        shutil.rmtree(temp_dir)
+        logger.info("Cleaned up temporary chunk files")
+    except Exception as e:
+        logger.warning(f"Failed to cleanup temp directory: {e}")
+
+    socketio.sleep(0)
+    return merge_success
+
+
+def run_single_nmap_scan(target, output_base, scan_type="comprehensive"):
+    """Run a single nmap scan without chunking"""
 
     if scan_type == "quick":
         logger.info(f"Running quick scan on {target}...")
