@@ -277,22 +277,22 @@ def should_run_auto_scan():
 
 
 def split_subnet_into_chunks(target):
-    """Split large subnets into /26 chunks (~64 hosts each) for manageable scanning"""
+    """Split large subnets into /27 chunks (~32 hosts each) for manageable scanning"""
     import ipaddress
 
     try:
         network = ipaddress.ip_network(target, strict=False)
-        if network.num_addresses <= 64:  # /26 or smaller
+        if network.num_addresses <= 32:  # /27 or smaller
             return [target]
 
-        # Split into /26 chunks (~64 hosts each)
+        # Split into /27 chunks (~32 hosts each)
         chunks = []
-        for subnet in network.subnets(new_prefix=26):
+        for subnet in network.subnets(new_prefix=27):
             if subnet.num_addresses > 0:
                 chunks.append(str(subnet))
-            if len(chunks) >= 256:  # Limit to prevent excessive chunks
+            if len(chunks) >= 512:  # Limit to prevent excessive chunks (increased for smaller chunks)
                 break
-        return chunks[:256]  # Max 256 chunks
+        return chunks[:512]  # Max 512 chunks
     except ValueError:
         # Not a valid subnet, return as-is
         return [target]
@@ -314,29 +314,12 @@ def merge_nmap_xml_files(xml_files, output_path):
 
     # Collect all hosts from all files
     all_hosts = []
-    total_up = 0
-    total_down = 0
-    total_hosts = 0
     earliest_start = None
     latest_end = None
 
     for xml_file in xml_files:
         tree = ET.parse(xml_file)
         root = tree.getroot()
-
-        # Get runstats from this file
-        runstats = root.find("runstats")
-        if runstats is not None:
-            finished = runstats.find("finished")
-            if finished is not None:
-                hosts = finished.get("hosts")
-                if hosts:
-                    parts = hosts.split()
-                    if len(parts) >= 3:
-                        up_count = int(parts[0]) if parts[0].isdigit() else 0
-                        down_count = int(parts[2]) if parts[2].isdigit() else 0
-                        total_up += up_count
-                        total_down += down_count
 
         # Collect host elements
         for host in root.findall("host"):
@@ -356,6 +339,11 @@ def merge_nmap_xml_files(xml_files, output_path):
                     if latest_end is None or end_ts > latest_end:
                         latest_end = end_ts
 
+    # Calculate totals
+    total_up = len(all_hosts)
+    total_ips = len(xml_files) * 32  # Each /27 chunk has 32 IPs
+    total_down = total_ips - total_up
+
     # Remove existing host elements from base
     for host in base_root.findall("host"):
         base_root.remove(host)
@@ -369,15 +357,22 @@ def merge_nmap_xml_files(xml_files, output_path):
     if runstats is not None:
         finished = runstats.find("finished")
         if finished is not None:
-            total_hosts = len(all_hosts)
-            finished.set("summary", f"Nmap done at {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}; {total_hosts} IP addresses ({total_up} hosts up) scanned in 44m1s")
-            finished.set("hosts", f"{total_up} up, {total_down} down, {total_hosts} total")
+            total_ips = total_up + total_down
+            # Calculate total elapsed time from earliest start to latest end
+            if earliest_start and latest_end:
+                total_elapsed = latest_end - earliest_start
+                elapsed_str = f"{total_elapsed // 60}m{total_elapsed % 60}s"
+            else:
+                elapsed_str = "unknown"
+            finished.set("summary", f"Nmap done at {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}; {total_ips} IP addresses ({total_up} hosts up) scanned in {elapsed_str}")
+            finished.set("hosts", f"{total_up} up, {total_down} down, {total_ips} total")
 
         hosts_elem = runstats.find("hosts")
         if hosts_elem is not None:
+            total_ips = total_up + total_down
             hosts_elem.set("up", str(total_up))
             hosts_elem.set("down", str(total_down))
-            hosts_elem.set("total", str(total_hosts))
+            hosts_elem.set("total", str(total_ips))
 
     # Update scaninfo with combined target
     scaninfo = base_root.find("scaninfo")
@@ -400,8 +395,36 @@ def merge_nmap_xml_files(xml_files, output_path):
             combined_target = " ".join(all_targets)
             scaninfo.set("numservices", "1000")  # Keep original
 
-    # Write merged XML
-    base_tree.write(str(output_path), encoding="utf-8", xml_declaration=True)
+    # Write merged XML with proper headers
+    # Read the first XML file to get headers
+    with open(xml_files[0], 'r', encoding='utf-8') as f:
+        first_content = f.read()
+
+    # Extract headers (everything before <nmaprun>)
+    header_end = first_content.find('<nmaprun')
+    if header_end != -1:
+        headers = first_content[:header_end]
+    else:
+        headers = '<?xml version="1.0" encoding="UTF-8"?>\n'
+
+    # Extract footer (everything after </nmaprun>)
+    footer_start = first_content.find('</nmaprun>') + len('</nmaprun>')
+    if footer_start > 0:
+        footer = first_content[footer_start:]
+    else:
+        footer = ''
+
+    # Convert tree to string without declaration (we'll add it with headers)
+    import io
+    xml_string = io.StringIO()
+    base_tree.write(xml_string, encoding="unicode", xml_declaration=False)
+    merged_content = xml_string.getvalue()
+
+    # Combine headers + merged content + footer
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(headers)
+        f.write(merged_content)
+        f.write(footer)
 
 
 
