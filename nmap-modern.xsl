@@ -533,9 +533,9 @@ Updated: 2026
                   </div>
                   <div class="ml-3">
                     <div class="text-2xl font-bold text-red-600">
-                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners']/table/elem[contains(@key, 'CRITICAL') or contains(@key, 'HIGH')])"/>
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '9.') or contains(@output, '10.')])"/>
                     </div>
-                    <div class="text-sm text-olive-600">Critical/High Vulns</div>
+                    <div class="text-sm text-olive-600">Critical Vulns (CVSS ≥9.0)</div>
                   </div>
                 </div>
               </div>
@@ -620,27 +620,27 @@ Updated: 2026
                 <h3 class="text-lg font-semibold text-olive-900 mb-3">Vulnerability Levels</h3>
                 <div class="space-y-2">
                   <div class="flex justify-between items-center">
-                    <span class="text-sm text-red-600 font-medium">Critical</span>
+                    <span class="text-sm text-red-600 font-medium">Critical (CVSS ≥9.0)</span>
                     <span class="text-sm font-bold text-red-600">
-                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners']/table/elem[contains(@key, 'CRITICAL')])"/>
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '9.') or contains(@output, '10.')])"/>
                     </span>
                   </div>
                   <div class="flex justify-between items-center">
-                    <span class="text-sm text-orange-600 font-medium">High</span>
+                    <span class="text-sm text-orange-600 font-medium">High (CVSS ≥7.0)</span>
                     <span class="text-sm font-bold text-orange-600">
-                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners']/table/elem[contains(@key, 'HIGH')])"/>
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '7.') or contains(@output, '8.')])"/>
                     </span>
                   </div>
                   <div class="flex justify-between items-center">
-                    <span class="text-sm text-yellow-600 font-medium">Medium</span>
+                    <span class="text-sm text-yellow-600 font-medium">Medium (CVSS ≥4.0)</span>
                     <span class="text-sm font-bold text-yellow-600">
-                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners']/table/elem[contains(@key, 'MEDIUM')])"/>
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '4.') or contains(@output, '5.') or contains(@output, '6.')])"/>
                     </span>
                   </div>
                   <div class="flex justify-between items-center">
-                    <span class="text-sm text-green-600 font-medium">Low</span>
+                    <span class="text-sm text-green-600 font-medium">Low (CVSS &lt;4.0)</span>
                     <span class="text-sm font-bold text-green-600">
-                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners']/table/elem[contains(@key, 'LOW')])"/>
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '0.') or contains(@output, '1.') or contains(@output, '2.') or contains(@output, '3.')])"/>
                     </span>
                   </div>
                 </div>
@@ -753,19 +753,23 @@ Updated: 2026
 
             <!-- Top 10 Most Vulnerable & Most Open Ports -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <!-- Most Vulnerable Hosts -->
+              <!-- Hosts with Vulnerabilities -->
               <div class="card p-4">
-                <h3 class="text-lg font-semibold text-olive-900 mb-3">Most Vulnerable Hosts</h3>
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Hosts with Vulnerabilities</h3>
                 <div class="space-y-2 max-h-64 overflow-y-auto">
                   <xsl:for-each select="/nmaprun/host[script[@id='vulners']]">
-                    <xsl:sort select="count(script[@id='vulners']/table/elem)" data-type="number" order="descending"/>
                     <xsl:if test="position() &lt;= 10">
                       <div class="flex justify-between items-center py-1">
                         <span class="text-sm font-mono text-olive-700">
                           <xsl:value-of select="address/@addr"/>
                         </span>
                         <span class="text-sm font-medium text-red-600 bg-red-50 px-2 py-1 rounded">
-                          <xsl:value-of select="count(script[@id='vulners']/table/elem)"/> vulns
+                          <xsl:if test="contains(script[@id='vulners']/@output, '9.') or contains(script[@id='vulners']/@output, '10.')">
+                            Critical
+                          </xsl:if>
+                          <xsl:if test="contains(script[@id='vulners']/@output, '7.') or contains(script[@id='vulners']/@output, '8.')">
+                            High
+                          </xsl:if>
                         </span>
                       </div>
                     </xsl:if>
