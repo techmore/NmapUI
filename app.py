@@ -277,22 +277,22 @@ def should_run_auto_scan():
 
 
 def split_subnet_into_chunks(target):
-    """Split large subnets into /27 chunks (~32 hosts each) for manageable scanning"""
+    """Split large subnets into /28 chunks (~16 hosts each) for manageable scanning"""
     import ipaddress
 
     try:
         network = ipaddress.ip_network(target, strict=False)
-        if network.num_addresses <= 32:  # /27 or smaller
+        if network.num_addresses <= 16:  # /28 or smaller
             return [target]
 
-        # Split into /27 chunks (~32 hosts each)
+        # Split into /28 chunks (~16 hosts each)
         chunks = []
-        for subnet in network.subnets(new_prefix=27):
+        for subnet in network.subnets(new_prefix=28):
             if subnet.num_addresses > 0:
                 chunks.append(str(subnet))
-            if len(chunks) >= 512:  # Limit to prevent excessive chunks (increased for smaller chunks)
+            if len(chunks) >= 1024:  # Limit to prevent excessive chunks (increased for smaller chunks)
                 break
-        return chunks[:512]  # Max 512 chunks
+        return chunks[:1024]  # Max 1024 chunks
     except ValueError:
         # Not a valid subnet, return as-is
         return [target]
@@ -341,7 +341,7 @@ def merge_nmap_xml_files(xml_files, output_path):
 
     # Calculate totals
     total_up = len(all_hosts)
-    total_ips = len(xml_files) * 32  # Each /27 chunk has 32 IPs
+    total_ips = len(xml_files) * 16  # Each /28 chunk has 16 IPs
     total_down = total_ips - total_up
 
     # Remove existing host elements from base
