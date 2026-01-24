@@ -3,7 +3,7 @@ from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from typing import Dict, Optional
 import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml, logging, tempfile, glob as file_glob
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
 
@@ -210,7 +210,79 @@ def restart_application():
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# ============================================================================
+# SECURITY: HTTP Basic Authentication
+# ============================================================================
+
+# Load auth config from environment or config file
+AUTH_USERNAME = os.environ.get("NMAPUI_USERNAME", "admin")
+AUTH_PASSWORD = os.environ.get("NMAPUI_PASSWORD", "nmapui123")  # Change in production!
+
+def check_auth(username, password):
+    """Validate credentials"""
+    return username == AUTH_USERNAME and password == AUTH_PASSWORD
+
+def require_auth(f):
+    """Decorator to require HTTP Basic Auth for Flask routes"""
+    from functools import wraps
+    from flask import request, jsonify
+    
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+def require_socket_auth():
+    """Check auth for SocketIO events - returns (authenticated, error_response)"""
+    # For SocketIO, we'll handle auth via a login event
+    # This is a placeholder - proper SocketIO auth would use tokens
+    return (True, None)
+
+# ============================================================================
+# SECURITY: Input Validation
+# ============================================================================
+
+def validate_target(target: str) -> tuple[bool, str]:
+    """
+    Validate scan target IP or CIDR.
+    Returns (is_valid, error_message)
+    """
+    if not target or not target.strip():
+        return False, "Target cannot be empty"
+    
+    target = target.strip()
+    
+    # Allow single IPs, CIDR ranges, and comma-separated lists
+    targets = [t.strip() for t in target.split(',')]
+    
+    for t in targets:
+        try:
+            # Try as IP address
+            ipaddress.ip_address(t)
+        except ValueError:
+            try:
+                # Try as CIDR
+                net = ipaddress.ip_network(t, strict=False)
+                # Warn if scanning entire internet
+                if net == ipaddress.ip_network("0.0.0.0/0"):
+                    return False, "Cannot scan 0.0.0.0/0 (entire internet)"
+            except ValueError:
+                return False, f"Invalid target: {t}"
+    
+    return True, None
+
+def sanitize_input(value: str) -> str:
+    """Sanitize string input to prevent injection attacks"""
+    if not value:
+        return ""
+    # Remove potentially dangerous characters
+    sanitized = re.sub(r'[;&|`${}()<>]', '', value)
+    return sanitized.strip()
 
 # Global network key - populated at startup
 network_key = {
@@ -241,6 +313,54 @@ auto_scan_config = {
     "end_time": "06:00",
     "last_run": None,
 }
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+
+class RateLimiter:
+    """Simple in-memory rate limiter for scan operations"""
+    
+    def __init__(self, max_scans_per_hour=10, cooldown_seconds=300):
+        self.max_scans_per_hour = max_scans_per_hour
+        self.cooldown_seconds = cooldown_seconds
+        self.scan_timestamps = []
+        self.last_scan_time = None
+    
+    def can_scan(self):
+        """Check if a new scan can be started"""
+        now = datetime.now()
+        
+        # Check cooldown
+        if self.last_scan_time:
+            elapsed = (now - self.last_scan_time).total_seconds()
+            if elapsed < self.cooldown_seconds:
+                logger.warning(f"Scan cooldown active. Wait {int(self.cooldown_seconds - elapsed)}s more")
+                return False, f"Cooldown active. Try again in {int(self.cooldown_seconds - elapsed)}s"
+        
+        # Check hourly limit
+        one_hour_ago = now - timedelta(hours=1)
+        recent_scans = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
+        
+        if len(recent_scans) >= self.max_scans_per_hour:
+            logger.warning(f"Rate limit reached: {self.max_scans_per_hour} scans/hour")
+            return False, f"Rate limit reached ({self.max_scans_per_hour} scans/hour)"
+        
+        return True, None
+    
+    def record_scan(self):
+        """Record a scan start"""
+        now = datetime.now()
+        self.scan_timestamps.append(now)
+        self.last_scan_time = now
+        
+        # Clean old entries
+        one_hour_ago = now - timedelta(hours=1)
+        self.scan_timestamps = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
+        
+        logger.info(f"Scan recorded. Total in last hour: {len(self.scan_timestamps)}")
+
+rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 
 
 def load_auto_scan_config():
@@ -435,6 +555,21 @@ def execute_auto_scan():
 
     if not target:
         logger.warning("No target available for auto scan")
+        safe_emit("auto_scan_error", {"error": "No target configured"})
+        return
+
+    # Validate target before scanning
+    is_valid, error_msg = validate_target(target)
+    if not is_valid:
+        logger.error(f"Auto scan validation failed: {error_msg}")
+        safe_emit("auto_scan_error", {"error": error_msg})
+        return
+
+    # Check rate limit
+    can_scan, rate_msg = rate_limiter.can_scan()
+    if not can_scan:
+        logger.warning(f"Auto scan rate limited: {rate_msg}")
+        safe_emit("auto_scan_error", {"error": rate_msg})
         return
 
     customer_name = current_customer.get("name", "Unknown").split(" (")[0]  # Remove confidence
@@ -442,6 +577,9 @@ def execute_auto_scan():
     logger.info(f"Executing auto scan for target: {target}, customer: {customer_name}")
 
     try:
+        # Record this scan
+        rate_limiter.record_scan()
+        
         safe_emit("trigger_generate_report", {
             "target": target,
             "customer_name": customer_name,
@@ -1567,8 +1705,29 @@ def start_deep_scan(targets, is_gateway_phase=False):
 
 
 @socketio.on("start_scan")
-def start_scan(target):
+def start_scan(data):
+    """Handle scan start request with validation"""
     try:
+        # Extract target from data (handles both old format (target) and new format {target: ...})
+        if isinstance(data, dict):
+            target = data.get("target", "")
+        else:
+            target = str(data) if data else ""
+        
+        # Validate target
+        is_valid, error_msg = validate_target(target)
+        if not is_valid:
+            emit("scan_error", f"Invalid target: {error_msg}")
+            return
+        
+        # Check rate limit
+        can_scan, rate_msg = rate_limiter.can_scan()
+        if not can_scan:
+            emit("scan_error", rate_msg)
+            return
+        
+        # Record scan start
+        rate_limiter.record_scan()
         idle_state_manager.start_operation("quick_scan")
         emit("quick_scan_start", f"Starting quick scan on {target}")
         command_str = f"nmap -sn {target}"
