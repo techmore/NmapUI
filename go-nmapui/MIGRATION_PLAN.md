@@ -50,7 +50,7 @@ go-nmapui/
 ├── go.mod                       # Go module definition
 ├── go.sum                       # Dependency checksums
 ├── Makefile                     # Build automation
-├── Dockerfile                   # Container build
+
 └── README.md                    # Go-specific docs
 ```
 
@@ -223,7 +223,7 @@ quick_scan_start, quick_scan_complete, scan_error, cve_array
 - [ ] Build for Windows (amd64)
 - [ ] Release documentation
 - [ ] Installation scripts
-- [ ] Docker image (optional)
+- [ ] Native installers for hospital environments
 - [ ] GitHub Actions CI/CD
 
 **Deliverable**: Release artifacts on GitHub

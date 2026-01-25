@@ -198,19 +198,17 @@ sudo systemctl enable nmapui
 sudo systemctl start nmapui
 ```
 
-### Docker
+### Native Installation (Recommended)
+
+NmapUI runs as a single binary without containers.
 
 ```bash
-# Build image
-docker build -t nmapui:latest .
+# Install system dependencies
+brew install nmap xsltproc wkhtmltopdf  # macOS
+sudo apt install nmap xsltproc wkhtmltopdf  # Linux
 
-# Run
-docker run -d \
-  -p 9000:9000 \
-  --cap-add=NET_RAW \
-  --cap-add=NET_ADMIN \
-  -v ./data:/app/data \
-  nmapui:latest
+# Run binary
+sudo ./nmapui
 ```
 
 ### Reverse Proxy (nginx)
