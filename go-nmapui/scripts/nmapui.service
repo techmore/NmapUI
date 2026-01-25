@@ -1,0 +1,46 @@
+[Unit]
+Description=NmapUI Network Scanner - Go Edition
+Documentation=https://github.com/techmore/NmapUI
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# Environment variables
+Environment="PORT=9000"
+Environment="DB_PATH=/var/lib/nmapui/nmapui.db"
+Environment="CUSTOMERS_YAML=/etc/nmapui/customers.yaml"
+Environment="MAX_CONCURRENT=10"
+
+# Binary location
+ExecStart=/usr/local/bin/nmapui
+
+# Working directory
+WorkingDirectory=/var/lib/nmapui
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+
+# Security hardening
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nmapui /var/log/nmapui
+LogsDirectory=nmapui
+StateDirectory=nmapui
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=512
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nmapui
+
+[Install]
+WantedBy=multi-user.target
