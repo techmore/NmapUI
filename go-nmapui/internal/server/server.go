@@ -8,14 +8,31 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/template/html/v2"
+	"github.com/techmore/nmapui/internal/database"
+	"github.com/techmore/nmapui/internal/fingerprint"
+	"github.com/techmore/nmapui/internal/reports"
+	"github.com/techmore/nmapui/internal/scanner"
+	"github.com/techmore/nmapui/pkg/websocket"
 )
 
-type Server struct {
-	App *fiber.App
+// Dependencies holds all components needed by the server
+type Dependencies struct {
+	DB            *database.DB
+	ScanEngine    *scanner.ScanEngine
+	Fingerprinter *fingerprint.CustomerFingerprinter
+	ReportGen     *reports.ReportGenerator
+	WSHub         *websocket.Hub
 }
 
-func NewServer() *Server {
-	return &Server{}
+type Server struct {
+	App  *fiber.App
+	Deps *Dependencies
+}
+
+func NewServer(deps *Dependencies) *Server {
+	return &Server{
+		Deps: deps,
+	}
 }
 
 func (s *Server) Initialize() error {
@@ -24,13 +41,15 @@ func (s *Server) Initialize() error {
 	s.App = fiber.New(fiber.Config{
 		Views:        views,
 		ErrorHandler: errorHandler,
+		AppName:      "NmapUI Go Edition",
+		ServerHeader: "NmapUI",
 	})
 
 	s.App.Use(logger.New())
 	s.App.Use(cors.New())
 	s.App.Static("/static", "./web/static")
 
-	RegisterRoutes(s.App)
+	RegisterRoutes(s)
 	return nil
 }
 
