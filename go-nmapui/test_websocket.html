@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NmapUI WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #faf9f6;
+            color: #3a3733;
+        }
+        h1 {
+            font-family: 'Instrument Serif', Georgia, serif;
+            color: #6b7a5a;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            color: #8a8578;
+            margin-bottom: 30px;
+        }
+        .status {
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .status.connected {
+            background: #d4e8d4;
+            color: #2d5a2d;
+        }
+        .status.disconnected {
+            background: #f0d8d8;
+            color: #8a3333;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button.primary {
+            background: #6b7a5a;
+            color: white;
+        }
+        button.primary:hover {
+            background: #556348;
+        }
+        button.secondary {
+            background: #e0dcd3;
+            color: #3a3733;
+        }
+        button.secondary:hover {
+            background: #d0ccc3;
+        }
+        button.danger {
+            background: #c85a5a;
+            color: white;
+        }
+        button.danger:hover {
+            background: #a84848;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .events-container {
+            background: white;
+            border: 2px solid #e0dcd3;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .event {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #6b7a5a;
+            background: #f8f7f4;
+        }
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .event-type {
+            font-weight: 700;
+            color: #6b7a5a;
+        }
+        .event-time {
+            font-size: 0.9em;
+            color: #8a8578;
+        }
+        .event-data {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85em;
+            background: #ebe9e5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            border: 2px solid #e0dcd3;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .stat-label {
+            font-size: 0.85em;
+            color: #8a8578;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: #6b7a5a;
+            margin-top: 5px;
+        }
+        input {
+            padding: 10px;
+            border: 2px solid #e0dcd3;
+            border-radius: 6px;
+            font-size: 1em;
+            flex: 1;
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>NmapUI WebSocket Test Client</h1>
+    <p class="subtitle">Real-time event monitoring and testing</p>
+
+    <div id="status" class="status disconnected">
+        ⚫ Disconnected
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-label">Events Received</div>
+            <div class="stat-value" id="event-count">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Connection Time</div>
+            <div class="stat-value" id="connection-time">--</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Last Event</div>
+            <div class="stat-value" id="last-event" style="font-size: 1.2em;">None</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="connect-btn" class="primary" onclick="connect()">Connect</button>
+        <button id="disconnect-btn" class="secondary" onclick="disconnect()" disabled>Disconnect</button>
+        <button class="secondary" onclick="clearEvents()">Clear Events</button>
+        
+        <input type="text" id="target-input" placeholder="Target (e.g., 127.0.0.1)" value="127.0.0.1">
+        <button class="primary" onclick="triggerQuickScan()" id="scan-btn" disabled>Trigger Quick Scan</button>
+        <button class="danger" onclick="sendCustomEvent()">Send Custom Event</button>
+    </div>
+
+    <div class="events-container" id="events">
+        <p style="text-align: center; color: #8a8578;">No events yet. Connect to start receiving.</p>
+    </div>
+
+    <script>
+        let ws = null;
+        let eventCount = 0;
+        let connectionStart = null;
+        let connectionTimer = null;
+
+        function updateStatus(connected) {
+            const status = document.getElementById('status');
+            const connectBtn = document.getElementById('connect-btn');
+            const disconnectBtn = document.getElementById('disconnect-btn');
+            const scanBtn = document.getElementById('scan-btn');
+
+            if (connected) {
+                status.className = 'status connected';
+                status.textContent = '🟢 Connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                scanBtn.disabled = false;
+                connectionStart = Date.now();
+                startConnectionTimer();
+            } else {
+                status.className = 'status disconnected';
+                status.textContent = '⚫ Disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                scanBtn.disabled = true;
+                stopConnectionTimer();
+            }
+        }
+
+        function startConnectionTimer() {
+            connectionTimer = setInterval(() => {
+                if (connectionStart) {
+                    const elapsed = Math.floor((Date.now() - connectionStart) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    document.getElementById('connection-time').textContent = 
+                        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+
+        function stopConnectionTimer() {
+            if (connectionTimer) {
+                clearInterval(connectionTimer);
+                connectionTimer = null;
+            }
+            document.getElementById('connection-time').textContent = '--';
+        }
+
+        function connect() {
+            const wsUrl = 'ws://localhost:9000/ws';
+            console.log('Connecting to', wsUrl);
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateStatus(true);
+                addEvent('connect', { message: 'WebSocket connection established' });
+            };
+
+            ws.onmessage = (event) => {
+                console.log('Received message:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    addEvent(data.event || 'message', data);
+                } catch (e) {
+                    addEvent('raw', { data: event.data });
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addEvent('error', { message: 'Connection error occurred' });
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateStatus(false);
+                addEvent('disconnect', { message: 'WebSocket connection closed' });
+                ws = null;
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function addEvent(eventType, data) {
+            eventCount++;
+            document.getElementById('event-count').textContent = eventCount;
+            document.getElementById('last-event').textContent = eventType;
+
+            const eventsContainer = document.getElementById('events');
+            
+            if (eventCount === 1) {
+                eventsContainer.innerHTML = '';
+            }
+
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'event';
+            
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
+            
+            eventDiv.innerHTML = `
+                <div class="event-header">
+                    <span class="event-type">${eventType}</span>
+                    <span class="event-time">${timeStr}</span>
+                </div>
+                <div class="event-data">${JSON.stringify(data, null, 2)}</div>
+            `;
+            
+            eventsContainer.insertBefore(eventDiv, eventsContainer.firstChild);
+        }
+
+        function clearEvents() {
+            document.getElementById('events').innerHTML = 
+                '<p style="text-align: center; color: #8a8578;">No events yet. Connect to start receiving.</p>';
+            eventCount = 0;
+            document.getElementById('event-count').textContent = '0';
+            document.getElementById('last-event').textContent = 'None';
+        }
+
+        async function triggerQuickScan() {
+            const target = document.getElementById('target-input').value;
+            if (!target) {
+                alert('Please enter a target');
+                return;
+            }
+
+            console.log('Triggering quick scan for', target);
+            addEvent('scan_request', { target });
+
+            try {
+                const response = await fetch('http://localhost:9000/api/scan/quick', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ target, timing: 'T3' })
+                });
+
+                const result = await response.json();
+                console.log('Scan result:', result);
+                addEvent('scan_response', result);
+            } catch (error) {
+                console.error('Scan error:', error);
+                addEvent('scan_error', { message: error.message });
+            }
+        }
+
+        function sendCustomEvent() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('Not connected to WebSocket');
+                return;
+            }
+
+            const message = {
+                event: 'ping',
+                data: { timestamp: Date.now() }
+            };
+
+            console.log('Sending custom event:', message);
+            ws.send(JSON.stringify(message));
+            addEvent('sent', message);
+        }
+
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+            connect();
+        });
+    </script>
+</body>
+</html>
