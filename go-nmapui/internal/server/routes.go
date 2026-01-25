@@ -4,42 +4,44 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func RegisterRoutes(app *fiber.App) {
-	app.Get("/", handleIndex)
-	app.Get("/api/health", handleHealth)
+func RegisterRoutes(s *Server) {
+	app := s.App
 
-	app.Get("/api/scans", handleListScans)
-	app.Post("/api/scan/start", handleStartScan)
-	app.Get("/api/scan/:id", handleGetScan)
+	app.Get("/", s.handleIndex)
+	app.Get("/api/health", s.handleHealth)
 
-	RegisterWebSocket(app)
+	app.Get("/api/scans", s.handleListScans)
+	app.Post("/api/scan/start", s.handleStartScan)
+	app.Get("/api/scan/:id", s.handleGetScan)
+
+	RegisterWebSocket(s)
 }
 
-func handleIndex(c *fiber.Ctx) error {
+func (s *Server) handleIndex(c *fiber.Ctx) error {
 	return c.Render("index", fiber.Map{
 		"Title": "NmapUI",
 	})
 }
 
-func handleHealth(c *fiber.Ctx) error {
+func (s *Server) handleHealth(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status": "ok",
 	})
 }
 
-func handleListScans(c *fiber.Ctx) error {
+func (s *Server) handleListScans(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 		"error": "scan listing not implemented",
 	})
 }
 
-func handleStartScan(c *fiber.Ctx) error {
+func (s *Server) handleStartScan(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 		"error": "scan start not implemented",
 	})
 }
 
-func handleGetScan(c *fiber.Ctx) error {
+func (s *Server) handleGetScan(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 		"error": "scan lookup not implemented",
 		"id":    c.Params("id"),
