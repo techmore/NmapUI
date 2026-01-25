@@ -363,7 +363,7 @@ func TestDB_CurrentAssignment(t *testing.T) {
 		Timestamp:    time.Now(),
 		Confidence:   0.85,
 		NetworkKey: map[string]interface{}{
-			"test": "data",
+			"test":    "data",
 			"exit_ip": "203.0.113.1",
 		},
 	}
@@ -515,5 +515,195 @@ func BenchmarkSetCurrentAssignment(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = db.SetCurrentAssignment(assign)
+	}
+}
+
+func TestDB_TracerouteOperations(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	entry := TracerouteEntry{
+		Timestamp: time.Now(),
+		ExitIP:    "203.0.113.1",
+		Hops: []map[string]interface{}{
+			{"ip": "192.168.1.1", "latency": 1.0},
+			{"ip": "10.0.0.1", "latency": 5.0},
+			{"ip": "203.0.113.1", "latency": 10.0},
+		},
+		RawOutput: "traceroute to 1.1.1.1",
+	}
+
+	if err := db.InsertTraceroute(entry); err != nil {
+		t.Fatalf("InsertTraceroute() error = %v", err)
+	}
+
+	count, err := db.GetTracerouteCount()
+	if err != nil {
+		t.Fatalf("GetTracerouteCount() error = %v", err)
+	}
+	if count != 1 {
+		t.Errorf("GetTracerouteCount() = %d, want 1", count)
+	}
+
+	entries, err := db.GetAllTraceroutes(10)
+	if err != nil {
+		t.Fatalf("GetAllTraceroutes() error = %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("GetAllTraceroutes() returned %d entries, want 1", len(entries))
+	}
+
+	if entries[0].ExitIP != "203.0.113.1" {
+		t.Errorf("ExitIP = %s, want 203.0.113.1", entries[0].ExitIP)
+	}
+	if len(entries[0].Hops) != 3 {
+		t.Errorf("len(Hops) = %d, want 3", len(entries[0].Hops))
+	}
+
+	byExitIP, err := db.GetTraceroutesByExitIP("203.0.113.1", 10)
+	if err != nil {
+		t.Fatalf("GetTraceroutesByExitIP() error = %v", err)
+	}
+	if len(byExitIP) != 1 {
+		t.Errorf("GetTraceroutesByExitIP() returned %d entries, want 1", len(byExitIP))
+	}
+
+	notFound, err := db.GetTraceroutesByExitIP("1.2.3.4", 10)
+	if err != nil {
+		t.Fatalf("GetTraceroutesByExitIP() error = %v", err)
+	}
+	if len(notFound) != 0 {
+		t.Errorf("GetTraceroutesByExitIP() for non-existent IP returned %d entries, want 0", len(notFound))
+	}
+
+	byID, err := db.GetTracerouteByID(entries[0].ID)
+	if err != nil {
+		t.Fatalf("GetTracerouteByID() error = %v", err)
+	}
+	if byID == nil {
+		t.Fatal("GetTracerouteByID() returned nil")
+	}
+	if byID.ExitIP != "203.0.113.1" {
+		t.Errorf("ExitIP = %s, want 203.0.113.1", byID.ExitIP)
+	}
+
+	notFoundByID, err := db.GetTracerouteByID(99999)
+	if err != nil {
+		t.Errorf("GetTracerouteByID() with invalid ID error = %v", err)
+	}
+	if notFoundByID != nil {
+		t.Error("GetTracerouteByID() should return nil for non-existent ID")
+	}
+}
+
+func TestDB_DeleteOldTraceroutes(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	now := time.Now()
+	old := now.Add(-24 * time.Hour)
+
+	oldEntry := TracerouteEntry{
+		Timestamp: old,
+		ExitIP:    "1.1.1.1",
+		Hops:      []map[string]interface{}{{"ip": "192.168.1.1"}},
+		RawOutput: "old",
+	}
+
+	newEntry := TracerouteEntry{
+		Timestamp: now,
+		ExitIP:    "2.2.2.2",
+		Hops:      []map[string]interface{}{{"ip": "192.168.1.2"}},
+		RawOutput: "new",
+	}
+
+	if err := db.InsertTraceroute(oldEntry); err != nil {
+		t.Fatalf("InsertTraceroute() error = %v", err)
+	}
+	if err := db.InsertTraceroute(newEntry); err != nil {
+		t.Fatalf("InsertTraceroute() error = %v", err)
+	}
+
+	cutoff := now.Add(-1 * time.Hour)
+	if err := db.DeleteOldTraceroutes(cutoff); err != nil {
+		t.Fatalf("DeleteOldTraceroutes() error = %v", err)
+	}
+
+	count, err := db.GetTracerouteCount()
+	if err != nil {
+		t.Fatalf("GetTracerouteCount() error = %v", err)
+	}
+	if count != 1 {
+		t.Errorf("After delete, count = %d, want 1", count)
+	}
+
+	entries, err := db.GetAllTraceroutes(10)
+	if err != nil {
+		t.Fatalf("GetAllTraceroutes() error = %v", err)
+	}
+	if len(entries) > 0 && entries[0].ExitIP != "2.2.2.2" {
+		t.Errorf("Remaining entry ExitIP = %s, want 2.2.2.2", entries[0].ExitIP)
+	}
+}
+
+func TestDB_PruneOldTraceroutes(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	for i := 0; i < 10; i++ {
+		entry := TracerouteEntry{
+			Timestamp: time.Now().Add(time.Duration(i) * time.Minute),
+			ExitIP:    "203.0.113.1",
+			Hops:      []map[string]interface{}{{"ip": "192.168.1.1"}},
+			RawOutput: "test",
+		}
+		if err := db.InsertTraceroute(entry); err != nil {
+			t.Fatalf("InsertTraceroute() error = %v", err)
+		}
+	}
+
+	if err := db.PruneOldTraceroutes(5); err != nil {
+		t.Fatalf("PruneOldTraceroutes() error = %v", err)
+	}
+
+	count, err := db.GetTracerouteCount()
+	if err != nil {
+		t.Fatalf("GetTracerouteCount() error = %v", err)
+	}
+	if count != 5 {
+		t.Errorf("After pruning, count = %d, want 5", count)
+	}
+}
+
+func TestDB_TracerouteLimit(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	for i := 0; i < 10; i++ {
+		entry := TracerouteEntry{
+			Timestamp: time.Now(),
+			ExitIP:    "203.0.113.1",
+			Hops:      []map[string]interface{}{{"hop": i}},
+			RawOutput: "test",
+		}
+		if err := db.InsertTraceroute(entry); err != nil {
+			t.Fatalf("InsertTraceroute() error = %v", err)
+		}
+	}
+
+	limited, err := db.GetAllTraceroutes(3)
+	if err != nil {
+		t.Fatalf("GetAllTraceroutes() error = %v", err)
+	}
+	if len(limited) != 3 {
+		t.Errorf("GetAllTraceroutes(3) returned %d entries, want 3", len(limited))
+	}
+
+	byExitLimited, err := db.GetTraceroutesByExitIP("203.0.113.1", 5)
+	if err != nil {
+		t.Fatalf("GetTraceroutesByExitIP() error = %v", err)
+	}
+	if len(byExitLimited) != 5 {
+		t.Errorf("GetTraceroutesByExitIP(5) returned %d entries, want 5", len(byExitLimited))
 	}
 }
