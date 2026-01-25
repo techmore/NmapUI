@@ -1,0 +1,67 @@
+version: "1.0"
+description: "Test customer fingerprint database"
+
+settings:
+  confidence_threshold: 0.7
+  max_history: 100
+
+customers:
+  - id: "test-hospital-1"
+    name: "Test Hospital 1"
+    confidence: 0.8
+    description: "Test hospital for unit testing"
+    networks:
+      exit_ips: "203.0.113.1"
+      public_ip: "203.0.113.0/24"
+      private_ranges:
+        - "10.0.0.0/8"
+        - "192.168.0.0/16"
+    metadata:
+      network_size: "small"
+    fingerprints:
+      - type: "primary"
+        description: "Main network path"
+        hop_count: "8-12"
+        latency_profile:
+          first_hop: "<5ms"
+          exit_hop: "10-20ms"
+          total_time: "<100ms"
+        private_hop_pattern:
+          - position: 1
+            ip_pattern: "192.168.1.*"
+        public_exit_pattern:
+          - position: "last"
+            ip_pattern: "203.0.113.1"
+
+  - id: "test-hospital-2"
+    name: "Test Hospital 2"
+    confidence: 0.85
+    description: "Second test hospital"
+    networks:
+      exit_ips:
+        - "198.51.100.1"
+        - "198.51.100.2"
+      public_ip: "198.51.100.0/24"
+    metadata:
+      network_size: "medium"
+    fingerprints:
+      - type: "primary"
+        description: "Main network path"
+        hop_count: "10-15"
+        latency_profile:
+          first_hop: "<3ms"
+          exit_hop: "15-25ms"
+        private_hop_pattern:
+          - position: 1
+            ip_pattern: "10.0.*.*"
+          - position: 2
+            ip_pattern: "10.1.*.*"
+
+unknown_customer:
+  id: "unknown"
+  name: "Unknown Network"
+  confidence: 0.0
+
+indexing:
+  by_exit_ip: true
+  by_hop_pattern: true
