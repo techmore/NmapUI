@@ -55,8 +55,10 @@ func (c *Client) Close() {
 	c.closeOnce.Do(func() {
 		close(c.done)
 		close(c.send)
-		if err := c.conn.Close(); err != nil {
-			log.Printf("websocket close error client=%s err=%v", c.id, err)
+		if c.conn != nil {
+			if err := c.conn.Close(); err != nil {
+				log.Printf("websocket close error client=%s err=%v", c.id, err)
+			}
 		}
 	})
 }
