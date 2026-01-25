@@ -87,6 +87,18 @@ python app.py --quick
 python app.py -q
 ```
 
+### Development and Production
+
+Development mode (debug enabled):
+```bash
+FLASK_ENV=development python app.py
+```
+
+Production mode (Gunicorn + gevent for Socket.IO):
+```bash
+gunicorn -c gunicorn_config.py wsgi:app
+```
+
 ## Scan Flow
 
 1. **nmap -sn** runs first for host discovery (warms ARP cache)

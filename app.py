@@ -550,7 +550,8 @@ def get_report_counts():
                         or timestamp > counts["last_scans"]["total"]
                     ):
                         counts["last_scans"]["total"] = timestamp
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse metadata from {metadata_path}: {type(e).__name__}: {e}")
             continue
 
     return counts
@@ -1647,7 +1648,8 @@ def check_arp_scan():
             )
             logger.info(f"Found: {version}")
             return True
-        except:
+        except (subprocess.CalledProcessError, UnicodeDecodeError) as e:
+            logger.debug(f"Could not get arp-scan version: {type(e).__name__}: {e}")
             logger.info("Found: arp-scan (version unknown)")
             return True
     else:
@@ -2607,7 +2609,8 @@ def startup_checks(quick=False):
                     versions["vulners"] = version_result.stdout.strip()
                 else:
                     versions["vulners"] = "Unknown"
-            except:
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.debug(f"Could not get vulners version: {type(e).__name__}: {e}")
                 versions["vulners"] = "Unknown"
 
         logger.info("\nChecking arp-scan...")
@@ -2621,7 +2624,8 @@ def startup_checks(quick=False):
                     .split("\n")[0]
                 )
                 versions["arp_scan"] = version
-            except:
+            except (subprocess.CalledProcessError, UnicodeDecodeError) as e:
+                logger.debug(f"Could not get arp-scan version: {type(e).__name__}: {e}")
                 versions["arp_scan"] = "arp-scan (version unknown)"
         else:
             versions["arp_scan"] = "Not installed"
@@ -2705,6 +2709,13 @@ auto_scan_thread = threading.Thread(target=auto_scan_loop, daemon=True)
 auto_scan_thread.start()
 
 if __name__ == "__main__":
-    quick_mode = "--quick" in sys.argv or "-q" in sys.argv
-    startup_checks(quick=quick_mode)
-    socketio.run(app, debug=True, port=9000, allow_unsafe_werkzeug=True)
+    import os
+
+    if os.environ.get("FLASK_ENV", "development") == "development":
+        quick_mode = "--quick" in sys.argv or "-q" in sys.argv
+        startup_checks(quick=quick_mode)
+        socketio.run(app, debug=True, host="127.0.0.1", port=9000)
+    else:
+        print("ERROR: Use 'gunicorn -c gunicorn_config.py wsgi:app' for production")
+        print("For development: FLASK_ENV=development python app.py")
+        sys.exit(1)

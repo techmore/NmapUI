@@ -59,9 +59,14 @@ class CustomerFingerprinter:
     def load_traceroute_history(self):
         try:
             if not self.traceroutes_path.exists():
-                logger.warning(
-                    f"Traceroute history not found at {self.traceroutes_path}"
+                logger.info(
+                    f"Traceroute history not found at {self.traceroutes_path}. Creating new file..."
                 )
+                os.makedirs(os.path.dirname(self.traceroutes_path), exist_ok=True)
+                self.customer_traceroutes = {}
+                with open(self.traceroutes_path, "w") as f:
+                    json.dump(self.customer_traceroutes, f, indent=2)
+                logger.info(f"Created new traceroute history file at {self.traceroutes_path}")
                 return
 
             with open(self.traceroutes_path, "r") as f:
@@ -96,17 +101,18 @@ class CustomerFingerprinter:
                 "raw_traceroute": network_key.get("raw", ""),
             }
 
-            if customer_id and customer_id not in self.customer_traceroutes:
-                self.customer_traceroutes[customer_id] = {
-                    "name": self.customer_traceroutes.get(customer_id, {}).get(
-                        "name", customer_id
-                    ),
-                    "traceroutes": [],
-                }
+            if customer_id:
+                if customer_id not in self.customer_traceroutes:
+                    self.customer_traceroutes[customer_id] = {
+                        "name": self.customer_traceroutes.get(customer_id, {}).get(
+                            "name", customer_id
+                        ),
+                        "traceroutes": [],
+                    }
 
-            self.customer_traceroutes[customer_id]["traceroutes"].append(
-                traceroute_entry
-            )
+                self.customer_traceroutes[customer_id]["traceroutes"].append(
+                    traceroute_entry
+                )
 
             os.makedirs(os.path.dirname(self.traceroutes_path), exist_ok=True)
             with open(self.traceroutes_path, "w") as f:
@@ -117,7 +123,10 @@ class CustomerFingerprinter:
             )
 
         except Exception as e:
-            logger.error(f"Error saving traceroute to history: {e}")
+            logger.error(
+                f"Error saving traceroute to history: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
 
     def match_ip_pattern(self, ip: str, pattern: str) -> bool:
         if pattern == "dynamic":
