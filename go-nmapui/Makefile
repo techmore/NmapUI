@@ -85,24 +85,8 @@ install: build ## Install binary to /usr/local/bin
 	sudo cp bin/$(APP_NAME) /usr/local/bin/
 	@echo "✓ Installed: /usr/local/bin/$(APP_NAME)"
 
-docker-build: ## Build Docker image
-	@echo "Building Docker image..."
-	docker build -t $(APP_NAME):$(VERSION) .
-	docker tag $(APP_NAME):$(VERSION) $(APP_NAME):latest
-
-docker-run: ## Run Docker container
-	@echo "Running Docker container..."
-	docker run -d \
-		-p 9000:9000 \
-		--cap-add=NET_RAW \
-		--cap-add=NET_ADMIN \
-		-v ./data:/app/data \
-		--name $(APP_NAME) \
-		$(APP_NAME):latest
-
-docker-stop: ## Stop Docker container
-	docker stop $(APP_NAME) || true
-	docker rm $(APP_NAME) || true
+# Docker is prohibited in hospital environments
+# All deployment must use native binaries
 
 migrate: ## Run database migrations
 	@echo "Running migrations..."
