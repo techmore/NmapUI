@@ -683,8 +683,24 @@
                     <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
                 </span>
             </div>
+            
+            <!-- Progress Bar -->
+            <div id="deep-scan-progress-container" class="hidden mb-4">
+                <div class="flex justify-between text-xs text-olive-600 mb-1">
+                    <span>Progress</span>
+                    <span id="deep-progress-text">0%</span>
+                </div>
+                <div class="w-full bg-olive-200 rounded-full h-2">
+                    <div id="deep-progress-bar" class="bg-olive-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <!-- Enhanced Metrics -->
             <div class="space-y-1 text-sm">
                 <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="deep-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Progress:</span> <span id="deep-progress-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Scan Rate:</span> <span id="deep-scan-rate" class="font-medium text-olive-900">-- hosts/min</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">ETA:</span> <span id="deep-eta" class="font-medium text-olive-900">--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="deep-hosts" class="font-medium text-olive-900">--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="deep-ports" class="font-medium text-olive-900">--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="deep-cves" class="font-medium text-olive-900">--</span></p>
@@ -916,8 +932,8 @@
         });
 
         // Deep scan indicator handlers
-        socket.on('deep_scan_start', () => {
-            console.log('Deep scan started - pulsing card');
+        socket.on('deep_scan_start', (data) => {
+            console.log('Deep scan started - pulsing card', data);
             // Stop quick scan card pulsing if still active
             const quickCard = document.getElementById('quick-scan-card');
             if (quickCard) {
@@ -927,6 +943,20 @@
             const deepCard = document.getElementById('deep-scan-card');
             if (deepCard) {
                 deepCard.classList.add('card-pulsing');
+            }
+            
+            // Show progress container and initialize
+            const progressContainer = document.getElementById('deep-scan-progress-container');
+            if (progressContainer) {
+                progressContainer.classList.remove('hidden');
+                document.getElementById('deep-progress-bar').style.width = '0%';
+                document.getElementById('deep-progress-text').textContent = '0%';
+            }
+            
+            // Update metrics with scan config
+            if (data && data.config) {
+                const config = data.config;
+                console.log(`Using ${config.scan_type} scan with ${config.max_concurrent} concurrent hosts`);
             }
         });
 
@@ -952,17 +982,58 @@
             }
         });
 
-        socket.on('deep_scan_complete', () => {
-            console.log('All deep scans complete - stopping pulse');
+        // Enhanced scan progress tracking
+        socket.on('scan_progress', (data) => {
+            console.log('Scan progress update:', data);
+            
+            // Update progress bar
+            const progressBar = document.getElementById('deep-progress-bar');
+            const progressText = document.getElementById('deep-progress-text');
+            const progressHosts = document.getElementById('deep-progress-hosts');
+            const scanRate = document.getElementById('deep-scan-rate');
+            const eta = document.getElementById('deep-eta');
+            
+            if (progressBar) {
+                progressBar.style.width = `${data.percentage}%`;
+                progressText.textContent = `${data.percentage}%`;
+            }
+            
+            if (progressHosts) {
+                progressHosts.textContent = `${data.scanned}/${data.total}`;
+            }
+            
+            if (scanRate) {
+                scanRate.textContent = `${(data.hosts_per_second * 60).toFixed(1)} hosts/min`;
+            }
+            
+            if (eta) {
+                eta.textContent = data.eta_formatted || '--';
+            }
+        });
+
+        socket.on('deep_scan_complete', (data) => {
+            console.log('All deep scans complete - stopping pulse', data);
             const deepCard = document.getElementById('deep-scan-card');
             if (deepCard) {
                 deepCard.classList.remove('card-pulsing');
             }
+            
+            // Hide progress container
+            const progressContainer = document.getElementById('deep-scan-progress-container');
+            if (progressContainer) {
+                progressContainer.classList.add('hidden');
+            }
+            
             // Clear all status indicators
             const tb = document.querySelector('#discovery-table tbody');
             Array.from(tb.rows).forEach(row => {
                 row.cells[0].innerHTML = '';
             });
+            
+            // Log final statistics
+            if (data) {
+                console.log(`Deep scan completed: ${data.total_results} hosts in ${data.total_time.toFixed(1)}s at ${data.avg_scan_rate.toFixed(2)} hosts/sec`);
+            }
         });
 
         socket.on('scan_feedback', msg => {

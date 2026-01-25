@@ -77,22 +77,43 @@ else
     echo "✅ arp-scan found: $(arp-scan --version | head -1)"
 fi
 
-# Check Chrome/ChromeDriver for Selenium
-echo "📦 Checking Chrome/ChromeDriver..."
-if command -v google-chrome &> /dev/null || command -v /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome &> /dev/null; then
-    echo "✅ Chrome found"
-    
-    # Install chromedriver via pip if not available
-    if ! command -v chromedriver &> /dev/null; then
-        echo "📦 Installing chromedriver..."
-        pip install chromedriver-autoinstaller
-        echo "✅ chromedriver will be auto-installed when needed"
+# Check xsltproc (for PDF report generation)
+if ! command -v xsltproc &> /dev/null; then
+    echo "📦 Installing xsltproc/libxslt (for PDF report generation)..."
+    if command -v brew &> /dev/null; then
+        brew install libxslt
     else
-        echo "✅ chromedriver found"
+        echo "⚠️  xsltproc not found. PDF report generation will not work."
+        echo "   Install manually:"
+        echo "   Ubuntu: sudo apt install xsltproc"
     fi
 else
-    echo "⚠️  Chrome not found. Selenium features may not work properly."
-    echo "   Please install Google Chrome for full functionality."
+    echo "✅ xsltproc found"
+fi
+
+# Check wkhtmltopdf or weasyprint (for PDF conversion)
+if ! command -v wkhtmltopdf &> /dev/null; then
+    echo "📦 Checking PDF converter..."
+    if python3 -c "import weasyprint" &> /dev/null; then
+        echo "✅ weasyprint (Python PDF converter) found"
+    else
+        echo "📦 Installing weasyprint (PDF converter)..."
+        pip install weasyprint
+        echo "✅ weasyprint installed"
+        echo "   Note: You can also install wkhtmltopdf:"
+        echo "   macOS:  brew install wkhtmltopdf"
+        echo "   Ubuntu: sudo apt install wkhtmltopdf"
+    fi
+else
+    echo "✅ wkhtmltopdf found"
+fi
+
+# Check traceroute (for network fingerprinting)
+if ! command -v traceroute &> /dev/null; then
+    echo "⚠️  traceroute not found (usually pre-installed on macOS/Linux)"
+    echo "   Customer network fingerprinting may not work."
+else
+    echo "✅ traceroute found"
 fi
 
 # Check git (for vulners script)
@@ -132,7 +153,7 @@ echo "Or manually:"
 echo "  source .venv/bin/activate"
 echo "  python app.py"
 echo ""
-echo "Then visit: http://127.0.0.1:5000"
+echo "Then visit: http://127.0.0.1:9000"
 echo ""
 echo "Optional: Use --quick flag to skip dependency checks:"
 echo "  ./start.sh --quick"
