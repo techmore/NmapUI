@@ -8,12 +8,11 @@ import (
 	nmapws "github.com/techmore/nmapui/pkg/websocket"
 )
 
-func RegisterWebSocket(app *fiber.App) {
-	hub := nmapws.NewHub()
+func RegisterWebSocket(s *Server) {
+	hub := s.Deps.WSHub
 	router := nmapws.NewRouter()
-	registerWebSocketHandlers(router)
-
-	go hub.Run()
+	registerWebSocketHandlers(s, router)
+	app := s.App
 
 	app.Use("/socket.io/", func(c *fiber.Ctx) error {
 		if fiberws.IsWebSocketUpgrade(c) {
@@ -36,7 +35,7 @@ func RegisterWebSocket(app *fiber.App) {
 	}))
 }
 
-func registerWebSocketHandlers(router *nmapws.Router) {
+func registerWebSocketHandlers(s *Server, router *nmapws.Router) {
 	router.Register(nmapws.EventConnect, func(client *nmapws.Client, data interface{}) error {
 		return nil
 	})
