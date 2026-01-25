@@ -1,0 +1,1 @@
+- gopls not available in PATH, so lsp_diagnostics could not be executed.

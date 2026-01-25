@@ -1,0 +1,2 @@
+- Implemented ARP discovery via nmap with `-PR` (custom arguments) plus ping scan to avoid external arp-scan subprocess.
+- Capped effective concurrency at 10 in the engine even when adaptive profile allows more, matching stated requirement.

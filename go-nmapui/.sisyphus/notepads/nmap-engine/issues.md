@@ -1,0 +1,2 @@
+- Plan file not found under .sisyphus/plans; proceeded without plan reference.
+- gopls not available in PATH, so LSP diagnostics could not run.

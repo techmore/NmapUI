@@ -1,0 +1,1 @@
+- Selected the best matching fingerprint per customer using the combined hop+latency weighted score to avoid inflating scores across multiple fingerprints.

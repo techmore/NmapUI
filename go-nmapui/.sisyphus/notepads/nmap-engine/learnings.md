@@ -1,0 +1,2 @@
+- Built scan pipeline around Ullaakut/nmap Run results; CVE extraction comes from vulners script output and script elements.
+- Adaptive scan profiles map to nmap timing templates and top-ports settings for quick tuning.

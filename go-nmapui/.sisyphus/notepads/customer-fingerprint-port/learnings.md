@@ -1,0 +1,2 @@
+- Ported traceroute parsing and network signature generation to mirror Python behavior (hop regex, avg latency rounding, private/public masking).
+- Preserved Python matching quirks such as latency range normalization before comparisons for parity.
