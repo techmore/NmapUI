@@ -1,10 +1,13 @@
 package server
 
 import (
+	"context"
 	"log"
+	"time"
 
 	fiberws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/techmore/nmapui/internal/database"
 	nmapws "github.com/techmore/nmapui/pkg/websocket"
 )
 
@@ -42,13 +45,24 @@ func registerWebSocketHandlers(s *Server, router *nmapws.Router) {
 	router.Register(nmapws.EventDisconnect, func(client *nmapws.Client, data interface{}) error {
 		return nil
 	})
-	router.Register(nmapws.EventGetNetworkKey, handleGetNetworkKey)
-	router.Register(nmapws.EventGetCustomerInfo, handleGetCustomerInfo)
-	router.Register(nmapws.EventStartScan, handleStartScanEvent)
+
+	router.Register(nmapws.EventGetNetworkKey, func(client *nmapws.Client, data interface{}) error {
+		return handleGetNetworkKeyWS(s, client, data)
+	})
+	router.Register(nmapws.EventGetCustomerInfo, func(client *nmapws.Client, data interface{}) error {
+		return handleGetCustomerInfoWS(s, client, data)
+	})
+	router.Register(nmapws.EventStartScan, func(client *nmapws.Client, data interface{}) error {
+		return handleStartScanEventWS(s, client, data)
+	})
 	router.Register(nmapws.EventScanFeedback, handleScanFeedback)
 	router.Register(nmapws.EventScanProgress, handleScanProgress)
-	router.Register(nmapws.EventGetCustomers, handleGetCustomers)
-	router.Register(nmapws.EventAssignCustomer, handleAssignCustomer)
+	router.Register(nmapws.EventGetCustomers, func(client *nmapws.Client, data interface{}) error {
+		return handleGetCustomersWS(s, client, data)
+	})
+	router.Register(nmapws.EventAssignCustomer, func(client *nmapws.Client, data interface{}) error {
+		return handleAssignCustomerWS(s, client, data)
+	})
 
 	registerStub(router, nmapws.EventGenerateReport)
 	registerStub(router, nmapws.EventCheckResumableScan)
@@ -61,8 +75,12 @@ func registerWebSocketHandlers(s *Server, router *nmapws.Router) {
 
 	registerStub(router, nmapws.EventCheckAppUpdates)
 	registerStub(router, nmapws.EventPerformAppUpdate)
-	registerStub(router, nmapws.EventSearchScanHistory)
-	registerStub(router, nmapws.EventGetHistoryCounts)
+	router.Register(nmapws.EventSearchScanHistory, func(client *nmapws.Client, data interface{}) error {
+		return handleSearchScanHistoryWS(s, client, data)
+	})
+	router.Register(nmapws.EventGetHistoryCounts, func(client *nmapws.Client, data interface{}) error {
+		return handleGetHistoryCountsWS(s, client, data)
+	})
 	registerStub(router, nmapws.EventCVEArray)
 	registerStub(router, nmapws.EventScanError)
 
@@ -90,27 +108,76 @@ func handleDisconnect(client *nmapws.Client) error {
 	return nil
 }
 
-func handleGetNetworkKey(client *nmapws.Client, data interface{}) error {
+func handleGetNetworkKeyWS(s *Server, client *nmapws.Client, data interface{}) error {
+	ctx := context.Background()
+
+	nk, err := s.Deps.Fingerprinter.RunTraceroute(ctx, "1.1.1.1")
+	if err != nil {
+		log.Printf("traceroute failed client=%s err=%v", client.ID(), err)
+		client.Send(nmapws.Message{
+			Event: nmapws.EventNetworkKey,
+			Data: nmapws.NetworkKeyResponse{
+				Hops: []string{},
+			},
+		})
+		return nil
+	}
+
+	hops := make([]string, len(nk.Hops))
+	for i, hop := range nk.Hops {
+		hops[i] = hop.IP
+	}
+
 	client.Send(nmapws.Message{
 		Event: nmapws.EventNetworkKey,
 		Data: nmapws.NetworkKeyResponse{
-			Hops: []string{},
+			Hops: hops,
 		},
 	})
 	return nil
 }
 
-func handleGetCustomerInfo(client *nmapws.Client, data interface{}) error {
+func handleGetCustomerInfoWS(s *Server, client *nmapws.Client, data interface{}) error {
+	ctx := context.Background()
+
+	nk, err := s.Deps.Fingerprinter.RunTraceroute(ctx, "1.1.1.1")
+	if err != nil {
+		log.Printf("traceroute failed for customer info client=%s err=%v", client.ID(), err)
+		client.Send(nmapws.Message{
+			Event: nmapws.EventCustomerInfo,
+			Data: nmapws.CustomerInfoResponse{
+				Customer: nmapws.Customer{},
+			},
+		})
+		return nil
+	}
+
+	customerID, confidence, err := s.Deps.Fingerprinter.IdentifyCustomer(ctx, nk)
+	if err != nil || customerID == "Unknown" {
+		client.Send(nmapws.Message{
+			Event: nmapws.EventCustomerInfo,
+			Data: nmapws.CustomerInfoResponse{
+				Customer: nmapws.Customer{},
+			},
+		})
+		return nil
+	}
+
 	client.Send(nmapws.Message{
 		Event: nmapws.EventCustomerInfo,
 		Data: nmapws.CustomerInfoResponse{
-			Customer: nmapws.Customer{},
+			Customer: nmapws.Customer{
+				ID:   customerID,
+				Name: customerID,
+			},
 		},
 	})
+
+	log.Printf("identified customer=%s confidence=%.2f client=%s", customerID, confidence, client.ID())
 	return nil
 }
 
-func handleStartScanEvent(client *nmapws.Client, data interface{}) error {
+func handleStartScanEventWS(s *Server, client *nmapws.Client, data interface{}) error {
 	client.Send(nmapws.Message{
 		Event: nmapws.EventScanFeedback,
 		Data: nmapws.ScanFeedback{
@@ -118,6 +185,8 @@ func handleStartScanEvent(client *nmapws.Client, data interface{}) error {
 			Message: "start_scan queued",
 		},
 	})
+
+	log.Printf("scan queued client=%s", client.ID())
 	return nil
 }
 
@@ -131,17 +200,97 @@ func handleScanProgress(client *nmapws.Client, data interface{}) error {
 	return nil
 }
 
-func handleGetCustomers(client *nmapws.Client, data interface{}) error {
+func handleGetCustomersWS(s *Server, client *nmapws.Client, data interface{}) error {
+	customers := s.Deps.Fingerprinter.Customers
+
+	wsCustomers := make([]nmapws.Customer, len(customers))
+	for i, c := range customers {
+		wsCustomers[i] = nmapws.Customer{
+			ID:   c.ID,
+			Name: c.Name,
+		}
+	}
+
 	client.Send(nmapws.Message{
 		Event: nmapws.EventCustomers,
 		Data: nmapws.CustomersResponse{
-			Customers: []nmapws.Customer{},
+			Customers: wsCustomers,
 		},
 	})
 	return nil
 }
 
-func handleAssignCustomer(client *nmapws.Client, data interface{}) error {
-	log.Printf("websocket assign customer client=%s", client.ID())
+func handleAssignCustomerWS(s *Server, client *nmapws.Client, data interface{}) error {
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		log.Printf("invalid assign customer data client=%s", client.ID())
+		return nil
+	}
+
+	customerID, ok := dataMap["customer_id"].(string)
+	if !ok {
+		log.Printf("missing customer_id client=%s", client.ID())
+		return nil
+	}
+
+	assignment := database.Assignment{
+		CustomerID:   customerID,
+		CustomerName: customerID,
+		Timestamp:    time.Now(),
+		Confidence:   1.0,
+		NetworkKey:   make(map[string]interface{}),
+	}
+
+	if err := s.Deps.DB.SetCurrentAssignment(assignment); err != nil {
+		log.Printf("save assignment failed customer=%s client=%s err=%v", customerID, client.ID(), err)
+		return nil
+	}
+
+	log.Printf("customer assigned customer=%s client=%s", customerID, client.ID())
+	return nil
+}
+
+func handleSearchScanHistoryWS(s *Server, client *nmapws.Client, data interface{}) error {
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		dataMap = make(map[string]interface{})
+	}
+
+	customerID, _ := dataMap["customer_id"].(string)
+	limit := 50
+	if limitFloat, ok := dataMap["limit"].(float64); ok {
+		limit = int(limitFloat)
+	}
+
+	history, err := s.Deps.DB.GetScanHistory(customerID, limit)
+	if err != nil {
+		log.Printf("get scan history failed client=%s err=%v", client.ID(), err)
+		return nil
+	}
+
+	client.Send(nmapws.Message{
+		Event: "scan_history_results",
+		Data:  map[string]interface{}{"history": history},
+	})
+	return nil
+}
+
+func handleGetHistoryCountsWS(s *Server, client *nmapws.Client, data interface{}) error {
+	count, err := s.Deps.DB.GetScanHistoryCount()
+	if err != nil {
+		log.Printf("get history counts failed client=%s err=%v", client.ID(), err)
+		return nil
+	}
+
+	counts := map[string]interface{}{
+		"total":    count,
+		"by_day":   make(map[string]int),
+		"by_month": make(map[string]int),
+	}
+
+	client.Send(nmapws.Message{
+		Event: "history_counts",
+		Data:  counts,
+	})
 	return nil
 }
