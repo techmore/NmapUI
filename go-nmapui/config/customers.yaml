@@ -1,0 +1,23 @@
+customers:
+  - id: demo-customer-1
+    name: Demo Corporation
+    exit_ips:
+      - 203.0.113.1
+      - 203.0.113.2
+    latency_range: [10, 50]
+    hop_count_range: [8, 15]
+    priority: 1
+    metadata:
+      notes: "Demo customer for testing"
+
+  - id: demo-customer-2
+    name: Test Enterprise
+    exit_ips:
+      - 198.51.100.1
+    latency_range: [5, 30]
+    hop_count_range: [6, 12]
+    priority: 2
+
+indexing:
+  storage_path: "data/scan_history.json"
+  max_entries: 10000
