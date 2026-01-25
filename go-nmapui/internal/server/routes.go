@@ -11,6 +11,8 @@ func RegisterRoutes(app *fiber.App) {
 	app.Get("/api/scans", handleListScans)
 	app.Post("/api/scan/start", handleStartScan)
 	app.Get("/api/scan/:id", handleGetScan)
+
+	RegisterWebSocket(app)
 }
 
 func handleIndex(c *fiber.Ctx) error {
