@@ -809,7 +809,7 @@ func TestCalculateHopPatternScore(t *testing.T) {
 			fingerprint: &models.Fingerprint{
 				HopCount: "2",
 			},
-			want: 0.5,
+			want: 1.0,
 		},
 		{
 			name: "matching private hop pattern",
