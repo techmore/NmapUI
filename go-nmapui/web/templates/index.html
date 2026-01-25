@@ -1,14 +1,2728 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{.Title}}</title>
-  </head>
-  <body>
-    <main>
-      <h1>NmapUI</h1>
-      <p>Go Fiber server is running.</p>
-    </main>
-  </body>
+<html>
+<head>
+    <title>Network Scanner GUI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        olive: {
+                            50: 'oklch(96% 0.015 110)',
+                            100: 'oklch(91% 0.020 110)',
+                            200: 'oklch(85% 0.028 110)',
+                            300: 'oklch(75% 0.040 110)',
+                            400: 'oklch(62% 0.055 110)',
+                            500: 'oklch(50% 0.065 110)',
+                            600: 'oklch(42% 0.055 110)',
+                            700: 'oklch(35% 0.045 110)',
+                            800: 'oklch(28% 0.035 110)',
+                            900: 'oklch(22% 0.025 110)',
+                            950: 'oklch(16% 0.015 110)',
+                        }
+                    },
+                    fontFamily: {
+                        display: ['Instrument Serif', 'serif'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<style>
+    body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background-color: oklch(91% 0.012 106.5);
+        color: oklch(15.3% 0.006 107.1);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    h1, h2, h3 {
+        font-family: 'Instrument Serif', serif;
+    }
+    ::selection {
+        background-color: oklch(75% 0.040 110);
+    }
+    input {
+        background-color: oklch(98% 0.008 110);
+        color: oklch(16% 0.015 110);
+        border: 1px solid oklch(75% 0.040 110);
+        padding: 8px 12px;
+        border-radius: 9999px;
+        outline: none;
+        transition: border-color 0.2s ease;
+    }
+    input:focus {
+        border-color: oklch(42% 0.055 110);
+    }
+    input::placeholder {
+        color: oklch(50% 0.065 110);
+    }
+    .open-ports-cell {
+        max-width: 200px;
+        overflow-wrap: break-word;
+    }
+    table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    th {
+        background-color: oklch(22% 0.025 110);
+        color: white;
+        font-weight: 500;
+    }
+    tbody tr:nth-child(even) {
+        background-color: oklch(96% 0.015 110);
+    }
+    tbody tr:hover {
+        background-color: oklch(85% 0.028 110);
+    }
+    .card-pulsing {
+        animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        border-color: oklch(22% 0.025 110) !important;
+        box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
+    }
+    @keyframes pulse-border {
+        0%, 100% {
+            box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
+        }
+        50% {
+            box-shadow: 0 0 0 12px oklch(62% 0.055 110 / 0.2);
+        }
+    }
+
+    @keyframes slideDown {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+    }
+
+    /* Sortable table styles */
+    .sortable {
+        user-select: none;
+    }
+
+    .sortable:hover .sort-indicators {
+        opacity: 1 !important;
+    }
+
+    .sorted-asc .sort-asc {
+        color: oklch(22% 0.025 110); /* olive-800 equivalent */
+    }
+
+    .sorted-desc .sort-desc {
+        color: oklch(22% 0.025 110); /* olive-800 equivalent */
+    }
+
+    .sort-indicators {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-left: 0.25rem;
+    }
+
+    .sort-asc, .sort-desc {
+        transition: color 0.2s ease;
+    }
+</style>
+    <body class="py-8">
+    <!-- Main Content Container (1200px) -->
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <!-- Header with Title -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-6">
+            <img src="static/techmore.png" class="h-12 w-auto">
+            <div>
+                <h1 class="text-4xl font-display italic text-olive-950">Network Scanner</h1>
+                <div class="flex items-center gap-2">
+                    <div id="app-version" class="text-sm text-olive-600 font-medium">v--.--.--.__</div>
+                    <button id="app-update-badge" onclick="showUpdateModal()" class="hidden px-2 py-0.5 bg-amber-500 text-white text-[10px] font-bold rounded-full hover:bg-amber-600 transition-colors">
+                        Update Available
+                    </button>
+                    <div class="relative group">
+                        <button class="flex items-center justify-center w-5 h-5 rounded-full bg-olive-100 text-olive-600 hover:bg-olive-200 hover:text-olive-800 transition-all focus:ring-2 focus:ring-olive-500 focus:outline-none" aria-label="Software version information">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </button>
+                        <div id="versions" class="invisible group-hover:visible absolute left-0 top-full mt-2 w-64 bg-olive-950 text-white p-4 rounded-xl shadow-xl border border-olive-800 z-50 transition-all opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 origin-top-left">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-olive-400 mb-3">Software Stack</h4>
+                            <div class="space-y-3 text-xs">
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-olive-500 font-medium">Nmap Engine</span>
+                                    <div id="nmap-version" class="font-mono bg-olive-900 p-2 rounded border border-olive-800 break-words">Nmap: --</div>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-olive-500 font-medium">Vulners Database</span>
+                                    <div id="vulners-version" class="font-mono bg-olive-900 p-2 rounded border border-olive-800 break-words">Vulners: --</div>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-olive-500 font-medium">ARP-Scan Utility</span>
+                                    <div id="arpscan-version" class="font-mono bg-olive-900 p-2 rounded border border-olive-800 break-words">ARP-Scan: --</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="current-date-time" class="text-xl font-display text-olive-950 text-center"></div>
+        <div class="flex items-center gap-8">
+        </div>
+    </div>
+
+    <!-- Auto-Update Banner -->
+    <div id="auto-update-banner" class="hidden fixed top-16 left-4 right-4 z-50 bg-gradient-to-r from-olive-600 to-olive-700 text-white p-4 rounded-lg shadow-lg border border-olive-500 max-w-2xl mx-auto">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="flex-shrink-0">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">Update Available!</h3>
+                    <p id="update-description" class="text-olive-100">NmapUI v2026.1.9.12_45 is ready to install</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-center">
+                    <div id="countdown-timer" class="text-3xl font-mono font-bold text-olive-100">
+                        30
+                    </div>
+                    <div class="text-xs text-olive-200">seconds</div>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="update-now-btn" class="bg-white text-olive-700 px-4 py-2 rounded-lg font-medium hover:bg-olive-50 transition-colors text-sm">
+                        Update Now
+                    </button>
+                    <button id="cancel-update-btn" class="bg-olive-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-olive-400 transition-colors text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <div class="bg-olive-500 rounded-full h-2 overflow-hidden">
+                <div id="progress-bar" class="bg-white h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden customer selector for JavaScript compatibility -->
+    <select id="current-customer" class="hidden">
+        <option value="">Auto-detect network...</option>
+    </select>
+
+    <!-- Local IP Info Panel -->
+    <div id="local-ip-panel" class="mt-4 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+            <div>
+                <span class="text-olive-500 block">Local IP</span>
+                <span id="local-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">Subnet Mask</span>
+                <span id="subnet-mask-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">CIDR</span>
+                <span id="cidr-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">Public IP</span>
+                <span id="public-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+        </div>
+
+        <div id="network-key-banner" class="p-4 bg-olive-50 text-olive-950 rounded-2xl shadow-sm border border-olive-200">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-olive-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <span class="text-olive-600 text-xs font-bold uppercase tracking-widest">Network Topology</span>
+                    </div>
+                    <div class="flex items-center gap-8">
+                        <div class="flex flex-col items-end">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-400 font-black">Hops</span>
+                            <span id="total-hops" class="text-sm font-mono font-bold text-olive-900">--</span>
+                        </div>
+                        <div class="flex flex-col items-end border-l border-olive-100 pl-4">
+                            <span class="text-[9px] uppercase tracking-tighter text-amber-500 font-black">Private</span>
+                            <span id="private-hops" class="text-sm font-mono font-bold text-amber-600">--</span>
+                        </div>
+                        <div class="flex flex-col items-end border-l border-olive-100 pl-4">
+                            <span class="text-[9px] uppercase tracking-tighter text-emerald-500 font-black">Public</span>
+                            <span id="public-hops" class="text-sm font-mono font-bold text-emerald-600">--</span>
+                        </div>
+                        <div class="flex flex-col items-end border-l border-olive-100 pl-4">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-400 font-black">Exit</span>
+                            <span id="exit-ip" class="text-sm font-mono font-bold text-olive-900">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="route-path" class="flex items-center flex-wrap gap-2 py-1">
+                    <span class="text-olive-400 text-xs italic">Mapping active route...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-customer-form" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-olive-900">Add Customer</h3>
+                <button onclick="hideCustomerForm()" class="text-olive-500 hover:text-olive-700">
+                    ✕
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer Name *</label>
+                    <input type="text" id="cust-name" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., TechCorp HQ">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer ID *</label>
+                    <input type="text" id="cust-id" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., techcorp_hq">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Description</label>
+                    <input type="text" id="cust-description" class="w-full p-2 border border-olive-300 rounded" placeholder="Brief description">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Location</label>
+                    <input type="text" id="cust-location" class="w-full p-2 border border-olive-300 rounded" placeholder="City, State/Country">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Connection Type</label>
+                    <select id="cust-connection-type" class="w-full p-2 border border-olive-300 rounded">
+                        <option value="direct">Direct</option>
+                        <option value="vpn">VPN</option>
+                        <option value="residential">Residential</option>
+                        <option value="mobile">Mobile/Cellular</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Gateway Pattern</label>
+                    <input type="text" id="cust-gateway" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 192.168.1.1">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Exit IP Pattern</label>
+                    <input type="text" id="cust-exit-pattern" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 203.0.113.*">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Hop Count Range</label>
+                    <input type="text" id="cust-hop-count" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 2-5">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Private IP Ranges</label>
+                    <input type="text" id="cust-private-ranges" class="w-full p-2 border border-olive-300 rounded" placeholder="192.168.0.0/16,10.0.0.0/8">
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="hideCustomerForm()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                    Cancel
+                </button>
+                <button onclick="addCustomer()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors">
+                    Add Customer
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Customer Messages -->
+    <div id="customer-messages" class="mt-4 hidden">
+        <div class="p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
+            <span id="customer-message"></span>
+        </div>
+    </div>
+
+    <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center">
+                <h2 class="text-2xl font-display italic text-olive-900">Scan History</h2>
+                <button onclick="hideHistoryModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div class="mb-4 flex gap-4">
+                    <select id="history-customer-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                        <option value="">All Customers</option>
+                    </select>
+                    <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                    <button onclick="loadScanHistory()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="history-list" class="space-y-3">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Asset Details Modal -->
+    <div id="asset-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center">
+                <h2 id="asset-modal-title" class="text-2xl font-display italic text-olive-900">Asset Details</h2>
+                <button onclick="hideAssetModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div id="asset-modal-content" class="space-y-6">
+                    <!-- Asset details will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div id="update-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        <div class="bg-white rounded-lg max-w-2xl w-full flex flex-col shadow-2xl border border-olive-300">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50 rounded-t-lg">
+                <h2 class="text-2xl font-display italic text-olive-900">Application Update</h2>
+                <button onclick="hideUpdateModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-8">
+                <div id="update-initial" class="space-y-4">
+                    <p class="text-olive-800">A new version of NmapUI is available. Would you like to download it now?</p>
+                    <div id="update-release-notes" class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 max-h-32 overflow-y-auto">
+                        <strong>Release Notes:</strong><br>
+                        Loading...
+                    </div>
+                    <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                        <strong>Note:</strong> This will open your browser to download the new version. You'll need to install it manually.
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button onclick="hideUpdateModal()" class="px-5 py-2 text-olive-600 hover:text-olive-900 font-medium transition-colors">
+                            Later
+                        </button>
+                        <button onclick="startAppUpdate()" class="px-6 py-2 bg-amber-500 text-white font-bold rounded-full hover:bg-amber-600 shadow-sm transition-all">
+                            Download Update
+                        </button>
+                    </div>
+                </div>
+
+                <div id="update-progress" class="hidden space-y-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="update-current-status" class="text-olive-900 font-medium">Initializing update...</span>
+                        <span id="update-percentage" class="text-olive-600 text-sm">0%</span>
+                    </div>
+                    <div class="w-full bg-olive-100 rounded-full h-3 overflow-hidden shadow-inner">
+                        <div id="update-progress-bar" class="bg-amber-500 h-full w-0 transition-all duration-500 shadow-sm"></div>
+                    </div>
+                    <div id="update-terminal" class="mt-4 p-4 bg-zinc-900 text-zinc-300 font-mono text-xs rounded-lg h-48 overflow-y-auto shadow-inner border border-zinc-800">
+                        <div id="update-log"></div>
+                    </div>
+                </div>
+
+                <div id="update-complete" class="hidden text-center space-y-4">
+                    <div class="mx-auto size-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-display text-olive-950">Update Successful</h3>
+                    <p class="text-olive-700">The application is restarting. Please wait a moment...</p>
+                    <button onclick="window.location.reload()" class="mt-4 px-6 py-2 bg-olive-950 text-white rounded-full hover:bg-olive-800 transition-colors">
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Asset Details Modal -->
+    <div id="asset-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-olive-300">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50">
+                <div>
+                    <h2 class="text-2xl font-display italic text-olive-900">Asset Details</h2>
+                    <p class="text-sm text-olive-600 mt-1">
+                        <span id="asset-detail-ip" class="font-mono font-bold"></span>
+                        <span id="asset-detail-hostname" class="ml-2"></span>
+                    </p>
+                </div>
+                <button onclick="closeAssetDetailsModal()" class="text-olive-400 hover:text-olive-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Basic Info Section -->
+                <div class="bg-olive-50 p-4 rounded-lg border border-olive-200">
+                    <h3 class="text-lg font-display italic text-olive-900 mb-3">Basic Information</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-olive-600 font-medium">MAC Address:</span>
+                            <span id="asset-detail-mac" class="ml-2 font-mono text-olive-900"></span>
+                        </div>
+                        <div>
+                            <span class="text-olive-600 font-medium">Vendor:</span>
+                            <span id="asset-detail-vendor" class="ml-2 text-olive-900"></span>
+                            <a id="asset-vendor-link" href="#" target="_blank" class="ml-2 text-olive-600 hover:text-olive-800 hidden">
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-olive-600 font-medium">Status:</span>
+                            <span id="asset-detail-status" class="ml-2 text-olive-900"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Services Section -->
+                <div class="bg-olive-50 p-4 rounded-lg border border-olive-200">
+                    <h3 class="text-lg font-display italic text-olive-900 mb-3">Services & Ports</h3>
+                    <div id="asset-detail-services" class="space-y-2">
+                        <!-- Services will be populated here -->
+                    </div>
+                </div>
+
+                <!-- CVE Vulnerabilities Section -->
+                <div id="asset-cve-section" class="bg-amber-50 p-4 rounded-lg border border-amber-200 hidden">
+                    <h3 class="text-lg font-display italic text-amber-900 mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Vulnerabilities (<span id="asset-cve-count">0</span> CVEs)
+                    </h3>
+                    <div id="asset-detail-cves" class="space-y-2 max-h-64 overflow-y-auto">
+                        <!-- CVEs will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-olive-300 bg-olive-50 flex justify-end">
+                <button onclick="closeAssetDetailsModal()" class="px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white font-medium rounded-lg transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Command Center -->
+    <div class="mt-8 bg-olive-50 p-6 rounded-2xl shadow-sm border border-olive-200">
+        <div class="flex flex-col md:flex-row md:items-end gap-6">
+            <!-- Target Input Group -->
+            <div class="flex-1 space-y-2">
+                <label for="scan-target" class="block text-xs font-bold uppercase tracking-wider text-olive-600 ml-1">Network Target</label>
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-olive-400 group-focus-within:text-olive-600 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                    </div>
+                    <input type="text" id="scan-target" class="w-full pl-11 pr-12 py-3 bg-olive-50 border-2 border-olive-100 rounded-xl text-olive-900 placeholder-olive-400 focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none" placeholder="192.168.1.0/24 or techmore.io" aria-label="Network target for scanning">
+                    <span id="info-icon" class="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-olive-300 hover:text-olive-600 transition-colors" title="Scan information">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </span>
+                    <div id="tooltip" class="hidden absolute top-full right-0 mt-3 w-64 bg-olive-900 text-white p-4 rounded-xl shadow-xl border border-olive-800 text-xs z-50 leading-relaxed">
+                        <p class="font-bold text-olive-400 mb-1 uppercase tracking-tighter">Valid Target Formats:</p>
+                        <ul class="space-y-1 opacity-90">
+                            <li>• IPv4 (e.g. 192.168.1.1)</li>
+                            <li>• Ranges (e.g. 192.168.1.1-254)</li>
+                            <li>• CIDR (e.g. 192.168.1.0/24)</li>
+                            <li>• Hostnames (e.g. scanme.nmap.org)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Selection Group -->
+            <div class="w-full md:w-64 space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <label for="customer-quick-add" class="block text-xs font-bold uppercase tracking-wider text-olive-600">Client Profile</label>
+                    <button onclick="showCustomerForm()" class="text-[10px] font-bold text-olive-600 hover:text-olive-800 uppercase tracking-wider underline underline-offset-4 decoration-olive-200 hover:decoration-olive-400 transition-all">
+                        + New Client
+                    </button>
+                </div>
+                <div class="relative">
+                    <select id="customer-quick-add" class="w-full appearance-none pl-4 pr-10 py-3 bg-olive-100 border-2 border-transparent rounded-xl text-olive-900 font-medium focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none cursor-pointer" aria-label="Select customer profile">
+                        <option value="">Unassigned Network</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-olive-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Primary Actions -->
+            <div class="w-full md:w-auto flex flex-col gap-2">
+                <div class="flex flex-col md:flex-row gap-2">
+                    <button id="start-scan-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-600 text-white font-bold rounded-xl hover:bg-olive-700 active:scale-95 transition-all shadow-lg shadow-olive-600/20 flex items-center justify-center gap-3 group" aria-label="Initialize network discovery">
+                        <span>Quick Scan</span>
+                        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <button id="generate-report-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Generate comprehensive PDF report">
+                        <span>Generate PDF</span>
+                        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </button>
+                </div>
+                <div id="last-scan-duration" class="text-center text-[10px] text-olive-500 font-bold uppercase tracking-widest hidden">
+                    Last Duration: <span id="last-scan-time-val">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Secondary Controls & Status -->
+        <div class="mt-6 pt-6 border-t border-olive-100 flex flex-wrap items-center justify-between gap-6">
+            <div class="flex items-center gap-2">
+                <button id="stop-scan-btn" class="px-5 py-2 rounded-full bg-olive-100 text-olive-600 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-widest transition-all active:scale-95" aria-label="Terminate scanning operations">
+                    Stop
+                </button>
+                <div class="h-4 w-px bg-olive-200 mx-1"></div>
+                <button id="suspend-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Pause scan">
+                    Pause
+                </button>
+                <button id="resume-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Resume scan">
+                    Resume
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div id="last-scan-container" class="hidden flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-olive-100">
+                    <span class="text-[9px] font-black uppercase tracking-tighter text-olive-400">Baseline Health</span>
+                    <span id="last-scan-days" class="text-xs font-bold text-olive-900">--</span>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <button id="view-history-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group relative" aria-label="View historical scan archives">
+                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Archive
+                        <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3 ml-4">
+                    <label class="flex items-center cursor-pointer group">
+                        <input type="checkbox" id="auto-scan-toggle" class="sr-only peer" aria-label="Enable automated daily scans">
+                        <div class="relative w-10 h-5 bg-olive-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-olive-600"></div>
+                        <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 group-hover:text-olive-800 transition-colors">Auto-Monitor</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-status" class="hidden mt-4 p-4 rounded-lg">
+        <p id="report-status-text" class="text-sm font-medium"></p>
+    </div>
+
+    <!-- Scan Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+        <div id="quick-scan-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Quick Scan</h2>
+                <!-- Pulsing indicator - hidden by default -->
+                <span id="quick-scan-indicator" class="hidden relative flex size-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-600 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
+                </span>
+            </div>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="quick-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="quick-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="text-olive-500 text-xs mt-2 font-mono">nmap -sn</p>
+            </div>
+        </div>
+        <div id="deep-scan-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Deep Scan</h2>
+                <span id="deep-scan-indicator" class="hidden relative flex size-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-600 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
+                </span>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div id="deep-scan-progress-container" class="hidden mb-4">
+                <div class="flex justify-between text-xs text-olive-600 mb-1">
+                    <span>Progress</span>
+                    <span id="deep-progress-text">0%</span>
+                </div>
+                <div class="w-full bg-olive-200 rounded-full h-2">
+                    <div id="deep-progress-bar" class="bg-olive-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <!-- Enhanced Metrics -->
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="deep-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Progress:</span> <span id="deep-progress-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Scan Rate:</span> <span id="deep-scan-rate" class="font-medium text-olive-900">-- hosts/min</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">ETA:</span> <span id="deep-eta" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="deep-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="deep-ports" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="deep-cves" class="font-medium text-olive-900">--</span></p>
+            </div>
+        </div>
+        <div class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300">
+            <h2 class="text-xl font-display italic text-olive-900 mb-3">Dragnet Scan</h2>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="dragnet-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="dragnet-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="dragnet-ports" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="dragnet-cves" class="font-medium text-olive-900">--</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Feedback Container -->
+    <div class="relative mt-6 hidden">
+        <div id="feedback-container" class="p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-900 space-y-2 empty:hidden min-h-[3rem] transition-all duration-500">
+        </div>
+        <div id="scan-timer-container" class="hidden absolute bottom-3 right-4 flex items-center gap-2 bg-white/70 backdrop-blur-sm px-3 py-1 rounded-full border border-olive-200 shadow-sm z-10">
+            <span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span id="scan-timer" class="font-mono text-xs font-bold text-amber-600">00:00</span>
+        </div>
+    </div>
+
+    <!-- Historical Data Banner (hidden by default) -->
+    <div id="historical-data-banner" class="mt-8 hidden">
+        <div class="bg-olive-100 border-l-4 border-olive-600 p-4 rounded-lg shadow-sm">
+            <div class="flex items-start justify-between">
+                <div class="flex items-start space-x-3">
+                    <span class="text-2xl">📅</span>
+                    <div class="flex-1">
+                        <h3 class="font-medium text-olive-900">
+                            <span id="historical-title">Historical Scan Data</span>
+                        </h3>
+                        <p class="text-sm text-olive-700 mt-1">
+                            <span id="historical-details"></span>
+                        </p>
+                        <div class="flex items-center space-x-4 mt-2 text-xs text-olive-600">
+                            <span id="historical-hosts"></span>
+                            <span id="historical-vulns"></span>
+                            <span id="historical-exploits"></span>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="runNewScanFromBanner()" class="ml-4 inline-flex items-center px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white text-sm font-medium rounded-lg transition-colors">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Run New Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    </div>
+    <!-- Results Table - Wider breakout section (2400px) -->
+    <div class="w-full mt-8 px-4 sm:px-6 lg:px-8 py-8 bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-x-auto">
+        <table id="discovery-table" class="table-fixed" style="width: 2400px">
+                        <thead>
+                            <tr>
+                                <th class="w-12 px-4 py-3 text-left"></th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip">
+                                    <div class="flex items-center space-x-1">
+                                        <span>IP Address</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left hidden md:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac">
+                                    <div class="flex items-center space-x-1">
+                                        <span>MAC Address</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left hidden lg:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="vendor" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Vendor</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left max-w-[150px] cursor-pointer hover:bg-olive-100 transition-colors group" data-column="hostname" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Hostname</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="open_ports" data-type="ports">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Open Ports</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="version" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Version</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="cves" data-type="number">
+                                    <div class="flex items-center space-x-1">
+                                        <span>CVEs</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-3 text-left">Actions</th>
+                            </tr>
+                        </thead>
+
+            <tbody class="text-sm"></tbody>
+        </table>
+        </div>
+    </div>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+
+    <script>
+        // Set current date and time
+        function updateDateTime() {
+            const now = new Date();
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            };
+            document.getElementById('current-date-time').textContent = now.toLocaleDateString('en-US', options);
+        }
+
+        // Initialize clock with precise minute-boundary updates
+        function startPreciseClock() {
+            // Update immediately on page load
+            updateDateTime();
+
+            // Calculate milliseconds until next minute boundary (:00 seconds)
+            const now = new Date();
+            const secondsUntilNextMinute = 60 - now.getSeconds();
+            const msUntilNextMinute = secondsUntilNextMinute * 1000 - now.getMilliseconds();
+
+            // Schedule first update at minute boundary
+            setTimeout(() => {
+                updateDateTime();
+                // Then update every minute thereafter
+                setInterval(updateDateTime, 60000);
+            }, msUntilNextMinute);
+        }
+
+        startPreciseClock();
+
+        var socket = io.connect(`http://${document.domain}:${location.port}`);
+        socket.on('connect', () => console.log('Socket.IO connected'));
+        
+        // Quick scan indicator handlers
+        socket.on('quick_scan_start', () => {
+            console.log('Quick scan started - pulsing card');
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.add('card-pulsing');
+            }
+        });
+
+        socket.on('quick_scan_complete', () => {
+            console.log('Quick scan complete - stopping pulse');
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.remove('card-pulsing');
+            }
+        });
+
+        // ARP scan indicator handler (no visual pulse - happens between quick and deep)
+        socket.on('arp_scan_start', () => {
+            console.log('ARP scan started');
+            // No visual indicator - ARP scan is very quick and happens between phases
+        });
+
+        socket.on('arp_scan_complete', () => {
+            console.log('ARP scan complete');
+            // No visual indicator needed
+        });
+
+        // Deep scan indicator handlers
+        socket.on('deep_scan_start', (data) => {
+            console.log('Deep scan started - pulsing card', data);
+            // Stop quick scan card pulsing if still active
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.remove('card-pulsing');
+            }
+            // Start deep scan card pulsing
+            const deepCard = document.getElementById('deep-scan-card');
+            if (deepCard) {
+                deepCard.classList.add('card-pulsing');
+            }
+            
+            // Show progress container and initialize
+            const progressContainer = document.getElementById('deep-scan-progress-container');
+            if (progressContainer) {
+                progressContainer.classList.remove('hidden');
+                document.getElementById('deep-progress-bar').style.width = '0%';
+                document.getElementById('deep-progress-text').textContent = '0%';
+            }
+            
+            // Update metrics with scan config
+            if (data && data.config) {
+                const config = data.config;
+                console.log(`Using ${config.scan_type} scan with ${config.max_concurrent} concurrent hosts`);
+            }
+        });
+
+        socket.on('deep_scan_host_start', (data) => {
+            console.log('Deep scan started for host:', data.ip);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.ip) {
+                    row.cells[0].innerHTML = '<span class="relative flex size-3"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-400 opacity-75"></span><span class="relative inline-flex size-3 rounded-full bg-olive-500"></span></span>';
+                    break;
+                }
+            }
+        });
+
+        socket.on('deep_scan_host_complete', (data) => {
+            console.log('Deep scan complete for host:', data.ip);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.ip) {
+                    row.cells[0].innerHTML = '';
+                    break;
+                }
+            }
+        });
+
+        // Enhanced scan progress tracking
+        socket.on('scan_progress', (data) => {
+            console.log('Scan progress update:', data);
+            
+            // Update progress bar
+            const progressBar = document.getElementById('deep-progress-bar');
+            const progressText = document.getElementById('deep-progress-text');
+            const progressHosts = document.getElementById('deep-progress-hosts');
+            const scanRate = document.getElementById('deep-scan-rate');
+            const eta = document.getElementById('deep-eta');
+            
+            if (progressBar) {
+                progressBar.style.width = `${data.percentage}%`;
+                progressText.textContent = `${data.percentage}%`;
+            }
+            
+            if (progressHosts) {
+                progressHosts.textContent = `${data.scanned}/${data.total}`;
+            }
+            
+            if (scanRate) {
+                scanRate.textContent = `${(data.hosts_per_second * 60).toFixed(1)} hosts/min`;
+            }
+            
+            if (eta) {
+                eta.textContent = data.eta_formatted || '--';
+            }
+        });
+
+        socket.on('deep_scan_complete', (data) => {
+            console.log('All deep scans complete - stopping pulse', data);
+            const deepCard = document.getElementById('deep-scan-card');
+            if (deepCard) {
+                deepCard.classList.remove('card-pulsing');
+            }
+            
+            // Hide progress container
+            const progressContainer = document.getElementById('deep-scan-progress-container');
+            if (progressContainer) {
+                progressContainer.classList.add('hidden');
+            }
+            
+            // Clear all status indicators
+            const tb = document.querySelector('#discovery-table tbody');
+            Array.from(tb.rows).forEach(row => {
+                row.cells[0].innerHTML = '';
+            });
+            
+            // Log final statistics
+            if (data) {
+                console.log(`Deep scan completed: ${data.total_results} hosts in ${data.total_time.toFixed(1)}s at ${data.avg_scan_rate.toFixed(2)} hosts/sec`);
+            }
+        });
+
+        socket.on('scan_feedback', msg => {
+            // Hide feedback container for standard info messages if they are from recovery
+            if (msg.includes('Loaded') && msg.includes('assets from scan')) {
+                console.log('Suppressed recovery feedback in container');
+                return;
+            }
+            const container = document.getElementById('feedback-container');
+            // Ensure the container is visible when feedback starts
+            container.parentElement.classList.remove('hidden');
+            container.innerHTML += `<p>${msg}</p>`;
+        });
+
+        socket.on('local_ip', data => {
+            ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
+            
+            // Update CIDR display in info panel
+            document.getElementById('cidr-value').textContent = data.cidr || '';
+            
+            document.getElementById('scan-target').value = data.cidr;
+        });
+
+        socket.on('cve_array', data => {
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.target) { // IP is now column 1 (status is 0)
+                    let cell = row.cells[7]; // CVEs column (index 7 now with status column)
+                    cell.innerHTML = '';
+                    data.cve_array.forEach(cve => cell.innerHTML += `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`);
+                    break;
+                }
+            }
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        socket.on('service_info', data => {
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.target) { // IP is now column 1
+                    row.cells[4].innerHTML += `<div class="text-xs text-olive-600">${data.line}</div>`; // Hostname column (index 4 now)
+                    break;
+                }
+            }
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        socket.on('quickscan_results', data => {
+            console.log("Received quick_scan_results:", data);
+            document.getElementById('quick-time').textContent = data.time_taken + 's';
+            document.getElementById('quick-hosts').textContent = data.hosts_up;
+        });
+
+        socket.on('deep_scan_results', data => {
+            data.forEach(updateRowWithResults);
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        function updateRowWithResults(host) {
+            const tb = document.querySelector('#discovery-table tbody');
+            let rowToUpdate = Array.from(tb.rows).find(row => row.cells[1].textContent === host.ip); // IP is now column 1
+            if (rowToUpdate) {
+                rowToUpdate.cells[5].textContent = host.ports.map(port => port.port).join(', '); // Open Ports (index 5 now)
+                rowToUpdate.cells[6].textContent = host.ports.map(port => port.service).join(', '); // Version (index 6 now)
+            }
+        }
+
+        document.getElementById('start-scan-btn').addEventListener('click', () => {
+            const target = document.getElementById('scan-target').value;
+            socket.emit('start_scan', target);
+        });
+
+        socket.emit('get_local_ip');
+        socket.emit('get_network_key');
+        socket.emit('get_customer_info');
+        socket.emit('get_versions');
+        socket.emit('get_customers');
+        socket.emit('get_history_counts');
+
+        // Customer quick add dropdown handler
+        document.getElementById('customer-quick-add').addEventListener('change', function() {
+            const selectedId = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
+
+            // Update history badge for selected customer
+            updateHistoryBadge(selectedName);
+
+            if (selectedId) {
+                // Assign the selected customer to this network
+                socket.emit('assign_customer', {
+                    customer_id: selectedId,
+                    customer_name: selectedName
+                });
+            }
+        });
+
+        socket.on('network_key', data => {
+            console.log('Network key received:', data);
+            document.getElementById('total-hops').textContent = data.total_hops;
+            document.getElementById('private-hops').textContent = data.private_hops.length;
+            document.getElementById('public-hops').textContent = data.public_hops.length;
+            document.getElementById('exit-ip').textContent = data.exit_ip || '--';
+            
+            const routePath = document.getElementById('route-path');
+            if (data.hops && data.hops.length > 0) {
+                // Reverse the hops so it reads: internet -> ... -> local
+                const reversedHops = [...data.hops].reverse();
+                routePath.innerHTML = reversedHops.map((hop, i) => {
+                    const typeColor = hop.is_private ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                    const isLast = i === reversedHops.length - 1;
+                    const arrow = !isLast ? '<svg class="w-3 h-3 text-olive-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>' : '';
+                    return `<div class="flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-mono font-bold ${typeColor} shadow-sm transition-all hover:scale-105">
+                                <span class="opacity-40 text-[9px]">${reversedHops.length - i}</span>
+                                <span>${hop.ip}</span>
+                            </div>${arrow}`;
+                }).join('');
+            } else if (data.error) {
+                routePath.innerHTML = `<span class="text-red-700 font-medium">${data.error}</span>`;
+            } else {
+                routePath.innerHTML = '<span class="text-olive-500 italic">No route data available</span>';
+            }
+        });
+
+        socket.on('customers_list', data => {
+            console.log('customers_list event received with data:', data);
+            populateCustomerDropdown(data);
+            // Request customer info again after dropdown is populated
+            // to ensure the correct selection is applied to the newly created options
+            socket.emit('get_customer_info');
+        });
+
+        socket.on('customer_info', data => {
+            console.log('Customer info received:', data);
+            // Store globally as a string for consistent matching
+            window.currentMatchedCustomerId = data.id ? String(data.id) : '';
+            updateCustomerSelection(data);
+            updateDropdownSelection(window.currentMatchedCustomerId, data.name);
+
+            // Check for resumable scan data when customer is identified
+            if (data.id && data.id !== 'unknown') {
+                socket.emit('check_resumable_scan', {
+                    customer_id: data.id,
+                    max_days: 7
+                });
+            }
+        });
+
+        // Historical data / asset resume socket handlers
+        socket.on('resumable_scan_check', data => {
+            if (data.available) {
+                console.log('Resumable scan available:', data);
+                // Auto-resume from last scan
+                socket.emit('resume_from_last_scan', {
+                    customer_id: window.currentMatchedCustomerId,
+                    max_days: 7
+                });
+            } else {
+                // No historical data available, hide banner
+                hideHistoricalDataBanner();
+            }
+        });
+
+        socket.on('resume_scan_error', data => {
+            console.error('Resume scan error:', data.error);
+            hideHistoricalDataBanner();
+        });
+
+        socket.on('versions', data => {
+            console.log('Versions received:', data);
+            // Update version displays with formatted strings
+            const nmapVersion = data.nmap || 'Not found';
+            const vulnersVersion = data.vulners || 'Not found';
+            const arpScanVersion = data.arp_scan || 'Not found';
+            const appVersion = data.app || 'v--.--.--.__';
+
+            document.getElementById('app-version').textContent = appVersion;
+            document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
+            document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
+            document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
+
+            // Check for updates whenever version is received
+            socket.emit('check_app_updates');
+        });
+
+
+
+        socket.on('app_update_available', data => {
+            console.log('App update check result:', data);
+            const badge = document.getElementById('app-update-badge');
+            const notesDiv = document.getElementById('update-release-notes');
+            if (data.available) {
+                badge.classList.remove('hidden');
+                if (data.release_notes) {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>${data.release_notes.replace(/\n/g, '<br>')}`;
+                } else {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>New version ${data.latest_version} is available.`;
+                }
+            } else {
+                badge.classList.add('hidden');
+                notesDiv.innerHTML = `<strong>Release Notes:</strong><br>You are using the latest version.`;
+            }
+        });
+
+        socket.on('update_status', data => {
+            console.log('Update status:', data.message);
+            const log = document.getElementById('update-log');
+            const statusText = document.getElementById('update-current-status');
+            const progressBar = document.getElementById('update-progress-bar');
+            const percentageText = document.getElementById('update-percentage');
+
+            statusText.textContent = data.message;
+            log.innerHTML += `<div class="py-0.5"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+
+            // Simple progress simulation based on message content
+            let progress = 0;
+            if (data.message.includes('Starting')) progress = 10;
+            if (data.message.includes('Pulling')) progress = 30;
+            if (data.message.includes('Git Pull Output')) progress = 50;
+            if (data.message.includes('Updating dependencies')) progress = 70;
+            if (data.message.includes('Dependencies updated')) progress = 90;
+            if (data.message.includes('Update complete')) {
+                progress = 100;
+                setTimeout(() => {
+                    document.getElementById('update-progress').classList.add('hidden');
+                    document.getElementById('update-complete').classList.remove('hidden');
+                }, 1000);
+            }
+
+            if (progress > 0) {
+                progressBar.style.width = `${progress}%`;
+                percentageText.textContent = `${progress}%`;
+            }
+        });
+
+        socket.on('update_error', data => {
+            console.error('Update error:', data.message);
+            const log = document.getElementById('update-log');
+            log.innerHTML += `<div class="py-0.5 text-red-400 font-bold"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ERROR: ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+            document.getElementById('update-current-status').textContent = 'Update failed';
+            document.getElementById('update-current-status').classList.add('text-red-500');
+            document.getElementById('update-progress-bar').classList.add('bg-red-500');
+        });
+
+        function showUpdateModal() {
+            document.getElementById('update-modal').classList.remove('hidden');
+            document.getElementById('update-initial').classList.remove('hidden');
+            document.getElementById('update-progress').classList.add('hidden');
+            document.getElementById('update-complete').classList.add('hidden');
+        }
+
+        function hideUpdateModal() {
+            // Only allow closing if not in progress or complete
+            const progressVisible = !document.getElementById('update-progress').classList.contains('hidden');
+            if (!progressVisible) {
+                document.getElementById('update-modal').classList.add('hidden');
+            }
+        }
+
+        function startAppUpdate() {
+            document.getElementById('update-initial').classList.add('hidden');
+            document.getElementById('update-progress').classList.remove('hidden');
+            document.getElementById('update-log').innerHTML = '';
+            socket.emit('perform_app_update');
+        }
+
+        // Auto-Update Banner Logic
+        let countdownInterval = null;
+        let remainingSeconds = 30;
+        let bannerVisible = false;
+
+        socket.on('idle_state_changed', data => {
+            console.log('Idle state changed:', data);
+        });
+
+        socket.on('show_auto_update_banner', data => {
+            console.log('Showing auto-update banner:', data);
+            showAutoUpdateBanner(data);
+        });
+
+        socket.on('hide_auto_update_banner', () => {
+            console.log('Hiding auto-update banner');
+            hideAutoUpdateBanner();
+        });
+
+        function showAutoUpdateBanner(updateInfo) {
+            if (bannerVisible) return;
+
+            bannerVisible = true;
+            remainingSeconds = 30;
+
+            // Update description
+            const descElement = document.getElementById('update-description');
+            if (updateInfo.latest_version) {
+                descElement.textContent = `NmapUI ${updateInfo.latest_version} is ready to install`;
+            }
+
+            // Show banner with animation
+            const banner = document.getElementById('auto-update-banner');
+            banner.classList.remove('hidden');
+            banner.style.animation = 'slideDown 0.5s ease-out';
+
+            // Start countdown
+            startCountdown();
+        }
+
+        function hideAutoUpdateBanner() {
+            if (!bannerVisible) return;
+
+            bannerVisible = false;
+            clearInterval(countdownInterval);
+
+            const banner = document.getElementById('auto-update-banner');
+            banner.style.animation = 'slideUp 0.3s ease-in';
+            setTimeout(() => {
+                banner.classList.add('hidden');
+                banner.style.animation = '';
+            }, 300);
+        }
+
+        function startCountdown() {
+            const timerElement = document.getElementById('countdown-timer');
+            const progressBar = document.getElementById('progress-bar');
+
+            countdownInterval = setInterval(() => {
+                remainingSeconds--;
+                timerElement.textContent = remainingSeconds;
+
+                const progressPercent = ((30 - remainingSeconds) / 30) * 100;
+                progressBar.style.width = `${progressPercent}%`;
+
+                if (remainingSeconds <= 0) {
+                    performAutoUpdate();
+                }
+            }, 1000);
+        }
+
+        function performAutoUpdate() {
+            clearInterval(countdownInterval);
+            socket.emit('perform_app_update');
+            hideAutoUpdateBanner();
+        }
+
+        // Event listeners for banner buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('update-now-btn')?.addEventListener('click', () => {
+                performAutoUpdate();
+            });
+
+            document.getElementById('cancel-update-btn')?.addEventListener('click', () => {
+                socket.emit('cancel_auto_update');
+                hideAutoUpdateBanner();
+            });
+        });
+
+        socket.on('history_counts', data => {
+            console.log('History counts received:', data);
+            window.historyCounts = data;
+            
+            const dropdown = document.getElementById('customer-quick-add');
+            const currentCustomerName = dropdown.selectedOptions[0]?.text || 'Unassigned';
+            updateHistoryBadge(currentCustomerName);
+        });
+
+        function updateHistoryBadge(customerName) {
+            const badge = document.getElementById('history-badge');
+            const lastScanSpan = document.getElementById('last-scan-days');
+            if (!badge || !window.historyCounts) return;
+
+            // Normalize the name to use as key
+            const key = (customerName && customerName !== 'Unassigned') ? customerName.split(' (')[0] : 'Unassigned';
+            const count = window.historyCounts[key] || 0;
+            
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                
+                // Muted premium styling for the report count badge
+                badge.className = 'absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-olive-900 text-white text-[10px] font-bold shadow-sm transition-all scale-110';
+
+                // Add a little pop animation when it updates
+                badge.classList.remove('scale-110');
+                void badge.offsetWidth; // Trigger reflow
+                badge.classList.add('scale-110');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            // Handle Days Since Last Scan - Muted Premium Version
+            const lastScanTime = window.historyCounts.last_scans ? window.historyCounts.last_scans[key] : null;
+            const container = document.getElementById('last-scan-container');
+            if (lastScanTime && lastScanSpan) {
+                const lastDate = new Date(lastScanTime);
+                const now = new Date();
+                const diffTime = Math.abs(now - lastDate);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                lastScanSpan.textContent = diffDays === 0 ? 'Today' : `${diffDays} days ago`;
+                if (container) container.classList.remove('hidden');
+                
+                // Muted, theme-appropriate colors using the olive palette
+                lastScanSpan.className = 'px-3 py-1 rounded-full text-xs font-medium transition-all';
+                
+                if (diffDays <= 1) {
+                    lastScanSpan.classList.add('bg-olive-200', 'text-olive-900');
+                } else if (diffDays <= 7) {
+                    lastScanSpan.classList.add('bg-olive-100', 'text-olive-700');
+                } else {
+                    lastScanSpan.classList.add('bg-olive-50', 'text-olive-500');
+                }
+            } else if (container) {
+                container.classList.add('hidden');
+            }
+        }
+
+        socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
+        socket.on('scan_complete', msg => {
+            document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`;
+            // Refresh history counts as a new metadata file was likely saved
+            socket.emit('get_history_counts');
+        });
+        socket.on('scan_results', function(data) {
+            // Handle both old format (array) and new format (object with metadata)
+            const hosts = Array.isArray(data) ? data : data.hosts;
+            const isHistorical = data.is_historical || false;
+
+            if (isHistorical) {
+                showHistoricalDataBanner(data);
+            } else {
+                hideHistoricalDataBanner();
+            }
+
+            populateTableWithResults(hosts);
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+        
+        // Report Generation socket listeners
+        socket.on('report_complete', function(data) {
+            showReportStatus('Report generated successfully! Check: ' + data.scan_dir, 'success');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+
+            // Refresh history counts to update the real-time badge
+            socket.emit('get_history_counts');
+
+            // Optionally reload history
+            if (!document.getElementById('history-modal').classList.contains('hidden')) {
+                loadScanHistory();
+            }
+        });
+
+        socket.on('report_error', function(data) {
+            showReportStatus('Error: ' + data.error, 'error');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+        });
+
+
+        socket.on('report_error', function(data) {
+            showReportStatus('Error: ' + data.error, 'error');
+        });
+
+        socket.on('arp_results', data => {
+            console.log('ARP results received:', data);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                const ip = row.cells[1].textContent; // IP is now column 1
+                if (data[ip]) {
+                    row.cells[2].textContent = data[ip].mac; // MAC is now column 2
+                    row.cells[3].textContent = data[ip].vendor; // Vendor is now column 3
+                }
+            }
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        // Store asset data globally for modal access
+        window.assetData = {};
+
+        function populateTableWithResults(data) {
+            const tb = document.querySelector('#discovery-table tbody');
+            tb.innerHTML = '';
+
+            // Store asset data for modal
+            window.assetData = {};
+
+            data.forEach(result => {
+            // Store full asset data including vulnerabilities array
+            if (result.ip) {
+                window.assetData[result.ip] = result;
+            }
+
+            const newRow = tb.insertRow(-1);
+
+            // Add status column first (keep empty for status indicators)
+            const statusCell = newRow.insertCell(0);
+            statusCell.className = 'px-4 py-3 text-center';
+            statusCell.innerHTML = '';
+
+            // Add other columns
+            ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
+                const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
+                cell.className = 'px-4 py-3 text-olive-900';
+
+                // Format open_ports, version, and cves with line breaks
+                if (col === 'open_ports' || col === 'version' || col === 'cves') {
+                    const value = result[col] || '';
+                    if (value) {
+                        // Split by comma and create divs for each item
+                        const items = value.split(',').map(item => item.trim()).filter(item => item);
+
+                        // Make CVEs clickable with purple color
+                        if (col === 'cves') {
+                            cell.innerHTML = items.map(item =>
+                                `<div class="whitespace-nowrap text-purple-600 hover:text-purple-800 cursor-pointer underline" onclick="event.stopPropagation(); showAssetDetailsModal(window.assetData['${result.ip}'])">${item}</div>`
+                            ).join('');
+                        } else {
+                            cell.innerHTML = items.map(item => `<div class="whitespace-nowrap">${item}</div>`).join('');
+                        }
+                    } else {
+                        cell.textContent = '';
+                    }
+                    if (col === 'open_ports') cell.classList.add('open-ports-cell');
+                } else {
+                    cell.textContent = result[col] || '';
+                }
+
+                if (col === 'mac') cell.classList.add('font-mono', 'text-xs');
+                if (col === 'vendor') cell.classList.add('text-olive-600');
+                if (col === 'hostname') {
+                    cell.classList.add('truncate', 'max-w-[150px]', 'block');
+                    cell.title = result[col]; // Add tooltip for full hostname
+                }
+            });
+            const rescanCell = newRow.insertCell(-1);
+            rescanCell.className = 'px-4 py-3';
+            const rescanBtn = document.createElement('button');
+            rescanBtn.textContent = 'Rescan';
+            rescanBtn.classList.add('inline-flex', 'items-center', 'justify-center', 'rounded-full', 'bg-olive-950', 'text-white', 'hover:bg-olive-800', 'font-medium', 'py-1', 'px-3', 'text-xs', 'transition-colors');
+            rescanBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent row click
+                handleRescan(result['ip']);
+            });
+            rescanCell.appendChild(rescanBtn);
+            });
+        }
+
+        // Tooltip toggle
+        document.getElementById('info-icon').addEventListener('click', () => {
+            document.getElementById('tooltip').classList.toggle('hidden');
+        });
+
+        // Asset Details Modal Functions
+        function showAssetDetailsModal(asset) {
+            const modal = document.getElementById('asset-details-modal');
+
+            // Populate basic info
+            document.getElementById('asset-detail-ip').textContent = asset.ip || 'Unknown';
+            document.getElementById('asset-detail-hostname').textContent = asset.hostname ? `(${asset.hostname})` : '';
+            document.getElementById('asset-detail-mac').textContent = asset.mac || 'N/A';
+            document.getElementById('asset-detail-vendor').textContent = asset.vendor || 'Unknown';
+            document.getElementById('asset-detail-status').textContent = asset.status || 'up';
+
+            // Vendor link
+            const vendorLink = document.getElementById('asset-vendor-link');
+            if (asset.vendor && asset.vendor !== 'Unknown') {
+                const vendorSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(asset.vendor + ' company website')}`;
+                vendorLink.href = vendorSearchUrl;
+                vendorLink.classList.remove('hidden');
+            } else {
+                vendorLink.classList.add('hidden');
+            }
+
+            // Populate services
+            const servicesContainer = document.getElementById('asset-detail-services');
+            servicesContainer.innerHTML = '';
+
+            if (asset.open_ports && asset.open_ports.trim()) {
+                const ports = asset.open_ports.split(',').map(p => p.trim()).filter(p => p);
+                const versions = asset.version ? asset.version.split(',').map(v => v.trim()).filter(v => v) : [];
+
+                // Create a map of port to version
+                const versionMap = {};
+                versions.forEach(v => {
+                    const match = v.match(/^(\d+):(.*)/);
+                    if (match) {
+                        versionMap[match[1]] = match[2];
+                    }
+                });
+
+                ports.forEach(port => {
+                    const portMatch = port.match(/^(\d+)\s*\(?(.*?)\)?$/);
+                    if (portMatch) {
+                        const portNum = portMatch[1];
+                        const serviceName = portMatch[2] || 'unknown';
+                        const version = versionMap[portNum] || '';
+
+                        const serviceDiv = document.createElement('div');
+                        serviceDiv.className = 'flex items-start p-3 bg-white rounded border border-olive-200';
+                        serviceDiv.innerHTML = `
+                            <div class="flex-shrink-0 w-20">
+                                <span class="font-mono text-sm font-bold text-olive-900">${portNum}</span>
+                                <span class="text-xs text-olive-600">/${serviceName}</span>
+                            </div>
+                            <div class="flex-1">
+                                ${version ? `<div class="text-sm text-olive-700">${version}</div>` : '<div class="text-xs text-olive-500 italic">No version detected</div>'}
+                            </div>
+                        `;
+                        servicesContainer.appendChild(serviceDiv);
+                    }
+                });
+            } else {
+                servicesContainer.innerHTML = '<p class="text-sm text-olive-500 italic">No open ports detected</p>';
+            }
+
+            // Populate CVEs
+            const cveSection = document.getElementById('asset-cve-section');
+            const cveContainer = document.getElementById('asset-detail-cves');
+            const cveCount = document.getElementById('asset-cve-count');
+
+            cveContainer.innerHTML = '';
+
+            if (asset.vulnerabilities && asset.vulnerabilities.length > 0) {
+                cveCount.textContent = asset.vulnerabilities.length;
+                cveSection.classList.remove('hidden');
+
+                asset.vulnerabilities.forEach(vuln => {
+                    const cveDiv = document.createElement('div');
+                    cveDiv.className = 'flex items-start justify-between p-3 bg-white rounded border border-amber-200';
+
+                    const isExploit = vuln.is_exploit || false;
+                    const cvss = vuln.cvss || 'N/A';
+
+                    cveDiv.innerHTML = `
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-sm font-bold text-amber-900">${vuln.cve_id || 'Unknown'}</span>
+                                ${isExploit ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded">EXPLOIT</span>' : ''}
+                            </div>
+                            <div class="text-xs text-amber-700 mt-1">
+                                Port ${vuln.port || 'N/A'} (${vuln.service || 'unknown'})
+                                ${cvss !== 'N/A' ? `• CVSS: ${cvss}` : ''}
+                            </div>
+                        </div>
+                        ${vuln.url ? `
+                            <a href="${vuln.url}" target="_blank" class="ml-2 text-amber-600 hover:text-amber-800">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        ` : ''}
+                    `;
+                    cveContainer.appendChild(cveDiv);
+                });
+            } else {
+                cveSection.classList.add('hidden');
+            }
+
+            // Show modal
+            modal.classList.remove('hidden');
+        }
+
+        function closeAssetDetailsModal() {
+            document.getElementById('asset-details-modal').classList.add('hidden');
+        }
+
+        // Historical Data Functions
+        function showHistoricalDataBanner(data) {
+            const banner = document.getElementById('historical-data-banner');
+            const title = document.getElementById('historical-title');
+            const details = document.getElementById('historical-details');
+            const hosts = document.getElementById('historical-hosts');
+            const vulns = document.getElementById('historical-vulns');
+            const exploits = document.getElementById('historical-exploits');
+
+            // Calculate age and format message
+            const ageDays = data.age_days || 0;
+            let ageText = '';
+            let bannerColor = 'bg-olive-100 border-olive-600'; // Default
+
+            if (ageDays === 0) {
+                ageText = 'today';
+                title.textContent = 'Scan from Today';
+                bannerColor = 'bg-olive-100 border-olive-600';
+            } else if (ageDays === 1) {
+                ageText = 'yesterday';
+                title.textContent = 'Scan from Yesterday';
+                bannerColor = 'bg-amber-50 border-amber-500';
+            } else {
+                ageText = `${ageDays} days ago`;
+                title.textContent = `Scan from ${ageDays} Days Ago`;
+                bannerColor = 'bg-amber-100 border-amber-600';
+            }
+
+            // Format scan date
+            const scanDate = new Date(data.scan_date);
+            const dateStr = scanDate.toLocaleString();
+
+            details.textContent = `Scanned ${ageText} on ${dateStr} • Target: ${data.target || 'Unknown'}`;
+            hosts.textContent = `📊 ${data.total || 0} hosts`;
+            vulns.textContent = `🔒 ${data.total_vulnerabilities || 0} CVEs`;
+            exploits.textContent = `⚠️  ${data.total_exploits || 0} exploits`;
+
+            // Update banner styling based on age
+            const bannerInner = banner.querySelector('div');
+            bannerInner.className = `${bannerColor} border-l-4 p-4 rounded-lg shadow-sm`;
+
+            // Show the banner
+            banner.classList.remove('hidden');
+        }
+
+        function hideHistoricalDataBanner() {
+            const banner = document.getElementById('historical-data-banner');
+            banner.classList.add('hidden');
+        }
+
+        function runNewScanFromBanner() {
+            // Trigger the main scan with current target
+            const target = document.getElementById('scan-target').value;
+            if (target) {
+                hideHistoricalDataBanner();
+                socket.emit('start_scan', { target });
+            } else {
+                alert('Please enter a target IP or network range');
+            }
+        }
+
+        // Customer Management Functions
+        function showCustomerForm() {
+            document.getElementById('add-customer-form').classList.remove('hidden');
+        }
+
+        function hideCustomerForm() {
+            document.getElementById('add-customer-form').classList.add('hidden');
+        }
+
+        function addCustomer() {
+            const customerData = {
+                name: document.getElementById('cust-name').value,
+                id: document.getElementById('cust-id').value,
+                description: document.getElementById('cust-description').value,
+                location: document.getElementById('cust-location').value,
+                connection_type: document.getElementById('cust-connection-type').value,
+                gateway_pattern: document.getElementById('cust-gateway').value,
+                exit_pattern: document.getElementById('cust-exit-pattern').value,
+                hop_count: document.getElementById('cust-hop-count').value,
+                private_ranges: document.getElementById('cust-private-ranges').value,
+                confidence: 0.7
+            };
+
+            // Clear form
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-id').value = '';
+            document.getElementById('cust-description').value = '';
+            document.getElementById('cust-location').value = '';
+            document.getElementById('cust-gateway').value = '';
+            document.getElementById('cust-exit-pattern').value = '';
+            document.getElementById('cust-hop-count').value = '';
+            document.getElementById('cust-private-ranges').value = '';
+
+            // Hide form
+            hideCustomerForm();
+
+            // Send to server
+            socket.emit('add_customer', customerData);
+        }
+
+        function assignCustomer() {
+            const dropdown = document.getElementById('current-customer');
+            const selectedId = dropdown.value;
+            const selectedOption = dropdown.options[dropdown.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
+
+            if (!selectedId) {
+                showCustomerMessage('Please select a customer to assign', 'error');
+                return;
+            }
+
+            // Extract clean name (remove confidence if present)
+            const cleanName = selectedName.split(' (')[0];
+
+            socket.emit('assign_customer', {
+                customer_id: selectedId,
+                customer_name: cleanName
+            });
+        }
+
+        socket.on('customer_added', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to add customer', 'error');
+            }
+        });
+
+        socket.on('customer_assigned', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                // Update dropdown selection
+                updateDropdownSelection(data.customer.id, data.customer.name);
+            } else {
+                showCustomerMessage('Failed to assign customer', 'error');
+            }
+        });
+
+        socket.on('customer_identified', data => {
+            console.log('Customer identified:', data);
+            // Update dropdown to show auto-detected customer
+            if (data.customer && data.customer.id) {
+                // Store globally for resume functionality
+                window.currentMatchedCustomerId = String(data.customer.id);
+
+                updateDropdownSelection(data.customer.id, data.customer.name);
+
+                // Show confidence info if available
+                if (data.customer.confidence !== undefined) {
+                    console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
+                }
+
+                // Check for resumable scan data when customer is auto-identified
+                if (data.customer.id !== 'unknown') {
+                    socket.emit('check_resumable_scan', {
+                        customer_id: data.customer.id,
+                        max_days: 7
+                    });
+                }
+            }
+        });
+
+        socket.on('customer_deleted', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to delete customer', 'error');
+            }
+        });
+
+        socket.on('customer_lookup_results', data => {
+            console.log('Customer lookup results:', data);
+            
+            if (data.success && data.matches.length > 0) {
+                showCustomerMessage(data.message, 'success');
+                
+                // Auto-select first matching customer
+                const match = data.matches[0];
+                const dropdown = document.getElementById('current-customer');
+                
+                dropdown.value = match.customer.id;
+                dropdown.dispatchEvent(new Event('change'));
+            } else {
+                showCustomerMessage(data.message, 'error');
+            }
+        });
+
+        socket.on('customer_error', message => {
+            showCustomerMessage(message, 'error');
+        });
+
+        function showCustomerList() {
+            socket.emit('get_customers');
+        }
+
+        function showCustomerMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('customer-messages');
+            const messageSpan = document.getElementById('customer-message');
+            
+            messagesDiv.classList.remove('hidden');
+            messageSpan.textContent = message;
+            
+            // Update styling based on type
+            messagesDiv.firstElementChild.className = `p-3 border rounded-lg text-sm ${
+                type === 'error' ? 'bg-red-100 border-red-300 text-red-800' :
+                type === 'success' ? 'bg-green-100 border-green-300 text-green-800' :
+                'bg-yellow-100 border-yellow-300 text-yellow-800'
+            }`;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messagesDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        function populateCustomerDropdown(customers) {
+            console.log('Populating customer dropdowns with', customers.length, 'customers');
+
+            const mainDropdown = document.getElementById('current-customer');
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+
+            if (!quickAddDropdown) return;
+
+            // Clear and add Unassigned
+            quickAddDropdown.innerHTML = '<option value="">Unassigned</option>';
+            if (mainDropdown) mainDropdown.innerHTML = '<option value="">Unassigned</option>';
+
+            customers.forEach(customer => {
+                const customerId = String(customer.id);
+                const customerName = customer.name;
+
+                if (!customerId || !customerName) return;
+
+                // Add to main dropdown if it exists
+                if (mainDropdown) {
+                    const mainOption = document.createElement('option');
+                    mainOption.value = customerId;
+                    mainOption.textContent = customerName;
+                    if (customerId === 'unknown') mainOption.classList.add('hidden');
+                    mainDropdown.appendChild(mainOption);
+                }
+
+                // Add to quick-add dropdown
+                const quickOption = document.createElement('option');
+                quickOption.value = customerId;
+                quickOption.textContent = customerName;
+                if (customerId === 'unknown') quickOption.classList.add('hidden');
+                quickAddDropdown.appendChild(quickOption);
+            });
+
+            // Target ID to select: preference is global matched ID, then current value
+            const targetId = window.currentMatchedCustomerId || '';
+            
+            if (targetId) {
+                console.log('Applying target customer selection:', targetId);
+                if (quickAddDropdown) quickAddDropdown.value = targetId;
+                if (mainDropdown) mainDropdown.value = targetId;
+                updateHistoryBadge(targetId);
+            } else {
+                updateHistoryBadge('');
+            }
+        }
+
+        function updateDropdownSelection(customerId, customerName) {
+            const idToSelect = customerId ? String(customerId) : '';
+            // Update the quick-add dropdown to show the selected customer
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+            if (quickAddDropdown) {
+                quickAddDropdown.value = idToSelect;
+                console.log(`Dropdown updated to customer ID: ${idToSelect}, Name: ${customerName}`);
+                // Update history badge when selection changes via detection
+                updateHistoryBadge(customerName);
+            }
+
+            // Also update main dropdown if it exists
+            const mainDropdown = document.getElementById('current-customer');
+            if (mainDropdown) {
+                mainDropdown.value = idToSelect;
+            }
+        }
+
+        function updateCustomerSelection(customer) {
+            const dropdown = document.getElementById('current-customer');
+
+            // If dropdown doesn't exist, skip update
+            if (!dropdown) {
+                console.log('current-customer dropdown not found, skipping update');
+                return;
+            }
+
+            if (customer.id && customer.name) {
+                // Update TLL display
+                const tllDiv = document.getElementById('last-scan-duration');
+                if (tllDiv) {
+                    if (customer.metadata && customer.metadata.last_scan_duration) {
+                        tllDiv.textContent = 'TLL: ' + customer.metadata.last_scan_duration;
+                        tllDiv.classList.remove('hidden');
+                    } else {
+                        tllDiv.classList.add('hidden');
+                    }
+                }
+
+                // Update dropdown to show selected customer
+                let customerExists = false;
+                for (let option of dropdown.options) {
+                    if (option.value === customer.id) {
+                        option.textContent = `${customer.name} (${customer.confidence.toFixed(2)} confidence)`;
+                        customerExists = true;
+                        break;
+                    }
+                }
+                
+                if (!customerExists) {
+                    // Add temporary option for current customer
+                    const option = document.createElement('option');
+                    option.value = customer.id;
+                    option.textContent = `${customer.name} (Manual Assignment)`;
+                    dropdown.appendChild(option);
+                }
+                
+                dropdown.value = customer.id;
+            } else {
+                dropdown.value = '';
+            }
+        }
+
+        function displayCustomerList(customers) {
+            // Create a simple modal or alert to show customers
+            const customerList = customers.map(c =>
+                `${c.name || c.get?.('name')} (ID: ${c.id || c.get?.('id')})`
+            ).join('\n');
+
+            showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
+        }
+
+        // Report Generation Functions
+        let lastScanTarget = '';
+        let lastScanResults = {};
+        let reportTimerInterval = null;
+        let reportStartTime = 0;
+
+        function startReportTimer() {
+            const container = document.getElementById('scan-timer-container');
+            const display = document.getElementById('scan-timer');
+            const feedbackBox = document.getElementById('feedback-container');
+            
+            container.classList.remove('hidden');
+            feedbackBox.classList.add('card-pulsing');
+            reportStartTime = Date.now();
+            
+            if (reportTimerInterval) clearInterval(reportTimerInterval);
+            
+            reportTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - reportStartTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                display.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopReportTimer() {
+            const feedbackBox = document.getElementById('feedback-container');
+            const timerContainer = document.getElementById('scan-timer-container');
+            
+            if (reportTimerInterval) {
+                clearInterval(reportTimerInterval);
+                reportTimerInterval = null;
+            }
+            
+            feedbackBox.classList.remove('card-pulsing');
+            
+            // Hide timer and clear feedback box after 5 seconds
+            setTimeout(() => {
+                timerContainer.classList.add('hidden');
+                feedbackBox.innerHTML = '';
+                // Also hide the feedback container parent div
+                feedbackBox.parentElement.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Store scan results globally for report generation
+        socket.on('scan_results', function(data) {
+            lastScanResults.quickScan = data;
+        });
+
+        socket.on('deep_scan_results', function(data) {
+            lastScanResults.deepScan = data;
+        });
+
+        socket.on('arp_results', function(data) {
+            lastScanResults.arpScan = data;
+        });
+
+        document.getElementById('generate-report-btn').addEventListener('click', function() {
+            const target = document.getElementById('scan-target').value || lastScanTarget;
+
+            if (!target) {
+                showReportStatus('Please enter a target or run a scan first', 'error');
+                return;
+            }
+
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Unknown';
+            
+            if (customerOption) {
+                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                customerName = customerOption.text.split(' (')[0];
+            }
+
+            // Add pulsing to the button
+            this.classList.add('card-pulsing');
+            
+            // Start the incrementing timer
+            startReportTimer();
+
+            socket.emit('generate_report', {
+                target: target,
+                customer_name: customerName,
+                scan_results: lastScanResults
+            });
+        });
+
+        // Pulsing Progress Card Helper Functions
+        function createReportProgressCard(message) {
+            const reportCard = document.createElement('div');
+            reportCard.id = 'report-progress-card';
+            reportCard.className = 'mt-4 bg-olive-50 p-4 rounded-xl border border-olive-300 card-pulsing';
+            reportCard.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="relative flex size-3">
+                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-500 opacity-75"></span>
+                        <span class="relative inline-flex size-3 rounded-full bg-olive-600"></span>
+                    </span>
+                    <p id="report-progress-text" class="text-sm font-medium text-olive-900">${message}</p>
+                </div>
+            `;
+            const statusDiv = document.getElementById('report-status');
+            statusDiv.parentNode.insertBefore(reportCard, statusDiv.nextSibling);
+        }
+
+        function updateReportProgress(message) {
+            const progressText = document.getElementById('report-progress-text');
+            if (progressText) {
+                progressText.textContent = message;
+            }
+        }
+
+        function removeReportProgressCard() {
+            const card = document.getElementById('report-progress-card');
+            if (card) {
+                card.remove();
+            }
+        }
+
+        function showReportStatus(message, type) {
+            const statusDiv = document.getElementById('report-status');
+            const statusText = document.getElementById('report-status-text');
+
+            statusDiv.classList.remove('hidden', 'bg-olive-100', 'bg-olive-200', 'bg-red-100', 'text-olive-800', 'text-olive-900', 'text-red-800');
+            statusDiv.classList.add(
+                type === 'error' ? 'bg-red-100' : 'bg-olive-100',
+                type === 'error' ? 'text-red-800' :
+                type === 'success' ? 'text-olive-900' :
+                'text-olive-800'
+            );
+
+            statusText.textContent = message;
+
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+            }
+        }
+
+        // Historical Scan Viewer Functions
+        document.getElementById('view-history-btn').addEventListener('click', function() {
+            showHistoryModal();
+        });
+
+        function showHistoryModal() {
+            const modal = document.getElementById('history-modal');
+            const customerDropdown = document.getElementById('current-customer');
+            const filter = document.getElementById('history-customer-filter');
+            
+            modal.classList.remove('hidden');
+            
+            // Get current customer name from the main UI
+            let currentName = '';
+            if (customerDropdown && customerDropdown.selectedOptions[0]) {
+                currentName = customerDropdown.selectedOptions[0].text.split(' (')[0];
+            }
+            
+            if (currentName && currentName !== 'Unassigned' && currentName !== 'Unknown Network' && currentName !== 'Auto-detect network...') {
+                // Set the filter to this customer by default
+                modal.dataset.defaultCustomer = currentName;
+            } else {
+                delete modal.dataset.defaultCustomer;
+            }
+            
+            loadScanHistory(true);
+        }
+
+        function hideHistoryModal() {
+            document.getElementById('history-modal').classList.add('hidden');
+        }
+
+        async function loadScanHistory(isInitialLoad = false) {
+            const modal = document.getElementById('history-modal');
+            const filter = document.getElementById('history-customer-filter');
+            const dateFilter = document.getElementById('history-date-filter').value;
+            
+            let customerFilter = filter.value;
+            
+            // On initial load, use the default customer from the modal dataset if filter is empty
+            if (isInitialLoad && !customerFilter && modal.dataset.defaultCustomer) {
+                customerFilter = modal.dataset.defaultCustomer;
+            }
+
+            try {
+                const response = await fetch('/api/scans');
+                const data = await response.json();
+
+                let scans = data.scans || [];
+
+                // Re-populate the customer filter list first so we can select the right one
+                populateCustomerFilter(scans, customerFilter);
+                
+                // Now get the possibly updated filter value (if populateCustomerFilter set it)
+                const activeFilter = filter.value;
+
+                // Apply filters
+                if (activeFilter) {
+                    scans = scans.filter(s => s.customer_name === activeFilter);
+                }
+                if (dateFilter) {
+                    scans = scans.filter(s => s.date === dateFilter);
+                }
+
+                displayScanHistory(scans);
+
+            } catch (error) {
+                console.error('Error loading scan history:', error);
+                document.getElementById('history-list').innerHTML =
+                    '<p class="text-red-600">Error loading scan history</p>';
+            }
+        }
+
+        function populateCustomerFilter(scans, defaultValue = '') {
+            const filter = document.getElementById('history-customer-filter');
+            const customers = [...new Set(scans.map(s => s.customer_name))].sort();
+
+            const currentValue = filter.value || defaultValue;
+            filter.innerHTML = '<option value="">All Customers</option>';
+
+            customers.forEach(customer => {
+                const option = document.createElement('option');
+                option.value = customer;
+                option.textContent = customer;
+                filter.appendChild(option);
+            });
+
+            // Set to current/default value if it exists in the new list
+            if (customers.includes(currentValue)) {
+                filter.value = currentValue;
+            } else {
+                filter.value = '';
+            }
+        }
+
+        function displayScanHistory(scans) {
+            const historyList = document.getElementById('history-list');
+
+            if (scans.length === 0) {
+                historyList.innerHTML = '<p class="text-olive-600">No scans found</p>';
+                return;
+            }
+
+            historyList.innerHTML = scans.map(scan => {
+                const date = new Date(scan.timestamp).toLocaleString();
+
+                return `
+                    <div class="bg-olive-50 p-4 rounded-lg border border-olive-300">
+                        <div class="flex justify-between items-start mb-2">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                                <h3 class="font-display text-lg text-olive-900">${scan.customer_name || 'Unknown'}</h3>
+                                <p class="text-sm text-olive-600">${date}</p>
+                                <p class="text-sm text-olive-700 mt-1">Target: <span class="font-mono">${scan.target}</span></p>
+                            </div>
+                            <div class="flex gap-2">
+                                ${scan.has_html ? `
+                                    <a href="/api/scans/${scan.path}/html" target="_blank"
+                                       class="px-3 py-1 bg-olive-600 text-white rounded text-sm hover:bg-olive-700">
+                                        View HTML
+                                    </a>
+                                ` : ''}
+                                ${scan.has_pdf ? `
+                                    <a href="/api/scans/${scan.path}/pdf"
+                                       class="px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800">
+                                        Download PDF
+                                    </a>
+                                ` : ''}
+                                ${scan.has_xml ? `
+                                    <a href="/api/scans/${scan.path}/xml"
+                                       class="px-3 py-1 bg-olive-500 text-white rounded text-sm hover:bg-olive-600">
+                                        Download XML
+                                    </a>
+                                ` : ''}
+                                <button onclick="deleteScan('${scan.path}')"
+                                        class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deleteScan(path) {
+            if (!confirm('Are you sure you want to delete this scan?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/scans/${path}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadScanHistory(); // Reload list
+                } else {
+                    alert('Error deleting scan');
+                }
+            } catch (error) {
+                console.error('Error deleting scan:', error);
+                alert('Error deleting scan');
+            }
+        }
+
+        // Store last scan target
+        document.getElementById('start-scan-btn').addEventListener('click', function() {
+            lastScanTarget = document.getElementById('scan-target').value;
+        });
+
+        // Auto Scan Toggle
+        let autoScanEnabled = false;
+        let autoScanStartTime = '01:00';
+        let autoScanEndTime = '06:00';
+
+        document.getElementById('auto-scan-toggle').addEventListener('change', function() {
+            autoScanEnabled = this.checked;
+            const timesDiv = document.getElementById('auto-scan-times');
+
+            if (autoScanEnabled) {
+                // Show time selection modal
+                showAutoScanTimeModal();
+            } else {
+                // Disable auto scanning
+                timesDiv.classList.add('hidden');
+                socket.emit('update_auto_scan', { enabled: false });
+                showReportStatus('Automatic scanning disabled', 'info');
+            }
+        });
+
+        function showAutoScanTimeModal() {
+            const modal = document.getElementById('auto-scan-modal');
+            modal.classList.remove('hidden');
+
+            // Pre-fill with current values
+            document.getElementById('auto-start-time').value = autoScanStartTime;
+            document.getElementById('auto-end-time').value = autoScanEndTime;
+        }
+
+        function hideAutoScanTimeModal() {
+            document.getElementById('auto-scan-modal').classList.add('hidden');
+        }
+
+        function saveAutoScanTimes() {
+            const startTime = document.getElementById('auto-start-time').value;
+            const endTime = document.getElementById('auto-end-time').value;
+
+            if (!startTime || !endTime) {
+                showReportStatus('Please select both start and end times', 'error');
+                return;
+            }
+
+            autoScanStartTime = startTime;
+            autoScanEndTime = endTime;
+
+            // Update display
+            const windowEl = document.getElementById('auto-scan-window');
+            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
+            const timesDiv = document.getElementById('auto-scan-times');
+            if (timesDiv) timesDiv.classList.remove('hidden');
+
+            // Enable auto scanning
+            socket.emit('update_auto_scan', {
+                enabled: true,
+                start_time: startTime,
+                end_time: endTime
+            });
+
+            hideAutoScanTimeModal();
+            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
+        }
+
+        function saveAndRunScan() {
+            const startTime = document.getElementById('auto-start-time').value;
+            const endTime = document.getElementById('auto-end-time').value;
+
+            if (!startTime || !endTime) {
+                showReportStatus('Please select both start and end times', 'error');
+                return;
+            }
+
+            // Close modal immediately
+            hideAutoScanTimeModal();
+
+            autoScanStartTime = startTime;
+            autoScanEndTime = endTime;
+
+            // Update display
+            const windowEl = document.getElementById('auto-scan-window');
+            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
+            const timesDiv = document.getElementById('auto-scan-times');
+            if (timesDiv) timesDiv.classList.remove('hidden');
+
+            // Enable auto scanning
+            socket.emit('update_auto_scan', {
+                enabled: true,
+                start_time: startTime,
+                end_time: endTime
+            });
+
+            hideAutoScanTimeModal();
+            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
+
+            // Immediately trigger a scan using generate_report
+            // Use the same target selection logic as the main Generate Report button
+            const target = document.getElementById('scan-target').value || lastScanTarget || '127.0.0.1';
+
+            // Use the same customer name logic as the main Generate Report button
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Auto Scan'; // Default for auto scans
+
+            if (customerOption) {
+                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                customerName = customerOption.text.split(' (')[0];
+            }
+
+            console.log('About to emit generate_report with target:', target, 'customer:', customerName);
+            console.log('Socket connected:', socket.connected);
+            showReportStatus(`Starting scan of ${target}...`, 'info');
+
+            // Use the same generate_report event as the main Generate Report button
+            socket.emit('generate_report', {
+                target: target,
+                customer_name: customerName
+            });
+            console.log('generate_report emitted');
+        }
+
+        // Auto scan status updates
+        socket.on('auto_scan_status', function(status) {
+            autoScanEnabled = status.enabled || false;
+            document.getElementById('auto-scan-toggle').checked = autoScanEnabled;
+
+            if (status.start_time && status.end_time) {
+                autoScanStartTime = status.start_time;
+                autoScanEndTime = status.end_time;
+                const windowEl = document.getElementById('auto-scan-window');
+                if (windowEl) windowEl.textContent = `${status.start_time} to ${status.end_time}`;
+                const timesDiv = document.getElementById('auto-scan-times');
+                if (timesDiv) timesDiv.classList.remove('hidden');
+            } else {
+                const timesDiv = document.getElementById('auto-scan-times');
+                if (timesDiv) timesDiv.classList.add('hidden');
+            }
+        });
+
+        socket.on('auto_scan_executed', function(data) {
+            showReportStatus(`Automatic scan completed: ${data.target}`, 'success');
+        });
+
+        socket.on('auto_scan_error', function(data) {
+            showReportStatus(`Automatic scan error: ${data.error}`, 'error');
+        });
+
+        // Handle report generation start (for pulsing effect)
+        socket.on('start_report_generation', function(data) {
+            const generateBtn = document.getElementById('generate-report-btn');
+            if (generateBtn) {
+                generateBtn.classList.add('card-pulsing');
+                startReportTimer();
+            }
+        });
+
+        // TableSorter class for sortable table functionality
+        class TableSorter {
+            constructor(tableId) {
+                this.table = document.getElementById(tableId);
+                this.currentSort = { column: null, direction: 'asc' };
+                this.sortFunctions = {
+                    'ip': this.sortIPAddresses.bind(this),
+                    'mac': this.sortMACAddresses.bind(this),
+                    'text': this.sortText.bind(this),
+                    'number': this.sortNumbers.bind(this),
+                    'ports': this.sortPortCount.bind(this)
+                };
+                this.initializeSorting();
+                this.loadSortState();
+            }
+
+            initializeSorting() {
+                const headers = this.table.querySelectorAll('.sortable');
+                headers.forEach(header => {
+                    header.addEventListener('click', () => this.sortByColumn(header));
+                    header.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            this.sortByColumn(header);
+                        }
+                    });
+                    header.setAttribute('tabindex', '0');
+                });
+            }
+
+            sortByColumn(header) {
+                const column = header.dataset.column;
+                const type = header.dataset.type;
+
+                // Toggle sort direction if same column, otherwise default to ascending
+                if (this.currentSort.column === column) {
+                    this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.currentSort.column = column;
+                    this.currentSort.direction = 'asc';
+                }
+
+                this.sortTable(column, type, this.currentSort.direction);
+                this.updateVisualIndicators(header);
+                this.saveSortState();
+            }
+
+            sortTable(column, type, direction) {
+                const tbody = this.table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                rows.sort((a, b) => {
+                    const aValue = this.getCellValue(a, column);
+                    const bValue = this.getCellValue(b, column);
+
+                    const sortFn = this.sortFunctions[type] || this.sortFunctions.text;
+                    const result = sortFn(aValue, bValue);
+
+                    return direction === 'asc' ? result : -result;
+                });
+
+                // Reorder DOM elements
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            sortIPAddresses(a, b) {
+                // Convert IP addresses to comparable numbers
+                const aParts = a.split('.').map(Number);
+                const bParts = b.split('.').map(Number);
+
+                for (let i = 0; i < 4; i++) {
+                    if (aParts[i] !== bParts[i]) {
+                        return aParts[i] - bParts[i];
+                    }
+                }
+                return 0;
+            }
+
+            sortMACAddresses(a, b) {
+                // Remove colons and compare as hex
+                const aHex = a.replace(/:/g, '');
+                const bHex = b.replace(/:/g, '');
+                return parseInt(aHex, 16) - parseInt(bHex, 16);
+            }
+
+            sortText(a, b) {
+                return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+            }
+
+            sortNumbers(a, b) {
+                return parseFloat(a) - parseFloat(b);
+            }
+
+            sortPortCount(a, b) {
+                // Extract port count from "80/tcp, 443/tcp, 22/tcp" format
+                const aCount = (a || '').split(',').length;
+                const bCount = (b || '').split(',').length;
+                return aCount - bCount;
+            }
+
+            getCellValue(row, column) {
+                const columnIndex = this.getColumnIndex(column);
+                const cell = row.cells[columnIndex];
+                return cell ? cell.textContent.trim() : '';
+            }
+
+            getColumnIndex(column) {
+                // Map column names to table indices
+                const columnMap = {
+                    'status': 0,
+                    'ip': 1,
+                    'mac': 2,
+                    'vendor': 3,
+                    'hostname': 4,
+                    'open_ports': 5,
+                    'version': 6,
+                    'cves': 7
+                };
+                return columnMap[column] || 0;
+            }
+
+            updateVisualIndicators(activeHeader) {
+                // Clear all indicators
+                this.table.querySelectorAll('.sortable').forEach(header => {
+                    header.classList.remove('sorted-asc', 'sorted-desc');
+                });
+
+                // Set active indicator
+                const directionClass = this.currentSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc';
+                activeHeader.classList.add(directionClass);
+            }
+
+            saveSortState() {
+                const state = {
+                    column: this.currentSort.column,
+                    direction: this.currentSort.direction,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('tableSortState', JSON.stringify(state));
+            }
+
+            loadSortState() {
+                try {
+                    const state = JSON.parse(localStorage.getItem('tableSortState'));
+                    if (state && state.column) {
+                        this.currentSort = state;
+                        // Apply saved sort
+                        const header = this.table.querySelector(`[data-column="${state.column}"]`);
+                        if (header) {
+                            this.sortTable(state.column, header.dataset.type, state.direction);
+                            this.updateVisualIndicators(header);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to load sort state:', e);
+                }
+            }
+
+            resort() {
+                if (this.currentSort.column) {
+                    const header = this.table.querySelector(`[data-column="${this.currentSort.column}"]`);
+                    if (header) {
+                        this.sortTable(this.currentSort.column, header.dataset.type, this.currentSort.direction);
+                    }
+                }
+            }
+        }
+
+        // Initialize table sorter when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            window.tableSorter = new TableSorter('discovery-table');
+        });
+    </script>
+
+    <!-- Auto Scan Time Modal -->
+    <div id="auto-scan-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-display italic text-olive-900">Set Auto Scan Times</h3>
+                <button onclick="hideAutoScanTimeModal()" class="text-olive-500 hover:text-olive-700 text-xl">&times;</button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-olive-700 mb-1">Start Time</label>
+                        <input type="time" id="auto-start-time" class="w-full px-3 py-2 border border-olive-300 rounded-lg focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="01:00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-olive-700 mb-1">End Time</label>
+                        <input type="time" id="auto-end-time" class="w-full px-3 py-2 border border-olive-300 rounded-lg focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="06:00">
+                    </div>
+                </div>
+
+                <div class="bg-olive-50 p-3 rounded-lg">
+                    <p class="text-sm text-olive-700">
+                        <strong>Automatic Mode:</strong> During these hours, the system will automatically run scans and generate reports using the current network target.
+                    </p>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="saveAutoScanTimes()" class="flex-1 bg-olive-600 text-white py-2 px-4 rounded-lg hover:bg-olive-700 transition-colors">
+                        Enable Auto Scan
+                    </button>
+                    <button onclick="saveAndRunScan()" class="flex-1 bg-olive-600 text-white py-2 px-4 rounded-lg hover:bg-olive-700 transition-colors">
+                        Save and Run Scan
+                    </button>
+                    <button onclick="hideAutoScanTimeModal()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+</body>
 </html>

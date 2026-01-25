@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net"
 	"time"
 
 	fiberws "github.com/gofiber/contrib/websocket"
@@ -62,6 +64,9 @@ func registerWebSocketHandlers(s *Server, router *nmapws.Router) {
 	})
 	router.Register(nmapws.EventAssignCustomer, func(client *nmapws.Client, data interface{}) error {
 		return handleAssignCustomerWS(s, client, data)
+	})
+	router.Register(nmapws.EventGetLocalIP, func(client *nmapws.Client, data interface{}) error {
+		return handleGetLocalIPWS(s, client, data)
 	})
 
 	registerStub(router, nmapws.EventGenerateReport)
@@ -293,4 +298,63 @@ func handleGetHistoryCountsWS(s *Server, client *nmapws.Client, data interface{}
 		Data:  counts,
 	})
 	return nil
+}
+
+func handleGetLocalIPWS(s *Server, client *nmapws.Client, data interface{}) error {
+	localIP := getLocalIP()
+	subnet := getSubnetMask()
+	cidr := calculateCIDR(subnet)
+	publicIP := getPublicIP()
+
+	client.Send(nmapws.Message{
+		Event: nmapws.EventLocalIP,
+		Data: nmapws.LocalIPResponse{
+			IP:       localIP,
+			Subnet:   subnet,
+			CIDR:     cidr,
+			PublicIP: publicIP,
+		},
+	})
+	return nil
+}
+
+func getLocalIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+	return conn.LocalAddr().(*net.UDPAddr).IP.String()
+}
+
+func getSubnetMask() string {
+	localIP := getLocalIP()
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "255.255.255.0"
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ipNet.IP.String() == localIP {
+			return ipNet.Mask.String()
+		}
+	}
+	return "255.255.255.0"
+}
+
+func calculateCIDR(subnet string) string {
+	mask := net.ParseIP(subnet)
+	if mask == nil {
+		return "24"
+	}
+	ones, _ := net.IPMask(mask).Size()
+	return fmt.Sprintf("%d", ones)
+}
+
+func getPublicIP() string {
+	return ""
 }

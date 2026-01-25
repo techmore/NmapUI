@@ -18,6 +18,8 @@ const (
 	EventGetCustomers    = "get_customers"
 	EventCustomers       = "customers"
 	EventAssignCustomer  = "assign_customer"
+	EventGetLocalIP      = "get_local_ip"
+	EventLocalIP         = "local_ip"
 
 	EventGenerateReport     = "generate_report"
 	EventCheckResumableScan = "check_resumable_scan"
@@ -99,4 +101,11 @@ type CustomerInfoResponse struct {
 type ScanFeedback struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
+}
+
+type LocalIPResponse struct {
+	IP       string `json:"ip"`
+	Subnet   string `json:"subnet"`
+	CIDR     string `json:"cidr"`
+	PublicIP string `json:"public_ip"`
 }
