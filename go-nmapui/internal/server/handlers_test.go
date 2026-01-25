@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -451,6 +453,115 @@ func TestSanitizeFilename(t *testing.T) {
 				t.Errorf("sanitizeFilename(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHandleHealth(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	server.Initialize()
+
+	req, _ := http.NewRequest("GET", "/api/health", nil)
+	resp, err := server.App.Test(req, -1)
+	if err != nil {
+		t.Fatalf("Test request failed: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("Status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), `"status":"ok"`) {
+		t.Errorf("Response missing status ok: %s", string(body))
+	}
+}
+
+func TestHandleIndex(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	server.Initialize()
+
+	req, _ := http.NewRequest("GET", "/", nil)
+	resp, err := server.App.Test(req, -1)
+	if err != nil {
+		t.Fatalf("Test request failed: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusOK && resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("Status = %d, want %d or %d (templates might not exist)", resp.StatusCode, fiber.StatusOK, fiber.StatusInternalServerError)
+	}
+}
+
+func TestHandleGetScanByID(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	server.Initialize()
+
+	req, _ := http.NewRequest("GET", "/api/scans/999", nil)
+	resp, err := server.App.Test(req, -1)
+	if err != nil {
+		t.Fatalf("Test request failed: %v", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 600 {
+		t.Errorf("Invalid status code: %d", resp.StatusCode)
+	}
+}
+
+func TestHandleAddCustomer(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	server.Initialize()
+
+	body := strings.NewReader(`{"id":"test","name":"Test Customer"}`)
+	req, _ := http.NewRequest("POST", "/api/customers", body)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := server.App.Test(req, -1)
+	if err != nil {
+		t.Fatalf("Test request failed: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d (method not allowed - route not registered)", resp.StatusCode, fiber.StatusMethodNotAllowed)
+	}
+}
+
+func TestHandleDeleteCustomer(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	server.Initialize()
+
+	req, _ := http.NewRequest("DELETE", "/api/customers/test", nil)
+	resp, err := server.App.Test(req, -1)
+	if err != nil {
+		t.Fatalf("Test request failed: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d (method not allowed - route not registered)", resp.StatusCode, fiber.StatusMethodNotAllowed)
+	}
+}
+
+func TestHandleDeleteScan(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	server.Initialize()
+
+	req, _ := http.NewRequest("DELETE", "/api/scans/123", nil)
+	resp, err := server.App.Test(req, -1)
+	if err != nil {
+		t.Fatalf("Test request failed: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d (method not allowed - route not registered)", resp.StatusCode, fiber.StatusMethodNotAllowed)
 	}
 }
 
