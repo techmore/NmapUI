@@ -57,7 +57,15 @@ test-coverage: ## Generate coverage report
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report: coverage.html"
 
-bench: ## Run benchmarks
+test-bench: ## Run benchmarks
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./...
+
+test-integration: ## Run integration tests
+	@echo "Running integration tests..."
+	go test -v -tags=integration ./...
+
+bench: ## Run benchmarks (alias for test-bench)
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...
 
