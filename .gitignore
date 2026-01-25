@@ -33,3 +33,26 @@ logs/
 .env.local
 .claude
 reports/
+
+# Go build artifacts
+go-nmapui/bin/
+go-nmapui/coverage.out
+go-nmapui/coverage.html
+go-nmapui/data/
+
+# Agent workspace
+.sisyphus/
+
+# Downloaded source code
+nmap-7.95/
+nmap.tar.bz2
+
+# Draft/temporary files
+ENHANCED_README.md
+INSTALLATION.md
+demo_enhanced.py
+gunicorn_config.py
+wsgi.py
+scalable_scan_engine.py
+test_performance.py
+docs/guides/

@@ -1,0 +1,40 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2024-01-01T12:00:00Z",
+    "customer_id": "test-hospital-1",
+    "customer_name": "Test Hospital 1",
+    "confidence_score": 0.95,
+    "exit_ip": "203.0.113.1",
+    "hop_count": 10,
+    "private_hop_count": 6,
+    "public_hop_count": 4,
+    "network_signature": "private:192.168.x.x -> private:10.0.x.x -> public:203.0.x.x",
+    "raw_traceroute": "traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets\n 1  192.168.1.1  1.234 ms\n 2  10.0.0.1  2.345 ms\n 3  203.0.113.1  10.456 ms",
+    "network_key": {
+      "exit_ip": "203.0.113.1",
+      "public_ip": "203.0.113.50",
+      "hops": 10,
+      "signature": "test-signature"
+    }
+  },
+  {
+    "id": 2,
+    "timestamp": "2024-01-01T13:00:00Z",
+    "customer_id": "test-hospital-2",
+    "customer_name": "Test Hospital 2",
+    "confidence_score": 0.88,
+    "exit_ip": "198.51.100.1",
+    "hop_count": 12,
+    "private_hop_count": 8,
+    "public_hop_count": 4,
+    "network_signature": "private:10.0.x.x -> private:10.1.x.x -> public:198.51.x.x",
+    "raw_traceroute": "traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets\n 1  10.0.0.1  0.987 ms\n 2  10.1.0.1  1.876 ms\n 3  198.51.100.1  15.234 ms",
+    "network_key": {
+      "exit_ip": "198.51.100.1",
+      "public_ip": "198.51.100.50",
+      "hops": 12,
+      "signature": "test-signature-2"
+    }
+  }
+]
