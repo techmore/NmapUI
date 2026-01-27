@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -312,10 +313,21 @@ func TestNewScanEngine(t *testing.T) {
 
 type mockPublisher struct {
 	events []string
+	mu     sync.Mutex
 }
 
 func (m *mockPublisher) Publish(event string, payload any) {
+	m.mu.Lock()
 	m.events = append(m.events, event)
+	m.mu.Unlock()
+}
+
+func (m *mockPublisher) getEvents() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]string, len(m.events))
+	copy(result, m.events)
+	return result
 }
 
 func TestScanEngine_QuickScan(t *testing.T) {
@@ -330,12 +342,16 @@ func TestScanEngine_QuickScan(t *testing.T) {
 		t.Logf("QuickScan error (expected if nmap not available): %v", err)
 	}
 
-	if len(publisher.events) < 1 {
+	// Wait for async events to be published
+	time.Sleep(100 * time.Millisecond)
+
+	events := publisher.getEvents()
+	if len(events) < 1 {
 		t.Error("expected at least 1 event to be published")
 	}
 
 	foundStart := false
-	for _, event := range publisher.events {
+	for _, event := range events {
 		if event == "quick_scan_start" {
 			foundStart = true
 			break
@@ -358,12 +374,16 @@ func TestScanEngine_ARPScan(t *testing.T) {
 		t.Logf("ARPScan error (expected if nmap not available): %v", err)
 	}
 
-	if len(publisher.events) < 1 {
+	// Wait for async events to be published
+	time.Sleep(100 * time.Millisecond)
+
+	events := publisher.getEvents()
+	if len(events) < 1 {
 		t.Error("expected at least 1 event to be published")
 	}
 
 	foundStart := false
-	for _, event := range publisher.events {
+	for _, event := range events {
 		if event == "arp_scan_start" {
 			foundStart = true
 			break
@@ -414,8 +434,12 @@ func TestScanEngine_DeepScan_SingleTarget(t *testing.T) {
 		t.Errorf("TotalHosts = %d, want 1", result.TotalHosts)
 	}
 
+	// Wait for async events to be published
+	time.Sleep(100 * time.Millisecond)
+
+	events := publisher.getEvents()
 	foundStart := false
-	for _, event := range publisher.events {
+	for _, event := range events {
 		if event == "deep_scan_start" {
 			foundStart = true
 			break

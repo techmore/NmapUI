@@ -65,13 +65,13 @@ func TestMatchIPPattern(t *testing.T) {
 			name:    "wildcard match - last octet",
 			ip:      "192.168.1.100",
 			pattern: "192.168.1.*",
-			want:    false, // Current implementation has double backslash issue
+			want:    true,
 		},
 		{
 			name:    "wildcard match - multiple octets",
 			ip:      "192.168.50.100",
 			pattern: "192.168.*.*",
-			want:    false, // Current implementation has double backslash issue
+			want:    true,
 		},
 		{
 			name:    "dynamic pattern",

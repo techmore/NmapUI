@@ -30,12 +30,18 @@ const (
 	EventQuickScanStart     = "quick_scan_start"
 	EventQuickScanComplete  = "quick_scan_complete"
 
-	EventCheckAppUpdates   = "check_app_updates"
-	EventPerformAppUpdate  = "perform_app_update"
-	EventSearchScanHistory = "search_scan_history"
-	EventGetHistoryCounts  = "get_history_counts"
-	EventCVEArray          = "cve_array"
-	EventScanError         = "scan_error"
+	EventCheckAppUpdates    = "check_app_updates"
+	EventPerformAppUpdate   = "perform_app_update"
+	EventSearchScanHistory  = "search_scan_history"
+	EventGetHistoryCounts   = "get_history_counts"
+	EventScanHistoryResults = "scan_history_results"
+	EventHistoryCounts      = "history_counts"
+	EventCVEArray           = "cve_array"
+	EventScanError          = "scan_error"
+	EventARPScanStart       = "arp_scan_start"
+	EventARPScanComplete    = "arp_scan_complete"
+	EventARPResults         = "arp_results"
+	EventScanResults        = "scan_results"
 )
 
 // Message defines the websocket event envelope.
@@ -70,11 +76,18 @@ func (r *Router) Handle(client *Client, message Message) error {
 	r.mu.RUnlock()
 
 	if handler == nil {
-		log.Printf("websocket unhandled event=%s client=%s", message.Event, client.id)
+		log.Printf("[ROUTER] unhandled event=%s client=%s", message.Event, client.id)
 		return nil
 	}
 
-	return handler(client, message.Data)
+	log.Printf("[ROUTER] handling event=%s client=%s", message.Event, client.id)
+	err := handler(client, message.Data)
+	if err != nil {
+		log.Printf("[ROUTER] handler error event=%s client=%s err=%v", message.Event, client.id, err)
+	} else {
+		log.Printf("[ROUTER] handler success event=%s client=%s", message.Event, client.id)
+	}
+	return err
 }
 
 type ConnectPayload struct {
@@ -104,8 +117,8 @@ type ScanFeedback struct {
 }
 
 type LocalIPResponse struct {
-	IP       string `json:"ip"`
-	Subnet   string `json:"subnet"`
-	CIDR     string `json:"cidr"`
-	PublicIP string `json:"public_ip"`
+	LocalIP    string `json:"local_ip"`
+	SubnetMask string `json:"subnet_mask"`
+	PublicIP   string `json:"public_ip"`
+	CIDR       string `json:"cidr"`
 }

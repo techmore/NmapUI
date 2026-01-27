@@ -236,8 +236,10 @@ func (cf *CustomerFingerprinter) MatchIPPattern(ip string, pattern string) bool 
 	}
 
 	if strings.Contains(pattern, "*") {
-		regexPattern := strings.ReplaceAll(pattern, "*", `\\d+`)
-		re, err := regexp.Compile("^" + regexPattern)
+		// Escape dots for regex and replace * with \d+
+		regexPattern := strings.ReplaceAll(pattern, ".", `\.`)
+		regexPattern = strings.ReplaceAll(regexPattern, "*", `\d+`)
+		re, err := regexp.Compile("^" + regexPattern + "$")
 		if err != nil {
 			return false
 		}
@@ -345,4 +347,53 @@ func (cf *CustomerFingerprinter) IsPrivateIP(ipStr string) bool {
 		}
 	}
 	return false
+}
+
+// AddCustomer adds a new customer to the configuration and saves it.
+func (cf *CustomerFingerprinter) AddCustomer(customer models.Customer) error {
+	// Check if customer ID already exists
+	for _, c := range cf.Customers {
+		if c.ID == customer.ID {
+			return errors.New("customer with this ID already exists")
+		}
+	}
+
+	cf.Customers = append(cf.Customers, customer)
+	cf.Config.Customers = cf.Customers
+	return cf.SaveConfig()
+}
+
+// DeleteCustomer removes a customer from the configuration and saves it.
+func (cf *CustomerFingerprinter) DeleteCustomer(customerID string) error {
+	found := false
+	newCustomers := make([]models.Customer, 0, len(cf.Customers))
+	for _, c := range cf.Customers {
+		if c.ID == customerID {
+			found = true
+			continue
+		}
+		newCustomers = append(newCustomers, c)
+	}
+
+	if !found {
+		return errors.New("customer not found")
+	}
+
+	cf.Customers = newCustomers
+	cf.Config.Customers = cf.Customers
+	return cf.SaveConfig()
+}
+
+// SaveConfig writes the current configuration back to the YAML file.
+func (cf *CustomerFingerprinter) SaveConfig() error {
+	data, err := yaml.Marshal(cf.Config)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(cf.ConfigPath, data, 0o644)
+}
+
+// ReloadConfig reloads the configuration from disk.
+func (cf *CustomerFingerprinter) ReloadConfig() {
+	cf.loadConfig()
 }

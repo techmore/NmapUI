@@ -6,7 +6,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <!-- Using native WebSocket instead of Socket.IO -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -719,7 +719,7 @@
 
     <!-- Scan Feedback Container -->
     <div class="relative mt-6 hidden">
-        <div id="feedback-container" class="p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-900 space-y-2 empty:hidden min-h-[3rem] transition-all duration-500">
+        <div id="feedback-container" class="p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-900 space-y-2 empty:hidden min-h-[3rem] max-h-64 overflow-y-auto transition-all duration-500 font-mono">
         </div>
         <div id="scan-timer-container" class="hidden absolute bottom-3 right-4 flex items-center gap-2 bg-white/70 backdrop-blur-sm px-3 py-1 rounded-full border border-olive-200 shadow-sm z-10">
             <span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
@@ -900,8 +900,67 @@
 
         startPreciseClock();
 
-        var socket = io.connect(`http://${document.domain}:${location.port}`);
-        socket.on('connect', () => console.log('Socket.IO connected'));
+        // Native WebSocket wrapper with Socket.IO-like API
+        class WebSocketWrapper {
+            constructor(url) {
+                console.log('[WS] Connecting to:', url);
+                this.handlers = {};
+                this.ws = new WebSocket(url);
+                this.ws.onopen = () => {
+                    console.log('[WS] Connection opened');
+                    this.trigger('connect');
+                };
+                this.ws.onclose = (e) => {
+                    console.log('[WS] Connection closed:', e.code, e.reason);
+                    this.trigger('disconnect');
+                };
+                this.ws.onerror = (e) => console.error('[WS] Error:', e);
+                this.ws.onmessage = (e) => {
+                    console.log('[WS] Received raw:', e.data);
+                    try {
+                        const msg = JSON.parse(e.data);
+                        console.log('[WS] Parsed message:', msg.event, msg.data);
+                        if (msg.event) {
+                            this.trigger(msg.event, msg.data);
+                        }
+                    } catch (err) {
+                        console.error('[WS] Parse error:', err, 'Raw data:', e.data);
+                    }
+                };
+            }
+            on(event, callback) {
+                if (!this.handlers[event]) this.handlers[event] = [];
+                this.handlers[event].push(callback);
+            }
+            trigger(event, data) {
+                console.log('[WS] Triggering event:', event, data);
+                if (this.handlers[event]) {
+                    this.handlers[event].forEach(cb => cb(data));
+                }
+            }
+            emit(event, data) {
+                console.log('[WS] Emit:', event, data, 'readyState:', this.ws.readyState);
+                if (this.ws.readyState === WebSocket.OPEN) {
+                    const msg = JSON.stringify({ event, data });
+                    console.log('[WS] Sending:', msg);
+                    this.ws.send(msg);
+                } else {
+                    console.warn('[WS] Cannot send, not connected. readyState:', this.ws.readyState);
+                }
+            }
+        }
+
+        var socket = new WebSocketWrapper(`ws://${document.domain}:${location.port}/socket.io/`);
+        socket.on('connect', () => {
+            console.log('WebSocket connected');
+            // Now that we're connected, request initial data
+            socket.emit('get_local_ip');
+            socket.emit('get_network_key');
+            socket.emit('get_customer_info');
+            socket.emit('get_versions');
+            socket.emit('get_customers');
+            socket.emit('get_history_counts');
+        });
         
         // Quick scan indicator handlers
         socket.on('quick_scan_start', () => {
@@ -1037,24 +1096,57 @@
         });
 
         socket.on('scan_feedback', msg => {
+            console.log('[FEEDBACK] Received:', msg, 'at', new Date().toISOString());
+
+            // Handle both string and object formats
+            let text = msg;
+            if (typeof msg === 'object') {
+                text = msg.message || msg.status || JSON.stringify(msg);
+            }
+
             // Hide feedback container for standard info messages if they are from recovery
-            if (msg.includes('Loaded') && msg.includes('assets from scan')) {
+            if (typeof text === 'string' && text.includes('Loaded') && text.includes('assets from scan')) {
                 console.log('Suppressed recovery feedback in container');
                 return;
             }
+
             const container = document.getElementById('feedback-container');
+            const parent = container.parentElement;
+
+            console.log('[FEEDBACK] Container found:', !!container, 'Parent hidden:', parent.classList.contains('hidden'));
+
             // Ensure the container is visible when feedback starts
-            container.parentElement.classList.remove('hidden');
-            container.innerHTML += `<p>${msg}</p>`;
+            parent.classList.remove('hidden');
+            parent.style.display = 'block'; // Force display in case CSS is overriding
+
+            // Add timestamp to message
+            const timestamp = new Date().toLocaleTimeString();
+            container.innerHTML += `<p><span class="text-olive-500 text-xs">[${timestamp}]</span> ${text}</p>`;
+
+            console.log('[FEEDBACK] Container now visible, content added');
+
+            // Auto-scroll to bottom
+            container.scrollTop = container.scrollHeight;
         });
 
         socket.on('local_ip', data => {
-            ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
-            
-            // Update CIDR display in info panel
+            console.log('[LOCAL_IP] Received data:', data);
+            console.log('[LOCAL_IP] local_ip:', data.local_ip);
+            console.log('[LOCAL_IP] subnet_mask:', data.subnet_mask);
+            console.log('[LOCAL_IP] public_ip:', data.public_ip);
+            console.log('[LOCAL_IP] cidr:', data.cidr);
+
+            // Update network info display
+            document.getElementById('local-ip-value').textContent = data.local_ip || '';
+            document.getElementById('subnet-mask-value').textContent = data.subnet_mask || '';
+            document.getElementById('public-ip-value').textContent = data.public_ip || '';
             document.getElementById('cidr-value').textContent = data.cidr || '';
-            
-            document.getElementById('scan-target').value = data.cidr;
+
+            // Pre-fill scan target with CIDR
+            const targetInput = document.getElementById('scan-target');
+            console.log('[LOCAL_IP] Setting scan-target to:', data.cidr);
+            targetInput.value = data.cidr || '';
+            console.log('[LOCAL_IP] scan-target value is now:', targetInput.value);
         });
 
         socket.on('cve_array', data => {
@@ -1103,15 +1195,14 @@
 
         document.getElementById('start-scan-btn').addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
+            // Clear previous feedback and show the container
+            const feedbackContainer = document.getElementById('feedback-container');
+            feedbackContainer.innerHTML = '';
+            feedbackContainer.parentElement.classList.remove('hidden');
             socket.emit('start_scan', target);
         });
 
-        socket.emit('get_local_ip');
-        socket.emit('get_network_key');
-        socket.emit('get_customer_info');
-        socket.emit('get_versions');
-        socket.emit('get_customers');
-        socket.emit('get_history_counts');
+        // Initial data requests moved to 'connect' handler above
 
         // Customer quick add dropdown handler
         document.getElementById('customer-quick-add').addEventListener('change', function() {
@@ -1133,15 +1224,29 @@
 
         socket.on('network_key', data => {
             console.log('Network key received:', data);
-            document.getElementById('total-hops').textContent = data.total_hops;
-            document.getElementById('private-hops').textContent = data.private_hops.length;
-            document.getElementById('public-hops').textContent = data.public_hops.length;
-            document.getElementById('exit-ip').textContent = data.exit_ip || '--';
-            
+
+            // Handle both formats: simple hops array or structured data
+            const hops = data.hops || [];
+            const privateHops = data.private_hops || hops.filter(h => typeof h === 'string' ? isPrivateIP(h) : h.is_private);
+            const publicHops = data.public_hops || hops.filter(h => typeof h === 'string' ? !isPrivateIP(h) : !h.is_private);
+
+            document.getElementById('total-hops').textContent = data.total_hops || hops.length;
+            document.getElementById('private-hops').textContent = privateHops.length;
+            document.getElementById('public-hops').textContent = publicHops.length;
+            document.getElementById('exit-ip').textContent = data.exit_ip || (hops.length > 0 ? (typeof hops[hops.length-1] === 'string' ? hops[hops.length-1] : hops[hops.length-1].ip) : '--');
+
             const routePath = document.getElementById('route-path');
-            if (data.hops && data.hops.length > 0) {
+            if (hops.length > 0) {
+                // Normalize hops to objects with ip and is_private
+                const normalizedHops = hops.map(h => {
+                    if (typeof h === 'string') {
+                        return { ip: h, is_private: isPrivateIP(h) };
+                    }
+                    return h;
+                });
+
                 // Reverse the hops so it reads: internet -> ... -> local
-                const reversedHops = [...data.hops].reverse();
+                const reversedHops = [...normalizedHops].reverse();
                 routePath.innerHTML = reversedHops.map((hop, i) => {
                     const typeColor = hop.is_private ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
                     const isLast = i === reversedHops.length - 1;
@@ -1157,6 +1262,16 @@
                 routePath.innerHTML = '<span class="text-olive-500 italic">No route data available</span>';
             }
         });
+
+        function isPrivateIP(ip) {
+            const parts = ip.split('.').map(Number);
+            if (parts.length !== 4) return false;
+            // 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+            return parts[0] === 10 ||
+                   (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+                   (parts[0] === 192 && parts[1] === 168) ||
+                   (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127); // CGNAT
+        }
 
         socket.on('customers_list', data => {
             console.log('customers_list event received with data:', data);
@@ -2115,18 +2230,24 @@
 
             const customerOption = document.getElementById('current-customer').selectedOptions[0];
             let customerName = 'Unknown';
-            
+
             if (customerOption) {
                 // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
                 customerName = customerOption.text.split(' (')[0];
             }
 
+            // Show feedback container and clear previous messages
+            const feedbackContainer = document.getElementById('feedback-container');
+            feedbackContainer.innerHTML = '';
+            feedbackContainer.parentElement.classList.remove('hidden');
+
             // Add pulsing to the button
             this.classList.add('card-pulsing');
-            
+
             // Start the incrementing timer
             startReportTimer();
 
+            console.log('[REPORT] Emitting generate_report with:', { target, customer_name: customerName });
             socket.emit('generate_report', {
                 target: target,
                 customer_name: customerName,

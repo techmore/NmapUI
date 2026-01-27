@@ -64,10 +64,12 @@ func (c *Client) Close() {
 }
 
 func (c *Client) Send(message Message) {
+	log.Printf("[WS-SEND] queuing client=%s event=%s", c.id, message.Event)
 	select {
 	case c.send <- message:
+		log.Printf("[WS-SEND] queued ok client=%s event=%s", c.id, message.Event)
 	default:
-		log.Printf("websocket send buffer full client=%s event=%s", c.id, message.Event)
+		log.Printf("[WS-SEND] buffer full client=%s event=%s", c.id, message.Event)
 	}
 }
 
@@ -88,12 +90,17 @@ func (c *Client) readPump() {
 		var message Message
 		if err := c.conn.ReadJSON(&message); err != nil {
 			if fiberws.IsUnexpectedCloseError(err, fiberws.CloseGoingAway, fiberws.CloseAbnormalClosure) {
-				log.Printf("websocket read error client=%s err=%v", c.id, err)
+				log.Printf("[WS-READ] error client=%s err=%v", c.id, err)
+			} else {
+				log.Printf("[WS-READ] connection closed client=%s err=%v", c.id, err)
 			}
 			break
 		}
 
+		log.Printf("[WS-READ] received client=%s event=%q data=%v", c.id, message.Event, message.Data)
+
 		if message.Event == "" {
+			log.Printf("[WS-READ] skipping empty event client=%s", c.id)
 			continue
 		}
 
@@ -103,7 +110,7 @@ func (c *Client) readPump() {
 		}
 
 		if err := c.router.Handle(c, message); err != nil {
-			log.Printf("websocket handle error client=%s event=%s err=%v", c.id, message.Event, err)
+			log.Printf("[WS-HANDLE] error client=%s event=%s err=%v", c.id, message.Event, err)
 		}
 	}
 }
@@ -122,12 +129,14 @@ func (c *Client) writePump() {
 			}
 
 			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				log.Printf("websocket write deadline error client=%s err=%v", c.id, err)
+				log.Printf("[WS-WRITE] deadline error client=%s err=%v", c.id, err)
 			}
+			log.Printf("[WS-WRITE] sending client=%s event=%s", c.id, message.Event)
 			if err := c.conn.WriteJSON(message); err != nil {
-				log.Printf("websocket write error client=%s err=%v", c.id, err)
+				log.Printf("[WS-WRITE] error client=%s err=%v", c.id, err)
 				return
 			}
+			log.Printf("[WS-WRITE] sent ok client=%s event=%s", c.id, message.Event)
 		case <-ticker.C:
 			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
 				log.Printf("websocket ping deadline error client=%s err=%v", c.id, err)

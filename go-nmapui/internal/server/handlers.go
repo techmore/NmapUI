@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/techmore/nmapui/internal/database"
 	"github.com/techmore/nmapui/internal/models"
+	"github.com/techmore/nmapui/internal/reports"
 )
 
 func (s *Server) handleQuickScan(c *fiber.Ctx) error {
@@ -237,20 +238,91 @@ func (s *Server) handleVersion(c *fiber.Ctx) error {
 }
 
 func (s *Server) handleAddCustomer(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "add customer not implemented",
+	var req struct {
+		ID         string  `json:"id"`
+		Name       string  `json:"name"`
+		Confidence float64 `json:"confidence"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	if req.ID == "" || req.Name == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "id and name are required")
+	}
+
+	if req.Confidence <= 0 {
+		req.Confidence = 0.7 // default confidence
+	}
+
+	customer := models.Customer{
+		ID:         req.ID,
+		Name:       req.Name,
+		Confidence: req.Confidence,
+	}
+
+	if err := s.Deps.Fingerprinter.AddCustomer(customer); err != nil {
+		return fiber.NewError(fiber.StatusConflict, err.Error())
+	}
+
+	return c.JSON(fiber.Map{
+		"customer": customer,
+		"message":  "customer added successfully",
 	})
 }
 
 func (s *Server) handleDeleteCustomer(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "delete customer not implemented",
+	id := c.Params("id")
+	if id == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "customer id is required")
+	}
+
+	if err := s.Deps.Fingerprinter.DeleteCustomer(id); err != nil {
+		return fiber.NewError(fiber.StatusNotFound, err.Error())
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "customer deleted successfully",
 	})
 }
 
 func (s *Server) handleGenerateReport(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "report generation not implemented",
+	var req struct {
+		XMLPath      string `json:"xml_path"`
+		CustomerName string `json:"customer_name"`
+		Target       string `json:"target"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	if req.XMLPath == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "xml_path is required")
+	}
+
+	// Create scan directory based on customer and timestamp
+	scanDir := createScanDirectory(req.CustomerName, req.Target)
+
+	ctx := context.Background()
+	reportReq := reports.ReportRequest{
+		XMLPath:      req.XMLPath,
+		CustomerName: req.CustomerName,
+		Target:       req.Target,
+		ScanDir:      scanDir,
+	}
+
+	result, err := s.Deps.ReportGen.GenerateReport(ctx, reportReq)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, fmt.Sprintf("report generation failed: %v", err))
+	}
+
+	return c.JSON(fiber.Map{
+		"html_path":     result.HTMLPath,
+		"pdf_path":      result.PDFPath,
+		"metadata_path": result.MetadataPath,
+		"duration_ms":   result.Duration.Milliseconds(),
 	})
 }
 

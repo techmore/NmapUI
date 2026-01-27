@@ -43,12 +43,17 @@ func NewScanEngine(scanner *NmapScanner, hub ProgressPublisher, maxConcurrent in
 func (e *ScanEngine) QuickScan(ctx context.Context, target string) ([]models.Host, error) {
 	config := e.GetAdaptiveScanConfig([]string{target})
 
+	e.emit("scan_feedback", fmt.Sprintf("🔍 Starting quick scan on %s...", target))
 	e.emit("quick_scan_start", map[string]any{
 		"target": target,
 	})
 
+	startTime := time.Now()
 	result, err := e.scanner.QuickScan(ctx, target, config.TimingProfile)
+	duration := time.Since(startTime)
+
 	if err != nil {
+		e.emit("scan_feedback", fmt.Sprintf("❌ Quick scan failed: %s", err.Error()))
 		e.emit("scan_error", map[string]any{
 			"target": target,
 			"error":  err.Error(),
@@ -56,6 +61,7 @@ func (e *ScanEngine) QuickScan(ctx context.Context, target string) ([]models.Hos
 		return nil, err
 	}
 
+	e.emit("scan_feedback", fmt.Sprintf("✅ Quick scan complete: %d hosts found in %.1fs", len(result), duration.Seconds()))
 	e.emit("quick_scan_complete", map[string]any{
 		"target":     target,
 		"live_hosts": len(result),
@@ -68,12 +74,17 @@ func (e *ScanEngine) QuickScan(ctx context.Context, target string) ([]models.Hos
 func (e *ScanEngine) ARPScan(ctx context.Context, target string) ([]models.Host, error) {
 	config := e.GetAdaptiveScanConfig([]string{target})
 
+	e.emit("scan_feedback", fmt.Sprintf("📡 Starting ARP scan on %s...", target))
 	e.emit("arp_scan_start", map[string]any{
 		"target": target,
 	})
 
+	startTime := time.Now()
 	result, err := e.scanner.ARPScan(ctx, target, config.TimingProfile)
+	duration := time.Since(startTime)
+
 	if err != nil {
+		e.emit("scan_feedback", fmt.Sprintf("⚠️ ARP scan error (continuing): %s", err.Error()))
 		e.emit("scan_error", map[string]any{
 			"target": target,
 			"error":  err.Error(),
@@ -81,6 +92,7 @@ func (e *ScanEngine) ARPScan(ctx context.Context, target string) ([]models.Host,
 		return nil, err
 	}
 
+	e.emit("scan_feedback", fmt.Sprintf("✅ ARP scan complete: %d hosts with MAC/vendor info in %.1fs", len(result), duration.Seconds()))
 	e.emit("arp_scan_complete", map[string]any{
 		"target":     target,
 		"live_hosts": len(result),
@@ -108,6 +120,7 @@ func (e *ScanEngine) DeepScan(ctx context.Context, targets []string) (models.Sca
 	atomic.StoreInt64(&e.totalHosts, int64(result.TotalHosts))
 	atomic.StoreInt64(&e.hostsScanned, 0)
 
+	e.emit("scan_feedback", fmt.Sprintf("🚀 Starting deep scan on %d hosts (%s mode, %d concurrent)...", len(targets), config.ScanType, effectiveMax))
 	e.emit("deep_scan_start", map[string]any{
 		"scan_id": result.ScanID,
 		"total_hosts": result.TotalHosts,
@@ -182,11 +195,13 @@ func (e *ScanEngine) DeepScan(ctx context.Context, targets []string) (models.Sca
 	result.HostsScanned = int(atomic.LoadInt64(&e.hostsScanned))
 	result.CompletedAt = time.Now()
 
+	totalTime := time.Since(result.StartedAt)
+	e.emit("scan_feedback", fmt.Sprintf("✅ Deep scan complete: %d hosts scanned in %s", len(results), formatDuration(totalTime)))
 	e.emit("deep_scan_complete", map[string]any{
 		"scan_id": result.ScanID,
 		"total_results": len(results),
 		"successful_scans": countSuccessful(results),
-		"total_time": time.Since(result.StartedAt).Seconds(),
+		"total_time": totalTime.Seconds(),
 		"avg_scan_rate": e.scanRate(),
 	})
 

@@ -88,3 +88,11 @@ func (h *Hub) broadcastToClients(message Message) {
 		client.Send(message)
 	}
 }
+
+// Publish implements scanner.ProgressPublisher interface
+func (h *Hub) Publish(event string, payload any) {
+	h.Broadcast(Message{
+		Event: event,
+		Data:  payload,
+	})
+}
