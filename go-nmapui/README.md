@@ -19,49 +19,83 @@ Go solves these:
 
 ## Quick Start
 
-### Prerequisites
-System tools (same as Python version):
-- **nmap** (required for scanning)
-- **wkhtmltopdf** or **chromedp** (for PDF reports)
-- **xsltproc** (for HTML reports)
-- **git** (for vulners script updates)
+### macOS (Recommended)
 
-### Installation
+**One-command setup** - installs all dependencies and builds the binary:
 
-**Download Pre-built Binary**:
-```bash
-# Linux
-wget https://github.com/techmore/NmapUI/releases/latest/download/nmapui-linux-amd64
-chmod +x nmapui-linux-amd64
-sudo mv nmapui-linux-amd64 /usr/local/bin/nmapui
-
-# macOS
-wget https://github.com/techmore/NmapUI/releases/latest/download/nmapui-darwin-amd64
-chmod +x nmapui-darwin-amd64
-sudo mv nmapui-darwin-amd64 /usr/local/bin/nmapui
-
-# Windows
-# Download nmapui-windows-amd64.exe from releases
-```
-
-**Or Build from Source**:
 ```bash
 git clone https://github.com/techmore/NmapUI.git
 cd NmapUI/go-nmapui
-make build
+./scripts/setup-mac.sh
 ```
 
-### Run
+This script will:
+- Install Homebrew (if needed)
+- Install Go, nmap, and arp-scan via Homebrew
+- Install the nmap-vulners script for CVE detection
+- Build the NmapUI binary
+- Create necessary directories and config files
 
+**Then run:**
 ```bash
-# Start server (requires root for SYN scans)
-sudo nmapui
-
-# Or run without sudo (Connect scans only)
-nmapui --scan-type=connect
+./start-nmapui.sh
+# Or directly: ./nmapui
 ```
 
 Access at: **http://localhost:9000**
+
+> **Note:** Some scan types (SYN scans) require root privileges. Run with `sudo ./nmapui` if needed.
+
+---
+
+### Linux (Ubuntu/Debian)
+
+```bash
+# Install dependencies
+sudo apt update
+sudo apt install -y nmap arp-scan xsltproc golang-go
+
+# Clone and build
+git clone https://github.com/techmore/NmapUI.git
+cd NmapUI/go-nmapui
+go build -o nmapui ./cmd/nmapui
+
+# Run (requires root for SYN scans)
+sudo ./nmapui
+```
+
+**Or use the systemd installer:**
+```bash
+sudo ./scripts/install.sh
+sudo systemctl start nmapui
+```
+
+---
+
+### Windows
+
+1. Install [nmap](https://nmap.org/download.html) and add to PATH
+2. Install [Go](https://go.dev/dl/)
+3. Build and run:
+```powershell
+git clone https://github.com/techmore/NmapUI.git
+cd NmapUI\go-nmapui
+go build -o nmapui.exe .\cmd\nmapui
+.\nmapui.exe
+```
+
+---
+
+### Prerequisites (Manual Install)
+
+If not using the setup scripts, you need:
+- **nmap** (required for scanning)
+- **arp-scan** (for MAC/vendor detection)
+- **Go 1.21+** (for building from source)
+
+Optional:
+- **wkhtmltopdf** or **chromedp** (for PDF reports)
+- **xsltproc** (for HTML reports)
 
 ---
 
