@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Olive Media Library - Discover Digital Content</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        olive: {
+                            50: '#f7f8f4',
+                            100: '#eef0e6',
+                            200: '#dde1d0',
+                            300: '#c4c9b0',
+                            400: '#a7ae8b',
+                            500: '#8a9269',
+                            600: '#6e754b',
+                            700: '#575d3d',
+                            800: '#464a34',
+                            900: '#3b3e2d',
+                            950: '#1f2117',
+                        },
+                        stone: {
+                            50: '#fafaf9',
+                            100: '#f5f5f4',
+                            200: '#e7e5e4',
+                            300: '#d6d3d1',
+                            400: '#a8a29e',
+                            500: '#78716c',
+                            600: '#57534e',
+                            700: '#44403c',
+                            800: '#292524',
+                            900: '#1c1917',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-olive {
+            background: linear-gradient(135deg, #f7f8f4 0%, #eef0e6 100%);
+        }
+        .hero-gradient {
+            background: linear-gradient(180deg, #f7f8f4 0%, #eef0e6 50%, #f5f5f4 100%);
+        }
+        .card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .nav-blur {
+            backdrop-filter: blur(12px);
+            background-color: rgba(247, 248, 244, 0.8);
+        }
+        .search-glow:focus-within {
+            box-shadow: 0 0 0 3px rgba(138, 146, 105, 0.1);
+        }
+    </style>
+</head>
+<body class="font-sans text-stone-700 antialiased bg-stone-50">
+
+    <!-- Compact Navigation with Integrated Search -->
+    <nav class="sticky top-0 w-full z-50 nav-blur border-b border-olive-200/50 transition-all duration-300" id="navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-4 h-16">
+                <!-- Compact Logo -->
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <div class="w-8 h-8 bg-olive-600 rounded-lg flex items-center justify-center">
+                        <i data-lucide="library" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span class="font-serif text-lg font-bold text-olive-900 hidden sm:block">Olive</span>
+                </div>
+
+                <!-- Dense Search Bar - Primary Focus -->
+                <div class="flex-1 max-w-2xl relative">
+                    <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                        <i data-lucide="search" class="w-4 h-4 text-stone-400"></i>
+                    </div>
+                    <input 
+                        type="text" 
+                        id="global-search"
+                        placeholder="Search 320K+ titles..." 
+                        class="w-full pl-10 pr-4 py-2 bg-white border border-olive-200 rounded-lg text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:border-olive-400 focus:ring-2 focus:ring-olive-100 transition-all"
+                    >
+                    <div class="absolute inset-y-0 right-2 flex items-center">
+                        <kbd class="hidden md:inline-flex items-center gap-1 px-2 py-0.5 bg-stone-100 border border-stone-200 rounded text-xs text-stone-500 font-sans">
+                            <span>⌘</span><span>K</span>
+                        </kbd>
+                    </div>
+                </div>
+
+                <!-- Quick Filters -->
+                <div class="hidden lg:flex items-center gap-1">
+                    <button class="filter-pill active px-3 py-1.5 bg-olive-600 text-white text-xs font-medium rounded-md transition-all" data-filter="all">All</button>
+                    <button class="filter-pill px-3 py-1.5 bg-white border border-olive-200 text-stone-600 text-xs font-medium rounded-md hover:border-olive-400 transition-all" data-filter="books">Books</button>
+                    <button class="filter-pill px-3 py-1.5 bg-white border border-olive-200 text-stone-600 text-xs font-medium rounded-md hover:border-olive-400 transition-all" data-filter="video">Video</button>
+                    <button class="filter-pill px-3 py-1.5 bg-white border border-olive-200 text-stone-600 text-xs font-medium rounded-md hover:border-olive-400 transition-all" data-filter="research">Research</button>
+                </div>
+
+                <!-- User Actions -->
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button class="p-2 text-stone-500 hover:text-olive-700 transition-colors relative">
+                        <i data-lucide="bell" class="w-4 h-4"></i>
+                        <span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-olive-600 rounded-full"></span>
+                    </button>
+                    <button class="p-2 text-stone-500 hover:text-olive-700 transition-colors md:hidden">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <img src="http://static.photos/people/200x200/42" alt="User" class="w-8 h-8 rounded-full border border-olive-200 object-cover hidden md:block">
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Status Bar with Stats -->
+    <div class="bg-olive-50 border-b border-olive-200 py-2">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-4">
+                    <span class="flex items-center gap-1.5 text-olive-700">
+                        <span class="flex h-1.5 w-1.5 rounded-full bg-olive-600 animate-pulse"></span>
+                        50K new this month
+                    </span>
+                    <span class="text-stone-400">|</span>
+                    <span class="text-stone-500">250K Books</span>
+                    <span class="text-stone-400">•</span>
+                    <span class="text-stone-500">15K Movies</span>
+                    <span class="text-stone-400">•</span>
+                    <span class="text-stone-500">45K Research</span>
+                </div>
+                <div class="hidden sm:flex items-center gap-4 text-stone-500">
+                    <a href="#browse" class="hover:text-olive-700">Browse</a>
+                    <a href="#collections" class="hover:text-olive-700">Collections</a>
+                    <a href="#research" class="hover:text-olive-700">Research</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Featured Content - Dense Grid -->
+    <section id="browse" class="py-6 bg-stone-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-serif text-xl font-bold text-olive-950">Recommended for You</h2>
+                <button class="text-sm text-olive-600 hover:text-olive-800 font-medium flex items-center gap-1">
+                    View All <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Dense Content Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" id="content-grid">
+                <!-- Card 1: Book - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="books">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-olive-100">
+                        <img src="http://static.photos/education/640x360/101" alt="Book Cover" class="w-full h-full object-cover">
+                        <div class="absolute top-2 left-2">
+                            <span class="px-2 py-0.5 bg-white/90 backdrop-blur text-olive-800 text-[10px] font-semibold rounded-full">4.8★</span>
+                        </div>
+                        <button class="absolute bottom-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-olive-50">
+                            <i data-lucide="plus" class="w-4 h-4 text-olive-700"></i>
+                        </button>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-1 mb-0.5">The Art of Stillness</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">Pico Iyer</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Philosophy</span>
+                            <span class="text-[10px] text-stone-400">2024</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Documentary - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="video">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-olive-100">
+                        <img src="http://static.photos/nature/640x360/55" alt="Documentary Thumbnail" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                            <div class="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+                                <i data-lucide="play" class="w-4 h-4 text-olive-800 ml-0.5"></i>
+                            </div>
+                        </div>
+                        <div class="absolute top-2 left-2">
+                            <span class="px-2 py-0.5 bg-olive-600 text-white text-[10px] font-semibold rounded-full">4.9★</span>
+                        </div>
+                        <div class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] rounded">1h 45m</div>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-1 mb-0.5">Hidden Life of Trees</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">BBC Natural History</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Documentary</span>
+                            <span class="text-[10px] text-stone-400">2.1M views</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Research Paper - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="research">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-stone-100 flex items-center justify-center p-4">
+                        <div class="text-center">
+                            <i data-lucide="file-text" class="w-10 h-10 text-olive-300 mx-auto mb-2"></i>
+                            <span class="text-[10px] font-bold text-olive-800 bg-white px-2 py-1 rounded shadow-sm">PDF</span>
+                        </div>
+                        <div class="absolute top-2 right-2">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">847 cites</span>
+                        </div>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-2 mb-0.5">Urban Forestry Impact on Microclimates</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">Dr. Sarah Chen et al.</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Climate Science</span>
+                            <span class="text-[10px] text-stone-400">Jan 24</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 4: Movie - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="video">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-olive-100">
+                        <img src="http://static.photos/cityscape/640x360/88" alt="Movie Poster" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                            <div class="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+                                <i data-lucide="play" class="w-4 h-4 text-olive-800 ml-0.5"></i>
+                            </div>
+                        </div>
+                        <div class="absolute top-2 left-2">
+                            <span class="px-2 py-0.5 bg-amber-500 text-white text-[10px] font-semibold rounded-full">4.6★</span>
+                        </div>
+                        <div class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] rounded">2h 15m</div>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-1 mb-0.5">The Last Station</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">Dir. M. Johnson</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Drama</span>
+                            <span class="text-[10px] text-amber-600">Oscar Nominee</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 5: Audio Book - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="audio">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-olive-100 to-olive-200 flex items-center justify-center">
+                        <i data-lucide="headphones" class="w-8 h-8 text-olive-600"></i>
+                        <div class="absolute top-2 left-2">
+                            <span class="px-2 py-0.5 bg-white/90 text-olive-800 text-[10px] font-semibold rounded-full">4.9★</span>
+                        </div>
+                        <div class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] rounded">12h 30m</div>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-1 mb-0.5">Sapiens: A Brief History</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">Yuval Noah Harari</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Audio Book</span>
+                            <span class="text-[10px] text-stone-400">89k reviews</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 6: Photo Collection - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="media">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-stone-200">
+                        <img src="http://static.photos/aerial/640x360/33" alt="Photo Collection" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
+                        <div class="absolute bottom-2 left-2 text-white">
+                            <p class="text-xs font-medium">48 Photos</p>
+                        </div>
+                        <div class="absolute top-2 right-2 text-[10px] text-white bg-black/40 px-1.5 py-0.5 rounded">NatGeo</div>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-1 mb-0.5">Above the Clouds</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">Aerial Photography</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Collection</span>
+                            <span class="text-[10px] text-stone-400">12.5k downloads</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 7: Academic Journal - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="research">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-olive-800 flex items-center justify-center p-3">
+                        <div class="text-center text-white">
+                            <span class="text-xl font-serif font-bold border-2 border-white/30 px-2 py-1 rounded">N</span>
+                            <p class="text-[10px] text-white/60 uppercase tracking-wider mt-2">Nature</p>
+                            <p class="text-xs font-bold">Vol 628</p>
+                        </div>
+                        <div class="absolute top-2 right-2">
+                            <span class="text-[10px] text-green-400 bg-green-400/20 px-1.5 py-0.5 rounded">Open</span>
+                        </div>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-2 mb-0.5">Quantum Computing Breakthrough</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">Various Authors</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Journal</span>
+                            <span class="text-[10px] text-stone-400">18 authors</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 8: TV Series - Compact -->
+                <div class="content-card compact-card group bg-white rounded-xl overflow-hidden border border-olive-100 hover:shadow-md hover:border-olive-300 transition-all cursor-pointer" data-category="video">
+                    <div class="relative aspect-[2/3] overflow-hidden bg-olive-100">
+                        <img src="http://static.photos/workspace/640x360/77" alt="Series Thumbnail" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                            <div class="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+                                <i data-lucide="play" class="w-4 h-4 text-olive-800 ml-0.5"></i>
+                            </div>
+                        </div>
+                        <div class="absolute top-2 left-2">
+                            <span class="px-2 py-0.5 bg-olive-600 text-white text-[10px] font-semibold rounded-full">4.7★</span>
+                        </div>
+                        <div class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] rounded">8 eps</div>
+                    </div>
+                    <div class="p-2.5">
+                        <h3 class="font-serif text-sm font-bold text-stone-800 line-clamp-1 mb-0.5">Silicon Valley Revolution</h3>
+                        <p class="text-xs text-stone-500 line-clamp-1">HBO Originals</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[10px] text-olive-600 bg-olive-50 px-1.5 py-0.5 rounded">Technology</span>
+                            <span class="text-[10px] text-stone-400">28k reviews</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 text-center">
+                <button class="px-6 py-2.5 bg-white border border-olive-300 text-olive-800 text-sm font-medium rounded-lg hover:bg-olive-50 hover:border-olive-400 transition-all">
+                    Load More <i data-lucide="chevron-down" class="w-4 h-4 inline ml-1"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Compact Categories Bar -->
+    <section id="collections" class="py-4 bg-white border-y border-olive-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <span class="text-xs font-semibold text-stone-500 whitespace-nowrap mr-2">Browse:</span>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5 text-olive-600"></i>
+                    Literature <span class="text-stone-400">45K</span>
+                </a>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="film" class="w-3.5 h-3.5 text-olive-600"></i>
+                    Cinema <span class="text-stone-400">12K</span>
+                </a>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="microscope" class="w-3.5 h-3.5 text-olive-600"></i>
+                    Science <span class="text-stone-400">29K</span>
+                </a>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="music" class="w-3.5 h-3.5 text-olive-600"></i>
+                    Music <span class="text-stone-400">8K</span>
+                </a>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-olive-600"></i>
+                    Academic <span class="text-stone-400">67K</span>
+                </a>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="camera" class="w-3.5 h-3.5 text-olive-600"></i>
+                    Photography <span class="text-stone-400">16K</span>
+                </a>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="globe" class="w-3.5 h-3.5 text-olive-600"></i>
+                    History <span class="text-stone-400">23K</span>
+                </a>
+                <a href="#" class="flex items-center gap-1.5 px-3 py-1.5 bg-olive-50 rounded-full border border-olive-200 hover:border-olive-400 hover:bg-olive-100 transition-all text-xs font-medium text-stone-700 whitespace-nowrap">
+                    <i data-lucide="brain" class="w-3.5 h-3.5 text-olive-600"></i>
+                    Psychology <span class="text-stone-400">18K</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Research Section -->
+    <section id="research" class="py-20 bg-olive-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid lg:grid-cols-2 gap-12 items-center">
+                <div>
+                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full text-olive-800 text-sm font-medium mb-6 border border-olive-200 shadow-sm">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        For Researchers & Academics
+                    </div>
+                    <h2 class="font-serif text-4xl lg:text-5xl font-bold text-olive-950 mb-6 leading-tight">
+                        Advanced Research Tools & <span class="text-olive-700">Academic Resources</span>
+                    </h2>
+                    <p class="text-lg text-stone-600 mb-8 leading-relaxed">
+                        Access peer-reviewed journals, citation management tools, and collaborative workspaces designed for serious research. Our platform integrates with Zotero, Mendeley, and major academic databases.
+                    </p>
+                    
+                    <div class="space-y-4 mb-8">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                                <i data-lucide="search-check" class="w-5 h-5 text-olive-600"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-stone-800 mb-1">Smart Citation Analysis</h4>
+                                <p class="text-sm text-stone-600">Track citation metrics and discover related research automatically.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                                <i data-lucide="users-2" class="w-5 h-5 text-olive-600"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-stone-800 mb-1">Collaborative Workspaces</h4>
+                                <p class="text-sm text-stone-600">Share collections and annotate documents with your research team.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                                <i data-lucide="file-output" class="w-5 h-5 text-olive-600"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-stone-800 mb-1">Export & Integration</h4>
+                                <p class="text-sm text-stone-600">Export citations in APA, MLA, Chicago, and 20+ other formats.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="px-8 py-4 bg-olive-700 text-white font-semibold rounded-xl hover:bg-olive-800 transition-colors shadow-lg shadow-olive-700/20">
+                        Explore Research Tools
+                        <i data-lucide="arrow-right" class="w-4 h-4 inline ml-2"></i>
+                    </button>
+                </div>
+
+                <div class="relative">
+                    <div class="absolute -inset-4 bg-olive-200/50 rounded-3xl blur-2xl"></div>
+                    <div class="relative bg-white rounded-2xl p-8 shadow-xl border border-olive-100">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="font-serif text-xl font-bold text-stone-800">Recent Academic Uploads</h3>
+                            <button class="text-olive-600 text-sm font-medium hover:underline">View All</button>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-start gap-4 p-4 bg-stone-50 rounded-xl hover:bg-olive-50/50 transition-colors cursor-pointer group">
+                                <div class="w-12 h-12 bg-olive-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="file-text" class="w-6 h-6 text-olive-600"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-semibold text-stone-800 mb-1 truncate group-hover:text-olive-700 transition-colors">Machine Learning in Climate Prediction Models</h4>
+                                    <p class="text-sm text-stone-500 mb-2">Dr. Emily Watson • MIT</p>
+                                    <div class="flex items-center gap-4 text-xs text-stone-400">
+                                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i> 2 days ago</span>
+                                        <span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i> 1.2k views</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4 p-4 bg-stone-50 rounded-xl hover:bg-olive-50/50 transition-colors cursor-pointer group">
+                                <div class="w-12 h-12 bg-olive-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="file-text" class="w-6 h-6 text-olive-600"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-semibold text-stone-800 mb-1 truncate group-hover:text-olive-700 transition-colors">Sustainable Urban Architecture: A Meta-Analysis</h4>
+                                    <p class="text-sm text-stone-500 mb-2">Prof. James Liu • Stanford</p>
+                                    <div class="flex items-center gap-4 text-xs text-stone-400">
+                                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i> 3 days ago</span>
+                                        <span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i> 892 views</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4 p-4 bg-stone-50 rounded-xl hover:bg-olive-50/50 transition-colors cursor-pointer group">
+                                <div class="w-12 h-12 bg-olive-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="file-text" class="w-6 h-6 text-olive-600"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-semibold text-stone-800 mb-1 truncate group-hover:text-olive-700 transition-colors">Neuroplasticity and Digital Media Consumption</h4>
+                                    <p class="text-sm text-stone-500 mb-2">Dr. Sarah Chen • Oxford</p>
+                                    <div class="flex items-center gap-4 text-xs text-stone-400">
+                                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i> 5 days ago</span>
+                                        <span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i> 2.4k views</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-20 bg-olive-900 relative overflow-hidden">
+        <div class="absolute inset-0 opacity-10">
+            <div class="absolute inset-0" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 40px 40px;"></div>
+        </div>
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+            <h2 class="font-serif text-4xl lg:text-5xl font-bold text-white mb-6">Start Your Learning Journey Today</h2>
+            <p class="text-olive-200 text-lg mb-10 max-w-2xl mx-auto">Join over 2 million researchers, students, and lifelong learners who trust Olive Library for their knowledge needs.</p>
+            
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button class="px-8 py-4 bg-white text-olive-900 font-bold rounded-xl hover:bg-olive-50 transition-colors shadow-lg">
+                    Get Started Free
+                </button>
+                <button class="px-8 py-4 bg-transparent border-2 border-olive-400 text-white font-semibold rounded-xl hover:bg-olive-800 transition-colors">
+                    View Pricing Plans
+                </button>
+            </div>
+            
+            <p class="mt-6 text-sm text-olive-400">No credit card required • 14-day free trial • Cancel anytime</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-stone-100 border-t border-olive-200 pt-16 pb-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 mb-12">
+                <div class="col-span-2">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-8 h-8 bg-olive-600 rounded-lg flex items-center justify-center">
+                            <i data-lucide="library" class="w-4 h-4 text-white"></i>
+                        </div>
+                        <span class="font-serif text-xl font-bold text-olive-900">OliveLibrary</span>
+                    </div>
+                    <p class="text-stone-600 text-sm mb-6 max-w-xs">The world's most comprehensive multimedia library platform for researchers, educators, and lifelong learners.</p>
+                    <div class="flex gap-4">
+                        <a href="#" class="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-stone-400 hover:text-olive-600 hover:shadow-md transition-all">
+                            <i data-lucide="twitter" class="w-5 h-5"></i>
+                        </a>
+                        <a href="#" class="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-stone-400 hover:text-olive-600 hover:shadow-md transition-all">
+                            <i data-lucide="linkedin" class="w-5 h-5"></i>
+                        </a>
+                        <a href="#" class="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-stone-400 hover:text-olive-600 hover:shadow-md transition-all">
+                            <i data-lucide="github" class="w-5 h-5"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="font-semibold text-stone-800 mb-4">Platform</h4>
+                    <ul class="space-y-3 text-sm text-stone-600">
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Browse</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Collections</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Research Tools</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">API Access</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="font-semibold text-stone-800 mb-4">Resources</h4>
+                    <ul class="space-y-3 text-sm text-stone-600">
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Help Center</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Citation Guide</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Academic Partners</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Webinars</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="font-semibold text-stone-800 mb-4">Company</h4>
+                    <ul class="space-y-3 text-sm text-stone-600">
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">About Us</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Careers</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Privacy Policy</a></li>
+                        <li><a href="#" class="hover:text-olive-700 transition-colors">Terms of Service</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-olive-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p class="text-sm text-stone-500">© 2024 Olive Library. All rights reserved.</p>
+                <div class="flex items-center gap-6 text-sm text-stone-500">
+                    <a href="#" class="hover:text-olive-700 transition-colors">Privacy</a>
+                    <a href="#" class="hover:text-olive-700 transition-colors">Terms</a>
+                    <a href="#" class="hover:text-olive-700 transition-colors">Cookies</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

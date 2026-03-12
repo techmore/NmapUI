@@ -1,0 +1,203 @@
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f5f5f4;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #a7ae8b;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #8a9269;
+}
+
+/* Selection color */
+::selection {
+    background-color: #dde1d0;
+    color: #464a34;
+}
+
+/* Smooth scroll behavior */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Focus visible styles for accessibility */
+:focus-visible {
+    outline: 2px solid #8a9269;
+    outline-offset: 2px;
+}
+
+/* Custom animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+
+/* Stagger delay utilities */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* Line clamp utilities */
+.line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Aspect ratio fallback */
+.aspect-video {
+    aspect-ratio: 16 / 9;
+}
+
+.aspect-square {
+    aspect-ratio: 1 / 1;
+}
+
+/* Glass morphism utilities */
+.glass {
+    background: rgba(247, 248, 244, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* Text balance for better typography */
+h1, h2, h3 {
+    text-wrap: balance;
+}
+
+/* Prevent layout shift from images */
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+/* Print styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    body {
+        background: white;
+        color: black;
+    }
+}
+
+/* Compact card styles */
+.compact-card {
+    transition: all 0.2s ease;
+}
+
+.compact-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Dense grid optimizations */
+@media (min-width: 1280px) {
+    .xl\:grid-cols-5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+/* Custom form styles */
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+    display: none;
+}
+
+/* Loading skeleton animation */
+@keyframes skeleton {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #eef0e6 25%, #f7f8f4 50%, #eef0e6 75%);
+    background-size: 200% 100%;
+    animation: skeleton 1.5s infinite;
+}
+
+/* Hover lift effect */
+.hover-lift {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+}
+
+/* Custom button press effect */
+.btn-press:active {
+    transform: scale(0.98);
+}
+
+/* Gradient text */
+.gradient-text {
+    background: linear-gradient(135deg, #575d3d 0%, #8a9269 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Focus ring custom color */
+.focus-ring-olive:focus {
+    --tw-ring-color: #8a9269;
+}
