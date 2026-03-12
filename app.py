@@ -2,7 +2,19 @@ from flask import Flask, render_template, send_file, jsonify, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from typing import Dict, Optional
-import subprocess, re, json, ipaddress, socket, threading, requests, netifaces as ni, os, sys, shutil, yaml, logging, tempfile, glob as file_glob
+import ipaddress
+import json
+import logging
+import os
+import re
+import shutil
+import subprocess
+import sys
+import threading
+
+import netifaces as ni
+import requests
+import yaml
 from datetime import datetime
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
@@ -186,9 +198,11 @@ def check_for_updates():
             return {
                 "available": True,
                 "latest_version": latest_version,
-                "download_url": latest_release["assets"][0]["browser_download_url"]
-                if latest_release["assets"]
-                else None,
+                "download_url": (
+                    latest_release["assets"][0]["browser_download_url"]
+                    if latest_release["assets"]
+                    else None
+                ),
                 "release_notes": latest_release["body"],
             }
         return {"available": False}
@@ -245,7 +259,6 @@ auto_scan_config = {
 
 def load_auto_scan_config():
     """Load auto scan configuration"""
-    global auto_scan_config
     config_file = BASE_DIR / "auto_scan_config.json"
     if config_file.exists():
         try:
@@ -346,7 +359,7 @@ def safe_emit(event, data=None):
 
 
 def run_traceroute(target="1.1.1.1"):
-    global network_key, current_customer
+    global current_customer
     try:
         safe_emit("customer_identification_start")
         socketio.sleep(0)
@@ -358,8 +371,18 @@ def run_traceroute(target="1.1.1.1"):
         )
         socketio.sleep(0)
 
+        import platform
+
+        system = platform.system()
+
+        if system == "Darwin":
+            traceroute_cmd = ["traceroute", "-I", "-n", "-q", "1", target]
+        else:
+            traceroute_cmd = ["traceroute", "-n", "-I", "-q", "1", target]
+
+        logger.info(f"Running traceroute: {' '.join(traceroute_cmd)}")
         output = subprocess.check_output(
-            ["traceroute", "-n", target], stderr=subprocess.STDOUT, timeout=60
+            traceroute_cmd, stderr=subprocess.STDOUT, timeout=60
         ).decode("utf-8")
 
         network_key["raw"] = output
@@ -382,7 +405,7 @@ def run_traceroute(target="1.1.1.1"):
             avg_latency = None
             if latency_matches:
                 avg_latency = round(
-                    sum(float(l) for l in latency_matches) / len(latency_matches), 2
+                    sum(float(lat) for lat in latency_matches) / len(latency_matches), 2
                 )
 
             hop_data = {
@@ -550,7 +573,7 @@ def get_report_counts():
                         or timestamp > counts["last_scans"]["total"]
                     ):
                         counts["last_scans"]["total"] = timestamp
-        except:
+        except Exception:
             continue
 
     return counts
@@ -1034,15 +1057,16 @@ def add_labeled_public_ip_event(data):
 
 def save_customers_config():
     try:
+        config = customer_fingerprinter.config or {}
         config_data = {
-            "version": customer_fingerprinter.config.get("version", "1.0"),
-            "description": customer_fingerprinter.config.get(
+            "version": config.get("version", "1.0"),
+            "description": config.get(
                 "description", "Customer network fingerprinting database"
             ),
             "settings": customer_fingerprinter.settings,
             "customers": customer_fingerprinter.customers,
             "unknown_customer": customer_fingerprinter.unknown_customer,
-            "indexing": customer_fingerprinter.config.get("indexing", {}),
+            "indexing": config.get("indexing", {}),
         }
 
         with open(customer_fingerprinter.config_path, "w") as f:
@@ -1176,6 +1200,8 @@ def resume_from_last_scan_event(data):
         emit("resume_scan_error", {"error": "No assets found in scan"})
         return
 
+    metadata = metadata or {}
+
     # Calculate statistics
     total_vulns = sum(len(asset.get("vulnerabilities", [])) for asset in assets)
     total_exploits = sum(
@@ -1183,7 +1209,9 @@ def resume_from_last_scan_event(data):
         for asset in assets
     )
 
-    scan_time = datetime.fromisoformat(metadata.get("timestamp"))
+    scan_time = datetime.fromisoformat(
+        metadata.get("timestamp", datetime.now().isoformat())
+    )
     age_seconds = (datetime.now() - scan_time).total_seconds()
     age_days = int(age_seconds / (24 * 3600))
 
@@ -1194,8 +1222,8 @@ def resume_from_last_scan_event(data):
             "hosts": assets,
             "total": len(assets),
             "is_historical": True,
-            "scan_date": metadata.get("timestamp"),
-            "target": metadata.get("target"),
+            "scan_date": metadata.get("timestamp", datetime.now().isoformat()),
+            "target": metadata.get("target", "unknown"),
             "age_days": age_days,
             "total_vulnerabilities": total_vulns,
             "total_exploits": total_exploits,
@@ -1296,12 +1324,55 @@ def start_auto_update_countdown_event():
     idle_state_manager.start_countdown()
 
 
+def get_default_interface():
+    """Detect the primary network interface dynamically for cross-platform compatibility."""
+    import platform
+
+    system = platform.system()
+    preferred_order = []
+
+    if system == "Darwin":
+        preferred_order = ["en0", "en1", "en2", "en3", "en4", "bridge0", "utun"]
+    elif system == "Linux":
+        preferred_order = ["eth0", "ens", "eno", "enp", "wlan0", "wlp", "br-"]
+
+    available = ni.interfaces()
+    logger.info(f"Detected network interfaces: {available}")
+
+    for iface in preferred_order:
+        for avail in available:
+            if avail.startswith(iface) or avail == iface:
+                try:
+                    if ni.ifaddresses(avail).get(ni.AF_INET):
+                        logger.info(f"Using primary interface: {avail}")
+                        return avail
+                except ValueError:
+                    continue
+
+    for avail in available:
+        if avail == "lo":
+            continue
+        try:
+            if ni.ifaddresses(avail).get(ni.AF_INET):
+                logger.info(f"Using fallback interface: {avail}")
+                return avail
+        except ValueError:
+            continue
+
+    logger.warning("No suitable network interface found, defaulting to 'en0'")
+    return "en0"
+
+
+DEFAULT_INTERFACE = get_default_interface()
+
+
 @socketio.on("get_local_ip")
 def get_local_ip():
     try:
+        interface = DEFAULT_INTERFACE
         local_ip, subnet_mask = (
-            ni.ifaddresses("en0")[ni.AF_INET][0]["addr"],
-            ni.ifaddresses("en0")[ni.AF_INET][0]["netmask"],
+            ni.ifaddresses(interface)[ni.AF_INET][0]["addr"],
+            ni.ifaddresses(interface)[ni.AF_INET][0]["netmask"],
         )
         public_ip, cidr = (
             requests.get("https://api.ipify.org").text,
@@ -1314,10 +1385,12 @@ def get_local_ip():
                 "subnet_mask": subnet_mask,
                 "public_ip": public_ip,
                 "cidr": cidr,
+                "interface": interface,
             },
         )
     except Exception as e:
-        emit("scan_error", str(e))
+        logger.error(f"Failed to get local IP: {e}")
+        emit("scan_error", f"Failed to get local IP: {str(e)}")
 
 
 def calculate_cidr(ip, subnet_mask):
@@ -1440,7 +1513,7 @@ def start_scan(target):
         socketio.sleep(0)
 
         output = subprocess.check_output(["nmap", "-sn", target]).decode("utf-8")
-        parsed_data, lines = [], output.split("\n")
+        lines = output.split("\n")
         # Regex to capture IP (last distinct IP-like pattern in the line)
         ip_regex = re.compile(
             r"Nmap scan report for .*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
@@ -1587,23 +1660,33 @@ def start_scan(target):
         idle_state_manager.end_operation("quick_scan")
 
 
-def run_arp_scan(target, interface="en0"):
+def run_arp_scan(target, interface=None):
+    if interface is None:
+        interface = DEFAULT_INTERFACE
+
+    if not shutil.which("arp-scan"):
+        logger.warning("arp-scan not found, skipping MAC/vendor detection")
+        socketio.emit(
+            "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
+        )
+        return {}
+
     try:
-        command_str = f"arp-scan {target} -interface {interface}"
+        command_str = f"arp-scan {target} --interface {interface}"
         socketio.emit("scan_feedback", f"Executing: {command_str}")
         logger.info(command_str)
         socketio.sleep(0)
 
         try:
             output = subprocess.check_output(
-                ["arp-scan", target, "-interface", interface],
+                ["arp-scan", target, "--interface", interface],
                 stderr=subprocess.STDOUT,
                 timeout=30,
             ).decode("utf-8")
 
         except subprocess.CalledProcessError:
             output = subprocess.check_output(
-                ["sudo", "arp-scan", target, "-interface", interface],
+                ["sudo", "arp-scan", target, "--interface", interface],
                 stderr=subprocess.STDOUT,
                 timeout=30,
             ).decode("utf-8")
@@ -1647,7 +1730,7 @@ def check_arp_scan():
             )
             logger.info(f"Found: {version}")
             return True
-        except:
+        except Exception:
             logger.info("Found: arp-scan (version unknown)")
             return True
     else:
@@ -1746,7 +1829,6 @@ def check_vulners():
 
 def get_versions():
     """Get version information for all tools"""
-    global versions
     return versions
 
 
@@ -1960,7 +2042,7 @@ def convert_html_to_pdf(html_path, pdf_path):
             logger.error(f"wkhtmltopdf failed: {e}")
 
     # Fallback to weasyprint
-    socketio.emit("scan_feedback", f"Falling back to weasyprint for PDF generation")
+    socketio.emit("scan_feedback", "Falling back to weasyprint for PDF generation")
     try:
         from weasyprint import HTML
 
@@ -2436,7 +2518,7 @@ def generate_report_event(data):
 
     # Log report generation start
     logger.info("=" * 60)
-    logger.info(f"REPORT GENERATION STARTED")
+    logger.info("REPORT GENERATION STARTED")
     logger.info(f"  Target: {target}")
     logger.info(f"  Customer: {customer_name}")
     logger.info(f"  Auto Scan: {is_auto_scan}")
@@ -2535,7 +2617,7 @@ def generate_report_event(data):
                 safe_emit("customer_info", current_customer)
 
         logger.info("=" * 60)
-        logger.info(f"REPORT GENERATION SUCCESSFUL")
+        logger.info("REPORT GENERATION SUCCESSFUL")
         logger.info(f"  Duration: {duration_str}")
         logger.info(f"  Location: {scan_dir}")
         logger.info("=" * 60)
@@ -2552,7 +2634,7 @@ def generate_report_event(data):
     except Exception as e:
         logger.exception("Report generation failed")
         logger.error("=" * 60)
-        logger.error(f"REPORT GENERATION FAILED")
+        logger.error("REPORT GENERATION FAILED")
         logger.error(f"  Error: {str(e)}")
         logger.error("=" * 60)
         emit("report_error", {"error": str(e)})
@@ -2564,7 +2646,6 @@ def generate_report_event(data):
 @socketio.on("update_auto_scan")
 def update_auto_scan_event(data):
     """Update auto scan configuration"""
-    global auto_scan_config
     auto_scan_config.update(data)
     save_auto_scan_config()
 
@@ -2575,9 +2656,16 @@ def update_auto_scan_event(data):
 
 
 def startup_checks(quick=False):
+    import platform
+
     logger.info("\n" + "=" * 50)
     logger.info("NmapUI Startup Checks")
     logger.info("=" * 50)
+
+    system_platform = platform.system()
+    platform_release = platform.release()
+    logger.info(f"Platform detected: {system_platform} ({platform_release})")
+    logger.info(f"Default Network Interface: {DEFAULT_INTERFACE}")
 
     if quick:
         logger.info("Quick mode: skipping dependency checks")
@@ -2607,7 +2695,7 @@ def startup_checks(quick=False):
                     versions["vulners"] = version_result.stdout.strip()
                 else:
                     versions["vulners"] = "Unknown"
-            except:
+            except Exception:
                 versions["vulners"] = "Unknown"
 
         logger.info("\nChecking arp-scan...")
@@ -2621,7 +2709,7 @@ def startup_checks(quick=False):
                     .split("\n")[0]
                 )
                 versions["arp_scan"] = version
-            except:
+            except Exception:
                 versions["arp_scan"] = "arp-scan (version unknown)"
         else:
             versions["arp_scan"] = "Not installed"
@@ -2657,7 +2745,6 @@ def get_auto_scan_status():
 @app.route("/api/auto_scan/update", methods=["POST"])
 def update_auto_scan():
     """Update auto scan configuration"""
-    global auto_scan_config
     config = request.json
 
     auto_scan_config.update(config)
