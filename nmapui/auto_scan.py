@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import datetime
+import re
 
 from .paths import AUTO_SCAN_CONFIG_EXAMPLE_FILE, AUTO_SCAN_CONFIG_FILE
 
@@ -13,6 +14,8 @@ DEFAULT_AUTO_SCAN_CONFIG = {
     "end_time": "06:00",
     "last_run": None,
 }
+
+AUTO_SCAN_ALLOWED_KEYS = {"enabled", "start_time", "end_time", "last_run"}
 
 
 def load_auto_scan_config(target_config: dict) -> None:
@@ -33,6 +36,40 @@ def save_auto_scan_config(source_config: dict) -> None:
         AUTO_SCAN_CONFIG_FILE.write_text(json.dumps(source_config, indent=2))
     except Exception as exc:
         logger.error("Failed to save auto scan config: %s", exc)
+
+
+def validate_auto_scan_config_update(config) -> tuple[bool, str | None]:
+    """Validate a partial auto-scan config update payload."""
+    if not isinstance(config, dict):
+        return False, "Invalid JSON payload"
+
+    unknown_keys = sorted(set(config) - AUTO_SCAN_ALLOWED_KEYS)
+    if unknown_keys:
+        return (
+            False,
+            f"Unknown configuration keys: {', '.join(unknown_keys)}",
+        )
+
+    if "enabled" in config and not isinstance(config["enabled"], bool):
+        return False, "'enabled' must be a boolean"
+
+    time_pattern = re.compile(r"^\d{2}:\d{2}$")
+    for field in ("start_time", "end_time"):
+        if field not in config:
+            continue
+        value = config[field]
+        if not isinstance(value, str) or not time_pattern.match(value):
+            return False, f"'{field}' must use HH:MM format"
+
+    if "last_run" in config and config["last_run"] is not None:
+        if not isinstance(config["last_run"], str):
+            return False, "'last_run' must be an ISO string"
+        try:
+            datetime.fromisoformat(config["last_run"])
+        except ValueError:
+            return False, "'last_run' must be a valid ISO timestamp"
+
+    return True, None
 
 
 def should_run_auto_scan(
