@@ -406,6 +406,7 @@ class ClientJobRegistry:
     def __init__(self):
         self._jobs = {}
         self._lock = threading.Lock()
+        self._processes = {}
 
     def start(self, sid: str, job_type: str, details=None) -> bool:
         with self._lock:
@@ -416,6 +417,7 @@ class ClientJobRegistry:
             self._jobs[key] = {
                 "status": "running",
                 "started_at": datetime.now().isoformat(),
+                "cancel_requested": False,
                 "details": details or {},
             }
             return True
@@ -449,6 +451,38 @@ class ClientJobRegistry:
                 current["details"] = merged
             self._jobs[key] = current
 
+    def cancel(self, sid: str, job_type: str) -> bool:
+        with self._lock:
+            key = (sid, job_type)
+            current = self._jobs.get(key)
+            if not current or current.get("status") != "running":
+                return False
+            current["cancel_requested"] = True
+            current["status"] = "cancelling"
+            current["cancel_requested_at"] = datetime.now().isoformat()
+            self._jobs[key] = current
+
+            process = self._processes.get(key)
+            if process and process.poll() is None:
+                try:
+                    process.terminate()
+                except Exception:
+                    logger.exception("Failed to terminate subprocess for %s", key)
+            return True
+
+    def is_cancelled(self, sid: str, job_type: str) -> bool:
+        with self._lock:
+            job = self._jobs.get((sid, job_type))
+            return bool(job and job.get("cancel_requested"))
+
+    def attach_process(self, sid: str, job_type: str, process: subprocess.Popen):
+        with self._lock:
+            self._processes[(sid, job_type)] = process
+
+    def clear_process(self, sid: str, job_type: str):
+        with self._lock:
+            self._processes.pop((sid, job_type), None)
+
     def get(self, sid: str, job_type: str):
         with self._lock:
             job = self._jobs.get((sid, job_type))
@@ -472,6 +506,7 @@ class ClientJobRegistry:
             job = self._jobs.get(key)
             if job and job.get("disconnected"):
                 self._jobs.pop(key, None)
+            self._processes.pop(key, None)
 
 
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
@@ -807,6 +842,56 @@ def update_job_progress(
 
     job_registry.update(sid, job_type, details=payload)
     emit_job_status(sid, job_type)
+
+
+def ensure_job_not_cancelled(sid: str, job_type: str):
+    """Stop the current workflow if cancellation was requested."""
+    if job_registry.is_cancelled(sid, job_type):
+        raise RuntimeError(f"{job_type} cancelled")
+
+
+def run_cancellable_command(
+    cmd,
+    sid: Optional[str] = None,
+    job_type: Optional[str] = None,
+    timeout: Optional[int] = None,
+):
+    """Run a subprocess that can be cancelled via the job registry."""
+    start = datetime.now()
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if sid and job_type:
+        job_registry.attach_process(sid, job_type, process)
+
+    try:
+        while True:
+            try:
+                stdout, stderr = process.communicate(timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                if timeout is not None and (datetime.now() - start).total_seconds() > timeout:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    raise subprocess.TimeoutExpired(cmd, timeout, output=stdout, stderr=stderr)
+                if sid and job_type and job_registry.is_cancelled(sid, job_type):
+                    process.terminate()
+                    try:
+                        stdout, stderr = process.communicate(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        stdout, stderr = process.communicate()
+                    raise RuntimeError(f"{job_type} cancelled")
+
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=process.returncode, stdout=stdout, stderr=stderr
+        )
+    finally:
+        if sid and job_type:
+            job_registry.clear_process(sid, job_type)
 
 
 def run_traceroute(target="1.1.1.1"):
@@ -1696,6 +1781,31 @@ def get_job_status_event():
     emit_job_status(request.sid, "report")
 
 
+@socketio.on("cancel_job")
+def cancel_job_event(data):
+    """Cancel a running background job for this client."""
+    job_type = data.get("job_type") if isinstance(data, dict) else None
+    if job_type not in {"scan", "report"}:
+        emit("scan_error", "Invalid job type")
+        return
+
+    if not job_registry.cancel(request.sid, job_type):
+        emit_to_client(
+            request.sid,
+            "job_cancelled",
+            {"job_type": job_type, "message": "No running job to cancel"},
+        )
+        emit_job_status(request.sid, job_type)
+        return
+
+    emit_job_status(request.sid, job_type)
+    emit_to_client(
+        request.sid,
+        "job_cancelled",
+        {"job_type": job_type, "message": f"Cancelling {job_type} job..."},
+    )
+
+
 @socketio.on("disconnect")
 def disconnect_event():
     """Mark per-client jobs as abandoned when the socket disconnects."""
@@ -1880,17 +1990,19 @@ def identify_gateway_firewall_targets(hosts):
 
 def start_deep_scan(targets, sid, is_gateway_phase=False):
     try:
+        ensure_job_not_cancelled(sid, "scan")
         emit_to_client(sid, "deep_scan_start")
         socketio.sleep(0)
 
         for target in targets:
+            ensure_job_not_cancelled(sid, "scan")
             emit_to_client(sid, "deep_scan_host_start", {"ip": target})
             command_str = f"nmap -T3 -sV --script {str(VULNERS_SCRIPT)} {target}"
             emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
             logger.info(command_str)
             socketio.sleep(0)
 
-            output = subprocess.check_output(
+            result = run_cancellable_command(
                 [
                     "nmap",
                     "-T3",
@@ -1898,8 +2010,11 @@ def start_deep_scan(targets, sid, is_gateway_phase=False):
                     "--script",
                     str(VULNERS_SCRIPT),
                     target,
-                ]
-            ).decode("utf-8")
+                ],
+                sid=sid,
+                job_type="scan",
+            )
+            output = result.stdout
             cve_array, parsed_data, lines = (
                 [],
                 [],
@@ -1953,6 +2068,11 @@ def start_deep_scan(targets, sid, is_gateway_phase=False):
 
         # Emit deep scan complete after all hosts are done
         emit_to_client(sid, "deep_scan_complete")
+    except RuntimeError as e:
+        if str(e) == "scan cancelled":
+            emit_to_client(sid, "scan_error", "Scan cancelled")
+            return
+        emit_to_client(sid, "scan_error", str(e))
     except Exception as e:
         emit_to_client(sid, "scan_error", str(e))
 
@@ -1961,6 +2081,7 @@ def start_scan_task(sid, target):
     """Run scan workflow in a background task for a single client."""
     operation_id = f"quick_scan:{sid}"
     try:
+        ensure_job_not_cancelled(sid, "scan")
         idle_state_manager.start_operation(operation_id)
         update_job_progress(
             sid,
@@ -1975,7 +2096,9 @@ def start_scan_task(sid, target):
         logger.info(command_str)
         socketio.sleep(0)
 
-        output = subprocess.check_output(["nmap", "-sn", target]).decode("utf-8")
+        output = run_cancellable_command(
+            ["nmap", "-sn", target], sid=sid, job_type="scan"
+        ).stdout
         lines = output.split("\n")
         # Regex to capture IP (last distinct IP-like pattern in the line)
         ip_regex = re.compile(
@@ -2147,14 +2270,22 @@ def start_scan_task(sid, target):
             progress=100,
         )
 
+    except RuntimeError as e:
+        if str(e) == "scan cancelled":
+            job_registry.complete(sid, "scan", status="cancelled")
+            emit_job_status(sid, "scan")
+            emit_to_client(sid, "scan_error", "Scan cancelled")
+        else:
+            job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
+            emit_job_status(sid, "scan")
+            emit_to_client(sid, "scan_error", str(e))
     except Exception as e:
         job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
         emit_job_status(sid, "scan")
         emit_to_client(sid, "scan_error", str(e))
     finally:
-        if not job_registry.get(sid, "scan") or job_registry.get(sid, "scan").get(
-            "status"
-        ) == "running":
+        current_job = job_registry.get(sid, "scan")
+        if current_job and current_job.get("status") == "running":
             job_registry.complete(sid, "scan", status="completed")
             emit_job_status(sid, "scan")
         job_registry.clear_if_disconnected(sid, "scan")
@@ -2218,19 +2349,21 @@ def run_arp_scan(target, interface=None, sid=None):
         logger.info(command_str)
         socketio.sleep(0)
 
-        try:
-            output = subprocess.check_output(
-                ["arp-scan", target, "--interface", interface],
-                stderr=subprocess.STDOUT,
-                timeout=30,
-            ).decode("utf-8")
-
-        except subprocess.CalledProcessError:
-            output = subprocess.check_output(
+        result = run_cancellable_command(
+            ["arp-scan", target, "--interface", interface],
+            sid=sid,
+            job_type="scan" if sid else None,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            output = result.stdout
+        else:
+            output = run_cancellable_command(
                 ["sudo", "arp-scan", target, "--interface", interface],
-                stderr=subprocess.STDOUT,
+                sid=sid,
+                job_type="scan" if sid else None,
                 timeout=30,
-            ).decode("utf-8")
+            ).stdout
 
         arp_data = {}
         arp_pattern = re.compile(r"^(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F:]{17})\s+(.*)$")
@@ -2248,6 +2381,11 @@ def run_arp_scan(target, interface=None, sid=None):
 
     except FileNotFoundError:
         logger.warning("arp-scan not found, skipping MAC/vendor detection")
+        return {}
+    except RuntimeError as e:
+        if str(e) == "scan cancelled":
+            return {}
+        logger.error(f"arp-scan error: {e}")
         return {}
     except subprocess.TimeoutExpired:
         logger.warning("arp-scan timed out")
@@ -2463,8 +2601,8 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
     socketio.sleep(0)
 
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout_seconds
+        result = run_cancellable_command(
+            cmd, sid=sid, job_type="report" if sid else None, timeout=timeout_seconds
         )
 
         # Log completion
@@ -2501,6 +2639,12 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
 
         return result.returncode == 0
 
+    except RuntimeError as e:
+        if str(e) == "report cancelled":
+            if sid:
+                emit_to_client(sid, "scan_feedback", "Report generation cancelled")
+            return False
+        raise
     except subprocess.TimeoutExpired:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -3350,6 +3494,11 @@ def generate_report_task(sid, data):
             if not run_nmap_with_xml_output(
                 chunk_target, chunk_output_base, "comprehensive", sid=sid
             ):
+                if job_registry.is_cancelled(sid, "report"):
+                    job_registry.complete(sid, "report", status="cancelled")
+                    emit_job_status(sid, "report")
+                    emit_to_client(sid, "report_error", {"error": "Report generation cancelled"})
+                    return
                 job_registry.complete(
                     sid,
                     "report",
@@ -3545,6 +3694,10 @@ def generate_report_task(sid, data):
         emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": str(e)})
     finally:
+        current_job = job_registry.get(sid, "report")
+        if current_job and current_job.get("status") == "running":
+            job_registry.complete(sid, "report", status="completed")
+            emit_job_status(sid, "report")
         job_registry.clear_if_disconnected(sid, "report")
         idle_state_manager.end_operation(operation_id)
 

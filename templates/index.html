@@ -1228,6 +1228,7 @@
         function updateJobButtons() {
             const scanRunning = clientJobs.scan.status === 'running';
             const reportRunning = clientJobs.report.status === 'running';
+            const stopButton = document.getElementById('stop-scan-btn');
 
             const startScanBtn = document.getElementById('start-scan-btn');
             const generateReportBtn = document.getElementById('generate-report-btn');
@@ -1243,6 +1244,13 @@
                 generateReportBtn.classList.toggle('opacity-60', reportRunning);
                 generateReportBtn.classList.toggle('cursor-not-allowed', reportRunning);
             }
+
+            if (stopButton) {
+                const canStop = scanRunning || reportRunning;
+                stopButton.disabled = !canStop;
+                stopButton.classList.toggle('opacity-50', !canStop);
+                stopButton.classList.toggle('cursor-not-allowed', !canStop);
+            }
         }
 
         socket.on('job_status', function(data) {
@@ -1255,6 +1263,15 @@
                 updateReportProgress(message);
                 showReportStatus(message, 'info');
             }
+
+            if (data.job_type === 'scan' && data.status === 'running' && data.details?.message) {
+                showReportStatus(data.details.message, 'info');
+            }
+        });
+
+        socket.on('job_cancelled', function(data) {
+            if (!data || !data.message) return;
+            showReportStatus(data.message, 'info');
         });
 
         socket.emit('get_local_ip');
@@ -1264,6 +1281,17 @@
         socket.emit('get_customers');
         socket.emit('get_history_counts');
         socket.emit('get_job_status');
+
+        document.getElementById('stop-scan-btn').addEventListener('click', function() {
+            if (clientJobs.report.status === 'running') {
+                socket.emit('cancel_job', { job_type: 'report' });
+                return;
+            }
+
+            if (clientJobs.scan.status === 'running') {
+                socket.emit('cancel_job', { job_type: 'scan' });
+            }
+        });
 
         // Customer quick add dropdown handler
         document.getElementById('customer-quick-add').addEventListener('change', function() {
