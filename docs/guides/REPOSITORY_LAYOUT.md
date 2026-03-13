@@ -31,3 +31,10 @@ Do not add the following to the root:
 - one-off analysis markdown files
 - wrapper-specific documentation
 - packaging-only configuration that can live under `packaging/`
+
+Keep runtime-only state out of version control:
+
+- generated XML or report output
+- local scheduler state such as `auto_scan_config.json`
+- built wrapper binaries or `.app` bundles
+- scratch project directories or screenshots

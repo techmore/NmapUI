@@ -114,6 +114,10 @@ python app.py
 python app.py --quick
 ```
 
+## Auto Scan Configuration
+
+The app writes local scheduler state to `auto_scan_config.json` in the repository root at runtime. The tracked default lives at `config/auto_scan_config.example.json` and is used only as a fallback template.
+
 ## Troubleshooting
 
 ### Common Issues

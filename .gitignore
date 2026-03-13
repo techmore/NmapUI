@@ -8,6 +8,11 @@ scans/
 config/customers.yaml
 data/*.json
 auto_scan_config.json
+results.xml
+restore_summary.txt
+NmapUIMenuBar
+NmapUIMenuBarSimple
+2026-new_sites/
 
 # Build artifacts
 build/

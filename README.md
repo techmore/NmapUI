@@ -71,6 +71,8 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 - `docs/notes/`: internal implementation notes and working analysis
 - `docs/audits/`: deeper audit writeups that are not part of the main setup flow
 
+Runtime-only files such as `auto_scan_config.json`, generated scan outputs, local wrapper binaries, and ad hoc scratch directories should stay untracked.
+
 ## Usage
 
 Start the server:

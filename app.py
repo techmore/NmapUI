@@ -544,12 +544,18 @@ def resolve_scan_path(path: str) -> Optional[Path]:
 
 def load_auto_scan_config():
     """Load auto scan configuration"""
-    config_file = BASE_DIR / "auto_scan_config.json"
-    if config_file.exists():
+    config_paths = (
+        BASE_DIR / "auto_scan_config.json",
+        BASE_DIR / "config" / "auto_scan_config.example.json",
+    )
+    for config_file in config_paths:
+        if not config_file.exists():
+            continue
         try:
             auto_scan_config.update(json.loads(config_file.read_text()))
+            return
         except Exception as e:
-            logger.warning(f"Failed to load auto scan config: {e}")
+            logger.warning(f"Failed to load auto scan config from {config_file}: {e}")
 
 
 def save_auto_scan_config():

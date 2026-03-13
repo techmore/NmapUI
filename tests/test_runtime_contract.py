@@ -56,3 +56,10 @@ def test_repository_layout_guide_exists():
     assert "packaging/macos/" in guide
     assert "packaging/pyinstaller/" in guide
     assert "docs/notes/" in guide
+
+
+def test_auto_scan_config_has_tracked_example_only():
+    assert (ROOT / "config" / "auto_scan_config.example.json").exists()
+
+    gitignore = (ROOT / ".gitignore").read_text()
+    assert "auto_scan_config.json" in gitignore
