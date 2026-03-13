@@ -1,13 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import os
 from pathlib import Path
 
-# Get the directory containing the spec file (current working directory when pyinstaller is run)
-spec_dir = Path.cwd()
+# Resolve project paths from the spec file location so packaging does not
+# depend on the caller's current working directory.
+spec_dir = Path(__file__).resolve().parent
+project_root = spec_dir.parents[1]
 
 # Read version from VERSION file
-version_file = spec_dir / "VERSION"
+version_file = project_root / "VERSION"
 if version_file.exists():
     with open(version_file, "r") as f:
         app_version = f.read().strip()
@@ -15,18 +16,18 @@ else:
     app_version = "1.0.0"  # fallback
 
 a = Analysis(
-    ['app.py'],
-    pathex=[str(spec_dir)],
+    [str(project_root / 'app.py')],
+    pathex=[str(project_root)],
     binaries=[],
     datas=[
         # Include static assets
-        (str(spec_dir / 'static'), 'static'),
-        (str(spec_dir / 'templates'), 'templates'),
-        (str(spec_dir / 'config'), 'config'),
-        (str(spec_dir / 'VERSION'), '.'),
-        (str(spec_dir / 'nmap-modern.xsl'), '.'),
+        (str(project_root / 'static'), 'static'),
+        (str(project_root / 'templates'), 'templates'),
+        (str(project_root / 'config'), 'config'),
+        (str(project_root / 'VERSION'), '.'),
+        (str(project_root / 'nmap-modern.xsl'), '.'),
         # Include nmap-vulners script if present
-        (str(spec_dir / 'nmap-vulners'), 'nmap-vulners'),
+        (str(project_root / 'nmap-vulners'), 'nmap-vulners'),
     ],
     hiddenimports=[
         'engineio.async_drivers.threading',

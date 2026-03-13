@@ -62,6 +62,15 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
    # Update the XSL_STYLESHEET path in app.py if needed
    ```
 
+## Repository Layout
+
+- Root: stable entrypoints and runtime files such as `app.py`, `requirements.txt`, `install.sh`, and `deploy.sh`
+- `packaging/macos/`: supported Swift wrapper source and wrapper-specific docs
+- `packaging/pyinstaller/`: PyInstaller spec and packaging inputs
+- `docs/guides/`: user and maintainer guides
+- `docs/notes/`: internal implementation notes and working analysis
+- `docs/audits/`: deeper audit writeups that are not part of the main setup flow
+
 ## Usage
 
 Start the server:

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Build script for NmapUI Menu Bar Wrapper
-# Builds the Swift application and opens it
+# Builds the Swift application bundle and opens it
 
 # Clean up any existing instances
 echo "Cleaning up any existing instances..."
@@ -9,9 +9,12 @@ pkill -f "NmapUIMenuBar" 2>/dev/null || true
 sleep 1  # Give processes time to terminate
 
 # Set variables
-SRC="NmapUIMenuBarLauncher.swift"
-BIN="NmapUIMenuBar"
-APP_NAME="NmapUIMenuBar.app"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$SCRIPT_DIR"
+PACKAGING_DIR="$ROOT_DIR/packaging/macos"
+SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"
+BIN="$ROOT_DIR/NmapUIMenuBar"
+APP_NAME="$ROOT_DIR/NmapUIMenuBar.app"
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 
 if [[ ! -f "$SRC" ]]; then
@@ -54,8 +57,8 @@ mkdir -p "$APP_NAME/Contents/Resources"
 cp "$BIN" "$APP_NAME/Contents/MacOS/"
 
 # Copy the icon to Resources folder if it exists
-if [[ -f "icon.jpg" ]]; then
-    cp "icon.jpg" "$APP_NAME/Contents/Resources/icon.jpg"
+if [[ -f "$PACKAGING_DIR/icon.jpg" ]]; then
+    cp "$PACKAGING_DIR/icon.jpg" "$APP_NAME/Contents/Resources/icon.jpg"
     echo "Icon copied to resources"
 else
     echo "Warning: icon.jpg not found, using default icon"
@@ -63,26 +66,27 @@ fi
 
 # Copy the Python app and related files to Resources
 echo "Copying NmapUI Python application and resources..."
-cp -r app.py "$APP_NAME/Contents/Resources/"
-cp -r templates "$APP_NAME/Contents/Resources/"
-cp -r static "$APP_NAME/Contents/Resources/"
-cp -r nmap-vulners "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r scripts "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r requirements.txt "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r VERSION "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r AGENTS.md "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r customer_fingerprint.py "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r nmap-modern.xsl "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r nmap-pdf-olive-legacy.xsl "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/app.py" "$APP_NAME/Contents/Resources/"
+cp -r "$ROOT_DIR/templates" "$APP_NAME/Contents/Resources/"
+cp -r "$ROOT_DIR/static" "$APP_NAME/Contents/Resources/"
+cp -r "$ROOT_DIR/nmap-vulners" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/scripts" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/requirements.txt" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/VERSION" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/AGENTS.md" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/customer_fingerprint.py" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/persistence.py" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/nmap-modern.xsl" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+cp -r "$ROOT_DIR/nmap-pdf-olive-legacy.xsl" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
 
 # Copy virtual environment — install.sh creates .venv (with leading dot)
-if [[ -d ".venv" ]]; then
+if [[ -d "$ROOT_DIR/.venv" ]]; then
     echo "Copying virtual environment (.venv)..."
-    cp -r .venv "$APP_NAME/Contents/Resources/.venv"
+    cp -r "$ROOT_DIR/.venv" "$APP_NAME/Contents/Resources/.venv"
     echo "Virtual environment copied."
-elif [[ -d "venv" ]]; then
+elif [[ -d "$ROOT_DIR/venv" ]]; then
     echo "Copying virtual environment (venv)..."
-    cp -r venv "$APP_NAME/Contents/Resources/.venv"
+    cp -r "$ROOT_DIR/venv" "$APP_NAME/Contents/Resources/.venv"
     echo "Virtual environment copied (renamed to .venv inside bundle)."
 else
     echo "ERROR: No virtual environment found (.venv or venv). Run install.sh first."

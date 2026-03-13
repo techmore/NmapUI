@@ -5,6 +5,10 @@
 
 set -e  # Exit on any error
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$SCRIPT_DIR"
+SPEC_PATH="$ROOT_DIR/packaging/pyinstaller/nmapui.spec"
+
 echo "🚀 Starting NmapUI deployment..."
 
 # Check prerequisites
@@ -24,18 +28,19 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Get version from VERSION file or generate timestamp-based version
-if [ -f "VERSION" ]; then
-    VERSION=$(cat VERSION | tr -d '\n')
+if [ -f "$ROOT_DIR/VERSION" ]; then
+    VERSION=$(cat "$ROOT_DIR/VERSION" | tr -d '\n')
     echo "📋 Using version from VERSION file: $VERSION"
 else
     # Generate version like v2026.1.9.12_01
     VERSION="v$(date +%Y.%-m.%-d.%H_%M)"
     echo "📋 Generated timestamp version: $VERSION"
-    echo "$VERSION" > VERSION
+    echo "$VERSION" > "$ROOT_DIR/VERSION"
 fi
 
 # Clean previous builds
 echo "🧹 Cleaning previous builds..."
+cd "$ROOT_DIR"
 rm -rf build dist *.pkg *.dmg
 
 # Activate virtual environment if it exists
@@ -50,7 +55,7 @@ pip install -r requirements.txt
 
 # Build with PyInstaller
 echo "🔨 Building application bundle..."
-pyinstaller --clean nmapui.spec
+pyinstaller --clean "$SPEC_PATH"
 
 # Test the build quickly
 echo "🧪 Testing bundle startup..."

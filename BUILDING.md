@@ -30,7 +30,7 @@ This guide explains how to build and package NmapUI for macOS distribution and h
 
 3. **Run PyInstaller**
    ```bash
-   pyinstaller --clean nmapui.spec
+   pyinstaller --clean packaging/pyinstaller/nmapui.spec
    ```
 
    This creates `dist/NmapUI.app` - a standalone macOS application bundle.
@@ -134,7 +134,7 @@ codesign --deep --force --verify --verbose --sign "Developer ID Application: You
 ## Troubleshooting
 
 - **Bundle fails to start**: Check PyInstaller warnings in `build/nmapui/warn-nmapui.txt`
-- **Missing modules**: Add to `hiddenimports` in `nmapui.spec`
+- **Missing modules**: Add to `hiddenimports` in `packaging/pyinstaller/nmapui.spec`
 - **Large bundle size**: Consider excluding unnecessary modules in the spec file
 
 ## File Structure After Build

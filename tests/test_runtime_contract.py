@@ -20,21 +20,23 @@ def test_main_template_no_longer_uses_legacy_socket_events():
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 
-    assert 'SRC="NmapUIMenuBarLauncher.swift"' in build_script
+    assert 'PACKAGING_DIR="$ROOT_DIR/packaging/macos"' in build_script
+    assert 'SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"' in build_script
     assert not (ROOT / "NmapUIMenuBar.swift").exists()
     assert not (ROOT / "NmapUIMenuBarSimple.swift").exists()
     assert not (ROOT / "NmapUIMenuBarWithServer.swift").exists()
+    assert (ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift").exists()
 
 
 def test_wrapper_docs_reference_current_local_port():
-    for doc_name in ("SWIFT_WRAPPER_README.md", "NmapUI_Swift_Wrapper_Instructions.md"):
+    for doc_name in ("packaging/macos/README.md", "packaging/macos/SETUP.md"):
         source = (ROOT / doc_name).read_text()
         assert "127.0.0.1:9000" in source
         assert "localhost:9999" not in source
 
 
 def test_pyinstaller_spec_includes_runtime_assets():
-    spec = (ROOT / "nmapui.spec").read_text()
+    spec = (ROOT / "packaging" / "pyinstaller" / "nmapui.spec").read_text()
 
     assert "config" in spec
     assert "VERSION" in spec
@@ -46,3 +48,11 @@ def test_deploy_script_uses_portable_python_timeout_smoke_test():
 
     assert "subprocess.run" in deploy_script
     assert "timeout 10s" not in deploy_script
+
+
+def test_repository_layout_guide_exists():
+    guide = (ROOT / "docs" / "guides" / "REPOSITORY_LAYOUT.md").read_text()
+
+    assert "packaging/macos/" in guide
+    assert "packaging/pyinstaller/" in guide
+    assert "docs/notes/" in guide

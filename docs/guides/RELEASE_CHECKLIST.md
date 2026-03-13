@@ -35,7 +35,7 @@ Expected:
 
 ## Packaging Checks
 
-- `pyinstaller --clean nmapui.spec` succeeds
+- `pyinstaller --clean packaging/pyinstaller/nmapui.spec` succeeds
 - `dist/NmapUI.app` launches
 - Packaged app responds on `http://127.0.0.1:9000/api/health`
 
