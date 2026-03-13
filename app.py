@@ -568,10 +568,15 @@ def should_run_auto_scan():
 
     now = datetime.now()
     current_time = now.strftime("%H:%M")
+    start = auto_scan_config["start_time"]
+    end = auto_scan_config["end_time"]
 
-    return (
-        auto_scan_config["start_time"] <= current_time <= auto_scan_config["end_time"]
-    )
+    if start <= end:
+        # Same-day window e.g. 09:00–17:00
+        return start <= current_time <= end
+    else:
+        # Cross-midnight window e.g. 22:00–06:00
+        return current_time >= start or current_time <= end
 
 
 def split_subnet_into_chunks(target):
@@ -3164,10 +3169,12 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
         return None, None
 
     customer_name = customer.get("name", "Unknown")
+    safe_customer_name = re.sub(r"[^\w\-]", "_", customer_name)
 
     # Search in multiple possible locations
     search_dirs = [
-        SCANS_DIR / customer_name,
+        SCANS_DIR / safe_customer_name,
+        SCANS_DIR / customer_name,  # Fallback for legacy unsanitized folder names
         SCANS_DIR / "Unknown_Network",  # Fallback for unassigned scans
     ]
 

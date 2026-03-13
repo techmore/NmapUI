@@ -96,7 +96,9 @@ class CustomerFingerprinter:
                 "raw_traceroute": network_key.get("raw", ""),
             }
 
-            if customer_id and customer_id not in self.customer_traceroutes:
+            customer_id = customer_id or "unknown"
+
+            if customer_id not in self.customer_traceroutes:
                 self.customer_traceroutes[customer_id] = {
                     "name": self.customer_traceroutes.get(customer_id, {}).get(
                         "name", customer_id
