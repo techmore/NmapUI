@@ -44,9 +44,12 @@ cd "$ROOT_DIR"
 rm -rf build dist *.pkg *.dmg
 
 # Activate virtual environment if it exists
-if [ -f "venv/bin/activate" ]; then
+if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+    echo "✅ Activated virtual environment (.venv)"
+elif [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
-    echo "✅ Activated virtual environment"
+    echo "✅ Activated legacy virtual environment (venv)"
 fi
 
 # Install/update dependencies

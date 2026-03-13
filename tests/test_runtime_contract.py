@@ -74,3 +74,17 @@ def test_runtime_manifest_does_not_include_removed_browser_stack():
 
     assert "chromedriver-autoinstaller" not in install_script
     assert "Chrome/ChromeDriver for Selenium" not in install_script
+
+
+def test_release_paths_prefer_dot_venv():
+    deploy_script = (ROOT / "deploy.sh").read_text()
+    building_guide = (ROOT / "BUILDING.md").read_text()
+    testing_guide = (ROOT / "docs" / "guides" / "TESTING_GUIDE.md").read_text()
+    release_checklist = (
+        ROOT / "docs" / "guides" / "RELEASE_CHECKLIST.md"
+    ).read_text()
+
+    assert 'if [ -f ".venv/bin/activate" ]' in deploy_script
+    assert "source .venv/bin/activate" in building_guide
+    assert "source .venv/bin/activate" in testing_guide
+    assert "source .venv/bin/activate" in release_checklist

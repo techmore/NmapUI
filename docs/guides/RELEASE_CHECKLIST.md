@@ -12,7 +12,7 @@ Use this checklist when preparing the next stable NmapUI release.
 ## Runtime Smoke Test
 
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 NMAPUI_HOST=127.0.0.1 NMAPUI_PORT=9000 NMAPUI_DEBUG=false python app.py --quick &
 APP_PID=$!
 sleep 5

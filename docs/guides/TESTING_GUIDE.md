@@ -7,7 +7,7 @@ This guide is for validating the current Flask/Socket.IO app before a stable rel
 ### 1. Start the application
 ```bash
 cd /Users/seandolbec/Projects/NmapUI
-source venv/bin/activate
+source .venv/bin/activate
 NMAPUI_HOST=127.0.0.1 NMAPUI_PORT=9000 NMAPUI_DEBUG=false python app.py --quick
 ```
 

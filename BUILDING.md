@@ -20,7 +20,7 @@ This guide explains how to build and package NmapUI for macOS distribution and h
 
 1. **Activate virtual environment** (if not already active)
    ```bash
-   source venv/bin/activate
+   source .venv/bin/activate
    ```
 
 2. **Install dependencies**
@@ -103,7 +103,7 @@ The script automatically determines the version using the same method as the app
 Before publishing a stable build:
 
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 python -m py_compile app.py
 NMAPUI_HOST=127.0.0.1 NMAPUI_PORT=9000 NMAPUI_DEBUG=false python app.py --quick &
 APP_PID=$!
