@@ -10,10 +10,12 @@ Examples:
     python test_generate_report.py 192.168.222.0/24 "My Customer"
 """
 
+import os
 import sys
-import socketio
 import time
 from datetime import datetime
+
+import socketio
 
 # Create a Socket.IO client
 sio = socketio.Client()
@@ -108,7 +110,7 @@ def main():
     print()
 
     # Connect to the Flask-SocketIO server
-    server_url = "http://localhost:5001"
+    server_url = os.environ.get("NMAPUI_URL", "http://localhost:9000")
     print(f"Connecting to {server_url}...")
 
     try:

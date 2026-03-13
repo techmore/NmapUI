@@ -394,6 +394,25 @@ class RateLimiter:
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 
 
+def resolve_scan_path(path: str) -> Optional[Path]:
+    """Resolve a user-provided scan path and ensure it stays inside SCANS_DIR."""
+    if not path:
+        return None
+
+    try:
+        scan_dir = (SCANS_DIR / path).resolve()
+        scans_root = SCANS_DIR.resolve()
+    except (OSError, RuntimeError):
+        return None
+
+    try:
+        scan_dir.relative_to(scans_root)
+    except ValueError:
+        return None
+
+    return scan_dir
+
+
 def load_auto_scan_config():
     """Load auto scan configuration"""
     config_file = BASE_DIR / "auto_scan_config.json"
@@ -2839,7 +2858,10 @@ def list_scans():
 @app.route("/api/scans/<path:path>/html")
 def get_scan_html(path):
     """Serve the HTML report for a scan"""
-    scan_dir = SCANS_DIR / path
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None:
+        return "Invalid path", 400
+
     html_path = scan_dir / "scan_web.html"
     if not html_path.exists():
         html_path = scan_dir / "scan.html"
@@ -2853,7 +2875,10 @@ def get_scan_html(path):
 @app.route("/api/scans/<path:path>/pdf")
 def get_scan_pdf(path):
     """Download the PDF report for a scan with a unique descriptive filename"""
-    scan_dir = SCANS_DIR / path
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None:
+        return "Invalid path", 400
+
     pdf_path = scan_dir / "scan_report.pdf"
     if not pdf_path.exists():
         return "PDF not found", 404
@@ -2888,7 +2913,10 @@ def get_scan_pdf(path):
 @app.route("/api/scans/<path:path>/xml")
 def get_scan_xml(path):
     """Download the raw Nmap XML for a scan with a unique descriptive filename"""
-    scan_dir = SCANS_DIR / path
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None:
+        return "Invalid path", 400
+
     xml_path = scan_dir / "scan.xml"
     if not xml_path.exists():
         return "XML not found", 404
@@ -2923,8 +2951,8 @@ def get_scan_xml(path):
 @app.route("/api/scans/<path:path>", methods=["DELETE"])
 def delete_scan(path):
     """Delete a scan directory"""
-    scan_dir = SCANS_DIR / path
-    if not scan_dir.exists() or SCANS_DIR not in scan_dir.parents:
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None or not scan_dir.exists():
         return jsonify({"success": False, "error": "Invalid path"}), 400
 
     try:
@@ -2955,6 +2983,12 @@ def generate_report_event(data):
 
     if not target:
         emit("report_error", {"error": "No target specified"})
+        idle_state_manager.end_operation("report_generation")
+        return
+
+    is_valid, error_msg = validate_target(target)
+    if not is_valid:
+        emit("report_error", {"error": error_msg})
         idle_state_manager.end_operation("report_generation")
         return
 
