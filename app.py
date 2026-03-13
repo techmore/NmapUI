@@ -20,6 +20,23 @@ import glob as file_glob
 from datetime import datetime, timedelta
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
+from nmapui.auth import check_auth, require_auth, require_socket_auth
+from nmapui.auto_scan import (
+    DEFAULT_AUTO_SCAN_CONFIG,
+    load_auto_scan_config,
+    save_auto_scan_config,
+    should_run_auto_scan,
+)
+from nmapui.paths import (
+    BASE_DIR,
+    CURRENT_ASSIGNMENT_FILE,
+    SCANS_DIR,
+    VERSION_FILE,
+    VULNERS_SCRIPT,
+    XSL_STYLESHEET,
+    XSL_STYLESHEET_PDF,
+    resolve_scan_path,
+)
 from persistence import (
     load_json_document,
     normalize_current_assignment_document,
@@ -35,8 +52,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-BASE_DIR = Path(__file__).parent.resolve()
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -146,11 +161,6 @@ class IdleStateManager:
         self.update_available = False
 
 
-VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
-XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"
-XSL_STYLESHEET_PDF = BASE_DIR / "nmap-modern.xsl"
-SCANS_DIR = BASE_DIR / "data" / "scans"
-VERSION_FILE = BASE_DIR / "VERSION"
 APP_VERSION = None
 
 
@@ -245,42 +255,6 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # ============================================================================
-# SECURITY: HTTP Basic Authentication
-# ============================================================================
-
-# Load auth config from environment or config file
-AUTH_USERNAME = os.environ.get("NMAPUI_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("NMAPUI_PASSWORD", "nmapui123")  # Change in production!
-
-
-def check_auth(username, password):
-    """Validate credentials"""
-    return username == AUTH_USERNAME and password == AUTH_PASSWORD
-
-
-def require_auth(f):
-    """Decorator to require HTTP Basic Auth for Flask routes"""
-    from functools import wraps
-    from flask import request, jsonify
-
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return jsonify({"error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
-
-    return decorated
-
-
-def require_socket_auth():
-    """Check auth for SocketIO events - returns (authenticated, error_response)"""
-    # For SocketIO, we'll handle auth via a login event
-    # This is a placeholder - proper SocketIO auth would use tokens
-    return (True, None)
-
-
-# ============================================================================
 # SECURITY: Input Validation
 # ============================================================================
 
@@ -347,12 +321,7 @@ last_scan_target = None
 
 
 # Auto Scan System
-auto_scan_config = {
-    "enabled": False,
-    "start_time": "01:00",
-    "end_time": "06:00",
-    "last_run": None,
-}
+auto_scan_config = dict(DEFAULT_AUTO_SCAN_CONFIG)
 auto_scan_thread = None
 AUTO_SCAN_STARTUP_AT = datetime.now()
 AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
@@ -521,76 +490,6 @@ class ClientJobRegistry:
 
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 job_registry = ClientJobRegistry()
-
-
-def resolve_scan_path(path: str) -> Optional[Path]:
-    """Resolve a user-provided scan path and ensure it stays inside SCANS_DIR."""
-    if not path:
-        return None
-
-    try:
-        scan_dir = (SCANS_DIR / path).resolve()
-        scans_root = SCANS_DIR.resolve()
-    except (OSError, RuntimeError):
-        return None
-
-    try:
-        scan_dir.relative_to(scans_root)
-    except ValueError:
-        return None
-
-    return scan_dir
-
-
-def load_auto_scan_config():
-    """Load auto scan configuration"""
-    config_paths = (
-        BASE_DIR / "auto_scan_config.json",
-        BASE_DIR / "config" / "auto_scan_config.example.json",
-    )
-    for config_file in config_paths:
-        if not config_file.exists():
-            continue
-        try:
-            auto_scan_config.update(json.loads(config_file.read_text()))
-            return
-        except Exception as e:
-            logger.warning(f"Failed to load auto scan config from {config_file}: {e}")
-
-
-def save_auto_scan_config():
-    """Save auto scan configuration"""
-    config_file = BASE_DIR / "auto_scan_config.json"
-    try:
-        config_file.write_text(json.dumps(auto_scan_config, indent=2))
-    except Exception as e:
-        logger.error(f"Failed to save auto scan config: {e}")
-
-
-def should_run_auto_scan():
-    """Check if auto scan should run now"""
-    if not auto_scan_config["enabled"]:
-        return False
-
-    startup_elapsed = (datetime.now() - AUTO_SCAN_STARTUP_AT).total_seconds()
-    if startup_elapsed < AUTO_SCAN_STARTUP_GRACE_SECONDS:
-        logger.info(
-            "Auto scan suppressed during startup grace period (%ss remaining)",
-            int(AUTO_SCAN_STARTUP_GRACE_SECONDS - startup_elapsed),
-        )
-        return False
-
-    now = datetime.now()
-    current_time = now.strftime("%H:%M")
-    start = auto_scan_config["start_time"]
-    end = auto_scan_config["end_time"]
-
-    if start <= end:
-        # Same-day window e.g. 09:00–17:00
-        return start <= current_time <= end
-    else:
-        # Cross-midnight window e.g. 22:00–06:00
-        return current_time >= start or current_time <= end
 
 
 def split_subnet_into_chunks(target):
@@ -803,7 +702,7 @@ def execute_auto_scan():
         )
 
         auto_scan_config["last_run"] = datetime.now().isoformat()
-        save_auto_scan_config()
+        save_auto_scan_config(auto_scan_config)
 
         logger.info(f"Auto scan executed for target: {target}")
 
@@ -813,7 +712,7 @@ def execute_auto_scan():
 
 
 # Load auto scan config on startup
-load_auto_scan_config()
+load_auto_scan_config(auto_scan_config)
 
 # Global version information - populated at startup
 versions: Dict[str, Optional[str]] = {
@@ -1650,7 +1549,7 @@ def save_current_assignment():
             "customer": current_customer,
         }
 
-        assignment_path = BASE_DIR / "data" / "current_assignment.json"
+        assignment_path = CURRENT_ASSIGNMENT_FILE
         save_json_document(assignment_path, assignment_data)
 
         logger.info(f"Current assignment saved to {assignment_path}")
@@ -1672,7 +1571,7 @@ def merge_customer_metadata(customer_dict, saved_customer):
 def load_current_assignment():
     global current_customer
     try:
-        assignment_path = BASE_DIR / "data" / "current_assignment.json"
+        assignment_path = CURRENT_ASSIGNMENT_FILE
         if assignment_path.exists():
             data = normalize_current_assignment_document(
                 load_json_document(assignment_path, {})
@@ -3745,7 +3644,7 @@ def generate_report_event(data):
 def update_auto_scan_event(data):
     """Update auto scan configuration"""
     auto_scan_config.update(data)
-    save_auto_scan_config()
+    save_auto_scan_config(auto_scan_config)
 
     # Broadcast updated status to all clients
     emit("auto_scan_status", auto_scan_config, broadcast=True)
@@ -3914,7 +3813,7 @@ def update_auto_scan():
             )
 
     auto_scan_config.update(config)
-    save_auto_scan_config()
+    save_auto_scan_config(auto_scan_config)
 
     logger.info(f"Auto scan config updated: {auto_scan_config}")
     return jsonify({"success": True})
@@ -3934,7 +3833,12 @@ def auto_scan_loop():
             if current_minute != last_check_minute:
                 last_check_minute = current_minute
 
-                if should_run_auto_scan():
+                if should_run_auto_scan(
+                    auto_scan_config,
+                    now=now,
+                    startup_at=AUTO_SCAN_STARTUP_AT,
+                    startup_grace_seconds=AUTO_SCAN_STARTUP_GRACE_SECONDS,
+                ):
                     # Check if we haven't run in the last hour to avoid spam
                     last_run = auto_scan_config.get("last_run")
                     if last_run:
