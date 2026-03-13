@@ -3,6 +3,7 @@ from pathlib import Path
 
 from nmapui.auto_scan import DEFAULT_AUTO_SCAN_CONFIG, should_run_auto_scan
 from nmapui.paths import resolve_scan_path
+from nmapui.runtime import env_flag
 
 
 def test_should_run_auto_scan_allows_same_day_window():
@@ -59,3 +60,9 @@ def test_resolve_scan_path_accepts_nested_scan_path():
 
     assert isinstance(resolved, Path)
     assert "data/scans" in str(resolved)
+
+
+def test_env_flag_parses_truthy_values(monkeypatch):
+    monkeypatch.setenv("NMAPUI_TEST_FLAG", "yes")
+
+    assert env_flag("NMAPUI_TEST_FLAG", default=False) is True

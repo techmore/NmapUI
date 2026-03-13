@@ -8,10 +8,8 @@ import json
 import ipaddress
 import socket
 import threading
-import requests
 import netifaces as ni
 import os
-import sys
 import shutil
 import yaml
 import logging
@@ -31,11 +29,16 @@ from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
     SCANS_DIR,
-    VERSION_FILE,
     VULNERS_SCRIPT,
     XSL_STYLESHEET,
     XSL_STYLESHEET_PDF,
     resolve_scan_path,
+)
+from nmapui.runtime import (
+    check_for_updates,
+    env_flag,
+    get_app_version,
+    restart_application,
 )
 from persistence import (
     load_json_document,
@@ -52,15 +55,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-
-def env_flag(name: str, default: bool = False) -> bool:
-    """Parse a boolean environment flag."""
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
 
 class IdleStateManager:
     """Manages application idle state for auto-update functionality"""
@@ -160,94 +154,6 @@ class IdleStateManager:
         self.countdown_active = False
         self.update_available = False
 
-
-APP_VERSION = None
-
-
-def get_app_version():
-    """Read or generate app version based on timestamp"""
-    global APP_VERSION
-
-    if APP_VERSION:
-        return APP_VERSION
-
-    # Try to read from file first
-    if VERSION_FILE.exists():
-        with open(VERSION_FILE, "r") as f:
-            APP_VERSION = f.read().strip()
-        return APP_VERSION
-
-    # Generate version if file doesn't exist
-    now = datetime.now()
-    version = f"v{now.year}.{now.month}.{now.day}.{now.hour:02d}_{now.minute:02d}"
-    APP_VERSION = version
-
-    return version
-
-
-def check_for_updates():
-    """Check for new releases on GitHub"""
-    try:
-        # Get current version
-        current_version = get_app_version()
-
-        # Check GitHub releases API
-        response = requests.get(
-            "https://api.github.com/repos/techmore/NmapUI/releases/latest", timeout=10
-        )
-        response.raise_for_status()
-        latest_release = response.json()
-
-        latest_version = latest_release["tag_name"]
-
-        # Simple version comparison (assuming format v2026.1.9.12_01)
-        # Parse versions and compare (format: vYYYY.M.D.HH_MM)
-        def parse_version(v):
-            if not v.startswith("v"):
-                return (0, 0, 0, 0, 0)
-            parts = v[1:].split(".")
-            if len(parts) != 4:
-                return (0, 0, 0, 0, 0)
-            try:
-                year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
-                hour_min = parts[3].split("_")
-                hour, minute = (
-                    int(hour_min[0]),
-                    int(hour_min[1]) if len(hour_min) > 1 else 0,
-                )
-                return (year, month, day, hour, minute)
-            except (ValueError, IndexError):
-                return (0, 0, 0, 0, 0)
-
-        current_parsed = parse_version(current_version)
-        latest_parsed = parse_version(latest_version)
-
-        if latest_parsed > current_parsed:
-            return {
-                "available": True,
-                "latest_version": latest_version,
-                "download_url": (
-                    latest_release["assets"][0]["browser_download_url"]
-                    if latest_release["assets"]
-                    else None
-                ),
-                "release_notes": latest_release["body"],
-            }
-        return {"available": False}
-
-    except Exception as e:
-        logger.error(f"Failed to check for updates: {e}")
-        return {"available": False, "error": str(e)}
-
-
-def restart_application():
-    """Restart the application process"""
-    logger.info("Restarting application...")
-    try:
-        os.execv(sys.executable, [sys.executable] + sys.argv)
-    except Exception as e:
-        logger.error(f"Failed to restart application: {e}")
-        sys.exit(1)
 
 
 app = Flask(__name__)
