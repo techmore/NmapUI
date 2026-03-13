@@ -68,7 +68,11 @@ from nmapui.scanning import (
     create_scan_folder,
     run_quick_auto_scan,
 )
-from nmapui.workflows import generate_report_task as workflow_generate_report_task
+from nmapui.workflows import (
+    generate_report_task as workflow_generate_report_task,
+    start_deep_scan as workflow_start_deep_scan,
+    start_scan_task as workflow_start_scan_task,
+)
 from persistence import (
     load_json_document,
     normalize_current_assignment_document,
@@ -1673,308 +1677,45 @@ def identify_gateway_firewall_targets(hosts):
     return regular_hosts, gateway_hosts
 
 
+def _scan_workflow_context():
+    return {
+        "ensure_job_not_cancelled": ensure_job_not_cancelled,
+        "idle_state_manager": idle_state_manager,
+        "update_job_progress": update_job_progress,
+        "emit_to_client": emit_to_client,
+        "socketio_sleep": socketio.sleep,
+        "run_cancellable_command": run_cancellable_command,
+        "run_arp_scan": run_arp_scan,
+        "identify_gateway_firewall_targets": identify_gateway_firewall_targets,
+        "start_deep_scan": workflow_start_deep_scan,
+        "job_registry": job_registry,
+        "emit_job_status": emit_job_status,
+        "logger": logger,
+        "vulners_script": VULNERS_SCRIPT,
+        "cve_pattern": re.compile(
+            r"CVE-\d{4}-\d+\s+(\d+\.\d+)\s+(https://vulners\.com/cve/CVE-\d{4}-\d+)"
+        ),
+        "port_info_regex": re.compile(r"(\d+)/tcp\s+(\w+)\s+(.*)"),
+        "ip_regex": re.compile(r"Nmap scan report for .*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"),
+        "hostname_regex": re.compile(
+            r"Nmap scan report for ([^ ]+) \((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)"
+        ),
+        "host_status_regex": re.compile(r"Host is (up|down) \(([\d.]+s latency\))"),
+        "open_port_regex": re.compile(r"(\d+)\/tcp\s+(\w+)\s+(\w+)"),
+        "nmap_done_regex": re.compile(
+            r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
+        ),
+        "ip_sort_key": ipaddress.IPv4Address,
+    }
+
+
 def start_deep_scan(targets, sid, is_gateway_phase=False):
-    try:
-        ensure_job_not_cancelled(sid, "scan")
-        emit_to_client(sid, "deep_scan_start")
-        socketio.sleep(0)
-
-        for target in targets:
-            ensure_job_not_cancelled(sid, "scan")
-            emit_to_client(sid, "deep_scan_host_start", {"ip": target})
-            command_str = f"nmap -T3 -sV --script {str(VULNERS_SCRIPT)} {target}"
-            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
-            logger.info(command_str)
-            socketio.sleep(0)
-
-            result = run_cancellable_command(
-                [
-                    "nmap",
-                    "-T3",
-                    "-sV",
-                    "--script",
-                    str(VULNERS_SCRIPT),
-                    target,
-                ],
-                sid=sid,
-                job_type="scan",
-            )
-            output = result.stdout
-            cve_array, parsed_data, lines = (
-                [],
-                [],
-                output.split("\n"),
-            )
-            current_host, cve_pattern = (
-                None,
-                re.compile(
-                    r"CVE-\d{4}-\d+\s+(\d+\.\d+)\s+(https://vulners\.com/cve/CVE-\d{4}-\d+)"
-                ),
-            )
-            for line in lines:
-                if "Nmap scan report for" in line:
-                    current_host = {"ip": line.split(" ")[-1], "ports": []}
-                    parsed_data.append(current_host)
-                elif "/tcp" in line and current_host:
-                    port_info = re.search(r"(\d+)/tcp\s+(\w+)\s+(.*)", line)
-                    if port_info:
-                        current_host["ports"].append(
-                            {
-                                "port": port_info.group(1),
-                                "state": port_info.group(2),
-                                "service": port_info.group(3),
-                            }
-                        )
-                elif "CVE" in line:
-                    match = cve_pattern.search(line)
-                    if match:
-                        cve_id = match.group(0).split()[0]
-                        cve_score = match.group(1)
-                        cve_url = match.group(2)
-                        if float(cve_score) >= 7.0:
-                            cve_array.append(
-                                {"id": cve_id, "score": cve_score, "url": cve_url}
-                            )
-                elif "*EXPLOIT*" in line:
-                    logger.warning(f"Exploit: {line}")
-                elif "Service Info: " in line:
-                    trimmed_line = line.replace("Service Info: ", "")
-                    if current_host:  # Make sure current_host is not None
-                        current_host.setdefault("service_info", []).append(trimmed_line)
-                    emit_to_client(
-                        sid, "service_info", {"target": target, "line": trimmed_line}
-                    )
-            emit_to_client(sid, "deep_scan_results", parsed_data)
-            # print("DeepScan complete.")
-            emit_to_client(sid, "cve_array", {"target": target, "cve_array": cve_array})
-
-            # Emit per-host complete indicator
-            emit_to_client(sid, "deep_scan_host_complete", {"ip": target})
-
-        # Emit deep scan complete after all hosts are done
-        emit_to_client(sid, "deep_scan_complete")
-    except RuntimeError as e:
-        if str(e) == "scan cancelled":
-            emit_to_client(sid, "scan_error", "Scan cancelled")
-            return
-        emit_to_client(sid, "scan_error", str(e))
-    except Exception as e:
-        emit_to_client(sid, "scan_error", str(e))
+    return workflow_start_deep_scan(_scan_workflow_context(), targets, sid, is_gateway_phase=is_gateway_phase)
 
 
 def start_scan_task(sid, target):
     """Run scan workflow in a background task for a single client."""
-    operation_id = f"quick_scan:{sid}"
-    try:
-        ensure_job_not_cancelled(sid, "scan")
-        idle_state_manager.start_operation(operation_id)
-        update_job_progress(
-            sid,
-            "scan",
-            phase="quick_scan",
-            message=f"Starting quick scan on {target}",
-            progress=5,
-        )
-        emit_to_client(sid, "quick_scan_start", f"Starting quick scan on {target}")
-        command_str = f"nmap -sn {target}"
-        emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
-        logger.info(command_str)
-        socketio.sleep(0)
-
-        output = run_cancellable_command(
-            ["nmap", "-sn", target], sid=sid, job_type="scan"
-        ).stdout
-        lines = output.split("\n")
-        # Regex to capture IP (last distinct IP-like pattern in the line)
-        ip_regex = re.compile(
-            r"Nmap scan report for .*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
-        )
-        # Regex to capture hostname (optional, before the IP in parens)
-        hostname_regex = re.compile(
-            r"Nmap scan report for ([^ ]+) \((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)"
-        )
-
-        host_status_regex = re.compile(r"Host is (up|down) \(([\d.]+s latency\))")
-        open_port_regex = re.compile(r"(\d+)\/tcp\s+(\w+)\s+(\w+)")
-
-        hosts, current_host = [], None
-        total_ips, hosts_up, time_taken = 0, 0, 0.0
-        for line in lines:
-            ip_match = ip_regex.search(line)
-            if ip_match:
-                ip_addr = ip_match.group(1)
-                hostname = ""
-
-                # Check for hostname
-                hostname_match = hostname_regex.search(line)
-                if hostname_match:
-                    hostname = hostname_match.group(1)
-
-                current_host = {
-                    "ip": ip_addr,
-                    "hostname": hostname,
-                    "status": None,
-                    "ports": [],
-                }
-                hosts.append(current_host)
-            elif "Nmap done:" in line:
-                pattern = re.compile(
-                    r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
-                )
-                match = re.search(pattern, line)
-                if match:
-                    total_ips = int(match.group(1))
-                    hosts_up = int(match.group(2))
-                    time_taken = float(match.group(3))
-
-                    logger.info(f"Total IPs: {total_ips}")
-                    logger.info(f"Hosts Up: {hosts_up}")
-                    logger.info(f"Time Taken: {time_taken} seconds")
-                else:
-                    logger.warning("No match found")
-                emit_to_client(
-                    sid,
-                    "quickscan_results",
-                    {
-                        "total_ips": total_ips,
-                        "hosts_up": hosts_up,
-                        "time_taken": time_taken,
-                    },
-                )
-            else:
-                # Match host status and latency
-                host_status_match = host_status_regex.match(line)
-                if host_status_match and current_host:
-                    current_host["status"] = host_status_match.group(1)
-                else:
-                    # Match open ports
-                    open_port_match = open_port_regex.match(line)
-                    if open_port_match and current_host:
-                        port = open_port_match.group(1)
-                        state = open_port_match.group(2)
-                        service = open_port_match.group(3)
-                        current_host["ports"].append(
-                            {
-                                "port": port,
-                                "state": state,
-                                "service": service,
-                            }
-                        )
-
-        sorted_hosts = sorted(hosts, key=lambda x: ipaddress.IPv4Address(x["ip"]))
-
-        # Emit quick scan complete before ARP scan starts
-        emit_to_client(sid, "quick_scan_complete")
-        # Flush the event to frontend before blocking ARP scan
-        socketio.sleep(0)
-
-        # Run arp-scan to get MAC/vendor info (ARP cache is fresh from nmap)
-        update_job_progress(
-            sid,
-            "scan",
-            phase="arp_scan",
-            message="Collecting MAC and vendor data",
-            progress=35,
-        )
-        emit_to_client(sid, "arp_scan_start")
-        # Flush the event to frontend before blocking ARP scan
-        socketio.sleep(0)
-        arp_data = run_arp_scan(target, sid=sid)
-        for host in sorted_hosts:
-            if host["ip"] in arp_data:
-                host["mac"] = arp_data[host["ip"]]["mac"]
-                host["vendor"] = arp_data[host["ip"]]["vendor"]
-
-        # Emit arp results separately for UI update
-        if arp_data:
-            emit_to_client(sid, "arp_results", arp_data)
-
-        # Emit arp scan complete
-        emit_to_client(sid, "arp_scan_complete")
-
-        # Format hosts for the frontend table
-        display_hosts = []
-        for host in sorted_hosts:
-            display_host = host.copy()
-
-            # Format ports for display
-            ports_list = host.get("ports", [])
-            if ports_list:
-                display_host["open_ports"] = ", ".join(
-                    [f"{p['port']}/{p['service']}" for p in ports_list]
-                )
-            else:
-                display_host["open_ports"] = ""
-
-            # Ensure all required fields exist
-            display_host.setdefault("mac", "")
-            display_host.setdefault("vendor", "")
-            display_host.setdefault("hostname", "")
-            display_host.setdefault("version", "")
-            display_host.setdefault("cves", "")
-
-            display_hosts.append(display_host)
-
-        emit_to_client(sid, "scan_results", display_hosts)
-
-        # Ensure events are flushed before starting deep scan
-        socketio.sleep(0)
-
-        regular_hosts, gateway_hosts = identify_gateway_firewall_targets(hosts)
-        regular_targets = [host["ip"] for host in regular_hosts]
-        gateway_targets = [host["ip"] for host in gateway_hosts]
-
-        logger.info(f"Phase 1 - Regular hosts: {len(regular_targets)}")
-        logger.info(f"Phase 2 - Gateway hosts: {len(gateway_targets)}")
-
-        if regular_targets:
-            update_job_progress(
-                sid,
-                "scan",
-                phase="deep_scan",
-                message=f"Deep scanning {len(regular_targets)} regular hosts",
-                progress=60,
-            )
-            start_deep_scan(regular_targets, sid, is_gateway_phase=False)
-
-        if gateway_targets:
-            update_job_progress(
-                sid,
-                "scan",
-                phase="gateway_scan",
-                message=f"Deep scanning {len(gateway_targets)} gateway hosts",
-                progress=80,
-            )
-            start_deep_scan(gateway_targets, sid, is_gateway_phase=True)
-
-        update_job_progress(
-            sid,
-            "scan",
-            phase="complete",
-            message="Scan workflow completed",
-            progress=100,
-        )
-
-    except RuntimeError as e:
-        if str(e) == "scan cancelled":
-            job_registry.complete(sid, "scan", status="cancelled")
-            emit_job_status(sid, "scan")
-            emit_to_client(sid, "scan_error", "Scan cancelled")
-        else:
-            job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
-            emit_job_status(sid, "scan")
-            emit_to_client(sid, "scan_error", str(e))
-    except Exception as e:
-        job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
-        emit_job_status(sid, "scan")
-        emit_to_client(sid, "scan_error", str(e))
-    finally:
-        current_job = job_registry.get(sid, "scan")
-        if current_job and current_job.get("status") == "running":
-            job_registry.complete(sid, "scan", status="completed")
-            emit_job_status(sid, "scan")
-        job_registry.clear_if_disconnected(sid, "scan")
-        idle_state_manager.end_operation(operation_id)
+    return workflow_start_scan_task(_scan_workflow_context(), sid, target)
 
 
 @socketio.on("start_scan")

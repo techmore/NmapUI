@@ -5,6 +5,251 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def start_deep_scan(context, targets, sid, is_gateway_phase=False):
+    emit_to_client = context["emit_to_client"]
+    socketio_sleep = context["socketio_sleep"]
+    ensure_job_not_cancelled = context["ensure_job_not_cancelled"]
+    run_cancellable_command = context["run_cancellable_command"]
+    vulners_script = context["vulners_script"]
+
+    try:
+        ensure_job_not_cancelled(sid, "scan")
+        emit_to_client(sid, "deep_scan_start")
+        socketio_sleep(0)
+
+        for target in targets:
+            ensure_job_not_cancelled(sid, "scan")
+            emit_to_client(sid, "deep_scan_host_start", {"ip": target})
+            command_str = f"nmap -T3 -sV --script {str(vulners_script)} {target}"
+            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+            logger.info(command_str)
+            socketio_sleep(0)
+
+            result = run_cancellable_command(
+                [
+                    "nmap",
+                    "-T3",
+                    "-sV",
+                    "--script",
+                    str(vulners_script),
+                    target,
+                ],
+                sid=sid,
+                job_type="scan",
+            )
+            output = result.stdout
+            cve_array, parsed_data, lines = [], [], output.split("\n")
+            current_host = None
+            cve_pattern = context["cve_pattern"]
+
+            for line in lines:
+                if "Nmap scan report for" in line:
+                    current_host = {"ip": line.split(" ")[-1], "ports": []}
+                    parsed_data.append(current_host)
+                elif "/tcp" in line and current_host:
+                    port_info = context["port_info_regex"].search(line)
+                    if port_info:
+                        current_host["ports"].append(
+                            {
+                                "port": port_info.group(1),
+                                "state": port_info.group(2),
+                                "service": port_info.group(3),
+                            }
+                        )
+                elif "CVE" in line:
+                    match = cve_pattern.search(line)
+                    if match:
+                        cve_id = match.group(0).split()[0]
+                        cve_score = match.group(1)
+                        cve_url = match.group(2)
+                        if float(cve_score) >= 7.0:
+                            cve_array.append({"id": cve_id, "score": cve_score, "url": cve_url})
+                elif "Service Info: " in line:
+                    trimmed_line = line.replace("Service Info: ", "")
+                    if current_host:
+                        current_host.setdefault("service_info", []).append(trimmed_line)
+                    emit_to_client(sid, "service_info", {"target": target, "line": trimmed_line})
+
+            emit_to_client(sid, "deep_scan_results", parsed_data)
+            emit_to_client(sid, "cve_array", {"target": target, "cve_array": cve_array})
+            emit_to_client(sid, "deep_scan_host_complete", {"ip": target})
+
+        emit_to_client(sid, "deep_scan_complete")
+    except RuntimeError as exc:
+        if str(exc) == "scan cancelled":
+            emit_to_client(sid, "scan_error", "Scan cancelled")
+            return
+        emit_to_client(sid, "scan_error", str(exc))
+    except Exception as exc:
+        emit_to_client(sid, "scan_error", str(exc))
+
+
+def start_scan_task(context, sid, target):
+    """Run scan workflow in a background task for a single client."""
+    ensure_job_not_cancelled = context["ensure_job_not_cancelled"]
+    idle_state_manager = context["idle_state_manager"]
+    update_job_progress = context["update_job_progress"]
+    emit_to_client = context["emit_to_client"]
+    socketio_sleep = context["socketio_sleep"]
+    run_cancellable_command = context["run_cancellable_command"]
+    run_arp_scan = context["run_arp_scan"]
+    identify_gateway_firewall_targets = context["identify_gateway_firewall_targets"]
+    start_deep_scan_fn = context["start_deep_scan"]
+    job_registry = context["job_registry"]
+    emit_job_status = context["emit_job_status"]
+    logger = context["logger"]
+    ip_regex = context["ip_regex"]
+    hostname_regex = context["hostname_regex"]
+    host_status_regex = context["host_status_regex"]
+    open_port_regex = context["open_port_regex"]
+    ip_sort_key = context["ip_sort_key"]
+
+    operation_id = f"quick_scan:{sid}"
+    try:
+        ensure_job_not_cancelled(sid, "scan")
+        idle_state_manager.start_operation(operation_id)
+        update_job_progress(
+            sid,
+            "scan",
+            phase="quick_scan",
+            message=f"Starting quick scan on {target}",
+            progress=5,
+        )
+        emit_to_client(sid, "quick_scan_start", f"Starting quick scan on {target}")
+        command_str = f"nmap -sn {target}"
+        emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+        logger.info(command_str)
+        socketio_sleep(0)
+
+        output = run_cancellable_command(["nmap", "-sn", target], sid=sid, job_type="scan").stdout
+        lines = output.split("\n")
+
+        hosts, current_host = [], None
+        total_ips, hosts_up, time_taken = 0, 0, 0.0
+        for line in lines:
+            ip_match = ip_regex.search(line)
+            if ip_match:
+                ip_addr = ip_match.group(1)
+                hostname = ""
+                hostname_match = hostname_regex.search(line)
+                if hostname_match:
+                    hostname = hostname_match.group(1)
+                current_host = {"ip": ip_addr, "hostname": hostname, "status": None, "ports": []}
+                hosts.append(current_host)
+            elif "Nmap done:" in line:
+                match = context["nmap_done_regex"].search(line)
+                if match:
+                    total_ips = int(match.group(1))
+                    hosts_up = int(match.group(2))
+                    time_taken = float(match.group(3))
+                    logger.info("Total IPs: %s", total_ips)
+                    logger.info("Hosts Up: %s", hosts_up)
+                    logger.info("Time Taken: %s seconds", time_taken)
+                else:
+                    logger.warning("No match found")
+                emit_to_client(
+                    sid,
+                    "quickscan_results",
+                    {"total_ips": total_ips, "hosts_up": hosts_up, "time_taken": time_taken},
+                )
+            else:
+                host_status_match = host_status_regex.match(line)
+                if host_status_match and current_host:
+                    current_host["status"] = host_status_match.group(1)
+                else:
+                    open_port_match = open_port_regex.match(line)
+                    if open_port_match and current_host:
+                        current_host["ports"].append(
+                            {
+                                "port": open_port_match.group(1),
+                                "state": open_port_match.group(2),
+                                "service": open_port_match.group(3),
+                            }
+                        )
+
+        sorted_hosts = sorted(hosts, key=lambda host: ip_sort_key(host["ip"]))
+        emit_to_client(sid, "quick_scan_complete")
+        socketio_sleep(0)
+
+        update_job_progress(sid, "scan", phase="arp_scan", message="Collecting MAC and vendor data", progress=35)
+        emit_to_client(sid, "arp_scan_start")
+        socketio_sleep(0)
+        arp_data = run_arp_scan(target, sid=sid)
+        for host in sorted_hosts:
+            if host["ip"] in arp_data:
+                host["mac"] = arp_data[host["ip"]]["mac"]
+                host["vendor"] = arp_data[host["ip"]]["vendor"]
+
+        if arp_data:
+            emit_to_client(sid, "arp_results", arp_data)
+
+        emit_to_client(sid, "arp_scan_complete")
+
+        display_hosts = []
+        for host in sorted_hosts:
+            display_host = host.copy()
+            ports_list = host.get("ports", [])
+            display_host["open_ports"] = ", ".join([f"{p['port']}/{p['service']}" for p in ports_list]) if ports_list else ""
+            display_host.setdefault("mac", "")
+            display_host.setdefault("vendor", "")
+            display_host.setdefault("hostname", "")
+            display_host.setdefault("version", "")
+            display_host.setdefault("cves", "")
+            display_hosts.append(display_host)
+
+        emit_to_client(sid, "scan_results", display_hosts)
+        socketio_sleep(0)
+
+        regular_hosts, gateway_hosts = identify_gateway_firewall_targets(hosts)
+        regular_targets = [host["ip"] for host in regular_hosts]
+        gateway_targets = [host["ip"] for host in gateway_hosts]
+
+        logger.info("Phase 1 - Regular hosts: %s", len(regular_targets))
+        logger.info("Phase 2 - Gateway hosts: %s", len(gateway_targets))
+
+        if regular_targets:
+            update_job_progress(
+                sid,
+                "scan",
+                phase="deep_scan",
+                message=f"Deep scanning {len(regular_targets)} regular hosts",
+                progress=60,
+            )
+            start_deep_scan_fn(context, regular_targets, sid, is_gateway_phase=False)
+
+        if gateway_targets:
+            update_job_progress(
+                sid,
+                "scan",
+                phase="gateway_scan",
+                message=f"Deep scanning {len(gateway_targets)} gateway hosts",
+                progress=80,
+            )
+            start_deep_scan_fn(context, gateway_targets, sid, is_gateway_phase=True)
+
+        update_job_progress(sid, "scan", phase="complete", message="Scan workflow completed", progress=100)
+    except RuntimeError as exc:
+        if str(exc) == "scan cancelled":
+            job_registry.complete(sid, "scan", status="cancelled")
+            emit_job_status(sid, "scan")
+            emit_to_client(sid, "scan_error", "Scan cancelled")
+        else:
+            job_registry.complete(sid, "scan", status="failed", details={"error": str(exc)})
+            emit_job_status(sid, "scan")
+            emit_to_client(sid, "scan_error", str(exc))
+    except Exception as exc:
+        job_registry.complete(sid, "scan", status="failed", details={"error": str(exc)})
+        emit_job_status(sid, "scan")
+        emit_to_client(sid, "scan_error", str(exc))
+    finally:
+        current_job = job_registry.get(sid, "scan")
+        if current_job and current_job.get("status") == "running":
+            job_registry.complete(sid, "scan", status="completed")
+            emit_job_status(sid, "scan")
+        job_registry.clear_if_disconnected(sid, "scan")
+        idle_state_manager.end_operation(operation_id)
+
+
 def generate_report_task(context, sid, data):
     """Run report generation in a background task for a single client."""
     job_registry = context["job_registry"]
