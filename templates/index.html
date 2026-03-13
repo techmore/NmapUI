@@ -1249,6 +1249,12 @@
             if (!data || !data.job_type) return;
             clientJobs[data.job_type] = data;
             updateJobButtons();
+
+            if (data.job_type === 'report' && data.status === 'running' && data.details) {
+                const message = data.details.message || 'Generating report...';
+                updateReportProgress(message);
+                showReportStatus(message, 'info');
+            }
         });
 
         socket.emit('get_local_ip');
@@ -2321,9 +2327,12 @@
 
         function updateReportProgress(message) {
             const progressText = document.getElementById('report-progress-text');
-            if (progressText) {
-                progressText.textContent = message;
+            if (!progressText) {
+                createReportProgressCard(message);
+                return;
             }
+
+            progressText.textContent = message;
         }
 
         function removeReportProgressCard() {

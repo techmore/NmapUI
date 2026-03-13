@@ -436,6 +436,19 @@ class ClientJobRegistry:
                 current["details"] = merged
             self._jobs[key] = current
 
+    def update(self, sid: str, job_type: str, details=None, **fields):
+        with self._lock:
+            key = (sid, job_type)
+            current = self._jobs.get(key)
+            if not current:
+                return
+            current.update(fields)
+            if details:
+                merged = dict(current.get("details", {}))
+                merged.update(details)
+                current["details"] = merged
+            self._jobs[key] = current
+
     def get(self, sid: str, job_type: str):
         with self._lock:
             job = self._jobs.get((sid, job_type))
@@ -773,6 +786,27 @@ def emit_job_status(sid: str, job_type: str):
     payload = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}
     payload["job_type"] = job_type
     emit_to_client(sid, "job_status", payload)
+
+
+def update_job_progress(
+    sid: str,
+    job_type: str,
+    phase: str,
+    message: Optional[str] = None,
+    progress: Optional[int] = None,
+    details=None,
+):
+    """Update the current phase/progress for a client job and publish it."""
+    payload = {"phase": phase}
+    if message is not None:
+        payload["message"] = message
+    if progress is not None:
+        payload["progress"] = progress
+    if details:
+        payload.update(details)
+
+    job_registry.update(sid, job_type, details=payload)
+    emit_job_status(sid, job_type)
 
 
 def run_traceroute(target="1.1.1.1"):
@@ -1928,7 +1962,13 @@ def start_scan_task(sid, target):
     operation_id = f"quick_scan:{sid}"
     try:
         idle_state_manager.start_operation(operation_id)
-        emit_job_status(sid, "scan")
+        update_job_progress(
+            sid,
+            "scan",
+            phase="quick_scan",
+            message=f"Starting quick scan on {target}",
+            progress=5,
+        )
         emit_to_client(sid, "quick_scan_start", f"Starting quick scan on {target}")
         command_str = f"nmap -sn {target}"
         emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
@@ -2021,6 +2061,13 @@ def start_scan_task(sid, target):
         socketio.sleep(0)
 
         # Run arp-scan to get MAC/vendor info (ARP cache is fresh from nmap)
+        update_job_progress(
+            sid,
+            "scan",
+            phase="arp_scan",
+            message="Collecting MAC and vendor data",
+            progress=35,
+        )
         emit_to_client(sid, "arp_scan_start")
         # Flush the event to frontend before blocking ARP scan
         socketio.sleep(0)
@@ -2073,10 +2120,32 @@ def start_scan_task(sid, target):
         logger.info(f"Phase 2 - Gateway hosts: {len(gateway_targets)}")
 
         if regular_targets:
+            update_job_progress(
+                sid,
+                "scan",
+                phase="deep_scan",
+                message=f"Deep scanning {len(regular_targets)} regular hosts",
+                progress=60,
+            )
             start_deep_scan(regular_targets, sid, is_gateway_phase=False)
 
         if gateway_targets:
+            update_job_progress(
+                sid,
+                "scan",
+                phase="gateway_scan",
+                message=f"Deep scanning {len(gateway_targets)} gateway hosts",
+                progress=80,
+            )
             start_deep_scan(gateway_targets, sid, is_gateway_phase=True)
+
+        update_job_progress(
+            sid,
+            "scan",
+            phase="complete",
+            message="Scan workflow completed",
+            progress=100,
+        )
 
     except Exception as e:
         job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
@@ -3161,7 +3230,6 @@ def generate_report_task(sid, data):
     """Run report generation in a background task for a single client."""
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
-    emit_job_status(sid, "report")
     target = data.get("target")
     is_auto_scan = data.get("auto_scan", False)
 
@@ -3216,6 +3284,14 @@ def generate_report_task(sid, data):
         sid,
         "scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}"
     )
+    update_job_progress(
+        sid,
+        "report",
+        phase="preparing",
+        message=f"Preparing report for {target}",
+        progress=5,
+        details={"auto_scan": is_auto_scan, "customer_name": customer_name},
+    )
     socketio.sleep(0)
 
     start_time = datetime.now()
@@ -3223,6 +3299,9 @@ def generate_report_task(sid, data):
     try:
         # Phase 1: Create scan folder
         emit_to_client(sid, "scan_feedback", "📁 Creating scan folder...")
+        update_job_progress(
+            sid, "report", phase="create_folder", message="Creating scan folder", progress=10
+        )
         socketio.sleep(0)
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
@@ -3233,17 +3312,33 @@ def generate_report_task(sid, data):
         # Phase 2: Run nmap scan (this is the long-running part)
         xml_files = []
         for i, chunk_target in enumerate(targets):
+            chunk_progress = 15 + int(((i + 1) / max(num_chunks, 1)) * 40)
             if num_chunks > 1:
                 emit_to_client(
                     sid,
                     "scan_feedback",
                     f"🔍 Scanning chunk {i + 1}/{num_chunks}: {chunk_target}",
                 )
+                update_job_progress(
+                    sid,
+                    "report",
+                    phase="scan_chunks",
+                    message=f"Scanning chunk {i + 1} of {num_chunks}",
+                    progress=chunk_progress,
+                    details={"chunk_index": i + 1, "chunk_total": num_chunks},
+                )
             else:
                 emit_to_client(
                     sid,
                     "scan_feedback",
                     "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
+                )
+                update_job_progress(
+                    sid,
+                    "report",
+                    phase="scan",
+                    message="Running comprehensive scan",
+                    progress=35,
                 )
             socketio.sleep(0)
 
@@ -3272,6 +3367,9 @@ def generate_report_task(sid, data):
         # If multiple chunks, merge XML files
         if num_chunks > 1:
             emit_to_client(sid, "scan_feedback", "🔀 Merging scan results from chunks...")
+            update_job_progress(
+                sid, "report", phase="merge", message="Merging chunked XML results", progress=60
+            )
             socketio.sleep(0)
             xml_path = scan_dir / "scan.xml"
             merge_nmap_xml_files(xml_files, xml_path)
@@ -3285,6 +3383,9 @@ def generate_report_task(sid, data):
         pdf_path = scan_dir / "scan_report.pdf"
 
         emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (web view)...")
+        update_job_progress(
+            sid, "report", phase="html_web", message="Generating web HTML report", progress=70
+        )
         socketio.sleep(0)
         # Use the premium Olive PDF stylesheet for BOTH views for consistency
         if convert_xml_to_html(xml_path, web_html_path, sid=sid):
@@ -3296,6 +3397,9 @@ def generate_report_task(sid, data):
             emit_to_client(sid, "scan_feedback", "✗ Web HTML conversion failed")
 
         emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (PDF view)...")
+        update_job_progress(
+            sid, "report", phase="html_pdf", message="Generating PDF HTML report", progress=78
+        )
         socketio.sleep(0)
         if convert_xml_to_html(xml_path, pdf_html_path, sid=sid):
             file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
@@ -3306,6 +3410,9 @@ def generate_report_task(sid, data):
             emit_to_client(sid, "scan_feedback", "✗ PDF HTML conversion failed")
 
         emit_to_client(sid, "scan_feedback", "📑 Generating PDF report...")
+        update_job_progress(
+            sid, "report", phase="pdf", message="Rendering PDF output", progress=86
+        )
         socketio.sleep(0)
         if convert_html_to_pdf(pdf_html_path, pdf_path, sid=sid):
             file_size = pdf_path.stat().st_size if pdf_path.exists() else 0
@@ -3341,11 +3448,17 @@ def generate_report_task(sid, data):
         duration_str = f"{duration_minutes}m{duration_seconds}s"
 
         emit_to_client(sid, "scan_feedback", "💾 Saving scan metadata with duration...")
+        update_job_progress(
+            sid, "report", phase="metadata", message="Saving metadata", progress=92
+        )
         socketio.sleep(0)
         save_scan_metadata(scan_dir, customer_name, target, files, start_time, end_time)
 
         # Extract scan statistics from XML
         emit_to_client(sid, "scan_feedback", "📊 Extracting scan statistics...")
+        update_job_progress(
+            sid, "report", phase="statistics", message="Extracting scan statistics", progress=96
+        )
         socketio.sleep(0)
         scan_stats = extract_scan_statistics(xml_path)
 
@@ -3367,6 +3480,14 @@ def generate_report_task(sid, data):
 
         logger.info(f"Report generation completed in {duration_str}")
         emit_to_client(sid, "scan_feedback", f"✅ Report generation completed in {duration_str}")
+        update_job_progress(
+            sid,
+            "report",
+            phase="complete",
+            message="Report generation completed",
+            progress=100,
+            details={"duration_formatted": duration_str},
+        )
         socketio.sleep(0)
 
         # Find customer ID to update
