@@ -37,6 +37,7 @@ from nmapui.handlers.auto_scan import (
 )
 from nmapui.handlers.history import register_history_handlers
 from nmapui.handlers.scans import register_scan_routes
+from nmapui.handlers.updates import register_update_handlers
 from nmapui.jobs import (
     ClientJobRegistry,
     RateLimiter,
@@ -583,6 +584,14 @@ register_history_handlers(
         "emit_job_status": emit_job_status,
         "job_registry": job_registry,
         "emit_to_client": emit_to_client,
+        "logger": logger,
+    },
+)
+register_update_handlers(
+    socketio,
+    {
+        "check_for_updates": check_for_updates,
+        "idle_state_manager": idle_state_manager,
         "logger": logger,
     },
 )
@@ -1371,80 +1380,6 @@ def load_current_assignment():
 
     except Exception as e:
         logger.error(f"Error loading current assignment: {e}")
-
-
-@socketio.on("check_app_updates")
-def check_app_updates_event():
-    """Check for application updates and notify the client"""
-    update_info = check_for_updates()
-    if isinstance(update_info, dict):
-        available = update_info.get("available", False)
-        idle_state_manager.set_update_available(bool(available), update_info)
-        emit("app_update_available", update_info)
-    else:
-        idle_state_manager.set_update_available(False)
-        emit("app_update_available", {"available": False})
-
-
-@socketio.on("perform_app_update")
-def perform_app_update_event():
-    """Guide user to download and install new version"""
-    try:
-        # For packaged applications, don't perform self-update
-        # Instead, provide download instructions
-        emit("update_status", {"message": "Opening download page..."})
-        socketio.sleep(1)
-
-        # Check for updates to get download URL
-        update_info = check_for_updates()
-        if (
-            isinstance(update_info, dict)
-            and update_info.get("available")
-            and update_info.get("download_url")
-        ):
-            # Open download URL
-            subprocess.run(["open", str(update_info["download_url"])], check=False)
-            emit(
-                "update_status",
-                {
-                    "message": "Download page opened. Please download and install the new version manually."
-                },
-            )
-        else:
-            # Fallback: open releases page
-            subprocess.run(
-                ["open", "https://github.com/techmore/NmapUI/releases"], check=False
-            )
-            emit(
-                "update_status",
-                {
-                    "message": "Releases page opened. Please download the latest .dmg or .pkg file."
-                },
-            )
-
-        emit(
-            "update_complete",
-            {
-                "message": "Update initiated. Please install the new version and restart the application."
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Update failed: {e}")
-        emit("update_error", {"message": f"Failed to open download: {str(e)}"})
-
-
-@socketio.on("cancel_auto_update")
-def cancel_auto_update_event():
-    """Cancel the auto-update countdown"""
-    idle_state_manager.cancel_countdown()
-    emit("hide_auto_update_banner")
-
-
-@socketio.on("start_auto_update_countdown")
-def start_auto_update_countdown_event():
-    """Start the auto-update countdown (called when banner is shown)"""
-    idle_state_manager.start_countdown()
 
 
 def get_default_interface():
