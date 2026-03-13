@@ -698,6 +698,14 @@ def safe_emit(event, data=None):
         pass
 
 
+def emit_to_client(sid: str, event: str, data=None):
+    """Emit a Socket.IO event to a single connected client."""
+    if data is None:
+        socketio.emit(event, to=sid)
+    else:
+        socketio.emit(event, data, to=sid)
+
+
 def run_traceroute(target="1.1.1.1"):
     global current_customer
     try:
@@ -1753,15 +1761,15 @@ def identify_gateway_firewall_targets(hosts):
     return regular_hosts, gateway_hosts
 
 
-def start_deep_scan(targets, is_gateway_phase=False):
+def start_deep_scan(targets, sid, is_gateway_phase=False):
     try:
-        emit("deep_scan_start")
+        emit_to_client(sid, "deep_scan_start")
         socketio.sleep(0)
 
         for target in targets:
-            emit("deep_scan_host_start", {"ip": target})
+            emit_to_client(sid, "deep_scan_host_start", {"ip": target})
             command_str = f"nmap -T3 -sV --script {str(VULNERS_SCRIPT)} {target}"
-            socketio.emit("scan_feedback", f"Executing: {command_str}")
+            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
             logger.info(command_str)
             socketio.sleep(0)
 
@@ -1816,48 +1824,30 @@ def start_deep_scan(targets, is_gateway_phase=False):
                     trimmed_line = line.replace("Service Info: ", "")
                     if current_host:  # Make sure current_host is not None
                         current_host.setdefault("service_info", []).append(trimmed_line)
-                    emit("service_info", {"target": target, "line": trimmed_line})
-            emit("deep_scan_results", parsed_data)
+                    emit_to_client(
+                        sid, "service_info", {"target": target, "line": trimmed_line}
+                    )
+            emit_to_client(sid, "deep_scan_results", parsed_data)
             # print("DeepScan complete.")
-            emit("cve_array", {"target": target, "cve_array": cve_array})
+            emit_to_client(sid, "cve_array", {"target": target, "cve_array": cve_array})
 
             # Emit per-host complete indicator
-            emit("deep_scan_host_complete", {"ip": target})
+            emit_to_client(sid, "deep_scan_host_complete", {"ip": target})
 
         # Emit deep scan complete after all hosts are done
-        emit("deep_scan_complete")
+        emit_to_client(sid, "deep_scan_complete")
     except Exception as e:
-        emit("scan_error", str(e))
+        emit_to_client(sid, "scan_error", str(e))
 
 
-@socketio.on("start_scan")
-def start_scan(data):
-    """Handle scan start request with validation"""
+def start_scan_task(sid, target):
+    """Run scan workflow in a background task for a single client."""
+    operation_id = f"quick_scan:{sid}"
     try:
-        # Extract target from data (handles both old format (target) and new format {target: ...})
-        if isinstance(data, dict):
-            target = data.get("target", "")
-        else:
-            target = str(data) if data else ""
-
-        # Validate target
-        is_valid, error_msg = validate_target(target)
-        if not is_valid:
-            emit("scan_error", f"Invalid target: {error_msg}")
-            return
-
-        # Check rate limit
-        can_scan, rate_msg = rate_limiter.can_scan()
-        if not can_scan:
-            emit("scan_error", rate_msg)
-            return
-
-        # Record scan start
-        rate_limiter.record_scan()
-        idle_state_manager.start_operation("quick_scan")
-        emit("quick_scan_start", f"Starting quick scan on {target}")
+        idle_state_manager.start_operation(operation_id)
+        emit_to_client(sid, "quick_scan_start", f"Starting quick scan on {target}")
         command_str = f"nmap -sn {target}"
-        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
         logger.info(command_str)
         socketio.sleep(0)
 
@@ -1910,7 +1900,8 @@ def start_scan(data):
                     logger.info(f"Time Taken: {time_taken} seconds")
                 else:
                     logger.warning("No match found")
-                emit(
+                emit_to_client(
+                    sid,
                     "quickscan_results",
                     {
                         "total_ips": total_ips,
@@ -1941,15 +1932,15 @@ def start_scan(data):
         sorted_hosts = sorted(hosts, key=lambda x: ipaddress.IPv4Address(x["ip"]))
 
         # Emit quick scan complete before ARP scan starts
-        emit("quick_scan_complete")
+        emit_to_client(sid, "quick_scan_complete")
         # Flush the event to frontend before blocking ARP scan
         socketio.sleep(0)
 
         # Run arp-scan to get MAC/vendor info (ARP cache is fresh from nmap)
-        emit("arp_scan_start")
+        emit_to_client(sid, "arp_scan_start")
         # Flush the event to frontend before blocking ARP scan
         socketio.sleep(0)
-        arp_data = run_arp_scan(target)
+        arp_data = run_arp_scan(target, sid=sid)
         for host in sorted_hosts:
             if host["ip"] in arp_data:
                 host["mac"] = arp_data[host["ip"]]["mac"]
@@ -1957,10 +1948,10 @@ def start_scan(data):
 
         # Emit arp results separately for UI update
         if arp_data:
-            emit("arp_results", arp_data)
+            emit_to_client(sid, "arp_results", arp_data)
 
         # Emit arp scan complete
-        emit("arp_scan_complete")
+        emit_to_client(sid, "arp_scan_complete")
 
         # Format hosts for the frontend table
         display_hosts = []
@@ -1985,7 +1976,7 @@ def start_scan(data):
 
             display_hosts.append(display_host)
 
-        emit("scan_results", display_hosts)
+        emit_to_client(sid, "scan_results", display_hosts)
 
         # Ensure events are flushed before starting deep scan
         socketio.sleep(0)
@@ -1998,31 +1989,65 @@ def start_scan(data):
         logger.info(f"Phase 2 - Gateway hosts: {len(gateway_targets)}")
 
         if regular_targets:
-            start_deep_scan(regular_targets, is_gateway_phase=False)
+            start_deep_scan(regular_targets, sid, is_gateway_phase=False)
 
         if gateway_targets:
-            start_deep_scan(gateway_targets, is_gateway_phase=True)
+            start_deep_scan(gateway_targets, sid, is_gateway_phase=True)
 
     except Exception as e:
-        emit("scan_error", str(e))
+        emit_to_client(sid, "scan_error", str(e))
     finally:
-        idle_state_manager.end_operation("quick_scan")
+        idle_state_manager.end_operation(operation_id)
 
 
-def run_arp_scan(target, interface=None):
+@socketio.on("start_scan")
+def start_scan(data):
+    """Handle scan start request with validation."""
+    # Extract target from data (handles both old format (target) and new format {target: ...})
+    if isinstance(data, dict):
+        target = data.get("target", "")
+    else:
+        target = str(data) if data else ""
+
+    # Validate target
+    is_valid, error_msg = validate_target(target)
+    if not is_valid:
+        emit("scan_error", f"Invalid target: {error_msg}")
+        return
+
+    # Check rate limit
+    can_scan, rate_msg = rate_limiter.can_scan()
+    if not can_scan:
+        emit("scan_error", rate_msg)
+        return
+
+    # Record scan start before dispatching background work
+    rate_limiter.record_scan()
+    socketio.start_background_task(start_scan_task, request.sid, target)
+
+
+def run_arp_scan(target, interface=None, sid=None):
     if interface is None:
         interface = DEFAULT_INTERFACE
 
     if not shutil.which("arp-scan"):
         logger.warning("arp-scan not found, skipping MAC/vendor detection")
-        socketio.emit(
-            "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
-        )
+        if sid:
+            emit_to_client(
+                sid, "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
+            )
+        else:
+            socketio.emit(
+                "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
+            )
         return {}
 
     try:
         command_str = f"arp-scan {target} --interface {interface}"
-        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        if sid:
+            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+        else:
+            socketio.emit("scan_feedback", f"Executing: {command_str}")
         logger.info(command_str)
         socketio.sleep(0)
 
@@ -2197,12 +2222,15 @@ def create_scan_folder(customer_name, target):
     return scan_dir
 
 
-def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
+def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
     """Run nmap with all formats output (-oA)"""
 
     if scan_type == "quick":
         logger.info(f"Running quick scan on {target}...")
-        socketio.emit("scan_feedback", f"Starting quick scan on {target}...")
+        if sid:
+            emit_to_client(sid, "scan_feedback", f"Starting quick scan on {target}...")
+        else:
+            socketio.emit("scan_feedback", f"Starting quick scan on {target}...")
         cmd = [
             "nmap",
             "-sS",  # SYN scan
@@ -2216,10 +2244,17 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
         timeout_seconds = 180  # 3 minutes for quick scan
     else:
         logger.info(f"Running comprehensive scan on {target}...")
-        socketio.emit(
-            "scan_feedback",
-            f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
-        )
+        if sid:
+            emit_to_client(
+                sid,
+                "scan_feedback",
+                f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
+            )
+        else:
+            socketio.emit(
+                "scan_feedback",
+                f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
+            )
         cmd = [
             "nmap",
             "-sS",
@@ -2239,7 +2274,10 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
     # Log the full command for debugging
     cmd_str = " ".join(cmd)
     logger.info(f"Executing: {cmd_str}")
-    socketio.emit("scan_feedback", f"Command: {cmd_str}")
+    if sid:
+        emit_to_client(sid, "scan_feedback", f"Command: {cmd_str}")
+    else:
+        socketio.emit("scan_feedback", f"Command: {cmd_str}")
     socketio.sleep(0)
 
     # Record start time
@@ -2247,7 +2285,14 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
 
     start_time = datetime.now()
     logger.info(f"Scan started at {start_time.strftime('%H:%M:%S')}")
-    socketio.emit("scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}")
+    if sid:
+        emit_to_client(
+            sid, "scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}"
+        )
+    else:
+        socketio.emit(
+            "scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}"
+        )
     socketio.sleep(0)
 
     try:
@@ -2259,7 +2304,12 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         logger.info(f"Scan completed in {duration:.1f} seconds")
-        socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
+        if sid:
+            emit_to_client(
+                sid, "scan_feedback", f"Scan completed in {duration:.1f} seconds"
+            )
+        else:
+            socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
         socketio.sleep(0)
 
         # Log stdout/stderr for debugging
@@ -2270,9 +2320,16 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
 
         if result.returncode != 0:
             logger.error(f"Nmap failed with return code {result.returncode}")
-            socketio.emit(
-                "scan_feedback", f"❌ Nmap failed with return code {result.returncode}"
-            )
+            if sid:
+                emit_to_client(
+                    sid,
+                    "scan_feedback",
+                    f"❌ Nmap failed with return code {result.returncode}",
+                )
+            else:
+                socketio.emit(
+                    "scan_feedback", f"❌ Nmap failed with return code {result.returncode}"
+                )
             socketio.sleep(0)
 
         return result.returncode == 0
@@ -2282,16 +2339,29 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
         duration = (end_time - start_time).total_seconds()
         error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds // 60}min) on {target}"
         logger.error(error_msg)
-        socketio.emit("scan_feedback", error_msg)
-        socketio.emit(
-            "report_error",
-            {
-                "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
-                "timeout": True,
-                "timeout_seconds": timeout_seconds,
-                "elapsed_seconds": duration,
-            },
-        )
+        if sid:
+            emit_to_client(sid, "scan_feedback", error_msg)
+            emit_to_client(
+                sid,
+                "report_error",
+                {
+                    "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
+                    "timeout": True,
+                    "timeout_seconds": timeout_seconds,
+                    "elapsed_seconds": duration,
+                },
+            )
+        else:
+            socketio.emit("scan_feedback", error_msg)
+            socketio.emit(
+                "report_error",
+                {
+                    "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
+                    "timeout": True,
+                    "timeout_seconds": timeout_seconds,
+                    "elapsed_seconds": duration,
+                },
+            )
         socketio.sleep(0)
         return False
 
@@ -2321,7 +2391,7 @@ def run_quick_auto_scan(target, output_base):
         return False
 
 
-def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
+def convert_xml_to_html(xml_path, html_path, pdf_optimized=True, sid=None):
     """Convert Nmap XML to HTML using xsltproc - Use Olive PDF theme for all outputs"""
     stylesheet = XSL_STYLESHEET_PDF
 
@@ -2343,7 +2413,10 @@ def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
         str(xml_path),
     ]
     command_str = " ".join(cmd)
-    socketio.emit("scan_feedback", f"Executing: {command_str}")
+    if sid:
+        emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+    else:
+        socketio.emit("scan_feedback", f"Executing: {command_str}")
     logger.info(f"Executing: {command_str}")
     socketio.sleep(0)
 
@@ -2358,7 +2431,7 @@ def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
         return False
 
 
-def convert_html_to_pdf(html_path, pdf_path):
+def convert_html_to_pdf(html_path, pdf_path, sid=None):
     """Convert HTML to PDF using wkhtmltopdf, weasyprint, or pyppeteer"""
     # Try wkhtmltopdf first
     wkhtml = shutil.which("wkhtmltopdf")
@@ -2381,7 +2454,10 @@ def convert_html_to_pdf(html_path, pdf_path):
             str(pdf_path),
         ]
         command_str = " ".join(cmd)
-        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        if sid:
+            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+        else:
+            socketio.emit("scan_feedback", f"Executing: {command_str}")
         socketio.sleep(0)
 
         try:
@@ -2391,7 +2467,10 @@ def convert_html_to_pdf(html_path, pdf_path):
             logger.error(f"wkhtmltopdf failed: {e}")
 
     # Fallback to weasyprint
-    socketio.emit("scan_feedback", "Falling back to weasyprint for PDF generation")
+    if sid:
+        emit_to_client(sid, "scan_feedback", "Falling back to weasyprint for PDF generation")
+    else:
+        socketio.emit("scan_feedback", "Falling back to weasyprint for PDF generation")
     try:
         from weasyprint import HTML
 
@@ -2401,7 +2480,10 @@ def convert_html_to_pdf(html_path, pdf_path):
         logger.error(f"weasyprint failed: {e}")
 
     # Final fallback to playwright (Chromium-based)
-    socketio.emit("scan_feedback", f"Falling back to playwright for PDF generation")
+    if sid:
+        emit_to_client(sid, "scan_feedback", "Falling back to playwright for PDF generation")
+    else:
+        socketio.emit("scan_feedback", f"Falling back to playwright for PDF generation")
     try:
         import asyncio
         from playwright.async_api import async_playwright
@@ -2430,11 +2512,17 @@ def convert_html_to_pdf(html_path, pdf_path):
         logger.error(f"playwright failed: {e}")
 
     # Ultimate fallback to macOS textutil
-    socketio.emit("scan_feedback", f"Falling back to textutil for PDF generation")
+    if sid:
+        emit_to_client(sid, "scan_feedback", "Falling back to textutil for PDF generation")
+    else:
+        socketio.emit("scan_feedback", f"Falling back to textutil for PDF generation")
     try:
         cmd = ["textutil", "-convert", "pdf", "-output", str(pdf_path), str(html_path)]
         command_str = " ".join(cmd)
-        socketio.emit("scan_feedback", f"Executing: textutil HTML to PDF")
+        if sid:
+            emit_to_client(sid, "scan_feedback", "Executing: textutil HTML to PDF")
+        else:
+            socketio.emit("scan_feedback", f"Executing: textutil HTML to PDF")
         socketio.sleep(0)
 
         subprocess.run(cmd, check=True, capture_output=True)
@@ -2971,10 +3059,10 @@ def delete_scan(path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@socketio.on("generate_report")
-def generate_report_event(data):
-    """Handle report generation request via SocketIO"""
-    idle_state_manager.start_operation("report_generation")
+def generate_report_task(sid, data):
+    """Run report generation in a background task for a single client."""
+    operation_id = f"report_generation:{sid}"
+    idle_state_manager.start_operation(operation_id)
     target = data.get("target")
     is_auto_scan = data.get("auto_scan", False)
 
@@ -2991,14 +3079,14 @@ def generate_report_event(data):
     customer_name = customer_name.split(" (")[0]
 
     if not target:
-        emit("report_error", {"error": "No target specified"})
-        idle_state_manager.end_operation("report_generation")
+        emit_to_client(sid, "report_error", {"error": "No target specified"})
+        idle_state_manager.end_operation(operation_id)
         return
 
     is_valid, error_msg = validate_target(target)
     if not is_valid:
-        emit("report_error", {"error": error_msg})
-        idle_state_manager.end_operation("report_generation")
+        emit_to_client(sid, "report_error", {"error": error_msg})
+        idle_state_manager.end_operation(operation_id)
         return
 
     # Split large subnets into manageable chunks
@@ -3007,7 +3095,8 @@ def generate_report_event(data):
     logger.info(f"Target split into {num_chunks} chunks: {targets}")
 
     if num_chunks > 1:
-        emit(
+        emit_to_client(
+            sid,
             "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks"
         )
         socketio.sleep(0)
@@ -3020,7 +3109,8 @@ def generate_report_event(data):
     logger.info(f"  Auto Scan: {is_auto_scan}")
     logger.info("=" * 60)
 
-    emit(
+    emit_to_client(
+        sid,
         "scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}"
     )
     socketio.sleep(0)
@@ -3029,24 +3119,26 @@ def generate_report_event(data):
 
     try:
         # Phase 1: Create scan folder
-        emit("scan_feedback", "📁 Creating scan folder...")
+        emit_to_client(sid, "scan_feedback", "📁 Creating scan folder...")
         socketio.sleep(0)
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
         logger.info(f"Scan folder created: {scan_dir}")
-        emit("scan_feedback", f"✓ Scan folder: {scan_dir.name}")
+        emit_to_client(sid, "scan_feedback", f"✓ Scan folder: {scan_dir.name}")
         socketio.sleep(0)
 
         # Phase 2: Run nmap scan (this is the long-running part)
         xml_files = []
         for i, chunk_target in enumerate(targets):
             if num_chunks > 1:
-                emit(
+                emit_to_client(
+                    sid,
                     "scan_feedback",
                     f"🔍 Scanning chunk {i + 1}/{num_chunks}: {chunk_target}",
                 )
             else:
-                emit(
+                emit_to_client(
+                    sid,
                     "scan_feedback",
                     "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
                 )
@@ -3058,16 +3150,18 @@ def generate_report_event(data):
                 chunk_output_base = scan_dir / f"scan_chunk_{i}"
 
             if not run_nmap_with_xml_output(
-                chunk_target, chunk_output_base, "comprehensive"
+                chunk_target, chunk_output_base, "comprehensive", sid=sid
             ):
-                emit("report_error", {"error": f"Nmap scan failed on chunk {i + 1}"})
+                emit_to_client(
+                    sid, "report_error", {"error": f"Nmap scan failed on chunk {i + 1}"}
+                )
                 return
 
             xml_files.append(chunk_output_base.with_suffix(".xml"))
 
         # If multiple chunks, merge XML files
         if num_chunks > 1:
-            emit("scan_feedback", "🔀 Merging scan results from chunks...")
+            emit_to_client(sid, "scan_feedback", "🔀 Merging scan results from chunks...")
             socketio.sleep(0)
             xml_path = scan_dir / "scan.xml"
             merge_nmap_xml_files(xml_files, xml_path)
@@ -3080,40 +3174,42 @@ def generate_report_event(data):
         pdf_html_path = scan_dir / "scan_pdf.html"
         pdf_path = scan_dir / "scan_report.pdf"
 
-        emit("scan_feedback", "📄 Converting XML to HTML (web view)...")
+        emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (web view)...")
         socketio.sleep(0)
         # Use the premium Olive PDF stylesheet for BOTH views for consistency
-        if convert_xml_to_html(xml_path, web_html_path):
+        if convert_xml_to_html(xml_path, web_html_path, sid=sid):
             file_size = web_html_path.stat().st_size if web_html_path.exists() else 0
             logger.info(f"✓ Web HTML created: {web_html_path} ({file_size} bytes)")
-            emit("scan_feedback", f"✓ Web HTML: {file_size} bytes")
+            emit_to_client(sid, "scan_feedback", f"✓ Web HTML: {file_size} bytes")
         else:
             logger.error("✗ Web HTML conversion failed")
-            emit("scan_feedback", "✗ Web HTML conversion failed")
+            emit_to_client(sid, "scan_feedback", "✗ Web HTML conversion failed")
 
-        emit("scan_feedback", "📄 Converting XML to HTML (PDF view)...")
+        emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (PDF view)...")
         socketio.sleep(0)
-        if convert_xml_to_html(xml_path, pdf_html_path):
+        if convert_xml_to_html(xml_path, pdf_html_path, sid=sid):
             file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
             logger.info(f"✓ PDF HTML created: {pdf_html_path} ({file_size} bytes)")
-            emit("scan_feedback", f"✓ PDF HTML: {file_size} bytes")
+            emit_to_client(sid, "scan_feedback", f"✓ PDF HTML: {file_size} bytes")
         else:
             logger.error("✗ PDF HTML conversion failed")
-            emit("scan_feedback", "✗ PDF HTML conversion failed")
+            emit_to_client(sid, "scan_feedback", "✗ PDF HTML conversion failed")
 
-        emit("scan_feedback", "📑 Generating PDF report...")
+        emit_to_client(sid, "scan_feedback", "📑 Generating PDF report...")
         socketio.sleep(0)
-        if convert_html_to_pdf(pdf_html_path, pdf_path):
+        if convert_html_to_pdf(pdf_html_path, pdf_path, sid=sid):
             file_size = pdf_path.stat().st_size if pdf_path.exists() else 0
             logger.info(f"✓ PDF created: {pdf_path} ({file_size} bytes)")
-            emit("scan_feedback", f"✓ PDF: {file_size} bytes")
+            emit_to_client(sid, "scan_feedback", f"✓ PDF: {file_size} bytes")
         else:
             logger.warning("PDF generation failed - HTML reports are fully functional")
-            emit(
+            emit_to_client(
+                sid,
                 "scan_feedback",
                 "✅ HTML reports complete - open in browser or print to PDF manually",
             )
-            emit(
+            emit_to_client(
+                sid,
                 "scan_feedback",
                 f"📄 Files: {web_html_path.name} & {pdf_html_path.name} ({pdf_html_path.stat().st_size} bytes each)",
             )
@@ -3134,17 +3230,18 @@ def generate_report_event(data):
         duration_seconds = int(duration.total_seconds() % 60)
         duration_str = f"{duration_minutes}m{duration_seconds}s"
 
-        emit("scan_feedback", "💾 Saving scan metadata with duration...")
+        emit_to_client(sid, "scan_feedback", "💾 Saving scan metadata with duration...")
         socketio.sleep(0)
         save_scan_metadata(scan_dir, customer_name, target, files, start_time, end_time)
 
         # Extract scan statistics from XML
-        emit("scan_feedback", "📊 Extracting scan statistics...")
+        emit_to_client(sid, "scan_feedback", "📊 Extracting scan statistics...")
         socketio.sleep(0)
         scan_stats = extract_scan_statistics(xml_path)
 
         # Send scan summary banner to client
-        emit(
+        emit_to_client(
+            sid,
             "scan_complete_summary",
             {
                 "duration_formatted": duration_str,
@@ -3159,7 +3256,7 @@ def generate_report_event(data):
         socketio.sleep(0)
 
         logger.info(f"Report generation completed in {duration_str}")
-        emit("scan_feedback", f"✅ Report generation completed in {duration_str}")
+        emit_to_client(sid, "scan_feedback", f"✅ Report generation completed in {duration_str}")
         socketio.sleep(0)
 
         # Find customer ID to update
@@ -3182,7 +3279,7 @@ def generate_report_event(data):
                 if "metadata" not in current_customer:
                     current_customer["metadata"] = {}
                 current_customer["metadata"]["last_scan_duration"] = duration_str
-                safe_emit("customer_info", current_customer)
+                emit_to_client(sid, "customer_info", current_customer)
 
         logger.info("=" * 60)
         logger.info("REPORT GENERATION SUCCESSFUL")
@@ -3190,7 +3287,8 @@ def generate_report_event(data):
         logger.info(f"  Location: {scan_dir}")
         logger.info("=" * 60)
 
-        emit(
+        emit_to_client(
+            sid,
             "report_complete",
             {
                 "status": "success",
@@ -3205,9 +3303,19 @@ def generate_report_event(data):
         logger.error("REPORT GENERATION FAILED")
         logger.error(f"  Error: {str(e)}")
         logger.error("=" * 60)
-        emit("report_error", {"error": str(e)})
+        emit_to_client(sid, "report_error", {"error": str(e)})
     finally:
-        idle_state_manager.end_operation("report_generation")
+        idle_state_manager.end_operation(operation_id)
+
+
+@socketio.on("generate_report")
+def generate_report_event(data):
+    """Handle report generation request via SocketIO."""
+    if not isinstance(data, dict):
+        emit("report_error", {"error": "Invalid report request"})
+        return
+
+    socketio.start_background_task(generate_report_task, request.sid, data)
 
 
 # Auto Scan SocketIO Events
