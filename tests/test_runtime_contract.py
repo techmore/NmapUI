@@ -63,3 +63,14 @@ def test_auto_scan_config_has_tracked_example_only():
 
     gitignore = (ROOT / ".gitignore").read_text()
     assert "auto_scan_config.json" in gitignore
+
+
+def test_runtime_manifest_does_not_include_removed_browser_stack():
+    requirements = (ROOT / "requirements.txt").read_text()
+    install_script = (ROOT / "install.sh").read_text()
+
+    for removed_dependency in ("selenium==", "reportlab==", "Pillow=="):
+        assert removed_dependency not in requirements
+
+    assert "chromedriver-autoinstaller" not in install_script
+    assert "Chrome/ChromeDriver for Selenium" not in install_script

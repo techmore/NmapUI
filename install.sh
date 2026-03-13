@@ -77,22 +77,13 @@ else
     echo "✅ arp-scan found: $(arp-scan --version | head -1)"
 fi
 
-# Check Chrome/ChromeDriver for Selenium
-echo "📦 Checking Chrome/ChromeDriver..."
+# Check browser/PDF tooling for report fallbacks
+echo "📦 Checking browser/PDF tooling..."
 if command -v google-chrome &> /dev/null || command -v /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome &> /dev/null; then
-    echo "✅ Chrome found"
-    
-    # Install chromedriver via pip if not available
-    if ! command -v chromedriver &> /dev/null; then
-        echo "📦 Installing chromedriver..."
-        pip install chromedriver-autoinstaller
-        echo "✅ chromedriver will be auto-installed when needed"
-    else
-        echo "✅ chromedriver found"
-    fi
+    echo "✅ Chrome found (usable by Playwright/browser-based tooling if needed)"
 else
-    echo "⚠️  Chrome not found. Selenium features may not work properly."
-    echo "   Please install Google Chrome for full functionality."
+    echo "⚠️  Chrome not found. Browser-based PDF fallbacks may be limited."
+    echo "   Report generation still works with wkhtmltopdf or other configured tooling."
 fi
 
 # Check git (for vulners script)
