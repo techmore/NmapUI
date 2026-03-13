@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_file, jsonify, request
+from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from typing import Dict, Optional
@@ -35,6 +35,7 @@ from nmapui.handlers.auto_scan import (
     register_auto_scan_handlers,
     start_auto_scan_thread as handler_start_auto_scan_thread,
 )
+from nmapui.handlers.scans import register_scan_routes
 from nmapui.jobs import (
     ClientJobRegistry,
     RateLimiter,
@@ -556,6 +557,16 @@ register_auto_scan_handlers(
     {
         "auto_scan_config": auto_scan_config,
         "save_auto_scan_config": save_auto_scan_config,
+        "logger": logger,
+    },
+)
+register_scan_routes(
+    app,
+    {
+        "scans_dir": SCANS_DIR,
+        "resolve_scan_path": resolve_scan_path,
+        "load_json_document": load_json_document,
+        "normalize_scan_metadata_document": normalize_scan_metadata_document,
         "logger": logger,
     },
 )
@@ -1988,158 +1999,6 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
         socketio.sleep(0)
         return False
 
-
-
-@app.route("/api/scans")
-def list_scans():
-    """List all saved scans from directory structure"""
-    scans = []
-    if not SCANS_DIR.exists():
-        return jsonify({"scans": []})
-
-    for metadata_path in SCANS_DIR.glob("**/metadata.json"):
-        try:
-            data = normalize_scan_metadata_document(
-                load_json_document(metadata_path, {})
-            )
-
-            # Ensure consistent naming for the UI
-            if "customer_name" not in data:
-                data["customer_name"] = data.get(
-                    "customer", data.get("customer_id", "Unknown")
-                )
-
-            # Normalize: remove confidence score
-            if data["customer_name"]:
-                data["customer_name"] = data["customer_name"].split(" (")[0]
-
-            # Add path info for identification
-            rel_path = metadata_path.parent.relative_to(SCANS_DIR)
-            data["path"] = str(rel_path)
-
-            # Check for existing files
-            data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
-                metadata_path.parent / "scan.html"
-            ).exists()
-            data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
-            data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
-
-            scans.append(data)
-        except Exception as e:
-            logger.error(f"Error reading metadata at {metadata_path}: {e}")
-
-    # Sort by timestamp descending
-    scans.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-    return jsonify({"scans": scans})
-
-
-@app.route("/api/scans/<path:path>/html")
-def get_scan_html(path):
-    """Serve the HTML report for a scan"""
-    scan_dir = resolve_scan_path(path)
-    if scan_dir is None:
-        return "Invalid path", 400
-
-    html_path = scan_dir / "scan_web.html"
-    if not html_path.exists():
-        html_path = scan_dir / "scan.html"
-
-    if not html_path.exists():
-        return "Report not found", 404
-
-    return send_file(html_path)
-
-
-@app.route("/api/scans/<path:path>/pdf")
-def get_scan_pdf(path):
-    """Download the PDF report for a scan with a unique descriptive filename"""
-    scan_dir = resolve_scan_path(path)
-    if scan_dir is None:
-        return "Invalid path", 400
-
-    pdf_path = scan_dir / "scan_report.pdf"
-    if not pdf_path.exists():
-        return "PDF not found", 404
-
-    # Default fallback filename
-    download_name = "Nmap_Audit_Report.pdf"
-
-    metadata_path = scan_dir / "metadata.json"
-    if metadata_path.exists():
-        try:
-            meta = normalize_scan_metadata_document(
-                load_json_document(metadata_path, {})
-            )
-
-            customer = meta.get("customer_name", "Unknown").split(" (")[0]
-            target = meta.get("target", "scan").replace("/", "_")
-            date_str = meta.get("date", datetime.now().strftime("%Y-%m-%d"))
-            time_str = meta.get("time", "000000").replace(":", "")
-
-            # Sanitize names for filesystem safety
-            safe_cust = re.sub(r"[^\w\-]", "_", customer)
-            safe_target = re.sub(r"[^\w\.]", "_", target)
-
-            download_name = (
-                f"Nmap_Audit_{safe_cust}_{safe_target}_{date_str}_{time_str}.pdf"
-            )
-        except Exception as e:
-            logger.error(f"Error generating download name: {e}")
-
-    return send_file(pdf_path, as_attachment=True, download_name=download_name)
-
-
-@app.route("/api/scans/<path:path>/xml")
-def get_scan_xml(path):
-    """Download the raw Nmap XML for a scan with a unique descriptive filename"""
-    scan_dir = resolve_scan_path(path)
-    if scan_dir is None:
-        return "Invalid path", 400
-
-    xml_path = scan_dir / "scan.xml"
-    if not xml_path.exists():
-        return "XML not found", 404
-
-    # Default fallback filename
-    download_name = "Nmap_Raw_Data.xml"
-
-    metadata_path = scan_dir / "metadata.json"
-    if metadata_path.exists():
-        try:
-            meta = normalize_scan_metadata_document(
-                load_json_document(metadata_path, {})
-            )
-
-            customer = meta.get("customer_name", "Unknown").split(" (")[0]
-            target = meta.get("target", "scan").replace("/", "_")
-            date_str = meta.get("date", datetime.now().strftime("%Y-%m-%d"))
-            time_str = meta.get("time", "000000").replace(":", "")
-
-            # Sanitize names for filesystem safety
-            safe_cust = re.sub(r"[^\w\-]", "_", customer)
-            safe_target = re.sub(r"[^\w\.]", "_", target)
-
-            download_name = (
-                f"Nmap_Raw_{safe_cust}_{safe_target}_{date_str}_{time_str}.xml"
-            )
-        except Exception as e:
-            logger.error(f"Error generating download name: {e}")
-
-    return send_file(xml_path, as_attachment=True, download_name=download_name)
-
-
-@app.route("/api/scans/<path:path>", methods=["DELETE"])
-def delete_scan(path):
-    """Delete a scan directory"""
-    scan_dir = resolve_scan_path(path)
-    if scan_dir is None or not scan_dir.exists():
-        return jsonify({"success": False, "error": "Invalid path"}), 400
-
-    try:
-        shutil.rmtree(scan_dir)
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
 
 
 def generate_report_task(sid, data):
