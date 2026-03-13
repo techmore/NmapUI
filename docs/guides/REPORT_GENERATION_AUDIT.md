@@ -195,7 +195,7 @@ Status Error:    bg-red-100 text-red-800
 
 ```bash
 # Test API endpoints
-curl http://localhost:5000/api/scans
+curl http://127.0.0.1:9000/api/scans
 # Should return JSON array of scans
 
 # Test scan generation (requires running app)
@@ -203,7 +203,6 @@ curl http://localhost:5000/api/scans
 # 2. Enter target: 192.168.1.1
 # 3. Click Generate Report
 # 4. Watch console for SocketIO events:
-#    - report_generating
 #    - report_complete or report_error
 ```
 

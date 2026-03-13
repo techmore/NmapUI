@@ -20,6 +20,14 @@ import glob as file_glob
 from datetime import datetime, timedelta
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
+from persistence import (
+    load_json_document,
+    normalize_current_assignment_document,
+    normalize_scan_metadata_document,
+    save_json_document,
+    save_yaml_document,
+    sanitize_customer_dir_name,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1104,37 +1112,38 @@ def get_report_counts():
 
     for metadata_path in SCANS_DIR.glob("**/metadata.json"):
         try:
-            with open(metadata_path, "r") as f:
-                data = json.load(f)
+            data = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
-                # Use normalized customer name as the key
-                name = data.get("customer_name")
-                if not name:
-                    customer_info = data.get("customer_info", {})
-                    name = customer_info.get("name")
-                if not name:
-                    name = data.get("customer", "Unassigned")
+            # Use normalized customer name as the key
+            name = data.get("customer_name")
+            if not name:
+                customer_info = data.get("customer_info", {})
+                name = customer_info.get("name")
+            if not name:
+                name = data.get("customer", "Unassigned")
 
-                # Normalize: remove confidence score if present
-                name = name.split(" (")[0]
-                key = name if name else "Unassigned"
+            # Normalize: remove confidence score if present
+            name = name.split(" (")[0]
+            key = name if name else "Unassigned"
 
-                counts[key] = counts.get(key, 0) + 1
-                counts["total"] = counts.get("total", 0) + 1
+            counts[key] = counts.get(key, 0) + 1
+            counts["total"] = counts.get("total", 0) + 1
 
-                # Track last scan timestamp
-                timestamp = data.get("timestamp")
-                if timestamp:
-                    if (
-                        key not in counts["last_scans"]
-                        or timestamp > counts["last_scans"][key]
-                    ):
-                        counts["last_scans"][key] = timestamp
-                    if (
-                        "total" not in counts["last_scans"]
-                        or timestamp > counts["last_scans"]["total"]
-                    ):
-                        counts["last_scans"]["total"] = timestamp
+            # Track last scan timestamp
+            timestamp = data.get("timestamp")
+            if timestamp:
+                if (
+                    key not in counts["last_scans"]
+                    or timestamp > counts["last_scans"][key]
+                ):
+                    counts["last_scans"][key] = timestamp
+                if (
+                    "total" not in counts["last_scans"]
+                    or timestamp > counts["last_scans"]["total"]
+                ):
+                    counts["last_scans"]["total"] = timestamp
         except Exception:
             continue
 
@@ -1482,8 +1491,9 @@ def assign_report_to_customer_event(data):
             emit("customer_error", "Report metadata not found")
             return
 
-        with open(metadata_path, "r") as f:
-            metadata = json.load(f)
+        metadata = normalize_scan_metadata_document(
+            load_json_document(Path(metadata_path), {})
+        )
 
         metadata["customer_id"] = customer_id
         metadata["customer_name"] = customer.get("name")
@@ -1491,8 +1501,7 @@ def assign_report_to_customer_event(data):
         if label:
             metadata["assignment_label"] = label
 
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
+        save_json_document(Path(metadata_path), metadata)
 
         logger.info(
             f"Report {report_path} assigned to customer '{customer.get('name')}' ({customer_id})"
@@ -1619,8 +1628,7 @@ def save_customers_config():
             "indexing": config.get("indexing", {}),
         }
 
-        with open(customer_fingerprinter.config_path, "w") as f:
-            yaml.dump(config_data, f, default_flow_style=False, indent=2)
+        save_yaml_document(customer_fingerprinter.config_path, config_data)
 
         logger.info(f"Customers config saved to {customer_fingerprinter.config_path}")
 
@@ -1631,13 +1639,13 @@ def save_customers_config():
 def save_current_assignment():
     try:
         assignment_data = {
+            "schema_version": 1,
             "timestamp": datetime.now().isoformat(),
             "customer": current_customer,
         }
 
         assignment_path = BASE_DIR / "data" / "current_assignment.json"
-        with open(assignment_path, "w") as f:
-            json.dump(assignment_data, f, indent=2)
+        save_json_document(assignment_path, assignment_data)
 
         logger.info(f"Current assignment saved to {assignment_path}")
 
@@ -1660,23 +1668,24 @@ def load_current_assignment():
     try:
         assignment_path = BASE_DIR / "data" / "current_assignment.json"
         if assignment_path.exists():
-            with open(assignment_path, "r") as f:
-                data = json.load(f)
-                current_customer = data.get("customer", current_customer)
+            data = normalize_current_assignment_document(
+                load_json_document(assignment_path, {})
+            )
+            current_customer = data.get("customer", current_customer)
 
-                # Merge metadata from saved customer configuration
-                if current_customer.get("id"):
-                    saved_customer = customer_fingerprinter.get_customer_by_id(
-                        current_customer["id"]
-                    )
-                    if saved_customer:
-                        current_customer = merge_customer_metadata(
-                            current_customer, saved_customer
-                        )
-
-                logger.info(
-                    f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
+            # Merge metadata from saved customer configuration
+            if current_customer.get("id"):
+                saved_customer = customer_fingerprinter.get_customer_by_id(
+                    current_customer["id"]
                 )
+                if saved_customer:
+                    current_customer = merge_customer_metadata(
+                        current_customer, saved_customer
+                    )
+
+            logger.info(
+                f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
+            )
 
     except Exception as e:
         logger.error(f"Error loading current assignment: {e}")
@@ -2512,7 +2521,7 @@ def create_scan_folder(customer_name, target):
     time_str = datetime.now().strftime("%H%M%S")
 
     # Clean customer name and target for folder path
-    safe_customer = re.sub(r"[^\w\-]", "_", customer_name)
+    safe_customer = sanitize_customer_dir_name(customer_name)
     safe_target = re.sub(r"[^\w\.]", "_", target)
 
     folder_name = f"scan_{time_str}_{safe_target}"
@@ -2865,6 +2874,7 @@ def save_scan_metadata(
         duration_formatted = f"{duration_minutes}m{duration_secs}s"
 
     metadata = {
+        "schema_version": 1,
         "customer_name": customer_name,
         "target": target,
         "timestamp": datetime.now().isoformat(),
@@ -2880,8 +2890,9 @@ def save_scan_metadata(
         "files": {k: str(v) for k, v in files.items()},
     }
 
-    with open(scan_dir / "metadata.json", "w") as f:
-        json.dump(metadata, f, indent=2)
+    save_json_document(
+        scan_dir / "metadata.json", normalize_scan_metadata_document(metadata)
+    )
 
 
 def extract_scan_statistics(xml_path):
@@ -3149,7 +3160,7 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
         return None, None
 
     customer_name = customer.get("name", "Unknown")
-    safe_customer_name = re.sub(r"[^\w\-]", "_", customer_name)
+    safe_customer_name = sanitize_customer_dir_name(customer_name)
 
     # Search in multiple possible locations
     search_dirs = [
@@ -3181,8 +3192,9 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
                     continue
 
                 try:
-                    with open(metadata_file, "r") as f:
-                        metadata = json.load(f)
+                    metadata = normalize_scan_metadata_document(
+                        load_json_document(metadata_file, {})
+                    )
 
                     scan_time_str = metadata.get("timestamp", "")
                     if not scan_time_str:
@@ -3227,8 +3239,9 @@ def list_scans():
 
     for metadata_path in SCANS_DIR.glob("**/metadata.json"):
         try:
-            with open(metadata_path, "r") as f:
-                data = json.load(f)
+            data = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
             # Ensure consistent naming for the UI
             if "customer_name" not in data:
@@ -3294,8 +3307,9 @@ def get_scan_pdf(path):
     metadata_path = scan_dir / "metadata.json"
     if metadata_path.exists():
         try:
-            with open(metadata_path, "r") as f:
-                meta = json.load(f)
+            meta = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
             customer = meta.get("customer_name", "Unknown").split(" (")[0]
             target = meta.get("target", "scan").replace("/", "_")
@@ -3332,8 +3346,9 @@ def get_scan_xml(path):
     metadata_path = scan_dir / "metadata.json"
     if metadata_path.exists():
         try:
-            with open(metadata_path, "r") as f:
-                meta = json.load(f)
+            meta = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
             customer = meta.get("customer_name", "Unknown").split(" (")[0]
             target = meta.get("target", "scan").replace("/", "_")

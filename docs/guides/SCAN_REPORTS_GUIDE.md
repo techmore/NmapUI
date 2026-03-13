@@ -60,7 +60,7 @@ data/scans/
 3. Wait for scan to complete (Quick Scan → ARP Scan → Deep Scan)
 
 ### Step 2: Generate Report
-1. Click the **Generate Report** button (blue button with download icon)
+1. Click the **Generate Report** button
 2. Watch the status message for progress
 3. Report will be generated with all formats (XML, HTML, PDF)
 4. Success message will show the save location
@@ -79,7 +79,7 @@ The system will:
 ## Using the Historical Viewer
 
 ### Opening the Viewer
-Click the **Report History** button (purple button with clock icon)
+Click the **Report History** button
 
 ### Filtering Scans
 - **Customer Filter**: Select customer from dropdown to show only their scans
@@ -134,13 +134,6 @@ socket.emit('generate_report', {
     target: '192.168.1.0/24',
     customer_name: 'TechCorp',
     scan_results: { /* optional scan data */ }
-});
-```
-
-### Listen: report_generating
-```javascript
-socket.on('report_generating', function(data) {
-    console.log(data.status); // "Starting report generation..."
 });
 ```
 
@@ -250,13 +243,11 @@ cmd = [
 Use the API endpoints to integrate scan reports into your CI/CD pipeline:
 
 ```bash
-# Generate report
-curl -X POST http://localhost:5000/api/generate_report \
-  -H "Content-Type: application/json" \
-  -d '{"target": "192.168.1.0/24", "customer_name": "CI Pipeline"}'
+# List available scans
+curl http://127.0.0.1:9000/api/scans
 
-# Download latest PDF
-curl -o report.pdf http://localhost:5000/api/scans/CI_Pipeline/2026-01-08/scan_143022_192.168.1.0_24/pdf
+# Download a saved PDF
+curl -o report.pdf http://127.0.0.1:9000/api/scans/CI_Pipeline/2026-01-08/scan_143022_192.168.1.0_24/pdf
 ```
 
 ## Tips & Best Practices

@@ -1631,12 +1631,6 @@
             }
         }
 
-        socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
-        socket.on('scan_complete', msg => {
-            document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`;
-            // Refresh history counts as a new metadata file was likely saved
-            socket.emit('get_history_counts');
-        });
         socket.on('scan_complete_summary', function(data) {
             // Display the scan summary banner with statistics
             showScanSummaryBanner(data);
@@ -2077,23 +2071,6 @@
                 socket.emit('get_customers'); // Refresh customer list
             } else {
                 showCustomerMessage('Failed to delete customer', 'error');
-            }
-        });
-
-        socket.on('customer_lookup_results', data => {
-            console.log('Customer lookup results:', data);
-            
-            if (data.success && data.matches.length > 0) {
-                showCustomerMessage(data.message, 'success');
-                
-                // Auto-select first matching customer
-                const match = data.matches[0];
-                const dropdown = document.getElementById('current-customer');
-                
-                dropdown.value = match.customer.id;
-                dropdown.dispatchEvent(new Event('change'));
-            } else {
-                showCustomerMessage(data.message, 'error');
             }
         });
 
@@ -2700,21 +2677,8 @@
             }
         });
 
-        socket.on('auto_scan_executed', function(data) {
-            showReportStatus(`Automatic scan completed: ${data.target}`, 'success');
-        });
-
         socket.on('auto_scan_error', function(data) {
             showReportStatus(`Automatic scan error: ${data.error}`, 'error');
-        });
-
-        // Handle report generation start (for pulsing effect)
-        socket.on('start_report_generation', function(data) {
-            const generateBtn = document.getElementById('generate-report-btn');
-            if (generateBtn) {
-                generateBtn.classList.add('card-pulsing');
-                startReportTimer();
-            }
         });
 
         // TableSorter class for sortable table functionality

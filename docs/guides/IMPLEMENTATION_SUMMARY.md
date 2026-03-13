@@ -56,7 +56,7 @@ This document summarizes the comprehensive scan report generation and historical
 - `displayScanHistory()` - Render scan list
 - `deleteScan()` - Delete scan with confirmation
 - Event listeners for report generation and history viewing
-- Socket handlers for report_generating, report_complete, report_error
+- Socket handlers for report_complete, report_error, and job_status
 
 ### 3. README.md
 **Location**: `/README.md`
@@ -180,15 +180,11 @@ Each scan includes metadata.json with:
    - Payload: {target, customer_name, scan_results}
    - Triggers: Report generation process
 
-2. **report_generating** (listen)
-   - Payload: {status}
-   - Updates: Status message
-
-3. **report_complete** (listen)
+2. **report_complete** (listen)
    - Payload: {status, path, scan_dir}
    - Action: Show success message, refresh history
 
-4. **report_error** (listen)
+3. **report_error** (listen)
    - Payload: {error}
    - Action: Show error message
 
@@ -274,7 +270,7 @@ Each scan includes metadata.json with:
 python app.py
 
 # 2. Open browser
-http://localhost:5000
+http://127.0.0.1:9000
 
 # 3. Run a test scan
 # Enter target: 192.168.1.0/24
