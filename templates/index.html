@@ -1213,8 +1213,42 @@
         }
 
         document.getElementById('start-scan-btn').addEventListener('click', () => {
+            if (clientJobs.scan.status === 'running') {
+                return;
+            }
             const target = document.getElementById('scan-target').value;
             socket.emit('start_scan', target);
+        });
+
+        const clientJobs = {
+            scan: { status: 'idle' },
+            report: { status: 'idle' }
+        };
+
+        function updateJobButtons() {
+            const scanRunning = clientJobs.scan.status === 'running';
+            const reportRunning = clientJobs.report.status === 'running';
+
+            const startScanBtn = document.getElementById('start-scan-btn');
+            const generateReportBtn = document.getElementById('generate-report-btn');
+
+            if (startScanBtn) {
+                startScanBtn.disabled = scanRunning;
+                startScanBtn.classList.toggle('opacity-60', scanRunning);
+                startScanBtn.classList.toggle('cursor-not-allowed', scanRunning);
+            }
+
+            if (generateReportBtn) {
+                generateReportBtn.disabled = reportRunning;
+                generateReportBtn.classList.toggle('opacity-60', reportRunning);
+                generateReportBtn.classList.toggle('cursor-not-allowed', reportRunning);
+            }
+        }
+
+        socket.on('job_status', function(data) {
+            if (!data || !data.job_type) return;
+            clientJobs[data.job_type] = data;
+            updateJobButtons();
         });
 
         socket.emit('get_local_ip');
@@ -1223,6 +1257,7 @@
         socket.emit('get_versions');
         socket.emit('get_customers');
         socket.emit('get_history_counts');
+        socket.emit('get_job_status');
 
         // Customer quick add dropdown handler
         document.getElementById('customer-quick-add').addEventListener('change', function() {
@@ -2235,6 +2270,9 @@
         });
 
         document.getElementById('generate-report-btn').addEventListener('click', function() {
+            if (clientJobs.report.status === 'running') {
+                return;
+            }
             const target = document.getElementById('scan-target').value || lastScanTarget;
 
             if (!target) {
@@ -2547,6 +2585,11 @@
         }
 
         function saveAndRunScan() {
+            if (clientJobs.report.status === 'running') {
+                showReportStatus('A report job is already running', 'error');
+                return;
+            }
+
             const startTime = document.getElementById('auto-start-time').value;
             const endTime = document.getElementById('auto-end-time').value;
 

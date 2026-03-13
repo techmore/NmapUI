@@ -400,7 +400,50 @@ class RateLimiter:
         logger.info(f"Scan recorded. Total in last hour: {len(self.scan_timestamps)}")
 
 
+class ClientJobRegistry:
+    """Track active scan/report jobs per connected client."""
+
+    def __init__(self):
+        self._jobs = {}
+        self._lock = threading.Lock()
+
+    def start(self, sid: str, job_type: str, details=None) -> bool:
+        with self._lock:
+            key = (sid, job_type)
+            job = self._jobs.get(key)
+            if job and job.get("status") == "running":
+                return False
+            self._jobs[key] = {
+                "status": "running",
+                "started_at": datetime.now().isoformat(),
+                "details": details or {},
+            }
+            return True
+
+    def complete(self, sid: str, job_type: str, status="completed", details=None):
+        with self._lock:
+            key = (sid, job_type)
+            current = self._jobs.get(key, {})
+            current.update(
+                {
+                    "status": status,
+                    "finished_at": datetime.now().isoformat(),
+                }
+            )
+            if details:
+                merged = dict(current.get("details", {}))
+                merged.update(details)
+                current["details"] = merged
+            self._jobs[key] = current
+
+    def get(self, sid: str, job_type: str):
+        with self._lock:
+            job = self._jobs.get((sid, job_type))
+            return dict(job) if job else None
+
+
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
+job_registry = ClientJobRegistry()
 
 
 def resolve_scan_path(path: str) -> Optional[Path]:
@@ -704,6 +747,13 @@ def emit_to_client(sid: str, event: str, data=None):
         socketio.emit(event, to=sid)
     else:
         socketio.emit(event, data, to=sid)
+
+
+def emit_job_status(sid: str, job_type: str):
+    """Publish the current status for a client job."""
+    payload = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}
+    payload["job_type"] = job_type
+    emit_to_client(sid, "job_status", payload)
 
 
 def run_traceroute(target="1.1.1.1"):
@@ -1586,6 +1636,13 @@ def get_versions_event():
     emit("versions", get_versions())
 
 
+@socketio.on("get_job_status")
+def get_job_status_event():
+    """Send current background job status for this client."""
+    emit_job_status(request.sid, "scan")
+    emit_job_status(request.sid, "report")
+
+
 @socketio.on("check_app_updates")
 def check_app_updates_event():
     """Check for application updates and notify the client"""
@@ -1845,6 +1902,7 @@ def start_scan_task(sid, target):
     operation_id = f"quick_scan:{sid}"
     try:
         idle_state_manager.start_operation(operation_id)
+        emit_job_status(sid, "scan")
         emit_to_client(sid, "quick_scan_start", f"Starting quick scan on {target}")
         command_str = f"nmap -sn {target}"
         emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
@@ -1995,8 +2053,15 @@ def start_scan_task(sid, target):
             start_deep_scan(gateway_targets, sid, is_gateway_phase=True)
 
     except Exception as e:
+        job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
+        emit_job_status(sid, "scan")
         emit_to_client(sid, "scan_error", str(e))
     finally:
+        if not job_registry.get(sid, "scan") or job_registry.get(sid, "scan").get(
+            "status"
+        ) == "running":
+            job_registry.complete(sid, "scan", status="completed")
+            emit_job_status(sid, "scan")
         idle_state_manager.end_operation(operation_id)
 
 
@@ -2021,8 +2086,14 @@ def start_scan(data):
         emit("scan_error", rate_msg)
         return
 
+    if not job_registry.start(request.sid, "scan", {"target": target}):
+        emit("scan_error", "A scan is already running for this client")
+        emit_job_status(request.sid, "scan")
+        return
+
     # Record scan start before dispatching background work
     rate_limiter.record_scan()
+    emit_job_status(request.sid, "scan")
     socketio.start_background_task(start_scan_task, request.sid, target)
 
 
@@ -3063,6 +3134,7 @@ def generate_report_task(sid, data):
     """Run report generation in a background task for a single client."""
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
+    emit_job_status(sid, "report")
     target = data.get("target")
     is_auto_scan = data.get("auto_scan", False)
 
@@ -3079,12 +3151,16 @@ def generate_report_task(sid, data):
     customer_name = customer_name.split(" (")[0]
 
     if not target:
+        job_registry.complete(sid, "report", status="failed", details={"error": "No target specified"})
+        emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": "No target specified"})
         idle_state_manager.end_operation(operation_id)
         return
 
     is_valid, error_msg = validate_target(target)
     if not is_valid:
+        job_registry.complete(sid, "report", status="failed", details={"error": error_msg})
+        emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": error_msg})
         idle_state_manager.end_operation(operation_id)
         return
@@ -3152,6 +3228,13 @@ def generate_report_task(sid, data):
             if not run_nmap_with_xml_output(
                 chunk_target, chunk_output_base, "comprehensive", sid=sid
             ):
+                job_registry.complete(
+                    sid,
+                    "report",
+                    status="failed",
+                    details={"error": f"Nmap scan failed on chunk {i + 1}"},
+                )
+                emit_job_status(sid, "report")
                 emit_to_client(
                     sid, "report_error", {"error": f"Nmap scan failed on chunk {i + 1}"}
                 )
@@ -3296,6 +3379,13 @@ def generate_report_task(sid, data):
                 "scan_dir": str(scan_dir),
             },
         )
+        job_registry.complete(
+            sid,
+            "report",
+            status="completed",
+            details={"target": target, "path": str(scan_dir.relative_to(SCANS_DIR))},
+        )
+        emit_job_status(sid, "report")
 
     except Exception as e:
         logger.exception("Report generation failed")
@@ -3303,6 +3393,8 @@ def generate_report_task(sid, data):
         logger.error("REPORT GENERATION FAILED")
         logger.error(f"  Error: {str(e)}")
         logger.error("=" * 60)
+        job_registry.complete(sid, "report", status="failed", details={"error": str(e)})
+        emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": str(e)})
     finally:
         idle_state_manager.end_operation(operation_id)
@@ -3315,6 +3407,16 @@ def generate_report_event(data):
         emit("report_error", {"error": "Invalid report request"})
         return
 
+    if not job_registry.start(
+        request.sid,
+        "report",
+        {"target": data.get("target"), "customer_name": data.get("customer_name")},
+    ):
+        emit("report_error", {"error": "A report job is already running for this client"})
+        emit_job_status(request.sid, "report")
+        return
+
+    emit_job_status(request.sid, "report")
     socketio.start_background_task(generate_report_task, request.sid, data)
 
 
