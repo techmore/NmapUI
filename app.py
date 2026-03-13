@@ -47,6 +47,13 @@ from nmapui.reporting import (
     parse_vulners_script,
     save_scan_metadata,
 )
+from nmapui.scanning import (
+    check_arp_scan,
+    check_nmap,
+    check_vulners,
+    create_scan_folder,
+    run_quick_auto_scan,
+)
 from persistence import (
     load_json_document,
     normalize_current_assignment_document,
@@ -2260,105 +2267,9 @@ def run_arp_scan(target, interface=None, sid=None):
         return {}
 
 
-def check_arp_scan():
-    """Check if arp-scan is installed"""
-    arp_path = shutil.which("arp-scan")
-    if arp_path:
-        try:
-            version = (
-                subprocess.check_output(
-                    ["arp-scan", "--version"], stderr=subprocess.STDOUT
-                )
-                .decode()
-                .split("\n")[0]
-            )
-            logger.info(f"Found: {version}")
-            return True
-        except Exception:
-            logger.info("Found: arp-scan (version unknown)")
-            return True
-    else:
-        logger.warning("arp-scan not found. MAC/vendor detection will be disabled.")
-        logger.info("  macOS:  brew install arp-scan")
-        logger.info("  Ubuntu: sudo apt install arp-scan")
-        return False
-
-
-def check_nmap():
-    nmap_path = shutil.which("nmap")
-    if not nmap_path:
-        logger.error("nmap not found. Please install nmap:")
-        logger.error("  macOS:  brew install nmap")
-        logger.error("  Ubuntu: sudo apt install nmap")
-        sys.exit(1)
-
-    try:
-        version = subprocess.check_output(["nmap", "--version"]).decode().split("\n")[0]
-        logger.info(f"Found: {version}")
-        return version
-    except Exception as e:
-        logger.error(f"Could not get nmap version: {e}")
-        sys.exit(1)
-
-
-def check_vulners():
-    """Verify the bundled vulners NSE script is present.
-
-    The script is treated as a versioned build-time asset. Startup no longer
-    clones or pulls from the upstream repository — that mutates tracked files
-    and introduces a supply-chain dependency on every boot.
-
-    To update vulners to a newer revision run this outside the app:
-        git -C nmap-vulners pull origin master
-    then commit the updated script into the repository.
-    """
-    if not VULNERS_SCRIPT.exists():
-        logger.error(
-            "Vulners NSE script not found at %s. "
-            "Run: git clone https://github.com/vulnersCom/nmap-vulners.git %s",
-            VULNERS_SCRIPT,
-            VULNERS_SCRIPT.parent,
-        )
-        sys.exit(1)
-
-    # Report the current vendored revision if the directory is a git repo
-    vulners_dir = VULNERS_SCRIPT.parent
-    try:
-        result = subprocess.run(
-            ["git", "log", "-1", "--oneline"],
-            cwd=vulners_dir,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            logger.info("Vulners script present (revision: %s)", result.stdout.strip())
-        else:
-            logger.info("Vulners script present at %s", VULNERS_SCRIPT)
-    except Exception:
-        logger.info("Vulners script present at %s", VULNERS_SCRIPT)
-
-    return True
-
-
 def get_versions():
     """Get version information for all tools"""
     return versions
-
-
-def create_scan_folder(customer_name, target):
-    """Create organized folder structure: CustomerName/Date/scan_HHMMSS_Target/"""
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    time_str = datetime.now().strftime("%H%M%S")
-
-    # Clean customer name and target for folder path
-    safe_customer = sanitize_customer_dir_name(customer_name)
-    safe_target = re.sub(r"[^\w\.]", "_", target)
-
-    folder_name = f"scan_{time_str}_{safe_target}"
-    scan_dir = SCANS_DIR / safe_customer / date_str / folder_name
-    scan_dir.mkdir(parents=True, exist_ok=True)
-
-    return scan_dir
 
 
 def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
@@ -2508,31 +2419,6 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
                 },
             )
         socketio.sleep(0)
-        return False
-
-
-def run_quick_auto_scan(target, output_base):
-    """Run a quick scan suitable for automated overnight scanning"""
-    logger.info(f"Running auto scan on {target}...")
-
-    cmd = [
-        "nmap",
-        "-sS",  # SYN scan
-        "-T3",  # Polite timing (not aggressive)
-        "--top-ports",
-        "50",  # Only top 50 ports for speed
-        "-oA",
-        str(output_base),
-        target,
-    ]
-
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120
-        )  # 2 minute timeout
-        return result.returncode == 0
-    except subprocess.TimeoutExpired:
-        logger.error(f"Auto scan timed out after 120 seconds on {target}")
         return False
 
 
@@ -2909,7 +2795,12 @@ def generate_report_task(sid, data):
             sid, "report", phase="create_folder", message="Creating scan folder", progress=10
         )
         socketio.sleep(0)
-        scan_dir = create_scan_folder(customer_name, target)
+        scan_dir = create_scan_folder(
+            customer_name,
+            target,
+            scans_dir=SCANS_DIR,
+            sanitize_customer_dir_name=sanitize_customer_dir_name,
+        )
         output_base = scan_dir / "scan"
         logger.info(f"Scan folder created: {scan_dir}")
         emit_to_client(sid, "scan_feedback", f"✓ Scan folder: {scan_dir.name}")
@@ -3225,7 +3116,7 @@ def startup_checks(quick=False):
         versions["nmap"] = check_nmap()
 
         logger.info("\nChecking vulners script...")
-        check_vulners()
+        check_vulners(VULNERS_SCRIPT)
         vulners_dir = VULNERS_SCRIPT.parent
         if vulners_dir.exists():
             try:
