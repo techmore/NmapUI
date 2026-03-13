@@ -441,6 +441,25 @@ class ClientJobRegistry:
             job = self._jobs.get((sid, job_type))
             return dict(job) if job else None
 
+    def mark_disconnected(self, sid: str):
+        with self._lock:
+            for key, job in list(self._jobs.items()):
+                if key[0] != sid:
+                    continue
+                if job.get("status") == "running":
+                    job["disconnected"] = True
+                    job["disconnected_at"] = datetime.now().isoformat()
+                    self._jobs[key] = job
+                else:
+                    self._jobs.pop(key, None)
+
+    def clear_if_disconnected(self, sid: str, job_type: str):
+        with self._lock:
+            key = (sid, job_type)
+            job = self._jobs.get(key)
+            if job and job.get("disconnected"):
+                self._jobs.pop(key, None)
+
 
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 job_registry = ClientJobRegistry()
@@ -1643,6 +1662,13 @@ def get_job_status_event():
     emit_job_status(request.sid, "report")
 
 
+@socketio.on("disconnect")
+def disconnect_event():
+    """Mark per-client jobs as abandoned when the socket disconnects."""
+    logger.info(f"Client disconnected: {request.sid}")
+    job_registry.mark_disconnected(request.sid)
+
+
 @socketio.on("check_app_updates")
 def check_app_updates_event():
     """Check for application updates and notify the client"""
@@ -2062,6 +2088,7 @@ def start_scan_task(sid, target):
         ) == "running":
             job_registry.complete(sid, "scan", status="completed")
             emit_job_status(sid, "scan")
+        job_registry.clear_if_disconnected(sid, "scan")
         idle_state_manager.end_operation(operation_id)
 
 
@@ -3397,6 +3424,7 @@ def generate_report_task(sid, data):
         emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": str(e)})
     finally:
+        job_registry.clear_if_disconnected(sid, "report")
         idle_state_manager.end_operation(operation_id)
 
 
