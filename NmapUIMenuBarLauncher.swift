@@ -1,12 +1,12 @@
 import Cocoa
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    let appURL = URL(string: "http://127.0.0.1:9000")!
     var statusItem: NSStatusItem!
-    var pythonProcess: Process!
+    var pythonProcess: Process?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Launch the NmapUI Python application from bundle resources
-        launchNmapUI()
+        startNmapUIIfNeeded()
         
         // Create menu bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -19,6 +19,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let openItem = NSMenuItem(title: "Open NmapUI", action: #selector(openNmapUI(_:)), keyEquivalent: "o")
             openItem.target = self
             menu.addItem(openItem)
+
+            let startItem = NSMenuItem(title: "Start NmapUI", action: #selector(startNmapUI(_:)), keyEquivalent: "s")
+            startItem.target = self
+            menu.addItem(startItem)
+
+            let stopItem = NSMenuItem(title: "Stop NmapUI", action: #selector(stopNmapUI(_:)), keyEquivalent: "")
+            stopItem.target = self
+            menu.addItem(stopItem)
             
             menu.addItem(NSMenuItem.separator())
             
@@ -36,60 +44,54 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    func launchNmapUI() {
-        // Find the app.py file in the bundle resources
+    func startNmapUIIfNeeded() {
+        guard pythonProcess?.isRunning != true else {
+            return
+        }
+
         if let bundlePath = Bundle.main.bundlePath as NSString? {
             let resourcesPath = bundlePath.appendingPathComponent("Contents/Resources")
-            let appPath = (resourcesPath as NSString).appendingPathComponent("app.py")
-            
-            // Check if app.py exists in bundle
-            if FileManager.default.fileExists(atPath: appPath) {
+            let runScriptPath = (resourcesPath as NSString).appendingPathComponent("run.sh")
+
+            if FileManager.default.fileExists(atPath: runScriptPath) {
                 pythonProcess = Process()
-                pythonProcess.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-                pythonProcess.arguments = [appPath]
-                
-                // Set working directory to resources so it can find templates, etc.
-                pythonProcess.currentDirectoryPath = resourcesPath
+                pythonProcess?.executableURL = URL(fileURLWithPath: "/bin/bash")
+                pythonProcess?.arguments = [runScriptPath]
+                pythonProcess?.currentDirectoryURL = URL(fileURLWithPath: resourcesPath, isDirectory: true)
                 
                 do {
-                    try pythonProcess.run()
-                    print("Launched NmapUI with PID: \(pythonProcess.processIdentifier)")
+                    try pythonProcess?.run()
+                    if let process = pythonProcess {
+                        print("Launched bundled NmapUI with PID: \(process.processIdentifier)")
+                    }
                 } catch {
-                    print("Failed to launch NmapUI: \(error)")
+                    print("Failed to launch bundled NmapUI: \(error)")
                 }
             } else {
-                // Fallback: try to launch from original location (for development)
-                let fallbackPath = "/Users/seandolbec/Projects/NmapUI/app.py"
-                if FileManager.default.fileExists(atPath: fallbackPath) {
-                    pythonProcess = Process()
-                    pythonProcess.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-                    pythonProcess.arguments = [fallbackPath]
-                    
-                    do {
-                        try pythonProcess.run()
-                        print("Launched NmapUI from fallback location with PID: \(pythonProcess.processIdentifier)")
-                    } catch {
-                        print("Failed to launch NmapUI from fallback: \(error)")
-                    }
-                } else {
-                    print("Could not find app.py in bundle or fallback location")
-                }
+                print("Bundled run.sh was not found. Rebuild the wrapper bundle before launching.")
             }
         }
     }
     
     @objc func openNmapUI(_ sender: Any?) {
-        if let url = URL(string: "http://localhost:9999") {
-            NSWorkspace.shared.open(url)
+        startNmapUIIfNeeded()
+        NSWorkspace.shared.open(appURL)
+    }
+
+    @objc func startNmapUI(_ sender: Any?) {
+        startNmapUIIfNeeded()
+    }
+
+    @objc func stopNmapUI(_ sender: Any?) {
+        if let process = pythonProcess, process.isRunning {
+            process.terminate()
+            process.waitUntilExit()
         }
+        pythonProcess = nil
     }
     
     @objc func quitApp(_ sender: Any?) {
-        // Terminate the Python process first
-        if pythonProcess != nil && pythonProcess.isRunning {
-            pythonProcess.terminate()
-            pythonProcess.waitUntilExit()
-        }
+        stopNmapUI(sender)
         NSApp.terminate(nil)
     }
     
@@ -103,11 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        // Clean up - terminate Python process if still running
-        if pythonProcess != nil && pythonProcess.isRunning {
-            pythonProcess.terminate()
-            pythonProcess.waitUntilExit()
-        }
+        stopNmapUI(nil)
         statusItem = nil
     }
 }
@@ -122,4 +120,4 @@ func main() {
 }
 
 // Call main function when this file is executed
-_ = main()
+main()

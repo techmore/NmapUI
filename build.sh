@@ -9,12 +9,17 @@ pkill -f "NmapUIMenuBar" 2>/dev/null || true
 sleep 1  # Give processes time to terminate
 
 # Set variables
-SRC="NmapUIMenuBarFinal.swift"
+SRC="NmapUIMenuBarLauncher.swift"
 BIN="NmapUIMenuBar"
 APP_NAME="NmapUIMenuBar.app"
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 
-echo "Building NmapUI Menu Bar Wrapper (with independent dropdown menu)..."
+if [[ ! -f "$SRC" ]]; then
+    echo "ERROR: Wrapper source file not found: $SRC"
+    exit 1
+fi
+
+echo "Building NmapUI Menu Bar Wrapper..."
 echo "Source: $SRC"
 echo "SDK: $SDK"
 echo "Target: arm64-apple-macosx13.0"
@@ -23,9 +28,7 @@ echo "Target: arm64-apple-macosx13.0"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macosx13.0 \
-  -framework SwiftUI \
   -framework AppKit \
-  -framework WebKit \
   "$SRC" \
   -o "$BIN"
 
@@ -152,6 +155,5 @@ open "$APP_NAME"
 
 echo "Done! The NmapUI Menu Bar application is now running."
 echo "Look for the network icon in your menu bar."
-echo "Click the icon to see an independent dropdown menu."
-echo "The application will automatically launch NmapUI when started."
+echo "Use the menu to open http://127.0.0.1:9000 or control the bundled app process."
 echo "Menu options: Open NmapUI, Start NmapUI, Stop NmapUI, Quit, Uninstall"
