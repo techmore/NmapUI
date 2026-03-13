@@ -617,37 +617,50 @@ def merge_nmap_xml_files(xml_files, output_path):
     # Find the nmaprun element
     nmaprun = base_root
 
-    # Collect all hosts from all files
+    # Collect all hosts and accurate statistics from all files in one pass
     all_hosts = []
     earliest_start = None
     latest_end = None
+    total_up = 0
+    total_down = 0
+    total_ips = 0
 
     for xml_file in xml_files:
         tree = ET.parse(xml_file)
         root = tree.getroot()
 
-        # Collect host elements
+        # Collect host elements and track timing
         for host in root.findall("host"):
             all_hosts.append(host)
+            starttime = host.get("starttime")
+            endtime = host.get("endtime")
+            if starttime:
+                start_ts = int(starttime)
+                if earliest_start is None or start_ts < earliest_start:
+                    earliest_start = start_ts
+            if endtime:
+                end_ts = int(endtime)
+                if latest_end is None or end_ts > latest_end:
+                    latest_end = end_ts
 
-            # Track timing
-            status = host.find("status")
-            if status is not None and status.get("state") == "up":
-                starttime = host.get("starttime")
-                endtime = host.get("endtime")
-                if starttime:
-                    start_ts = int(starttime)
-                    if earliest_start is None or start_ts < earliest_start:
-                        earliest_start = start_ts
-                if endtime:
-                    end_ts = int(endtime)
-                    if latest_end is None or end_ts > latest_end:
-                        latest_end = end_ts
+        # Sum per-file host counts from runstats (authoritative source)
+        rs = root.find("runstats")
+        if rs is not None:
+            h = rs.find("hosts")
+            if h is not None:
+                total_up += int(h.get("up", "0"))
+                total_down += int(h.get("down", "0"))
+                total_ips += int(h.get("total", "0"))
 
-    # Calculate totals
-    total_up = len(all_hosts)
-    total_ips = len(xml_files) * 8  # Each /29 chunk has 8 IPs
-    total_down = total_ips - total_up
+    # Fallback: derive counts from collected host elements if runstats were missing
+    if total_ips == 0:
+        for host in all_hosts:
+            s = host.find("status")
+            if s is not None and s.get("state") == "up":
+                total_up += 1
+            else:
+                total_down += 1
+        total_ips = total_up + total_down
 
     # Remove existing host elements from base
     for host in base_root.findall("host"):
@@ -662,7 +675,6 @@ def merge_nmap_xml_files(xml_files, output_path):
     if runstats is not None:
         finished = runstats.find("finished")
         if finished is not None:
-            total_ips = total_up + total_down
             # Calculate total elapsed time from earliest start to latest end
             if earliest_start and latest_end:
                 total_elapsed = latest_end - earliest_start
@@ -679,7 +691,6 @@ def merge_nmap_xml_files(xml_files, output_path):
 
         hosts_elem = runstats.find("hosts")
         if hosts_elem is not None:
-            total_ips = total_up + total_down
             hosts_elem.set("up", str(total_up))
             hosts_elem.set("down", str(total_down))
             hosts_elem.set("total", str(total_ips))
@@ -2452,71 +2463,40 @@ def check_nmap():
 
 
 def check_vulners():
-    """Check if vulners script exists and update if possible"""
-    vulners_dir = VULNERS_SCRIPT.parent
+    """Verify the bundled vulners NSE script is present.
 
+    The script is treated as a versioned build-time asset. Startup no longer
+    clones or pulls from the upstream repository — that mutates tracked files
+    and introduces a supply-chain dependency on every boot.
+
+    To update vulners to a newer revision run this outside the app:
+        git -C nmap-vulners pull origin master
+    then commit the updated script into the repository.
+    """
     if not VULNERS_SCRIPT.exists():
-        logger.info("Installing vulners script...")
-        try:
-            result = subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "https://github.com/vulnersCom/nmap-vulners.git",
-                    str(vulners_dir),
-                ],
-                cwd=BASE_DIR,
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                logger.info("Vulners script installed successfully")
-                return True
-            else:
-                logger.error(f"Failed to install vulners: {result.stderr}")
-                sys.exit(1)
-        except Exception as e:
-            logger.error(f"Failed to install vulners: {e}")
-            sys.exit(1)
+        logger.error(
+            "Vulners NSE script not found at %s. "
+            "Run: git clone https://github.com/vulnersCom/nmap-vulners.git %s",
+            VULNERS_SCRIPT,
+            VULNERS_SCRIPT.parent,
+        )
+        sys.exit(1)
 
-    logger.info("Updating vulners script...")
+    # Report the current vendored revision if the directory is a git repo
+    vulners_dir = VULNERS_SCRIPT.parent
     try:
-        if not (vulners_dir / ".git").exists():
-            subprocess.run(["git", "init"], cwd=vulners_dir, capture_output=True)
-            subprocess.run(
-                [
-                    "git",
-                    "remote",
-                    "add",
-                    "origin",
-                    "https://github.com/vulnersCom/nmap-vulners.git",
-                ],
-                cwd=vulners_dir,
-                capture_output=True,
-            )
-
         result = subprocess.run(
-            ["git", "pull", "origin", "master"],
+            ["git", "log", "-1", "--oneline"],
             cwd=vulners_dir,
             capture_output=True,
             text=True,
         )
-        if result.returncode == 0:
-            version_result = subprocess.run(
-                ["git", "log", "-1", "--oneline"],
-                cwd=vulners_dir,
-                capture_output=True,
-                text=True,
-            )
-            if version_result.returncode == 0:
-                commit = version_result.stdout.strip()
-                logger.info(f"Vulners updated: {commit}")
-            else:
-                logger.info("Vulners updated")
+        if result.returncode == 0 and result.stdout.strip():
+            logger.info("Vulners script present (revision: %s)", result.stdout.strip())
         else:
-            logger.info("Vulners already up-to-date")
-    except Exception as e:
-        logger.error(f"Vulners update failed: {e}")
+            logger.info("Vulners script present at %s", VULNERS_SCRIPT)
+    except Exception:
+        logger.info("Vulners script present at %s", VULNERS_SCRIPT)
 
     return True
 
