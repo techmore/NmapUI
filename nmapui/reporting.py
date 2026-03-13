@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 import logging
+import shutil
+import subprocess
 import xml.etree.ElementTree as ET
 
 from persistence import (
@@ -10,6 +12,128 @@ from persistence import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def convert_xml_to_html(
+    xml_path,
+    html_path,
+    *,
+    stylesheet,
+    get_app_version,
+    feedback=None,
+):
+    """Convert Nmap XML to HTML using xsltproc."""
+    if not stylesheet.exists():
+        logger.error("XSL stylesheet not found: %s", stylesheet)
+        return False
+
+    techmore_version = get_app_version()
+    cmd = [
+        "xsltproc",
+        "--stringparam",
+        "techmore_version",
+        techmore_version,
+        "-o",
+        str(html_path),
+        str(stylesheet),
+        str(xml_path),
+    ]
+    command_str = " ".join(cmd)
+    if feedback:
+        feedback(f"Executing: {command_str}")
+    logger.info("Executing: %s", command_str)
+
+    try:
+        subprocess.run(cmd, check=True)
+        return True
+    except Exception as exc:
+        logger.error("XML to HTML conversion failed: %s", exc)
+        return False
+
+
+def convert_html_to_pdf(html_path, pdf_path, *, feedback=None):
+    """Convert HTML to PDF using wkhtmltopdf, weasyprint, playwright, or textutil."""
+    wkhtml = shutil.which("wkhtmltopdf")
+    if wkhtml:
+        cmd = [
+            wkhtml,
+            "--print-media-type",
+            "--background",
+            "--margin-top",
+            "0mm",
+            "--margin-right",
+            "0mm",
+            "--margin-bottom",
+            "0mm",
+            "--margin-left",
+            "0mm",
+            "--page-size",
+            "Letter",
+            str(html_path),
+            str(pdf_path),
+        ]
+        command_str = " ".join(cmd)
+        if feedback:
+            feedback(f"Executing: {command_str}")
+        try:
+            subprocess.run(cmd, check=True)
+            return True
+        except Exception as exc:
+            logger.error("wkhtmltopdf failed: %s", exc)
+
+    if feedback:
+        feedback("Falling back to weasyprint for PDF generation")
+    try:
+        from weasyprint import HTML
+
+        HTML(str(html_path)).write_pdf(str(pdf_path))
+        return True
+    except Exception as exc:
+        logger.error("weasyprint failed: %s", exc)
+
+    if feedback:
+        feedback("Falling back to playwright for PDF generation")
+    try:
+        import asyncio
+        from playwright.async_api import async_playwright
+
+        async def generate_pdf():
+            async with async_playwright() as playwright:
+                browser = await playwright.chromium.launch(
+                    headless=True, args=["--no-sandbox"]
+                )
+                page = await browser.new_page()
+                await page.goto(f"file://{html_path.resolve()}")
+                await page.pdf(
+                    path=str(pdf_path),
+                    format="A4",
+                    print_background=True,
+                    margin={
+                        "top": "0mm",
+                        "right": "0mm",
+                        "bottom": "0mm",
+                        "left": "0mm",
+                    },
+                )
+                await browser.close()
+
+        asyncio.run(generate_pdf())
+        return True
+    except Exception as exc:
+        logger.error("playwright failed: %s", exc)
+
+    if feedback:
+        feedback("Falling back to textutil for PDF generation")
+    try:
+        cmd = ["textutil", "-convert", "pdf", "-output", str(pdf_path), str(html_path)]
+        if feedback:
+            feedback("Executing: textutil HTML to PDF")
+        subprocess.run(cmd, check=True, capture_output=True)
+        return True
+    except Exception as exc:
+        logger.error("textutil failed: %s", exc)
+
+    return False
 
 
 def save_scan_metadata(

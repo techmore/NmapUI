@@ -53,6 +53,8 @@ from nmapui.runtime import (
     restart_application,
 )
 from nmapui.reporting import (
+    convert_html_to_pdf,
+    convert_xml_to_html,
     extract_scan_statistics,
     get_most_recent_scan_xml,
     parse_scan_xml_for_assets,
@@ -2232,149 +2234,6 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
         return False
 
 
-def convert_xml_to_html(xml_path, html_path, pdf_optimized=True, sid=None):
-    """Convert Nmap XML to HTML using xsltproc - Use Olive PDF theme for all outputs"""
-    stylesheet = XSL_STYLESHEET_PDF
-
-    if not stylesheet.exists():
-        logger.error(f"XSL stylesheet not found: {stylesheet}")
-        return False
-
-    # Get app version for reports
-    techmore_version = get_app_version()
-
-    cmd = [
-        "xsltproc",
-        "--stringparam",
-        "techmore_version",
-        techmore_version,
-        "-o",
-        str(html_path),
-        str(stylesheet),
-        str(xml_path),
-    ]
-    command_str = " ".join(cmd)
-    if sid:
-        emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
-    else:
-        socketio.emit("scan_feedback", f"Executing: {command_str}")
-    logger.info(f"Executing: {command_str}")
-    socketio.sleep(0)
-
-    try:
-        subprocess.run(
-            cmd,
-            check=True,
-        )
-        return True
-    except Exception as e:
-        logger.error(f"XML to HTML conversion failed: {e}")
-        return False
-
-
-def convert_html_to_pdf(html_path, pdf_path, sid=None):
-    """Convert HTML to PDF using wkhtmltopdf, weasyprint, or pyppeteer"""
-    # Try wkhtmltopdf first
-    wkhtml = shutil.which("wkhtmltopdf")
-    if wkhtml:
-        cmd = [
-            wkhtml,
-            "--print-media-type",
-            "--background",  # Enable background colors in PDF
-            "--margin-top",
-            "0mm",
-            "--margin-right",
-            "0mm",
-            "--margin-bottom",
-            "0mm",
-            "--margin-left",
-            "0mm",
-            "--page-size",
-            "Letter",
-            str(html_path),
-            str(pdf_path),
-        ]
-        command_str = " ".join(cmd)
-        if sid:
-            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
-        else:
-            socketio.emit("scan_feedback", f"Executing: {command_str}")
-        socketio.sleep(0)
-
-        try:
-            subprocess.run(cmd, check=True)
-            return True
-        except Exception as e:
-            logger.error(f"wkhtmltopdf failed: {e}")
-
-    # Fallback to weasyprint
-    if sid:
-        emit_to_client(sid, "scan_feedback", "Falling back to weasyprint for PDF generation")
-    else:
-        socketio.emit("scan_feedback", "Falling back to weasyprint for PDF generation")
-    try:
-        from weasyprint import HTML
-
-        HTML(str(html_path)).write_pdf(str(pdf_path))
-        return True
-    except Exception as e:
-        logger.error(f"weasyprint failed: {e}")
-
-    # Final fallback to playwright (Chromium-based)
-    if sid:
-        emit_to_client(sid, "scan_feedback", "Falling back to playwright for PDF generation")
-    else:
-        socketio.emit("scan_feedback", f"Falling back to playwright for PDF generation")
-    try:
-        import asyncio
-        from playwright.async_api import async_playwright
-
-        async def generate_pdf():
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-                page = await browser.new_page()
-                await page.goto(f"file://{html_path.resolve()}")
-                await page.pdf(
-                    path=str(pdf_path),
-                    format="A4",
-                    print_background=True,
-                    margin={
-                        "top": "0mm",
-                        "right": "0mm",
-                        "bottom": "0mm",
-                        "left": "0mm",
-                    },
-                )
-                await browser.close()
-
-        asyncio.run(generate_pdf())
-        return True
-    except Exception as e:
-        logger.error(f"playwright failed: {e}")
-
-    # Ultimate fallback to macOS textutil
-    if sid:
-        emit_to_client(sid, "scan_feedback", "Falling back to textutil for PDF generation")
-    else:
-        socketio.emit("scan_feedback", f"Falling back to textutil for PDF generation")
-    try:
-        cmd = ["textutil", "-convert", "pdf", "-output", str(pdf_path), str(html_path)]
-        command_str = " ".join(cmd)
-        if sid:
-            emit_to_client(sid, "scan_feedback", "Executing: textutil HTML to PDF")
-        else:
-            socketio.emit("scan_feedback", f"Executing: textutil HTML to PDF")
-        socketio.sleep(0)
-
-        subprocess.run(cmd, check=True, capture_output=True)
-        return True
-    except Exception as e:
-        logger.error(f"textutil failed: {e}")
-
-    return False
-
-
-
 
 @app.route("/api/scans")
 def list_scans():
@@ -2700,7 +2559,15 @@ def generate_report_task(sid, data):
         )
         socketio.sleep(0)
         # Use the premium Olive PDF stylesheet for BOTH views for consistency
-        if convert_xml_to_html(xml_path, web_html_path, sid=sid):
+        if convert_xml_to_html(
+            xml_path,
+            web_html_path,
+            stylesheet=XSL_STYLESHEET_PDF,
+            get_app_version=get_app_version,
+            feedback=lambda message: (
+                emit_to_client(sid, "scan_feedback", message), socketio.sleep(0)
+            ),
+        ):
             file_size = web_html_path.stat().st_size if web_html_path.exists() else 0
             logger.info(f"✓ Web HTML created: {web_html_path} ({file_size} bytes)")
             emit_to_client(sid, "scan_feedback", f"✓ Web HTML: {file_size} bytes")
@@ -2713,7 +2580,15 @@ def generate_report_task(sid, data):
             sid, "report", phase="html_pdf", message="Generating PDF HTML report", progress=78
         )
         socketio.sleep(0)
-        if convert_xml_to_html(xml_path, pdf_html_path, sid=sid):
+        if convert_xml_to_html(
+            xml_path,
+            pdf_html_path,
+            stylesheet=XSL_STYLESHEET_PDF,
+            get_app_version=get_app_version,
+            feedback=lambda message: (
+                emit_to_client(sid, "scan_feedback", message), socketio.sleep(0)
+            ),
+        ):
             file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
             logger.info(f"✓ PDF HTML created: {pdf_html_path} ({file_size} bytes)")
             emit_to_client(sid, "scan_feedback", f"✓ PDF HTML: {file_size} bytes")
@@ -2726,7 +2601,13 @@ def generate_report_task(sid, data):
             sid, "report", phase="pdf", message="Rendering PDF output", progress=86
         )
         socketio.sleep(0)
-        if convert_html_to_pdf(pdf_html_path, pdf_path, sid=sid):
+        if convert_html_to_pdf(
+            pdf_html_path,
+            pdf_path,
+            feedback=lambda message: (
+                emit_to_client(sid, "scan_feedback", message), socketio.sleep(0)
+            ),
+        ):
             file_size = pdf_path.stat().st_size if pdf_path.exists() else 0
             logger.info(f"✓ PDF created: {pdf_path} ({file_size} bytes)")
             emit_to_client(sid, "scan_feedback", f"✓ PDF: {file_size} bytes")
