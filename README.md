@@ -69,6 +69,11 @@ Start the server:
 python app.py
 ```
 
+Configure runtime binding if needed:
+```bash
+NMAPUI_HOST=0.0.0.0 NMAPUI_PORT=9000 NMAPUI_DEBUG=false python app.py
+```
+
 The app will:
 1. Check for nmap installation
 2. Check for arp-scan (optional - warns if missing)

@@ -9,12 +9,12 @@ pkill -f "NmapUIMenuBar" 2>/dev/null || true
 sleep 1  # Give processes time to terminate
 
 # Set variables
-SRC="NmapUIMenuBarLauncher.swift"
+SRC="NmapUIMenuBarFinal.swift"
 BIN="NmapUIMenuBar"
 APP_NAME="NmapUIMenuBar.app"
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 
-echo "Building NmapUI Menu Bar Wrapper (with Python launcher)..."
+echo "Building NmapUI Menu Bar Wrapper (with independent dropdown menu)..."
 echo "Source: $SRC"
 echo "SDK: $SDK"
 echo "Target: arm64-apple-macosx13.0"
@@ -72,6 +72,43 @@ cp -r customer_fingerprint.py "$APP_NAME/Contents/Resources/" 2>/dev/null || tru
 cp -r nmap-modern.xsl "$APP_NAME/Contents/Resources/" 2>/dev/null || true
 cp -r nmap-pdf-olive-legacy.xsl "$APP_NAME/Contents/Resources/" 2>/dev/null || true
 
+# Copy virtual environment — install.sh creates .venv (with leading dot)
+if [[ -d ".venv" ]]; then
+    echo "Copying virtual environment (.venv)..."
+    cp -r .venv "$APP_NAME/Contents/Resources/.venv"
+    echo "Virtual environment copied."
+elif [[ -d "venv" ]]; then
+    echo "Copying virtual environment (venv)..."
+    cp -r venv "$APP_NAME/Contents/Resources/.venv"
+    echo "Virtual environment copied (renamed to .venv inside bundle)."
+else
+    echo "ERROR: No virtual environment found (.venv or venv). Run install.sh first."
+    exit 1
+fi
+
+# Create a run script that activates the bundled venv and runs the app.
+# Dependencies must already be installed in the venv — runtime pip installs
+# are not supported in packaged builds (network dependency, supply-chain risk).
+cat > "$APP_NAME/Contents/Resources/run.sh" << 'EOF'
+#!/bin/bash
+cd "$(dirname "$0")"
+
+VENV_ACTIVATE=".venv/bin/activate"
+
+if [[ ! -f "$VENV_ACTIVATE" ]]; then
+    echo "ERROR: Virtual environment not found inside app bundle." >&2
+    echo "Rebuild the app bundle with install.sh completed first." >&2
+    exit 1
+fi
+
+source "$VENV_ACTIVATE"
+
+# Run the NmapUI application
+exec python3 app.py
+EOF
+
+chmod +x "$APP_NAME/Contents/Resources/run.sh"
+
 echo "Resources copied successfully!"
 
 # Create the Info.plist file
@@ -115,4 +152,6 @@ open "$APP_NAME"
 
 echo "Done! The NmapUI Menu Bar application is now running."
 echo "Look for the network icon in your menu bar."
+echo "Click the icon to see an independent dropdown menu."
 echo "The application will automatically launch NmapUI when started."
+echo "Menu options: Open NmapUI, Start NmapUI, Stop NmapUI, Quit, Uninstall"

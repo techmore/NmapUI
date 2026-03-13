@@ -20,6 +20,14 @@ import glob as file_glob
 from datetime import datetime, timedelta
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
+from persistence import (
+    load_json_document,
+    normalize_current_assignment_document,
+    normalize_scan_metadata_document,
+    save_json_document,
+    save_yaml_document,
+    sanitize_customer_dir_name,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +37,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.resolve()
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment flag."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class IdleStateManager:
@@ -337,6 +353,9 @@ auto_scan_config = {
     "end_time": "06:00",
     "last_run": None,
 }
+auto_scan_thread = None
+AUTO_SCAN_STARTUP_AT = datetime.now()
+AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
 
 # ============================================================================
 # RATE LIMITING
@@ -391,7 +410,136 @@ class RateLimiter:
         logger.info(f"Scan recorded. Total in last hour: {len(self.scan_timestamps)}")
 
 
+class ClientJobRegistry:
+    """Track active scan/report jobs per connected client."""
+
+    def __init__(self):
+        self._jobs = {}
+        self._lock = threading.Lock()
+        self._processes = {}
+
+    def start(self, sid: str, job_type: str, details=None) -> bool:
+        with self._lock:
+            key = (sid, job_type)
+            job = self._jobs.get(key)
+            if job and job.get("status") == "running":
+                return False
+            self._jobs[key] = {
+                "status": "running",
+                "started_at": datetime.now().isoformat(),
+                "cancel_requested": False,
+                "details": details or {},
+            }
+            return True
+
+    def complete(self, sid: str, job_type: str, status="completed", details=None):
+        with self._lock:
+            key = (sid, job_type)
+            current = self._jobs.get(key, {})
+            current.update(
+                {
+                    "status": status,
+                    "finished_at": datetime.now().isoformat(),
+                }
+            )
+            if details:
+                merged = dict(current.get("details", {}))
+                merged.update(details)
+                current["details"] = merged
+            self._jobs[key] = current
+
+    def update(self, sid: str, job_type: str, details=None, **fields):
+        with self._lock:
+            key = (sid, job_type)
+            current = self._jobs.get(key)
+            if not current:
+                return
+            current.update(fields)
+            if details:
+                merged = dict(current.get("details", {}))
+                merged.update(details)
+                current["details"] = merged
+            self._jobs[key] = current
+
+    def cancel(self, sid: str, job_type: str) -> bool:
+        with self._lock:
+            key = (sid, job_type)
+            current = self._jobs.get(key)
+            if not current or current.get("status") != "running":
+                return False
+            current["cancel_requested"] = True
+            current["status"] = "cancelling"
+            current["cancel_requested_at"] = datetime.now().isoformat()
+            self._jobs[key] = current
+
+            process = self._processes.get(key)
+            if process and process.poll() is None:
+                try:
+                    process.terminate()
+                except Exception:
+                    logger.exception("Failed to terminate subprocess for %s", key)
+            return True
+
+    def is_cancelled(self, sid: str, job_type: str) -> bool:
+        with self._lock:
+            job = self._jobs.get((sid, job_type))
+            return bool(job and job.get("cancel_requested"))
+
+    def attach_process(self, sid: str, job_type: str, process: subprocess.Popen):
+        with self._lock:
+            self._processes[(sid, job_type)] = process
+
+    def clear_process(self, sid: str, job_type: str):
+        with self._lock:
+            self._processes.pop((sid, job_type), None)
+
+    def get(self, sid: str, job_type: str):
+        with self._lock:
+            job = self._jobs.get((sid, job_type))
+            return dict(job) if job else None
+
+    def mark_disconnected(self, sid: str):
+        with self._lock:
+            for key, job in list(self._jobs.items()):
+                if key[0] != sid:
+                    continue
+                if job.get("status") == "running":
+                    job["disconnected"] = True
+                    job["disconnected_at"] = datetime.now().isoformat()
+                    self._jobs[key] = job
+                else:
+                    self._jobs.pop(key, None)
+
+    def clear_if_disconnected(self, sid: str, job_type: str):
+        with self._lock:
+            key = (sid, job_type)
+            job = self._jobs.get(key)
+            if job and job.get("disconnected"):
+                self._jobs.pop(key, None)
+            self._processes.pop(key, None)
+
+
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
+job_registry = ClientJobRegistry()
+
+
+def resolve_scan_path(path: str) -> Optional[Path]:
+    """Resolve a user-provided scan path and ensure it stays inside SCANS_DIR."""
+    if not path:
+        return None
+
+    try:
+        scan_dir = (SCANS_DIR / path).resolve()
+        scans_root = SCANS_DIR.resolve()
+    except (OSError, RuntimeError):
+        return None
+
+    try:
+        scan_dir.relative_to(scans_root)
+    except ValueError:
+        return None
+
+    return scan_dir
 
 
 def load_auto_scan_config():
@@ -418,12 +566,25 @@ def should_run_auto_scan():
     if not auto_scan_config["enabled"]:
         return False
 
+    startup_elapsed = (datetime.now() - AUTO_SCAN_STARTUP_AT).total_seconds()
+    if startup_elapsed < AUTO_SCAN_STARTUP_GRACE_SECONDS:
+        logger.info(
+            "Auto scan suppressed during startup grace period (%ss remaining)",
+            int(AUTO_SCAN_STARTUP_GRACE_SECONDS - startup_elapsed),
+        )
+        return False
+
     now = datetime.now()
     current_time = now.strftime("%H:%M")
+    start = auto_scan_config["start_time"]
+    end = auto_scan_config["end_time"]
 
-    return (
-        auto_scan_config["start_time"] <= current_time <= auto_scan_config["end_time"]
-    )
+    if start <= end:
+        # Same-day window e.g. 09:00–17:00
+        return start <= current_time <= end
+    else:
+        # Cross-midnight window e.g. 22:00–06:00
+        return current_time >= start or current_time <= end
 
 
 def split_subnet_into_chunks(target):
@@ -464,37 +625,50 @@ def merge_nmap_xml_files(xml_files, output_path):
     # Find the nmaprun element
     nmaprun = base_root
 
-    # Collect all hosts from all files
+    # Collect all hosts and accurate statistics from all files in one pass
     all_hosts = []
     earliest_start = None
     latest_end = None
+    total_up = 0
+    total_down = 0
+    total_ips = 0
 
     for xml_file in xml_files:
         tree = ET.parse(xml_file)
         root = tree.getroot()
 
-        # Collect host elements
+        # Collect host elements and track timing
         for host in root.findall("host"):
             all_hosts.append(host)
+            starttime = host.get("starttime")
+            endtime = host.get("endtime")
+            if starttime:
+                start_ts = int(starttime)
+                if earliest_start is None or start_ts < earliest_start:
+                    earliest_start = start_ts
+            if endtime:
+                end_ts = int(endtime)
+                if latest_end is None or end_ts > latest_end:
+                    latest_end = end_ts
 
-            # Track timing
-            status = host.find("status")
-            if status is not None and status.get("state") == "up":
-                starttime = host.get("starttime")
-                endtime = host.get("endtime")
-                if starttime:
-                    start_ts = int(starttime)
-                    if earliest_start is None or start_ts < earliest_start:
-                        earliest_start = start_ts
-                if endtime:
-                    end_ts = int(endtime)
-                    if latest_end is None or end_ts > latest_end:
-                        latest_end = end_ts
+        # Sum per-file host counts from runstats (authoritative source)
+        rs = root.find("runstats")
+        if rs is not None:
+            h = rs.find("hosts")
+            if h is not None:
+                total_up += int(h.get("up", "0"))
+                total_down += int(h.get("down", "0"))
+                total_ips += int(h.get("total", "0"))
 
-    # Calculate totals
-    total_up = len(all_hosts)
-    total_ips = len(xml_files) * 8  # Each /29 chunk has 8 IPs
-    total_down = total_ips - total_up
+    # Fallback: derive counts from collected host elements if runstats were missing
+    if total_ips == 0:
+        for host in all_hosts:
+            s = host.find("status")
+            if s is not None and s.get("state") == "up":
+                total_up += 1
+            else:
+                total_down += 1
+        total_ips = total_up + total_down
 
     # Remove existing host elements from base
     for host in base_root.findall("host"):
@@ -509,7 +683,6 @@ def merge_nmap_xml_files(xml_files, output_path):
     if runstats is not None:
         finished = runstats.find("finished")
         if finished is not None:
-            total_ips = total_up + total_down
             # Calculate total elapsed time from earliest start to latest end
             if earliest_start and latest_end:
                 total_elapsed = latest_end - earliest_start
@@ -526,7 +699,6 @@ def merge_nmap_xml_files(xml_files, output_path):
 
         hosts_elem = runstats.find("hosts")
         if hosts_elem is not None:
-            total_ips = total_up + total_down
             hosts_elem.set("up", str(total_up))
             hosts_elem.set("down", str(total_down))
             hosts_elem.set("total", str(total_ips))
@@ -668,6 +840,92 @@ def safe_emit(event, data=None):
     except RuntimeError:
         # Not in a request context, skip emit
         pass
+
+
+def emit_to_client(sid: str, event: str, data=None):
+    """Emit a Socket.IO event to a single connected client."""
+    if data is None:
+        socketio.emit(event, to=sid)
+    else:
+        socketio.emit(event, data, to=sid)
+
+
+def emit_job_status(sid: str, job_type: str):
+    """Publish the current status for a client job."""
+    payload = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}
+    payload["job_type"] = job_type
+    emit_to_client(sid, "job_status", payload)
+
+
+def update_job_progress(
+    sid: str,
+    job_type: str,
+    phase: str,
+    message: Optional[str] = None,
+    progress: Optional[int] = None,
+    details=None,
+):
+    """Update the current phase/progress for a client job and publish it."""
+    payload = {"phase": phase}
+    if message is not None:
+        payload["message"] = message
+    if progress is not None:
+        payload["progress"] = progress
+    if details:
+        payload.update(details)
+
+    job_registry.update(sid, job_type, details=payload)
+    emit_job_status(sid, job_type)
+
+
+def ensure_job_not_cancelled(sid: str, job_type: str):
+    """Stop the current workflow if cancellation was requested."""
+    if job_registry.is_cancelled(sid, job_type):
+        raise RuntimeError(f"{job_type} cancelled")
+
+
+def run_cancellable_command(
+    cmd,
+    sid: Optional[str] = None,
+    job_type: Optional[str] = None,
+    timeout: Optional[int] = None,
+):
+    """Run a subprocess that can be cancelled via the job registry."""
+    start = datetime.now()
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if sid and job_type:
+        job_registry.attach_process(sid, job_type, process)
+
+    try:
+        while True:
+            try:
+                stdout, stderr = process.communicate(timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                if timeout is not None and (datetime.now() - start).total_seconds() > timeout:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    raise subprocess.TimeoutExpired(cmd, timeout, output=stdout, stderr=stderr)
+                if sid and job_type and job_registry.is_cancelled(sid, job_type):
+                    process.terminate()
+                    try:
+                        stdout, stderr = process.communicate(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        stdout, stderr = process.communicate()
+                    raise RuntimeError(f"{job_type} cancelled")
+
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=process.returncode, stdout=stdout, stderr=stderr
+        )
+    finally:
+        if sid and job_type:
+            job_registry.clear_process(sid, job_type)
 
 
 def run_traceroute(target="1.1.1.1"):
@@ -854,37 +1112,38 @@ def get_report_counts():
 
     for metadata_path in SCANS_DIR.glob("**/metadata.json"):
         try:
-            with open(metadata_path, "r") as f:
-                data = json.load(f)
+            data = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
-                # Use normalized customer name as the key
-                name = data.get("customer_name")
-                if not name:
-                    customer_info = data.get("customer_info", {})
-                    name = customer_info.get("name")
-                if not name:
-                    name = data.get("customer", "Unassigned")
+            # Use normalized customer name as the key
+            name = data.get("customer_name")
+            if not name:
+                customer_info = data.get("customer_info", {})
+                name = customer_info.get("name")
+            if not name:
+                name = data.get("customer", "Unassigned")
 
-                # Normalize: remove confidence score if present
-                name = name.split(" (")[0]
-                key = name if name else "Unassigned"
+            # Normalize: remove confidence score if present
+            name = name.split(" (")[0]
+            key = name if name else "Unassigned"
 
-                counts[key] = counts.get(key, 0) + 1
-                counts["total"] = counts.get("total", 0) + 1
+            counts[key] = counts.get(key, 0) + 1
+            counts["total"] = counts.get("total", 0) + 1
 
-                # Track last scan timestamp
-                timestamp = data.get("timestamp")
-                if timestamp:
-                    if (
-                        key not in counts["last_scans"]
-                        or timestamp > counts["last_scans"][key]
-                    ):
-                        counts["last_scans"][key] = timestamp
-                    if (
-                        "total" not in counts["last_scans"]
-                        or timestamp > counts["last_scans"]["total"]
-                    ):
-                        counts["last_scans"]["total"] = timestamp
+            # Track last scan timestamp
+            timestamp = data.get("timestamp")
+            if timestamp:
+                if (
+                    key not in counts["last_scans"]
+                    or timestamp > counts["last_scans"][key]
+                ):
+                    counts["last_scans"][key] = timestamp
+                if (
+                    "total" not in counts["last_scans"]
+                    or timestamp > counts["last_scans"]["total"]
+                ):
+                    counts["last_scans"]["total"] = timestamp
         except Exception:
             continue
 
@@ -1232,8 +1491,9 @@ def assign_report_to_customer_event(data):
             emit("customer_error", "Report metadata not found")
             return
 
-        with open(metadata_path, "r") as f:
-            metadata = json.load(f)
+        metadata = normalize_scan_metadata_document(
+            load_json_document(Path(metadata_path), {})
+        )
 
         metadata["customer_id"] = customer_id
         metadata["customer_name"] = customer.get("name")
@@ -1241,8 +1501,7 @@ def assign_report_to_customer_event(data):
         if label:
             metadata["assignment_label"] = label
 
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
+        save_json_document(Path(metadata_path), metadata)
 
         logger.info(
             f"Report {report_path} assigned to customer '{customer.get('name')}' ({customer_id})"
@@ -1369,8 +1628,7 @@ def save_customers_config():
             "indexing": config.get("indexing", {}),
         }
 
-        with open(customer_fingerprinter.config_path, "w") as f:
-            yaml.dump(config_data, f, default_flow_style=False, indent=2)
+        save_yaml_document(customer_fingerprinter.config_path, config_data)
 
         logger.info(f"Customers config saved to {customer_fingerprinter.config_path}")
 
@@ -1381,13 +1639,13 @@ def save_customers_config():
 def save_current_assignment():
     try:
         assignment_data = {
+            "schema_version": 1,
             "timestamp": datetime.now().isoformat(),
             "customer": current_customer,
         }
 
         assignment_path = BASE_DIR / "data" / "current_assignment.json"
-        with open(assignment_path, "w") as f:
-            json.dump(assignment_data, f, indent=2)
+        save_json_document(assignment_path, assignment_data)
 
         logger.info(f"Current assignment saved to {assignment_path}")
 
@@ -1410,23 +1668,24 @@ def load_current_assignment():
     try:
         assignment_path = BASE_DIR / "data" / "current_assignment.json"
         if assignment_path.exists():
-            with open(assignment_path, "r") as f:
-                data = json.load(f)
-                current_customer = data.get("customer", current_customer)
+            data = normalize_current_assignment_document(
+                load_json_document(assignment_path, {})
+            )
+            current_customer = data.get("customer", current_customer)
 
-                # Merge metadata from saved customer configuration
-                if current_customer.get("id"):
-                    saved_customer = customer_fingerprinter.get_customer_by_id(
-                        current_customer["id"]
-                    )
-                    if saved_customer:
-                        current_customer = merge_customer_metadata(
-                            current_customer, saved_customer
-                        )
-
-                logger.info(
-                    f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
+            # Merge metadata from saved customer configuration
+            if current_customer.get("id"):
+                saved_customer = customer_fingerprinter.get_customer_by_id(
+                    current_customer["id"]
                 )
+                if saved_customer:
+                    current_customer = merge_customer_metadata(
+                        current_customer, saved_customer
+                    )
+
+            logger.info(
+                f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
+            )
 
     except Exception as e:
         logger.error(f"Error loading current assignment: {e}")
@@ -1548,6 +1807,45 @@ def resume_from_last_scan_event(data):
 def get_versions_event():
     """Send version information to the client"""
     emit("versions", get_versions())
+
+
+@socketio.on("get_job_status")
+def get_job_status_event():
+    """Send current background job status for this client."""
+    emit_job_status(request.sid, "scan")
+    emit_job_status(request.sid, "report")
+
+
+@socketio.on("cancel_job")
+def cancel_job_event(data):
+    """Cancel a running background job for this client."""
+    job_type = data.get("job_type") if isinstance(data, dict) else None
+    if job_type not in {"scan", "report"}:
+        emit("scan_error", "Invalid job type")
+        return
+
+    if not job_registry.cancel(request.sid, job_type):
+        emit_to_client(
+            request.sid,
+            "job_cancelled",
+            {"job_type": job_type, "message": "No running job to cancel"},
+        )
+        emit_job_status(request.sid, job_type)
+        return
+
+    emit_job_status(request.sid, job_type)
+    emit_to_client(
+        request.sid,
+        "job_cancelled",
+        {"job_type": job_type, "message": f"Cancelling {job_type} job..."},
+    )
+
+
+@socketio.on("disconnect")
+def disconnect_event():
+    """Mark per-client jobs as abandoned when the socket disconnects."""
+    logger.info(f"Client disconnected: {request.sid}")
+    job_registry.mark_disconnected(request.sid)
 
 
 @socketio.on("check_app_updates")
@@ -1725,19 +2023,21 @@ def identify_gateway_firewall_targets(hosts):
     return regular_hosts, gateway_hosts
 
 
-def start_deep_scan(targets, is_gateway_phase=False):
+def start_deep_scan(targets, sid, is_gateway_phase=False):
     try:
-        emit("deep_scan_start")
+        ensure_job_not_cancelled(sid, "scan")
+        emit_to_client(sid, "deep_scan_start")
         socketio.sleep(0)
 
         for target in targets:
-            emit("deep_scan_host_start", {"ip": target})
+            ensure_job_not_cancelled(sid, "scan")
+            emit_to_client(sid, "deep_scan_host_start", {"ip": target})
             command_str = f"nmap -T3 -sV --script {str(VULNERS_SCRIPT)} {target}"
-            socketio.emit("scan_feedback", f"Executing: {command_str}")
+            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
             logger.info(command_str)
             socketio.sleep(0)
 
-            output = subprocess.check_output(
+            result = run_cancellable_command(
                 [
                     "nmap",
                     "-T3",
@@ -1745,8 +2045,11 @@ def start_deep_scan(targets, is_gateway_phase=False):
                     "--script",
                     str(VULNERS_SCRIPT),
                     target,
-                ]
-            ).decode("utf-8")
+                ],
+                sid=sid,
+                job_type="scan",
+            )
+            output = result.stdout
             cve_array, parsed_data, lines = (
                 [],
                 [],
@@ -1788,52 +2091,49 @@ def start_deep_scan(targets, is_gateway_phase=False):
                     trimmed_line = line.replace("Service Info: ", "")
                     if current_host:  # Make sure current_host is not None
                         current_host.setdefault("service_info", []).append(trimmed_line)
-                    emit("service_info", {"target": target, "line": trimmed_line})
-            emit("deep_scan_results", parsed_data)
+                    emit_to_client(
+                        sid, "service_info", {"target": target, "line": trimmed_line}
+                    )
+            emit_to_client(sid, "deep_scan_results", parsed_data)
             # print("DeepScan complete.")
-            emit("cve_array", {"target": target, "cve_array": cve_array})
+            emit_to_client(sid, "cve_array", {"target": target, "cve_array": cve_array})
 
             # Emit per-host complete indicator
-            emit("deep_scan_host_complete", {"ip": target})
+            emit_to_client(sid, "deep_scan_host_complete", {"ip": target})
 
         # Emit deep scan complete after all hosts are done
-        emit("deep_scan_complete")
+        emit_to_client(sid, "deep_scan_complete")
+    except RuntimeError as e:
+        if str(e) == "scan cancelled":
+            emit_to_client(sid, "scan_error", "Scan cancelled")
+            return
+        emit_to_client(sid, "scan_error", str(e))
     except Exception as e:
-        emit("scan_error", str(e))
+        emit_to_client(sid, "scan_error", str(e))
 
 
-@socketio.on("start_scan")
-def start_scan(data):
-    """Handle scan start request with validation"""
+def start_scan_task(sid, target):
+    """Run scan workflow in a background task for a single client."""
+    operation_id = f"quick_scan:{sid}"
     try:
-        # Extract target from data (handles both old format (target) and new format {target: ...})
-        if isinstance(data, dict):
-            target = data.get("target", "")
-        else:
-            target = str(data) if data else ""
-
-        # Validate target
-        is_valid, error_msg = validate_target(target)
-        if not is_valid:
-            emit("scan_error", f"Invalid target: {error_msg}")
-            return
-
-        # Check rate limit
-        can_scan, rate_msg = rate_limiter.can_scan()
-        if not can_scan:
-            emit("scan_error", rate_msg)
-            return
-
-        # Record scan start
-        rate_limiter.record_scan()
-        idle_state_manager.start_operation("quick_scan")
-        emit("quick_scan_start", f"Starting quick scan on {target}")
+        ensure_job_not_cancelled(sid, "scan")
+        idle_state_manager.start_operation(operation_id)
+        update_job_progress(
+            sid,
+            "scan",
+            phase="quick_scan",
+            message=f"Starting quick scan on {target}",
+            progress=5,
+        )
+        emit_to_client(sid, "quick_scan_start", f"Starting quick scan on {target}")
         command_str = f"nmap -sn {target}"
-        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
         logger.info(command_str)
         socketio.sleep(0)
 
-        output = subprocess.check_output(["nmap", "-sn", target]).decode("utf-8")
+        output = run_cancellable_command(
+            ["nmap", "-sn", target], sid=sid, job_type="scan"
+        ).stdout
         lines = output.split("\n")
         # Regex to capture IP (last distinct IP-like pattern in the line)
         ip_regex = re.compile(
@@ -1882,7 +2182,8 @@ def start_scan(data):
                     logger.info(f"Time Taken: {time_taken} seconds")
                 else:
                     logger.warning("No match found")
-                emit(
+                emit_to_client(
+                    sid,
                     "quickscan_results",
                     {
                         "total_ips": total_ips,
@@ -1913,15 +2214,22 @@ def start_scan(data):
         sorted_hosts = sorted(hosts, key=lambda x: ipaddress.IPv4Address(x["ip"]))
 
         # Emit quick scan complete before ARP scan starts
-        emit("quick_scan_complete")
+        emit_to_client(sid, "quick_scan_complete")
         # Flush the event to frontend before blocking ARP scan
         socketio.sleep(0)
 
         # Run arp-scan to get MAC/vendor info (ARP cache is fresh from nmap)
-        emit("arp_scan_start")
+        update_job_progress(
+            sid,
+            "scan",
+            phase="arp_scan",
+            message="Collecting MAC and vendor data",
+            progress=35,
+        )
+        emit_to_client(sid, "arp_scan_start")
         # Flush the event to frontend before blocking ARP scan
         socketio.sleep(0)
-        arp_data = run_arp_scan(target)
+        arp_data = run_arp_scan(target, sid=sid)
         for host in sorted_hosts:
             if host["ip"] in arp_data:
                 host["mac"] = arp_data[host["ip"]]["mac"]
@@ -1929,10 +2237,10 @@ def start_scan(data):
 
         # Emit arp results separately for UI update
         if arp_data:
-            emit("arp_results", arp_data)
+            emit_to_client(sid, "arp_results", arp_data)
 
         # Emit arp scan complete
-        emit("arp_scan_complete")
+        emit_to_client(sid, "arp_scan_complete")
 
         # Format hosts for the frontend table
         display_hosts = []
@@ -1957,7 +2265,7 @@ def start_scan(data):
 
             display_hosts.append(display_host)
 
-        emit("scan_results", display_hosts)
+        emit_to_client(sid, "scan_results", display_hosts)
 
         # Ensure events are flushed before starting deep scan
         socketio.sleep(0)
@@ -1970,47 +2278,127 @@ def start_scan(data):
         logger.info(f"Phase 2 - Gateway hosts: {len(gateway_targets)}")
 
         if regular_targets:
-            start_deep_scan(regular_targets, is_gateway_phase=False)
+            update_job_progress(
+                sid,
+                "scan",
+                phase="deep_scan",
+                message=f"Deep scanning {len(regular_targets)} regular hosts",
+                progress=60,
+            )
+            start_deep_scan(regular_targets, sid, is_gateway_phase=False)
 
         if gateway_targets:
-            start_deep_scan(gateway_targets, is_gateway_phase=True)
+            update_job_progress(
+                sid,
+                "scan",
+                phase="gateway_scan",
+                message=f"Deep scanning {len(gateway_targets)} gateway hosts",
+                progress=80,
+            )
+            start_deep_scan(gateway_targets, sid, is_gateway_phase=True)
 
+        update_job_progress(
+            sid,
+            "scan",
+            phase="complete",
+            message="Scan workflow completed",
+            progress=100,
+        )
+
+    except RuntimeError as e:
+        if str(e) == "scan cancelled":
+            job_registry.complete(sid, "scan", status="cancelled")
+            emit_job_status(sid, "scan")
+            emit_to_client(sid, "scan_error", "Scan cancelled")
+        else:
+            job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
+            emit_job_status(sid, "scan")
+            emit_to_client(sid, "scan_error", str(e))
     except Exception as e:
-        emit("scan_error", str(e))
+        job_registry.complete(sid, "scan", status="failed", details={"error": str(e)})
+        emit_job_status(sid, "scan")
+        emit_to_client(sid, "scan_error", str(e))
     finally:
-        idle_state_manager.end_operation("quick_scan")
+        current_job = job_registry.get(sid, "scan")
+        if current_job and current_job.get("status") == "running":
+            job_registry.complete(sid, "scan", status="completed")
+            emit_job_status(sid, "scan")
+        job_registry.clear_if_disconnected(sid, "scan")
+        idle_state_manager.end_operation(operation_id)
 
 
-def run_arp_scan(target, interface=None):
+@socketio.on("start_scan")
+def start_scan(data):
+    """Handle scan start request with validation."""
+    # Extract target from data (handles both old format (target) and new format {target: ...})
+    if isinstance(data, dict):
+        target = data.get("target", "")
+    else:
+        target = str(data) if data else ""
+
+    # Validate target
+    is_valid, error_msg = validate_target(target)
+    if not is_valid:
+        emit("scan_error", f"Invalid target: {error_msg}")
+        return
+
+    # Check rate limit
+    can_scan, rate_msg = rate_limiter.can_scan()
+    if not can_scan:
+        emit("scan_error", rate_msg)
+        return
+
+    if not job_registry.start(request.sid, "scan", {"target": target}):
+        emit("scan_error", "A scan is already running for this client")
+        emit_job_status(request.sid, "scan")
+        return
+
+    # Record scan start before dispatching background work
+    rate_limiter.record_scan()
+    emit_job_status(request.sid, "scan")
+    socketio.start_background_task(start_scan_task, request.sid, target)
+
+
+def run_arp_scan(target, interface=None, sid=None):
     if interface is None:
         interface = DEFAULT_INTERFACE
 
     if not shutil.which("arp-scan"):
         logger.warning("arp-scan not found, skipping MAC/vendor detection")
-        socketio.emit(
-            "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
-        )
+        if sid:
+            emit_to_client(
+                sid, "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
+            )
+        else:
+            socketio.emit(
+                "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
+            )
         return {}
 
     try:
         command_str = f"arp-scan {target} --interface {interface}"
-        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        if sid:
+            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+        else:
+            socketio.emit("scan_feedback", f"Executing: {command_str}")
         logger.info(command_str)
         socketio.sleep(0)
 
-        try:
-            output = subprocess.check_output(
-                ["arp-scan", target, "--interface", interface],
-                stderr=subprocess.STDOUT,
-                timeout=30,
-            ).decode("utf-8")
-
-        except subprocess.CalledProcessError:
-            output = subprocess.check_output(
+        result = run_cancellable_command(
+            ["arp-scan", target, "--interface", interface],
+            sid=sid,
+            job_type="scan" if sid else None,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            output = result.stdout
+        else:
+            output = run_cancellable_command(
                 ["sudo", "arp-scan", target, "--interface", interface],
-                stderr=subprocess.STDOUT,
+                sid=sid,
+                job_type="scan" if sid else None,
                 timeout=30,
-            ).decode("utf-8")
+            ).stdout
 
         arp_data = {}
         arp_pattern = re.compile(r"^(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F:]{17})\s+(.*)$")
@@ -2028,6 +2416,11 @@ def run_arp_scan(target, interface=None):
 
     except FileNotFoundError:
         logger.warning("arp-scan not found, skipping MAC/vendor detection")
+        return {}
+    except RuntimeError as e:
+        if str(e) == "scan cancelled":
+            return {}
+        logger.error(f"arp-scan error: {e}")
         return {}
     except subprocess.TimeoutExpired:
         logger.warning("arp-scan timed out")
@@ -2079,71 +2472,40 @@ def check_nmap():
 
 
 def check_vulners():
-    """Check if vulners script exists and update if possible"""
-    vulners_dir = VULNERS_SCRIPT.parent
+    """Verify the bundled vulners NSE script is present.
 
+    The script is treated as a versioned build-time asset. Startup no longer
+    clones or pulls from the upstream repository — that mutates tracked files
+    and introduces a supply-chain dependency on every boot.
+
+    To update vulners to a newer revision run this outside the app:
+        git -C nmap-vulners pull origin master
+    then commit the updated script into the repository.
+    """
     if not VULNERS_SCRIPT.exists():
-        logger.info("Installing vulners script...")
-        try:
-            result = subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "https://github.com/vulnersCom/nmap-vulners.git",
-                    str(vulners_dir),
-                ],
-                cwd=BASE_DIR,
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                logger.info("Vulners script installed successfully")
-                return True
-            else:
-                logger.error(f"Failed to install vulners: {result.stderr}")
-                sys.exit(1)
-        except Exception as e:
-            logger.error(f"Failed to install vulners: {e}")
-            sys.exit(1)
+        logger.error(
+            "Vulners NSE script not found at %s. "
+            "Run: git clone https://github.com/vulnersCom/nmap-vulners.git %s",
+            VULNERS_SCRIPT,
+            VULNERS_SCRIPT.parent,
+        )
+        sys.exit(1)
 
-    logger.info("Updating vulners script...")
+    # Report the current vendored revision if the directory is a git repo
+    vulners_dir = VULNERS_SCRIPT.parent
     try:
-        if not (vulners_dir / ".git").exists():
-            subprocess.run(["git", "init"], cwd=vulners_dir, capture_output=True)
-            subprocess.run(
-                [
-                    "git",
-                    "remote",
-                    "add",
-                    "origin",
-                    "https://github.com/vulnersCom/nmap-vulners.git",
-                ],
-                cwd=vulners_dir,
-                capture_output=True,
-            )
-
         result = subprocess.run(
-            ["git", "pull", "origin", "master"],
+            ["git", "log", "-1", "--oneline"],
             cwd=vulners_dir,
             capture_output=True,
             text=True,
         )
-        if result.returncode == 0:
-            version_result = subprocess.run(
-                ["git", "log", "-1", "--oneline"],
-                cwd=vulners_dir,
-                capture_output=True,
-                text=True,
-            )
-            if version_result.returncode == 0:
-                commit = version_result.stdout.strip()
-                logger.info(f"Vulners updated: {commit}")
-            else:
-                logger.info("Vulners updated")
+        if result.returncode == 0 and result.stdout.strip():
+            logger.info("Vulners script present (revision: %s)", result.stdout.strip())
         else:
-            logger.info("Vulners already up-to-date")
-    except Exception as e:
-        logger.error(f"Vulners update failed: {e}")
+            logger.info("Vulners script present at %s", VULNERS_SCRIPT)
+    except Exception:
+        logger.info("Vulners script present at %s", VULNERS_SCRIPT)
 
     return True
 
@@ -2159,7 +2521,7 @@ def create_scan_folder(customer_name, target):
     time_str = datetime.now().strftime("%H%M%S")
 
     # Clean customer name and target for folder path
-    safe_customer = re.sub(r"[^\w\-]", "_", customer_name)
+    safe_customer = sanitize_customer_dir_name(customer_name)
     safe_target = re.sub(r"[^\w\.]", "_", target)
 
     folder_name = f"scan_{time_str}_{safe_target}"
@@ -2169,12 +2531,15 @@ def create_scan_folder(customer_name, target):
     return scan_dir
 
 
-def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
+def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
     """Run nmap with all formats output (-oA)"""
 
     if scan_type == "quick":
         logger.info(f"Running quick scan on {target}...")
-        socketio.emit("scan_feedback", f"Starting quick scan on {target}...")
+        if sid:
+            emit_to_client(sid, "scan_feedback", f"Starting quick scan on {target}...")
+        else:
+            socketio.emit("scan_feedback", f"Starting quick scan on {target}...")
         cmd = [
             "nmap",
             "-sS",  # SYN scan
@@ -2188,10 +2553,17 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
         timeout_seconds = 180  # 3 minutes for quick scan
     else:
         logger.info(f"Running comprehensive scan on {target}...")
-        socketio.emit(
-            "scan_feedback",
-            f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
-        )
+        if sid:
+            emit_to_client(
+                sid,
+                "scan_feedback",
+                f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
+            )
+        else:
+            socketio.emit(
+                "scan_feedback",
+                f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
+            )
         cmd = [
             "nmap",
             "-sS",
@@ -2211,7 +2583,10 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
     # Log the full command for debugging
     cmd_str = " ".join(cmd)
     logger.info(f"Executing: {cmd_str}")
-    socketio.emit("scan_feedback", f"Command: {cmd_str}")
+    if sid:
+        emit_to_client(sid, "scan_feedback", f"Command: {cmd_str}")
+    else:
+        socketio.emit("scan_feedback", f"Command: {cmd_str}")
     socketio.sleep(0)
 
     # Record start time
@@ -2219,19 +2594,31 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
 
     start_time = datetime.now()
     logger.info(f"Scan started at {start_time.strftime('%H:%M:%S')}")
-    socketio.emit("scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}")
+    if sid:
+        emit_to_client(
+            sid, "scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}"
+        )
+    else:
+        socketio.emit(
+            "scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}"
+        )
     socketio.sleep(0)
 
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout_seconds
+        result = run_cancellable_command(
+            cmd, sid=sid, job_type="report" if sid else None, timeout=timeout_seconds
         )
 
         # Log completion
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         logger.info(f"Scan completed in {duration:.1f} seconds")
-        socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
+        if sid:
+            emit_to_client(
+                sid, "scan_feedback", f"Scan completed in {duration:.1f} seconds"
+            )
+        else:
+            socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
         socketio.sleep(0)
 
         # Log stdout/stderr for debugging
@@ -2242,28 +2629,54 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive"):
 
         if result.returncode != 0:
             logger.error(f"Nmap failed with return code {result.returncode}")
-            socketio.emit(
-                "scan_feedback", f"❌ Nmap failed with return code {result.returncode}"
-            )
+            if sid:
+                emit_to_client(
+                    sid,
+                    "scan_feedback",
+                    f"❌ Nmap failed with return code {result.returncode}",
+                )
+            else:
+                socketio.emit(
+                    "scan_feedback", f"❌ Nmap failed with return code {result.returncode}"
+                )
             socketio.sleep(0)
 
         return result.returncode == 0
 
+    except RuntimeError as e:
+        if str(e) == "report cancelled":
+            if sid:
+                emit_to_client(sid, "scan_feedback", "Report generation cancelled")
+            return False
+        raise
     except subprocess.TimeoutExpired:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds // 60}min) on {target}"
         logger.error(error_msg)
-        socketio.emit("scan_feedback", error_msg)
-        socketio.emit(
-            "report_error",
-            {
-                "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
-                "timeout": True,
-                "timeout_seconds": timeout_seconds,
-                "elapsed_seconds": duration,
-            },
-        )
+        if sid:
+            emit_to_client(sid, "scan_feedback", error_msg)
+            emit_to_client(
+                sid,
+                "report_error",
+                {
+                    "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
+                    "timeout": True,
+                    "timeout_seconds": timeout_seconds,
+                    "elapsed_seconds": duration,
+                },
+            )
+        else:
+            socketio.emit("scan_feedback", error_msg)
+            socketio.emit(
+                "report_error",
+                {
+                    "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
+                    "timeout": True,
+                    "timeout_seconds": timeout_seconds,
+                    "elapsed_seconds": duration,
+                },
+            )
         socketio.sleep(0)
         return False
 
@@ -2293,7 +2706,7 @@ def run_quick_auto_scan(target, output_base):
         return False
 
 
-def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
+def convert_xml_to_html(xml_path, html_path, pdf_optimized=True, sid=None):
     """Convert Nmap XML to HTML using xsltproc - Use Olive PDF theme for all outputs"""
     stylesheet = XSL_STYLESHEET_PDF
 
@@ -2315,7 +2728,10 @@ def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
         str(xml_path),
     ]
     command_str = " ".join(cmd)
-    socketio.emit("scan_feedback", f"Executing: {command_str}")
+    if sid:
+        emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+    else:
+        socketio.emit("scan_feedback", f"Executing: {command_str}")
     logger.info(f"Executing: {command_str}")
     socketio.sleep(0)
 
@@ -2330,7 +2746,7 @@ def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
         return False
 
 
-def convert_html_to_pdf(html_path, pdf_path):
+def convert_html_to_pdf(html_path, pdf_path, sid=None):
     """Convert HTML to PDF using wkhtmltopdf, weasyprint, or pyppeteer"""
     # Try wkhtmltopdf first
     wkhtml = shutil.which("wkhtmltopdf")
@@ -2353,7 +2769,10 @@ def convert_html_to_pdf(html_path, pdf_path):
             str(pdf_path),
         ]
         command_str = " ".join(cmd)
-        socketio.emit("scan_feedback", f"Executing: {command_str}")
+        if sid:
+            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
+        else:
+            socketio.emit("scan_feedback", f"Executing: {command_str}")
         socketio.sleep(0)
 
         try:
@@ -2363,7 +2782,10 @@ def convert_html_to_pdf(html_path, pdf_path):
             logger.error(f"wkhtmltopdf failed: {e}")
 
     # Fallback to weasyprint
-    socketio.emit("scan_feedback", "Falling back to weasyprint for PDF generation")
+    if sid:
+        emit_to_client(sid, "scan_feedback", "Falling back to weasyprint for PDF generation")
+    else:
+        socketio.emit("scan_feedback", "Falling back to weasyprint for PDF generation")
     try:
         from weasyprint import HTML
 
@@ -2373,7 +2795,10 @@ def convert_html_to_pdf(html_path, pdf_path):
         logger.error(f"weasyprint failed: {e}")
 
     # Final fallback to playwright (Chromium-based)
-    socketio.emit("scan_feedback", f"Falling back to playwright for PDF generation")
+    if sid:
+        emit_to_client(sid, "scan_feedback", "Falling back to playwright for PDF generation")
+    else:
+        socketio.emit("scan_feedback", f"Falling back to playwright for PDF generation")
     try:
         import asyncio
         from playwright.async_api import async_playwright
@@ -2402,11 +2827,17 @@ def convert_html_to_pdf(html_path, pdf_path):
         logger.error(f"playwright failed: {e}")
 
     # Ultimate fallback to macOS textutil
-    socketio.emit("scan_feedback", f"Falling back to textutil for PDF generation")
+    if sid:
+        emit_to_client(sid, "scan_feedback", "Falling back to textutil for PDF generation")
+    else:
+        socketio.emit("scan_feedback", f"Falling back to textutil for PDF generation")
     try:
         cmd = ["textutil", "-convert", "pdf", "-output", str(pdf_path), str(html_path)]
         command_str = " ".join(cmd)
-        socketio.emit("scan_feedback", f"Executing: textutil HTML to PDF")
+        if sid:
+            emit_to_client(sid, "scan_feedback", "Executing: textutil HTML to PDF")
+        else:
+            socketio.emit("scan_feedback", f"Executing: textutil HTML to PDF")
         socketio.sleep(0)
 
         subprocess.run(cmd, check=True, capture_output=True)
@@ -2443,6 +2874,7 @@ def save_scan_metadata(
         duration_formatted = f"{duration_minutes}m{duration_secs}s"
 
     metadata = {
+        "schema_version": 1,
         "customer_name": customer_name,
         "target": target,
         "timestamp": datetime.now().isoformat(),
@@ -2458,8 +2890,9 @@ def save_scan_metadata(
         "files": {k: str(v) for k, v in files.items()},
     }
 
-    with open(scan_dir / "metadata.json", "w") as f:
-        json.dump(metadata, f, indent=2)
+    save_json_document(
+        scan_dir / "metadata.json", normalize_scan_metadata_document(metadata)
+    )
 
 
 def extract_scan_statistics(xml_path):
@@ -2727,10 +3160,12 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
         return None, None
 
     customer_name = customer.get("name", "Unknown")
+    safe_customer_name = sanitize_customer_dir_name(customer_name)
 
     # Search in multiple possible locations
     search_dirs = [
-        SCANS_DIR / customer_name,
+        SCANS_DIR / safe_customer_name,
+        SCANS_DIR / customer_name,  # Fallback for legacy unsanitized folder names
         SCANS_DIR / "Unknown_Network",  # Fallback for unassigned scans
     ]
 
@@ -2757,8 +3192,9 @@ def get_most_recent_scan_xml(customer_id, max_days=7):
                     continue
 
                 try:
-                    with open(metadata_file, "r") as f:
-                        metadata = json.load(f)
+                    metadata = normalize_scan_metadata_document(
+                        load_json_document(metadata_file, {})
+                    )
 
                     scan_time_str = metadata.get("timestamp", "")
                     if not scan_time_str:
@@ -2803,8 +3239,9 @@ def list_scans():
 
     for metadata_path in SCANS_DIR.glob("**/metadata.json"):
         try:
-            with open(metadata_path, "r") as f:
-                data = json.load(f)
+            data = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
             # Ensure consistent naming for the UI
             if "customer_name" not in data:
@@ -2839,7 +3276,10 @@ def list_scans():
 @app.route("/api/scans/<path:path>/html")
 def get_scan_html(path):
     """Serve the HTML report for a scan"""
-    scan_dir = SCANS_DIR / path
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None:
+        return "Invalid path", 400
+
     html_path = scan_dir / "scan_web.html"
     if not html_path.exists():
         html_path = scan_dir / "scan.html"
@@ -2853,7 +3293,10 @@ def get_scan_html(path):
 @app.route("/api/scans/<path:path>/pdf")
 def get_scan_pdf(path):
     """Download the PDF report for a scan with a unique descriptive filename"""
-    scan_dir = SCANS_DIR / path
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None:
+        return "Invalid path", 400
+
     pdf_path = scan_dir / "scan_report.pdf"
     if not pdf_path.exists():
         return "PDF not found", 404
@@ -2864,8 +3307,9 @@ def get_scan_pdf(path):
     metadata_path = scan_dir / "metadata.json"
     if metadata_path.exists():
         try:
-            with open(metadata_path, "r") as f:
-                meta = json.load(f)
+            meta = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
             customer = meta.get("customer_name", "Unknown").split(" (")[0]
             target = meta.get("target", "scan").replace("/", "_")
@@ -2888,7 +3332,10 @@ def get_scan_pdf(path):
 @app.route("/api/scans/<path:path>/xml")
 def get_scan_xml(path):
     """Download the raw Nmap XML for a scan with a unique descriptive filename"""
-    scan_dir = SCANS_DIR / path
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None:
+        return "Invalid path", 400
+
     xml_path = scan_dir / "scan.xml"
     if not xml_path.exists():
         return "XML not found", 404
@@ -2899,8 +3346,9 @@ def get_scan_xml(path):
     metadata_path = scan_dir / "metadata.json"
     if metadata_path.exists():
         try:
-            with open(metadata_path, "r") as f:
-                meta = json.load(f)
+            meta = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
 
             customer = meta.get("customer_name", "Unknown").split(" (")[0]
             target = meta.get("target", "scan").replace("/", "_")
@@ -2923,8 +3371,8 @@ def get_scan_xml(path):
 @app.route("/api/scans/<path:path>", methods=["DELETE"])
 def delete_scan(path):
     """Delete a scan directory"""
-    scan_dir = SCANS_DIR / path
-    if not scan_dir.exists() or SCANS_DIR not in scan_dir.parents:
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None or not scan_dir.exists():
         return jsonify({"success": False, "error": "Invalid path"}), 400
 
     try:
@@ -2934,10 +3382,10 @@ def delete_scan(path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@socketio.on("generate_report")
-def generate_report_event(data):
-    """Handle report generation request via SocketIO"""
-    idle_state_manager.start_operation("report_generation")
+def generate_report_task(sid, data):
+    """Run report generation in a background task for a single client."""
+    operation_id = f"report_generation:{sid}"
+    idle_state_manager.start_operation(operation_id)
     target = data.get("target")
     is_auto_scan = data.get("auto_scan", False)
 
@@ -2954,8 +3402,18 @@ def generate_report_event(data):
     customer_name = customer_name.split(" (")[0]
 
     if not target:
-        emit("report_error", {"error": "No target specified"})
-        idle_state_manager.end_operation("report_generation")
+        job_registry.complete(sid, "report", status="failed", details={"error": "No target specified"})
+        emit_job_status(sid, "report")
+        emit_to_client(sid, "report_error", {"error": "No target specified"})
+        idle_state_manager.end_operation(operation_id)
+        return
+
+    is_valid, error_msg = validate_target(target)
+    if not is_valid:
+        job_registry.complete(sid, "report", status="failed", details={"error": error_msg})
+        emit_job_status(sid, "report")
+        emit_to_client(sid, "report_error", {"error": error_msg})
+        idle_state_manager.end_operation(operation_id)
         return
 
     # Split large subnets into manageable chunks
@@ -2964,7 +3422,8 @@ def generate_report_event(data):
     logger.info(f"Target split into {num_chunks} chunks: {targets}")
 
     if num_chunks > 1:
-        emit(
+        emit_to_client(
+            sid,
             "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks"
         )
         socketio.sleep(0)
@@ -2977,8 +3436,17 @@ def generate_report_event(data):
     logger.info(f"  Auto Scan: {is_auto_scan}")
     logger.info("=" * 60)
 
-    emit(
+    emit_to_client(
+        sid,
         "scan_feedback", f"📋 Generating report for {customer_name} - Target: {target}"
+    )
+    update_job_progress(
+        sid,
+        "report",
+        phase="preparing",
+        message=f"Preparing report for {target}",
+        progress=5,
+        details={"auto_scan": is_auto_scan, "customer_name": customer_name},
     )
     socketio.sleep(0)
 
@@ -2986,26 +3454,47 @@ def generate_report_event(data):
 
     try:
         # Phase 1: Create scan folder
-        emit("scan_feedback", "📁 Creating scan folder...")
+        emit_to_client(sid, "scan_feedback", "📁 Creating scan folder...")
+        update_job_progress(
+            sid, "report", phase="create_folder", message="Creating scan folder", progress=10
+        )
         socketio.sleep(0)
         scan_dir = create_scan_folder(customer_name, target)
         output_base = scan_dir / "scan"
         logger.info(f"Scan folder created: {scan_dir}")
-        emit("scan_feedback", f"✓ Scan folder: {scan_dir.name}")
+        emit_to_client(sid, "scan_feedback", f"✓ Scan folder: {scan_dir.name}")
         socketio.sleep(0)
 
         # Phase 2: Run nmap scan (this is the long-running part)
         xml_files = []
         for i, chunk_target in enumerate(targets):
+            chunk_progress = 15 + int(((i + 1) / max(num_chunks, 1)) * 40)
             if num_chunks > 1:
-                emit(
+                emit_to_client(
+                    sid,
                     "scan_feedback",
                     f"🔍 Scanning chunk {i + 1}/{num_chunks}: {chunk_target}",
                 )
+                update_job_progress(
+                    sid,
+                    "report",
+                    phase="scan_chunks",
+                    message=f"Scanning chunk {i + 1} of {num_chunks}",
+                    progress=chunk_progress,
+                    details={"chunk_index": i + 1, "chunk_total": num_chunks},
+                )
             else:
-                emit(
+                emit_to_client(
+                    sid,
                     "scan_feedback",
                     "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
+                )
+                update_job_progress(
+                    sid,
+                    "report",
+                    phase="scan",
+                    message="Running comprehensive scan",
+                    progress=35,
                 )
             socketio.sleep(0)
 
@@ -3015,16 +3504,33 @@ def generate_report_event(data):
                 chunk_output_base = scan_dir / f"scan_chunk_{i}"
 
             if not run_nmap_with_xml_output(
-                chunk_target, chunk_output_base, "comprehensive"
+                chunk_target, chunk_output_base, "comprehensive", sid=sid
             ):
-                emit("report_error", {"error": f"Nmap scan failed on chunk {i + 1}"})
+                if job_registry.is_cancelled(sid, "report"):
+                    job_registry.complete(sid, "report", status="cancelled")
+                    emit_job_status(sid, "report")
+                    emit_to_client(sid, "report_error", {"error": "Report generation cancelled"})
+                    return
+                job_registry.complete(
+                    sid,
+                    "report",
+                    status="failed",
+                    details={"error": f"Nmap scan failed on chunk {i + 1}"},
+                )
+                emit_job_status(sid, "report")
+                emit_to_client(
+                    sid, "report_error", {"error": f"Nmap scan failed on chunk {i + 1}"}
+                )
                 return
 
             xml_files.append(chunk_output_base.with_suffix(".xml"))
 
         # If multiple chunks, merge XML files
         if num_chunks > 1:
-            emit("scan_feedback", "🔀 Merging scan results from chunks...")
+            emit_to_client(sid, "scan_feedback", "🔀 Merging scan results from chunks...")
+            update_job_progress(
+                sid, "report", phase="merge", message="Merging chunked XML results", progress=60
+            )
             socketio.sleep(0)
             xml_path = scan_dir / "scan.xml"
             merge_nmap_xml_files(xml_files, xml_path)
@@ -3037,40 +3543,51 @@ def generate_report_event(data):
         pdf_html_path = scan_dir / "scan_pdf.html"
         pdf_path = scan_dir / "scan_report.pdf"
 
-        emit("scan_feedback", "📄 Converting XML to HTML (web view)...")
+        emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (web view)...")
+        update_job_progress(
+            sid, "report", phase="html_web", message="Generating web HTML report", progress=70
+        )
         socketio.sleep(0)
         # Use the premium Olive PDF stylesheet for BOTH views for consistency
-        if convert_xml_to_html(xml_path, web_html_path):
+        if convert_xml_to_html(xml_path, web_html_path, sid=sid):
             file_size = web_html_path.stat().st_size if web_html_path.exists() else 0
             logger.info(f"✓ Web HTML created: {web_html_path} ({file_size} bytes)")
-            emit("scan_feedback", f"✓ Web HTML: {file_size} bytes")
+            emit_to_client(sid, "scan_feedback", f"✓ Web HTML: {file_size} bytes")
         else:
             logger.error("✗ Web HTML conversion failed")
-            emit("scan_feedback", "✗ Web HTML conversion failed")
+            emit_to_client(sid, "scan_feedback", "✗ Web HTML conversion failed")
 
-        emit("scan_feedback", "📄 Converting XML to HTML (PDF view)...")
+        emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (PDF view)...")
+        update_job_progress(
+            sid, "report", phase="html_pdf", message="Generating PDF HTML report", progress=78
+        )
         socketio.sleep(0)
-        if convert_xml_to_html(xml_path, pdf_html_path):
+        if convert_xml_to_html(xml_path, pdf_html_path, sid=sid):
             file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
             logger.info(f"✓ PDF HTML created: {pdf_html_path} ({file_size} bytes)")
-            emit("scan_feedback", f"✓ PDF HTML: {file_size} bytes")
+            emit_to_client(sid, "scan_feedback", f"✓ PDF HTML: {file_size} bytes")
         else:
             logger.error("✗ PDF HTML conversion failed")
-            emit("scan_feedback", "✗ PDF HTML conversion failed")
+            emit_to_client(sid, "scan_feedback", "✗ PDF HTML conversion failed")
 
-        emit("scan_feedback", "📑 Generating PDF report...")
+        emit_to_client(sid, "scan_feedback", "📑 Generating PDF report...")
+        update_job_progress(
+            sid, "report", phase="pdf", message="Rendering PDF output", progress=86
+        )
         socketio.sleep(0)
-        if convert_html_to_pdf(pdf_html_path, pdf_path):
+        if convert_html_to_pdf(pdf_html_path, pdf_path, sid=sid):
             file_size = pdf_path.stat().st_size if pdf_path.exists() else 0
             logger.info(f"✓ PDF created: {pdf_path} ({file_size} bytes)")
-            emit("scan_feedback", f"✓ PDF: {file_size} bytes")
+            emit_to_client(sid, "scan_feedback", f"✓ PDF: {file_size} bytes")
         else:
             logger.warning("PDF generation failed - HTML reports are fully functional")
-            emit(
+            emit_to_client(
+                sid,
                 "scan_feedback",
                 "✅ HTML reports complete - open in browser or print to PDF manually",
             )
-            emit(
+            emit_to_client(
+                sid,
                 "scan_feedback",
                 f"📄 Files: {web_html_path.name} & {pdf_html_path.name} ({pdf_html_path.stat().st_size} bytes each)",
             )
@@ -3091,17 +3608,24 @@ def generate_report_event(data):
         duration_seconds = int(duration.total_seconds() % 60)
         duration_str = f"{duration_minutes}m{duration_seconds}s"
 
-        emit("scan_feedback", "💾 Saving scan metadata with duration...")
+        emit_to_client(sid, "scan_feedback", "💾 Saving scan metadata with duration...")
+        update_job_progress(
+            sid, "report", phase="metadata", message="Saving metadata", progress=92
+        )
         socketio.sleep(0)
         save_scan_metadata(scan_dir, customer_name, target, files, start_time, end_time)
 
         # Extract scan statistics from XML
-        emit("scan_feedback", "📊 Extracting scan statistics...")
+        emit_to_client(sid, "scan_feedback", "📊 Extracting scan statistics...")
+        update_job_progress(
+            sid, "report", phase="statistics", message="Extracting scan statistics", progress=96
+        )
         socketio.sleep(0)
         scan_stats = extract_scan_statistics(xml_path)
 
         # Send scan summary banner to client
-        emit(
+        emit_to_client(
+            sid,
             "scan_complete_summary",
             {
                 "duration_formatted": duration_str,
@@ -3116,7 +3640,15 @@ def generate_report_event(data):
         socketio.sleep(0)
 
         logger.info(f"Report generation completed in {duration_str}")
-        emit("scan_feedback", f"✅ Report generation completed in {duration_str}")
+        emit_to_client(sid, "scan_feedback", f"✅ Report generation completed in {duration_str}")
+        update_job_progress(
+            sid,
+            "report",
+            phase="complete",
+            message="Report generation completed",
+            progress=100,
+            details={"duration_formatted": duration_str},
+        )
         socketio.sleep(0)
 
         # Find customer ID to update
@@ -3139,7 +3671,7 @@ def generate_report_event(data):
                 if "metadata" not in current_customer:
                     current_customer["metadata"] = {}
                 current_customer["metadata"]["last_scan_duration"] = duration_str
-                safe_emit("customer_info", current_customer)
+                emit_to_client(sid, "customer_info", current_customer)
 
         logger.info("=" * 60)
         logger.info("REPORT GENERATION SUCCESSFUL")
@@ -3147,7 +3679,8 @@ def generate_report_event(data):
         logger.info(f"  Location: {scan_dir}")
         logger.info("=" * 60)
 
-        emit(
+        emit_to_client(
+            sid,
             "report_complete",
             {
                 "status": "success",
@@ -3155,6 +3688,13 @@ def generate_report_event(data):
                 "scan_dir": str(scan_dir),
             },
         )
+        job_registry.complete(
+            sid,
+            "report",
+            status="completed",
+            details={"target": target, "path": str(scan_dir.relative_to(SCANS_DIR))},
+        )
+        emit_job_status(sid, "report")
 
     except Exception as e:
         logger.exception("Report generation failed")
@@ -3162,9 +3702,36 @@ def generate_report_event(data):
         logger.error("REPORT GENERATION FAILED")
         logger.error(f"  Error: {str(e)}")
         logger.error("=" * 60)
-        emit("report_error", {"error": str(e)})
+        job_registry.complete(sid, "report", status="failed", details={"error": str(e)})
+        emit_job_status(sid, "report")
+        emit_to_client(sid, "report_error", {"error": str(e)})
     finally:
-        idle_state_manager.end_operation("report_generation")
+        current_job = job_registry.get(sid, "report")
+        if current_job and current_job.get("status") == "running":
+            job_registry.complete(sid, "report", status="completed")
+            emit_job_status(sid, "report")
+        job_registry.clear_if_disconnected(sid, "report")
+        idle_state_manager.end_operation(operation_id)
+
+
+@socketio.on("generate_report")
+def generate_report_event(data):
+    """Handle report generation request via SocketIO."""
+    if not isinstance(data, dict):
+        emit("report_error", {"error": "Invalid report request"})
+        return
+
+    if not job_registry.start(
+        request.sid,
+        "report",
+        {"target": data.get("target"), "customer_name": data.get("customer_name")},
+    ):
+        emit("report_error", {"error": "A report job is already running for this client"})
+        emit_job_status(request.sid, "report")
+        return
+
+    emit_job_status(request.sid, "report")
+    socketio.start_background_task(generate_report_task, request.sid, data)
 
 
 # Auto Scan SocketIO Events
@@ -3267,10 +3834,78 @@ def get_auto_scan_status():
     return jsonify(auto_scan_config)
 
 
+@app.route("/api/health")
+def health_check():
+    """Lightweight health endpoint for release smoke tests."""
+    return jsonify(
+        {
+            "status": "ok",
+            "app_version": get_app_version(),
+            "default_interface": DEFAULT_INTERFACE,
+            "auto_scan_thread_alive": bool(
+                auto_scan_thread and auto_scan_thread.is_alive()
+            ),
+            "tool_versions": get_versions(),
+        }
+    )
+
+
 @app.route("/api/auto_scan/update", methods=["POST"])
 def update_auto_scan():
     """Update auto scan configuration"""
-    config = request.json
+    config = request.get_json(silent=True)
+    if not isinstance(config, dict):
+        return jsonify({"success": False, "error": "Invalid JSON payload"}), 400
+
+    allowed_keys = {"enabled", "start_time", "end_time", "last_run"}
+    unknown_keys = sorted(set(config) - allowed_keys)
+    if unknown_keys:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"Unknown configuration keys: {', '.join(unknown_keys)}",
+                }
+            ),
+            400,
+        )
+
+    if "enabled" in config and not isinstance(config["enabled"], bool):
+        return jsonify({"success": False, "error": "'enabled' must be a boolean"}), 400
+
+    time_pattern = re.compile(r"^\d{2}:\d{2}$")
+    for field in ("start_time", "end_time"):
+        if field in config:
+            value = config[field]
+            if not isinstance(value, str) or not time_pattern.match(value):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": f"'{field}' must use HH:MM format",
+                        }
+                    ),
+                    400,
+                )
+
+    if "last_run" in config and config["last_run"] is not None:
+        if not isinstance(config["last_run"], str):
+            return (
+                jsonify({"success": False, "error": "'last_run' must be an ISO string"}),
+                400,
+            )
+        try:
+            datetime.fromisoformat(config["last_run"])
+        except ValueError:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "'last_run' must be a valid ISO timestamp",
+                    }
+                ),
+                400,
+            )
 
     auto_scan_config.update(config)
     save_auto_scan_config()
@@ -3312,11 +3947,28 @@ def auto_scan_loop():
         socketio.sleep(60)
 
 
-# Start auto scan thread
-auto_scan_thread = threading.Thread(target=auto_scan_loop, daemon=True)
-auto_scan_thread.start()
+def start_auto_scan_thread():
+    """Start the auto-scan worker once per process."""
+    global auto_scan_thread
+
+    if auto_scan_thread and auto_scan_thread.is_alive():
+        return
+
+    auto_scan_thread = threading.Thread(target=auto_scan_loop, daemon=True)
+    auto_scan_thread.start()
 
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv
+    host = os.environ.get("NMAPUI_HOST", "127.0.0.1")
+    port = int(os.environ.get("NMAPUI_PORT", "9000"))
+    debug = env_flag("NMAPUI_DEBUG", default=False)
+
     startup_checks(quick=quick_mode)
-    socketio.run(app, host="0.0.0.0", port=9000, debug=True, allow_unsafe_werkzeug=True)
+    start_auto_scan_thread()
+    socketio.run(
+        app,
+        host=host,
+        port=port,
+        debug=debug,
+        allow_unsafe_werkzeug=debug,
+    )

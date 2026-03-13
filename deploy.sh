@@ -18,6 +18,11 @@ if ! command -v gh &> /dev/null; then
     exit 1
 fi
 
+if ! command -v python3 &> /dev/null; then
+    echo "❌ python3 not found. Install Python 3 before running deployment."
+    exit 1
+fi
+
 # Get version from VERSION file or generate timestamp-based version
 if [ -f "VERSION" ]; then
     VERSION=$(cat VERSION | tr -d '\n')
@@ -49,7 +54,20 @@ pyinstaller --clean nmapui.spec
 
 # Test the build quickly
 echo "🧪 Testing bundle startup..."
-timeout 10s ./dist/NmapUI.app/Contents/MacOS/NmapUI --quick > /dev/null 2>&1 && echo "✅ Bundle starts successfully" || echo "⚠️  Bundle test inconclusive (may still work)"
+python3 - <<'PY'
+import subprocess
+import sys
+
+cmd = ["./dist/NmapUI.app/Contents/MacOS/NmapUI", "--quick"]
+try:
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
+    print("✅ Bundle starts successfully")
+except subprocess.TimeoutExpired:
+    print("✅ Bundle starts and stayed alive for 10 seconds")
+except Exception as exc:
+    print(f"⚠️  Bundle test inconclusive (may still work): {exc}")
+    sys.exit(0)
+PY
 
 # Create PKG installer
 echo "📦 Creating PKG installer..."

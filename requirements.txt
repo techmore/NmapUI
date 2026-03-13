@@ -1,10 +1,14 @@
-Flask
-Flask-SocketIO
-Flask-CORS
-selenium
-netifaces
-requests
-reportlab
-Pillow
-PyYAML
-playwright  # For PDF generation on Apple Silicon
+# Runtime dependencies — pinned from venv on 2026-03-13
+# To update: activate venv, run `pip install -U <package>`, test, then update pins here.
+Flask==3.1.3
+Flask-SocketIO==5.6.1
+Flask-Cors==6.0.2
+python-socketio==5.16.1
+selenium==4.41.0
+netifaces==0.11.0
+requests==2.32.5
+reportlab==4.4.10
+Pillow==12.1.1
+PyYAML==6.0.3
+# PDF generation backend (Apple Silicon / general)
+playwright==1.58.0

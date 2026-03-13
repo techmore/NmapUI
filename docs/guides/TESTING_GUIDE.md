@@ -1,254 +1,109 @@
-# Testing Guide: PDF-Optimized Reports with Pulsing Indicators
+# Testing Guide
+
+This guide is for validating the current Flask/Socket.IO app before a stable release.
 
 ## Quick Start
 
-### 1. Start the Application
+### 1. Start the application
 ```bash
-cd /Users/seandolbec/Desktop/Nmap-2026-ui-update
-sudo python3 app.py
+cd /Users/seandolbec/Projects/NmapUI
+source venv/bin/activate
+NMAPUI_HOST=127.0.0.1 NMAPUI_PORT=9000 NMAPUI_DEBUG=false python app.py --quick
 ```
 
-### 2. Open Browser
-Navigate to: `http://localhost:5000`
+### 2. Open the UI
+Navigate to `http://127.0.0.1:9000`
 
-## Testing the New Features
-
-### Test 1: Pulsing Progress Indicators
-
-**Steps**:
-1. Enter a target IP or range (e.g., `192.168.1.1` or `10.0.0.0/24`)
-2. Click the **"Generate Report"** button (olive-700 color)
-3. **Watch for the pulsing card** that appears below the button
-4. Observe the progress messages updating in real-time:
-   - "Initializing scan..."
-   - "Running nmap scan..."
-   - "Converting to web HTML..."
-   - "Creating PDF-optimized HTML..."
-   - "Generating PDF report..."
-   - "Saving metadata..."
-5. Progress card should disappear when complete
-6. Success message should appear
-
-**Expected Result**:
-- Animated pulsing dot (olive-500/600 colors)
-- Real-time text updates
-- Card automatically removes on completion
-- Success message with scan path
-
-### Test 2: Dual HTML Generation
-
-**Steps**:
-1. Generate a report (as above)
-2. Note the scan directory path from success message
-3. Navigate to that directory in Finder or terminal
-4. You should see TWO HTML files:
-   - `scan_web.html`
-   - `scan_pdf.html`
-
-**Compare the two files**:
+### 3. Verify the health endpoint
 ```bash
-# Open both files in browser
-open data/scans/CustomerName/YYYY-MM-DD/scan_HHMMSS_Range/scan_web.html
-open data/scans/CustomerName/YYYY-MM-DD/scan_HHMMSS_Range/scan_pdf.html
+curl http://127.0.0.1:9000/api/health
 ```
 
-**Expected Differences**:
+Expected result:
+- JSON response with `"status": "ok"`
+- `app_version` present
+- `tool_versions` present
 
-| Feature | scan_web.html | scan_pdf.html |
-|---------|--------------|---------------|
-| **Font Size** | 14pt body | 10pt body |
-| **Table Padding** | 8-12pt | 3-4pt |
-| **Line Height** | 1.5 | 1.3 |
-| **DataTables** | Interactive sorting | Static table |
-| **Export Buttons** | Visible | Hidden |
-| **Density** | Standard spacing | Compact |
+## Release Smoke Tests
 
-### Test 3: PDF Olive Theme
+### Test 1: Quick Scan
 
-**Steps**:
-1. Open the generated `scan_report.pdf` file
-2. Verify the color scheme matches the UI
+Steps:
+1. Enter a valid target such as `192.168.1.0/24`
+2. Click `Quick Scan`
+3. Confirm scan feedback appears in the activity panel
+4. Confirm the `Quick Scan` button disables while the job is running
+5. Confirm rows populate in the results table
 
-**Check these elements**:
-- ✅ Table headers: Dark olive (olive-900) background, white text
-- ✅ Table borders: Olive-200/300
-- ✅ Background stripes: Olive-50 (zebra striping)
-- ✅ Text: Dark primary color and olive-800 secondary
-- ✅ Headers: Olive-900/950
+Expected result:
+- Progress messages appear
+- Results table updates
+- The button re-enables after completion
 
-**Compare with old PDFs** (if available):
-- Old PDFs may have blue/gray colors
-- New PDFs should be exclusively olive-themed
+### Test 2: Generate PDF Report
 
-### Test 4: Information Density
+Steps:
+1. Enter a valid target
+2. Click `Generate PDF`
+3. Confirm the report progress card appears
+4. Confirm progress messages advance through scan/report phases
+5. Confirm the button disables while the report job is running
 
-**Steps**:
-1. Generate a scan with 10+ hosts
-2. Open the PDF report
-3. Count how many hosts appear per page
+Expected result:
+- `scan.xml`, `scan_web.html`, and metadata files are created
+- If PDF tooling is available, `scan_report.pdf` is created
+- UI shows success and re-enables the button
 
-**Expected Result**:
-- **Before**: ~30-40 hosts per page
-- **After**: ~50-70 hosts per page
-- **Improvement**: 40-75% more information per page
+### Test 3: Stop Active Work
 
-**Visual Check**:
-- Text should be readable (not too small)
-- Tables should be compact but not cramped
-- Margins should be 0.5 inch on all sides
-- Page breaks should occur cleanly
+Steps:
+1. Start a `Quick Scan` or `Generate PDF`
+2. Click `Stop`
+3. Watch the status area
 
-### Test 5: Historical Scan Viewer
+Expected result:
+- UI shows cancellation in progress
+- The running scan/report job stops
+- Buttons return to idle state
 
-**Steps**:
-1. Generate 2-3 reports with different targets
-2. Click **"Report History"** button (olive-600 color)
-3. Modal should open showing all scans
-4. Test filters:
-   - Customer dropdown: Filter by customer
-   - Date input: Filter by specific date
-5. For each scan, test:
-   - **"View HTML"**: Opens scan_web.html in new tab
-   - **"Download PDF"**: Downloads scan_report.pdf
-   - **"Delete"**: Prompts for confirmation, removes scan
+Note:
+- This path is implemented with cooperative cancellation and subprocess termination.
+- Stable release signoff should include one real end-to-end cancellation test on a live scan target.
 
-**Expected Result**:
-- All scans listed with metadata
-- Filters work correctly
-- HTML opens in browser
-- PDF downloads successfully
-- Delete removes scan and refreshes list
+### Test 4: History Viewer
 
-### Test 6: Error Handling
+Steps:
+1. Generate one or more reports
+2. Click `Archive`
+3. Open an HTML report
+4. Download PDF/XML if available
+5. Delete a historical scan
 
-**Test Invalid Target**:
-```
-Target: 999.999.999.999
-Expected: Error message "Invalid target" or nmap error
-```
+Expected result:
+- History modal loads
+- HTML/PDF/XML actions work
+- Delete removes the scan folder and refreshes the list
 
-**Test Missing Stylesheet**:
+## Backend Sanity Checks
+
+Run these before cutting a stable release:
+
 ```bash
-# Temporarily rename to stylesheet
-mv nmap-pdf-olive-legacy.xsl nmap-pdf-olive-legacy.xsl.bak
-# Generate report
-# Expected: Error message about missing stylesheet
-# Restore the file
-mv nmap-pdf-olive-legacy.xsl.bak nmap-pdf-olive-legacy.xsl
+python -m py_compile app.py
+python test_generate_report.py 127.0.0.1
 ```
 
-**Test Timeout** (optional, takes time):
-```
-Target: 10.0.0.0/16 (large range)
-Expected: Timeout after 10 minutes with appropriate error
-```
+Notes:
+- `test_generate_report.py` defaults to `http://localhost:9000`
+- Use `NMAPUI_URL` if you run the app on a different port
 
-## Verification Checklist
+## Stable Release Checklist
 
-### UI Elements
-- [ ] Generate Report button is olive-700 (not blue)
-- [ ] View History button is olive-600 (not purple)
-- [ ] Pulsing progress card appears on report generation
-- [ ] Progress messages update in real-time
-- [ ] Success message is olive-100 background (not blue)
-- [ ] Error messages are red-100 background
-
-### File Generation
-- [ ] scan.xml created (nmap XML)
-- [ ] scan.nmap created (text output)
-- [ ] scan.gnmap created (grepable)
-- [ ] scan_web.html created (interactive)
-- [ ] scan_pdf.html created (PDF-optimized)
-- [ ] scan_report.pdf created (from scan_pdf.html)
-- [ ] metadata.json created (scan info)
-
-### PDF Quality
-- [ ] PDF opens without errors
-- [ ] Olive color theme throughout
-- [ ] Higher information density visible
-- [ ] Text is readable (not too small)
-- [ ] Tables are well-formatted
-- [ ] Page breaks are clean
-- [ ] File size reasonable (< 5MB for typical scan)
-
-### Functionality
-- [ ] Progress indicators work correctly
-- [ ] Historical viewer loads all scans
-- [ ] Filters work (customer and date)
-- [ ] View HTML opens correct file
-- [ ] Download PDF works
-- [ ] Delete scan removes folder
-- [ ] Metadata includes both HTML paths
-
-## Common Issues
-
-### Issue: Progress Card Doesn't Appear
-**Check**:
-- Browser console for JavaScript errors
-- SocketIO connection established (Network tab)
-- index.html has createReportProgressCard function (line 894)
-
-### Issue: PDF Has Wrong Colors
-**Check**:
-- Using nmap-pdf-olive-legacy.xsl (not nmap-modern.xsl)
-- wkhtmltopdf has --print-media-type flag
-- CSS media queries are present in stylesheet
-
-### Issue: PDF Not Denser
-**Check**:
-- Using scan_pdf.html (not scan_web.html) for conversion
-- PDF-optimized CSS is loading (check font sizes in PDF)
-- Print media query is active
-
-### Issue: Two HTML Files Identical
-**Check**:
-- app.py calls convert_xml_to_html() twice with different pdf_optimized values
-- Both stylesheets exist (nmap-modern.xsl and nmap-pdf-olive-legacy.xsl)
-- No errors during HTML generation
-
-## Performance Notes
-
-### Expected Generation Time
-- Small scan (1-5 hosts): ~30-60 seconds
-- Medium scan (10-50 hosts): ~2-5 minutes
-- Large scan (100+ hosts): ~5-10 minutes
-
-### Time Breakdown
-1. Nmap scan: 80-90% of time
-2. XML → HTML conversion: 1-2 seconds per file
-3. HTML → PDF conversion: 2-5 seconds
-4. Metadata save: < 1 second
-
-## Success Indicators
-
-You'll know everything is working when:
-1. ✅ Pulsing progress card shows with olive colors
-2. ✅ Progress messages update in real-time
-3. ✅ Two HTML files created (web + PDF versions)
-4. ✅ PDF has olive theme throughout
-5. ✅ PDF has noticeably higher density
-6. ✅ Historical viewer shows all scans
-7. ✅ All buttons match olive color scheme
-
-## Next Steps After Testing
-
-If all tests pass:
-1. Document any issues found
-2. Test with production network ranges
-3. Verify PDF quality with stakeholders
-4. Consider backup/archival strategy for scan reports
-5. Set up automated cleanup for old scans (optional)
-
-## Support
-
-For issues or questions:
-- Review IMPLEMENTATION_SUMMARY.md for technical details
-- Check SCAN_REPORTS_GUIDE.md for user documentation
-- Examine REPORT_GENERATION_AUDIT.md for theme details
-- Check CUSTOMER_IDENTIFICATION_AUDIT.md for fingerprinting
-- Review browser console and terminal output for errors
-
----
-
-**Last Updated**: 2026-01-08
-**Version**: 1.0 (PDF Optimization + Pulsing Indicators)
+- App starts with `--quick` and serves `http://127.0.0.1:9000`
+- `/api/health` returns `status: ok`
+- Quick Scan works
+- Generate PDF works or fails gracefully when PDF tooling is unavailable
+- Stop cancels an active scan/report job
+- Report history opens and can serve saved artifacts
+- Version/build metadata is visible in the UI
+- No obvious JavaScript errors in the browser console

@@ -8,7 +8,7 @@ chmod +x install.sh
 ./install.sh
 
 # Start the application
-./start.sh
+python app.py
 ```
 
 Then visit: http://127.0.0.1:9000
@@ -24,7 +24,8 @@ Then visit: http://127.0.0.1:9000
 
 **Optional (but recommended):**
 - arp-scan (for MAC/vendor detection)
-- Google Chrome + ChromeDriver (for Selenium features)
+- xsltproc (for XML to HTML conversion)
+- wkhtmltopdf or weasyprint/playwright (for PDF generation)
 
 ### 2. Install Commands
 
@@ -78,7 +79,7 @@ nmap --version
 arp-scan --version
 
 # Check Python dependencies
-python -c "import flask, socketio, selenium, reportlab; print('All dependencies OK')"
+python -c "import flask, socketio, requests, netifaces; print('Core dependencies OK')"
 ```
 
 ## Dependencies Breakdown
@@ -87,17 +88,17 @@ python -c "import flask, socketio, selenium, reportlab; print('All dependencies 
 - **Flask** - Web framework
 - **Flask-SocketIO** - Real-time communication
 - **Flask-CORS** - Cross-origin resource sharing
-- **selenium** - Web automation (for CVE processing)
+- **playwright** - Chromium-based PDF fallback
 - **netifaces** - Network interface discovery
 - **requests** - HTTP client
-- **reportlab** - PDF generation
-- **Pillow** - Image processing
+- **PyYAML** - YAML parsing utilities
 
 ### System Tools
 - **nmap** - Network scanning (core functionality)
 - **arp-scan** - ARP scanning for MAC/vendor detection
 - **git** - For vulners script management
-- **Chrome/ChromeDriver** - For Selenium web automation
+- **xsltproc** - XML to HTML report conversion
+- **wkhtmltopdf** - Primary HTML to PDF conversion
 
 ### Optional Components
 - **nmap-vulners** script - Automatically cloned from GitHub
@@ -111,10 +112,6 @@ python app.py
 
 # Quick startup (skip checks)
 python app.py --quick
-
-# Using the startup script
-./start.sh
-./start.sh --quick
 ```
 
 ## Troubleshooting
@@ -124,9 +121,10 @@ python app.py --quick
 1. **Permission denied with arp-scan**
    - arp-scan may require sudo: `sudo arp-scan --localnet`
 
-2. **ChromeDriver issues**
-   - Install via pip: `pip install chromedriver-autoinstaller`
-   - Or download manually: https://chromedriver.chromium.org/
+2. **PDF generation issues**
+   - Install `wkhtmltopdf` or `xsltproc`
+   - Optional fallback: `pip install weasyprint`
+   - Optional fallback: `playwright install chromium`
 
 3. **nmap not found**
    - Ensure nmap is installed and in PATH
@@ -137,8 +135,8 @@ python app.py --quick
    - Delete .venv directory and recreate
    - Ensure using correct Python version
 
-5. **Port 5000 already in use**
-   - Kill existing process: `lsof -ti:5000 | xargs kill`
+5. **Port 9000 already in use**
+   - Kill existing process: `lsof -ti:9000 | xargs kill`
    - Or change port in app.py
 
 ### Development Mode

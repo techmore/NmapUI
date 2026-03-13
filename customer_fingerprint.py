@@ -8,6 +8,16 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 
+from persistence import (
+    load_json_document,
+    load_yaml_document,
+    normalize_customer_config_document,
+    normalize_scan_history_document,
+    normalize_traceroute_history_document,
+    save_json_document,
+    save_yaml_document,
+)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -33,8 +43,9 @@ class CustomerFingerprinter:
 
     def load_config(self):
         try:
-            with open(self.config_path, "r") as f:
-                self.config = yaml.safe_load(f) or {}
+            self.config = normalize_customer_config_document(
+                load_yaml_document(self.config_path, {})
+            )
 
             self.settings = self.config.get("settings", {})
             self.customers = self.config.get("customers", [])
@@ -64,8 +75,10 @@ class CustomerFingerprinter:
                 )
                 return
 
-            with open(self.traceroutes_path, "r") as f:
-                self.customer_traceroutes = json.load(f)
+            document = normalize_traceroute_history_document(
+                load_json_document(self.traceroutes_path, {})
+            )
+            self.customer_traceroutes = document["customers"]
 
             total_traceroutes = sum(
                 len(c.get("traceroutes", []))
@@ -96,7 +109,9 @@ class CustomerFingerprinter:
                 "raw_traceroute": network_key.get("raw", ""),
             }
 
-            if customer_id and customer_id not in self.customer_traceroutes:
+            customer_id = customer_id or "unknown"
+
+            if customer_id not in self.customer_traceroutes:
                 self.customer_traceroutes[customer_id] = {
                     "name": self.customer_traceroutes.get(customer_id, {}).get(
                         "name", customer_id
@@ -109,8 +124,10 @@ class CustomerFingerprinter:
             )
 
             os.makedirs(os.path.dirname(self.traceroutes_path), exist_ok=True)
-            with open(self.traceroutes_path, "w") as f:
-                json.dump(self.customer_traceroutes, f, indent=2)
+            save_json_document(
+                self.traceroutes_path,
+                normalize_traceroute_history_document(self.customer_traceroutes),
+            )
 
             logger.info(
                 f"Saved traceroute to history for customer '{customer_id}': {network_key.get('public_ip')}"
@@ -529,10 +546,10 @@ class CustomerFingerprinter:
         }
 
         try:
-            history = []
-            if os.path.exists(storage_path):
-                with open(storage_path, "r") as f:
-                    history = json.load(f)
+            history_document = normalize_scan_history_document(
+                load_json_document(Path(storage_path), {"entries": []})
+            )
+            history = history_document["entries"]
 
             history.append(scan_result)
 
@@ -540,8 +557,8 @@ class CustomerFingerprinter:
             if len(history) > max_entries:
                 history = history[-max_entries:]
 
-            with open(storage_path, "w") as f:
-                json.dump(history, f, indent=2)
+            history_document["entries"] = history
+            save_json_document(Path(storage_path), history_document)
 
             logger.info(f"Scan result saved to {storage_path}")
         except Exception as e:
@@ -586,8 +603,7 @@ class CustomerFingerprinter:
                 "indexing": (self.config or {}).get("indexing", {}),
             }
 
-            with open(self.config_path, "w") as f:
-                yaml.dump(config_data, f, default_flow_style=False, indent=2)
+            save_yaml_document(self.config_path, config_data)
 
             logger.info(f"Customers config saved to {self.config_path}")
 
@@ -620,8 +636,10 @@ class CustomerFingerprinter:
             return []
 
         try:
-            with open(storage_path, "r") as f:
-                history = json.load(f)
+            history_document = normalize_scan_history_document(
+                load_json_document(Path(storage_path), {"entries": []})
+            )
+            history = history_document["entries"]
 
             if customer_id:
                 history = [h for h in history if h.get("customer_id") == customer_id]
@@ -631,5 +649,5 @@ class CustomerFingerprinter:
             ]
 
         except Exception as e:
-            print(f"Error loading scan history: {e}")
+            logger.error("Error loading scan history: %s", e)
             return []

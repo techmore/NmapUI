@@ -1213,8 +1213,65 @@
         }
 
         document.getElementById('start-scan-btn').addEventListener('click', () => {
+            if (clientJobs.scan.status === 'running') {
+                return;
+            }
             const target = document.getElementById('scan-target').value;
             socket.emit('start_scan', target);
+        });
+
+        const clientJobs = {
+            scan: { status: 'idle' },
+            report: { status: 'idle' }
+        };
+
+        function updateJobButtons() {
+            const scanRunning = clientJobs.scan.status === 'running';
+            const reportRunning = clientJobs.report.status === 'running';
+            const stopButton = document.getElementById('stop-scan-btn');
+
+            const startScanBtn = document.getElementById('start-scan-btn');
+            const generateReportBtn = document.getElementById('generate-report-btn');
+
+            if (startScanBtn) {
+                startScanBtn.disabled = scanRunning;
+                startScanBtn.classList.toggle('opacity-60', scanRunning);
+                startScanBtn.classList.toggle('cursor-not-allowed', scanRunning);
+            }
+
+            if (generateReportBtn) {
+                generateReportBtn.disabled = reportRunning;
+                generateReportBtn.classList.toggle('opacity-60', reportRunning);
+                generateReportBtn.classList.toggle('cursor-not-allowed', reportRunning);
+            }
+
+            if (stopButton) {
+                const canStop = scanRunning || reportRunning;
+                stopButton.disabled = !canStop;
+                stopButton.classList.toggle('opacity-50', !canStop);
+                stopButton.classList.toggle('cursor-not-allowed', !canStop);
+            }
+        }
+
+        socket.on('job_status', function(data) {
+            if (!data || !data.job_type) return;
+            clientJobs[data.job_type] = data;
+            updateJobButtons();
+
+            if (data.job_type === 'report' && data.status === 'running' && data.details) {
+                const message = data.details.message || 'Generating report...';
+                updateReportProgress(message);
+                showReportStatus(message, 'info');
+            }
+
+            if (data.job_type === 'scan' && data.status === 'running' && data.details?.message) {
+                showReportStatus(data.details.message, 'info');
+            }
+        });
+
+        socket.on('job_cancelled', function(data) {
+            if (!data || !data.message) return;
+            showReportStatus(data.message, 'info');
         });
 
         socket.emit('get_local_ip');
@@ -1223,6 +1280,18 @@
         socket.emit('get_versions');
         socket.emit('get_customers');
         socket.emit('get_history_counts');
+        socket.emit('get_job_status');
+
+        document.getElementById('stop-scan-btn').addEventListener('click', function() {
+            if (clientJobs.report.status === 'running') {
+                socket.emit('cancel_job', { job_type: 'report' });
+                return;
+            }
+
+            if (clientJobs.scan.status === 'running') {
+                socket.emit('cancel_job', { job_type: 'scan' });
+            }
+        });
 
         // Customer quick add dropdown handler
         document.getElementById('customer-quick-add').addEventListener('change', function() {
@@ -1562,12 +1631,6 @@
             }
         }
 
-        socket.on('scan_start', msg => document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`);
-        socket.on('scan_complete', msg => {
-            document.getElementById('feedback-container').innerHTML += `<p>${msg}</p>`;
-            // Refresh history counts as a new metadata file was likely saved
-            socket.emit('get_history_counts');
-        });
         socket.on('scan_complete_summary', function(data) {
             // Display the scan summary banner with statistics
             showScanSummaryBanner(data);
@@ -1614,11 +1677,6 @@
             
             // Stop the timer
             stopReportTimer();
-        });
-
-
-        socket.on('report_error', function(data) {
-            showReportStatus('Error: ' + data.error, 'error');
         });
 
         socket.on('arp_results', data => {
@@ -2016,23 +2074,6 @@
             }
         });
 
-        socket.on('customer_lookup_results', data => {
-            console.log('Customer lookup results:', data);
-            
-            if (data.success && data.matches.length > 0) {
-                showCustomerMessage(data.message, 'success');
-                
-                // Auto-select first matching customer
-                const match = data.matches[0];
-                const dropdown = document.getElementById('current-customer');
-                
-                dropdown.value = match.customer.id;
-                dropdown.dispatchEvent(new Event('change'));
-            } else {
-                showCustomerMessage(data.message, 'error');
-            }
-        });
-
         socket.on('customer_error', message => {
             showCustomerMessage(message, 'error');
         });
@@ -2240,6 +2281,9 @@
         });
 
         document.getElementById('generate-report-btn').addEventListener('click', function() {
+            if (clientJobs.report.status === 'running') {
+                return;
+            }
             const target = document.getElementById('scan-target').value || lastScanTarget;
 
             if (!target) {
@@ -2288,9 +2332,12 @@
 
         function updateReportProgress(message) {
             const progressText = document.getElementById('report-progress-text');
-            if (progressText) {
-                progressText.textContent = message;
+            if (!progressText) {
+                createReportProgressCard(message);
+                return;
             }
+
+            progressText.textContent = message;
         }
 
         function removeReportProgressCard() {
@@ -2552,6 +2599,11 @@
         }
 
         function saveAndRunScan() {
+            if (clientJobs.report.status === 'running') {
+                showReportStatus('A report job is already running', 'error');
+                return;
+            }
+
             const startTime = document.getElementById('auto-start-time').value;
             const endTime = document.getElementById('auto-end-time').value;
 
@@ -2625,21 +2677,8 @@
             }
         });
 
-        socket.on('auto_scan_executed', function(data) {
-            showReportStatus(`Automatic scan completed: ${data.target}`, 'success');
-        });
-
         socket.on('auto_scan_error', function(data) {
             showReportStatus(`Automatic scan error: ${data.error}`, 'error');
-        });
-
-        // Handle report generation start (for pulsing effect)
-        socket.on('start_report_generation', function(data) {
-            const generateBtn = document.getElementById('generate-report-btn');
-            if (generateBtn) {
-                generateBtn.classList.add('card-pulsing');
-                startReportTimer();
-            }
         });
 
         // TableSorter class for sortable table functionality

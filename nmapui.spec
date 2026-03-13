@@ -22,6 +22,9 @@ a = Analysis(
         # Include static assets
         (str(spec_dir / 'static'), 'static'),
         (str(spec_dir / 'templates'), 'templates'),
+        (str(spec_dir / 'config'), 'config'),
+        (str(spec_dir / 'VERSION'), '.'),
+        (str(spec_dir / 'nmap-modern.xsl'), '.'),
         # Include nmap-vulners script if present
         (str(spec_dir / 'nmap-vulners'), 'nmap-vulners'),
     ],
