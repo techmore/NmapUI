@@ -31,6 +31,14 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).parent.resolve()
 
 
+def env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment flag."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class IdleStateManager:
     """Manages application idle state for auto-update functionality"""
 
@@ -337,6 +345,7 @@ auto_scan_config = {
     "end_time": "06:00",
     "last_run": None,
 }
+auto_scan_thread = None
 
 # ============================================================================
 # RATE LIMITING
@@ -3304,7 +3313,59 @@ def get_auto_scan_status():
 @app.route("/api/auto_scan/update", methods=["POST"])
 def update_auto_scan():
     """Update auto scan configuration"""
-    config = request.json
+    config = request.get_json(silent=True)
+    if not isinstance(config, dict):
+        return jsonify({"success": False, "error": "Invalid JSON payload"}), 400
+
+    allowed_keys = {"enabled", "start_time", "end_time", "last_run"}
+    unknown_keys = sorted(set(config) - allowed_keys)
+    if unknown_keys:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"Unknown configuration keys: {', '.join(unknown_keys)}",
+                }
+            ),
+            400,
+        )
+
+    if "enabled" in config and not isinstance(config["enabled"], bool):
+        return jsonify({"success": False, "error": "'enabled' must be a boolean"}), 400
+
+    time_pattern = re.compile(r"^\d{2}:\d{2}$")
+    for field in ("start_time", "end_time"):
+        if field in config:
+            value = config[field]
+            if not isinstance(value, str) or not time_pattern.match(value):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": f"'{field}' must use HH:MM format",
+                        }
+                    ),
+                    400,
+                )
+
+    if "last_run" in config and config["last_run"] is not None:
+        if not isinstance(config["last_run"], str):
+            return (
+                jsonify({"success": False, "error": "'last_run' must be an ISO string"}),
+                400,
+            )
+        try:
+            datetime.fromisoformat(config["last_run"])
+        except ValueError:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "'last_run' must be a valid ISO timestamp",
+                    }
+                ),
+                400,
+            )
 
     auto_scan_config.update(config)
     save_auto_scan_config()
@@ -3346,11 +3407,28 @@ def auto_scan_loop():
         socketio.sleep(60)
 
 
-# Start auto scan thread
-auto_scan_thread = threading.Thread(target=auto_scan_loop, daemon=True)
-auto_scan_thread.start()
+def start_auto_scan_thread():
+    """Start the auto-scan worker once per process."""
+    global auto_scan_thread
+
+    if auto_scan_thread and auto_scan_thread.is_alive():
+        return
+
+    auto_scan_thread = threading.Thread(target=auto_scan_loop, daemon=True)
+    auto_scan_thread.start()
 
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv
+    host = os.environ.get("NMAPUI_HOST", "127.0.0.1")
+    port = int(os.environ.get("NMAPUI_PORT", "9000"))
+    debug = env_flag("NMAPUI_DEBUG", default=False)
+
     startup_checks(quick=quick_mode)
-    socketio.run(app, host="0.0.0.0", port=9000, debug=True, allow_unsafe_werkzeug=True)
+    start_auto_scan_thread()
+    socketio.run(
+        app,
+        host=host,
+        port=port,
+        debug=debug,
+        allow_unsafe_werkzeug=debug,
+    )

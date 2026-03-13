@@ -1616,11 +1616,6 @@
             stopReportTimer();
         });
 
-
-        socket.on('report_error', function(data) {
-            showReportStatus('Error: ' + data.error, 'error');
-        });
-
         socket.on('arp_results', data => {
             console.log('ARP results received:', data);
             const tb = document.querySelector('#discovery-table tbody');
