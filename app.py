@@ -3822,6 +3822,22 @@ def get_auto_scan_status():
     return jsonify(auto_scan_config)
 
 
+@app.route("/api/health")
+def health_check():
+    """Lightweight health endpoint for release smoke tests."""
+    return jsonify(
+        {
+            "status": "ok",
+            "app_version": get_app_version(),
+            "default_interface": DEFAULT_INTERFACE,
+            "auto_scan_thread_alive": bool(
+                auto_scan_thread and auto_scan_thread.is_alive()
+            ),
+            "tool_versions": get_versions(),
+        }
+    )
+
+
 @app.route("/api/auto_scan/update", methods=["POST"])
 def update_auto_scan():
     """Update auto scan configuration"""

@@ -1,6 +1,6 @@
 # Building and Packaging NmapUI for macOS
 
-This guide explains how to build and package NmapUI for macOS distribution.
+This guide explains how to build and package NmapUI for macOS distribution and how to smoke test a release candidate before publishing it.
 
 ## Prerequisites
 
@@ -44,8 +44,18 @@ This guide explains how to build and package NmapUI for macOS distribution.
    ```
    Check for successful startup messages.
 
-2. **Full test** (optional)
-   - Run the app and access http://localhost:5000
+2. **Health check**
+   ```bash
+   NMAPUI_HOST=127.0.0.1 NMAPUI_PORT=9000 ./dist/NmapUI.app/Contents/MacOS/NmapUI --quick &
+   APP_PID=$!
+   sleep 5
+   curl http://127.0.0.1:9000/api/health
+   kill $APP_PID
+   ```
+   Expected result: JSON with `"status": "ok"` and an `app_version`.
+
+3. **Full test** (optional)
+   - Run the app and access `http://127.0.0.1:9000`
    - Test core functionality
 
 ## Creating Distribution Packages
@@ -87,6 +97,26 @@ This script will:
 - Create a GitHub release with the packages attached (requires `gh` CLI authentication)
 
 The script automatically determines the version using the same method as the application.
+
+## Release Smoke Test
+
+Before publishing a stable build:
+
+```bash
+source venv/bin/activate
+python -m py_compile app.py
+NMAPUI_HOST=127.0.0.1 NMAPUI_PORT=9000 NMAPUI_DEBUG=false python app.py --quick &
+APP_PID=$!
+sleep 5
+curl http://127.0.0.1:9000/api/health
+kill $APP_PID
+```
+
+Recommended manual checks:
+- Open `http://127.0.0.1:9000`
+- Confirm Quick Scan launches
+- Confirm Generate PDF launches and the button disables while the job runs
+- Confirm Stop cancels the active scan/report job
 
 ## Code Signing and Notarization (Production)
 
