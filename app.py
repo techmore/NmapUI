@@ -346,6 +346,8 @@ auto_scan_config = {
     "last_run": None,
 }
 auto_scan_thread = None
+AUTO_SCAN_STARTUP_AT = datetime.now()
+AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
 
 # ============================================================================
 # RATE LIMITING
@@ -554,6 +556,14 @@ def save_auto_scan_config():
 def should_run_auto_scan():
     """Check if auto scan should run now"""
     if not auto_scan_config["enabled"]:
+        return False
+
+    startup_elapsed = (datetime.now() - AUTO_SCAN_STARTUP_AT).total_seconds()
+    if startup_elapsed < AUTO_SCAN_STARTUP_GRACE_SECONDS:
+        logger.info(
+            "Auto scan suppressed during startup grace period (%ss remaining)",
+            int(AUTO_SCAN_STARTUP_GRACE_SECONDS - startup_elapsed),
+        )
         return False
 
     now = datetime.now()
