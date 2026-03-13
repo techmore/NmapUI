@@ -25,6 +25,18 @@ from nmapui.auto_scan import (
     save_auto_scan_config,
     should_run_auto_scan,
 )
+from nmapui.events import (
+    emit_job_status as nmapui_emit_job_status,
+    emit_to_client as nmapui_emit_to_client,
+    safe_emit as nmapui_safe_emit,
+    update_job_progress as nmapui_update_job_progress,
+)
+from nmapui.jobs import (
+    ClientJobRegistry,
+    RateLimiter,
+    ensure_job_not_cancelled as nmapui_ensure_job_not_cancelled,
+    run_cancellable_command as nmapui_run_cancellable_command,
+)
 from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
@@ -251,165 +263,59 @@ AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
 # ============================================================================
 
 
-class RateLimiter:
-    """Simple in-memory rate limiter for scan operations"""
-
-    def __init__(self, max_scans_per_hour=10, cooldown_seconds=300):
-        self.max_scans_per_hour = max_scans_per_hour
-        self.cooldown_seconds = cooldown_seconds
-        self.scan_timestamps = []
-        self.last_scan_time = None
-
-    def can_scan(self):
-        """Check if a new scan can be started"""
-        now = datetime.now()
-
-        # Check cooldown
-        if self.last_scan_time:
-            elapsed = (now - self.last_scan_time).total_seconds()
-            if elapsed < self.cooldown_seconds:
-                logger.warning(
-                    f"Scan cooldown active. Wait {int(self.cooldown_seconds - elapsed)}s more"
-                )
-                return (
-                    False,
-                    f"Cooldown active. Try again in {int(self.cooldown_seconds - elapsed)}s",
-                )
-
-        # Check hourly limit
-        one_hour_ago = now - timedelta(hours=1)
-        recent_scans = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
-
-        if len(recent_scans) >= self.max_scans_per_hour:
-            logger.warning(f"Rate limit reached: {self.max_scans_per_hour} scans/hour")
-            return False, f"Rate limit reached ({self.max_scans_per_hour} scans/hour)"
-
-        return True, None
-
-    def record_scan(self):
-        """Record a scan start"""
-        now = datetime.now()
-        self.scan_timestamps.append(now)
-        self.last_scan_time = now
-
-        # Clean old entries
-        one_hour_ago = now - timedelta(hours=1)
-        self.scan_timestamps = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
-
-        logger.info(f"Scan recorded. Total in last hour: {len(self.scan_timestamps)}")
-
-
-class ClientJobRegistry:
-    """Track active scan/report jobs per connected client."""
-
-    def __init__(self):
-        self._jobs = {}
-        self._lock = threading.Lock()
-        self._processes = {}
-
-    def start(self, sid: str, job_type: str, details=None) -> bool:
-        with self._lock:
-            key = (sid, job_type)
-            job = self._jobs.get(key)
-            if job and job.get("status") == "running":
-                return False
-            self._jobs[key] = {
-                "status": "running",
-                "started_at": datetime.now().isoformat(),
-                "cancel_requested": False,
-                "details": details or {},
-            }
-            return True
-
-    def complete(self, sid: str, job_type: str, status="completed", details=None):
-        with self._lock:
-            key = (sid, job_type)
-            current = self._jobs.get(key, {})
-            current.update(
-                {
-                    "status": status,
-                    "finished_at": datetime.now().isoformat(),
-                }
-            )
-            if details:
-                merged = dict(current.get("details", {}))
-                merged.update(details)
-                current["details"] = merged
-            self._jobs[key] = current
-
-    def update(self, sid: str, job_type: str, details=None, **fields):
-        with self._lock:
-            key = (sid, job_type)
-            current = self._jobs.get(key)
-            if not current:
-                return
-            current.update(fields)
-            if details:
-                merged = dict(current.get("details", {}))
-                merged.update(details)
-                current["details"] = merged
-            self._jobs[key] = current
-
-    def cancel(self, sid: str, job_type: str) -> bool:
-        with self._lock:
-            key = (sid, job_type)
-            current = self._jobs.get(key)
-            if not current or current.get("status") != "running":
-                return False
-            current["cancel_requested"] = True
-            current["status"] = "cancelling"
-            current["cancel_requested_at"] = datetime.now().isoformat()
-            self._jobs[key] = current
-
-            process = self._processes.get(key)
-            if process and process.poll() is None:
-                try:
-                    process.terminate()
-                except Exception:
-                    logger.exception("Failed to terminate subprocess for %s", key)
-            return True
-
-    def is_cancelled(self, sid: str, job_type: str) -> bool:
-        with self._lock:
-            job = self._jobs.get((sid, job_type))
-            return bool(job and job.get("cancel_requested"))
-
-    def attach_process(self, sid: str, job_type: str, process: subprocess.Popen):
-        with self._lock:
-            self._processes[(sid, job_type)] = process
-
-    def clear_process(self, sid: str, job_type: str):
-        with self._lock:
-            self._processes.pop((sid, job_type), None)
-
-    def get(self, sid: str, job_type: str):
-        with self._lock:
-            job = self._jobs.get((sid, job_type))
-            return dict(job) if job else None
-
-    def mark_disconnected(self, sid: str):
-        with self._lock:
-            for key, job in list(self._jobs.items()):
-                if key[0] != sid:
-                    continue
-                if job.get("status") == "running":
-                    job["disconnected"] = True
-                    job["disconnected_at"] = datetime.now().isoformat()
-                    self._jobs[key] = job
-                else:
-                    self._jobs.pop(key, None)
-
-    def clear_if_disconnected(self, sid: str, job_type: str):
-        with self._lock:
-            key = (sid, job_type)
-            job = self._jobs.get(key)
-            if job and job.get("disconnected"):
-                self._jobs.pop(key, None)
-            self._processes.pop(key, None)
-
-
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 job_registry = ClientJobRegistry()
+
+
+def safe_emit(event, data=None):
+    return nmapui_safe_emit(event, data)
+
+
+def emit_to_client(sid: str, event: str, data=None):
+    return nmapui_emit_to_client(socketio, sid, event, data)
+
+
+def emit_job_status(sid: str, job_type: str):
+    return nmapui_emit_job_status(socketio, job_registry, sid, job_type)
+
+
+def update_job_progress(
+    sid: str,
+    job_type: str,
+    phase: str,
+    message: Optional[str] = None,
+    progress: Optional[int] = None,
+    details=None,
+):
+    return nmapui_update_job_progress(
+        socketio,
+        job_registry,
+        sid,
+        job_type,
+        phase,
+        message=message,
+        progress=progress,
+        details=details,
+    )
+
+
+def ensure_job_not_cancelled(sid: str, job_type: str):
+    return nmapui_ensure_job_not_cancelled(job_registry, sid, job_type)
+
+
+def run_cancellable_command(
+    cmd,
+    sid: Optional[str] = None,
+    job_type: Optional[str] = None,
+    timeout: Optional[int] = None,
+):
+    return nmapui_run_cancellable_command(
+        job_registry,
+        cmd,
+        sid=sid,
+        job_type=job_type,
+        timeout=timeout,
+    )
 
 
 def split_subnet_into_chunks(target):
@@ -655,102 +561,6 @@ def is_private_ip(ip):
         return False
 
 
-def safe_emit(event, data=None):
-    """Emit a Socket.IO event only if in a request context"""
-    try:
-        if data is None:
-            emit(event)
-        else:
-            emit(event, data)
-    except RuntimeError:
-        # Not in a request context, skip emit
-        pass
-
-
-def emit_to_client(sid: str, event: str, data=None):
-    """Emit a Socket.IO event to a single connected client."""
-    if data is None:
-        socketio.emit(event, to=sid)
-    else:
-        socketio.emit(event, data, to=sid)
-
-
-def emit_job_status(sid: str, job_type: str):
-    """Publish the current status for a client job."""
-    payload = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}
-    payload["job_type"] = job_type
-    emit_to_client(sid, "job_status", payload)
-
-
-def update_job_progress(
-    sid: str,
-    job_type: str,
-    phase: str,
-    message: Optional[str] = None,
-    progress: Optional[int] = None,
-    details=None,
-):
-    """Update the current phase/progress for a client job and publish it."""
-    payload = {"phase": phase}
-    if message is not None:
-        payload["message"] = message
-    if progress is not None:
-        payload["progress"] = progress
-    if details:
-        payload.update(details)
-
-    job_registry.update(sid, job_type, details=payload)
-    emit_job_status(sid, job_type)
-
-
-def ensure_job_not_cancelled(sid: str, job_type: str):
-    """Stop the current workflow if cancellation was requested."""
-    if job_registry.is_cancelled(sid, job_type):
-        raise RuntimeError(f"{job_type} cancelled")
-
-
-def run_cancellable_command(
-    cmd,
-    sid: Optional[str] = None,
-    job_type: Optional[str] = None,
-    timeout: Optional[int] = None,
-):
-    """Run a subprocess that can be cancelled via the job registry."""
-    start = datetime.now()
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    if sid and job_type:
-        job_registry.attach_process(sid, job_type, process)
-
-    try:
-        while True:
-            try:
-                stdout, stderr = process.communicate(timeout=0.2)
-                break
-            except subprocess.TimeoutExpired:
-                if timeout is not None and (datetime.now() - start).total_seconds() > timeout:
-                    process.kill()
-                    stdout, stderr = process.communicate()
-                    raise subprocess.TimeoutExpired(cmd, timeout, output=stdout, stderr=stderr)
-                if sid and job_type and job_registry.is_cancelled(sid, job_type):
-                    process.terminate()
-                    try:
-                        stdout, stderr = process.communicate(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        stdout, stderr = process.communicate()
-                    raise RuntimeError(f"{job_type} cancelled")
-
-        return subprocess.CompletedProcess(
-            args=cmd, returncode=process.returncode, stdout=stdout, stderr=stderr
-        )
-    finally:
-        if sid and job_type:
-            job_registry.clear_process(sid, job_type)
 
 
 def run_traceroute(target="1.1.1.1"):
