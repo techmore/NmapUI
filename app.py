@@ -37,6 +37,7 @@ from nmapui.handlers.auto_scan import (
 )
 from nmapui.handlers.history import register_history_handlers
 from nmapui.handlers.scans import register_scan_routes
+from nmapui.health import build_liveness_payload, build_readiness_payload
 from nmapui.handlers.updates import register_update_handlers
 from nmapui.jobs import (
     ClientJobRegistry,
@@ -601,6 +602,15 @@ versions: Dict[str, Optional[str]] = {
     "nmap": None,
     "vulners": None,
     "arp_scan": None,
+}
+
+startup_state = {
+    "startup_complete": False,
+    "dependency_checks_skipped": False,
+    "dependencies_ok": False,
+    "traceroute_initialized": False,
+    "last_started_at": None,
+    "errors": [],
 }
 
 
@@ -1838,6 +1848,13 @@ def generate_report_event(data):
 def startup_checks(quick=False):
     import platform
 
+    startup_state["startup_complete"] = False
+    startup_state["dependency_checks_skipped"] = bool(quick)
+    startup_state["dependencies_ok"] = False
+    startup_state["traceroute_initialized"] = False
+    startup_state["last_started_at"] = datetime.now().isoformat()
+    startup_state["errors"] = []
+
     logger.info("\n" + "=" * 50)
     logger.info("NmapUI Startup Checks")
     logger.info("=" * 50)
@@ -1849,6 +1866,7 @@ def startup_checks(quick=False):
 
     if quick:
         logger.info("Quick mode: skipping dependency checks")
+        startup_state["dependencies_ok"] = True
     else:
         logger.info("\nChecking nmap...")
         versions["nmap"] = check_nmap()
@@ -1893,12 +1911,14 @@ def startup_checks(quick=False):
                 versions["arp_scan"] = "arp-scan (version unknown)"
         else:
             versions["arp_scan"] = "Not installed"
+        startup_state["dependencies_ok"] = True
 
     logger.info("\nLoading previous customer assignment...")
     load_current_assignment()
 
     logger.info("\nInitializing network key...")
     run_traceroute("1.1.1.1")
+    startup_state["traceroute_initialized"] = not bool(network_key.get("error"))
     logger.info(f"Network key initialized with {network_key.get('total_hops', 0)} hops")
 
     logger.info("\n" + "=" * 50)
@@ -1913,21 +1933,41 @@ def startup_checks(quick=False):
 
     # Send initial auto scan status
     safe_emit("auto_scan_status", auto_scan_config)
+    startup_state["startup_complete"] = True
 
 @app.route("/api/health")
 def health_check():
     """Lightweight health endpoint for release smoke tests."""
     return jsonify(
-        {
-            "status": "ok",
-            "app_version": get_app_version(),
-            "default_interface": DEFAULT_INTERFACE,
-            "auto_scan_thread_alive": bool(
+        build_liveness_payload(
+            app_version=get_app_version(),
+            default_interface=DEFAULT_INTERFACE,
+            auto_scan_thread_alive=bool(
                 auto_scan_thread and auto_scan_thread.is_alive()
             ),
-            "tool_versions": get_versions(),
-        }
+            tool_versions=get_versions(),
+        )
     )
+
+
+@app.route("/api/health/live")
+def health_live():
+    """Explicit liveness probe for packaging smoke tests."""
+    return health_check()
+
+
+@app.route("/api/health/ready")
+def health_ready():
+    """Readiness/diagnostics probe for operational checks."""
+    payload, status_code = build_readiness_payload(
+        startup_state=startup_state,
+        app_version=get_app_version(),
+        default_interface=DEFAULT_INTERFACE,
+        auto_scan_thread_alive=bool(auto_scan_thread and auto_scan_thread.is_alive()),
+        tool_versions=get_versions(),
+    )
+    return jsonify(payload), status_code
+
 def start_auto_scan_thread():
     """Start the auto-scan worker once per process."""
     global auto_scan_thread
