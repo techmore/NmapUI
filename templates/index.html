@@ -873,11 +873,51 @@
                         </div>
                     </div>
                 </div>
-                <button onclick="runNewScanFromBanner()" class="ml-4 inline-flex items-center px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white text-sm font-medium rounded-lg transition-colors">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </div>
+        </div>
+    </div>
+
+    <!-- Post-Scan Summary Banner (hidden by default) -->
+    <div id="scan-summary-banner" class="mt-8 hidden">
+        <div class="bg-emerald-50 border-l-4 border-emerald-600 p-6 rounded-lg shadow-md">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-3">
+                        <span class="text-3xl">✅</span>
+                        <h3 class="text-xl font-display italic text-emerald-900">Scan Complete!</h3>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                        <!-- Duration -->
+                        <div class="bg-white p-3 rounded-lg border border-emerald-200">
+                            <div class="text-xs text-emerald-600 font-medium uppercase tracking-wider">Duration</div>
+                            <div id="summary-duration" class="text-2xl font-bold text-emerald-900">--</div>
+                        </div>
+
+                        <!-- Hosts Discovered -->
+                        <div class="bg-white p-3 rounded-lg border border-emerald-200">
+                            <div class="text-xs text-emerald-600 font-medium uppercase tracking-wider">Hosts Found</div>
+                            <div id="summary-hosts" class="text-2xl font-bold text-emerald-900">--</div>
+                        </div>
+
+                        <!-- Ports Discovered -->
+                        <div class="bg-white p-3 rounded-lg border border-emerald-200">
+                            <div class="text-xs text-emerald-600 font-medium uppercase tracking-wider">Open Ports</div>
+                            <div id="summary-ports" class="text-2xl font-bold text-emerald-900">--</div>
+                        </div>
+
+                        <!-- CVEs Found -->
+                        <div class="bg-white p-3 rounded-lg border border-amber-200">
+                            <div class="text-xs text-amber-600 font-medium uppercase tracking-wider">CVEs Found</div>
+                            <div id="summary-cves" class="text-2xl font-bold text-amber-900">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="hideScanSummaryBanner()" class="ml-4 text-emerald-400 hover:text-emerald-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                    Run New Scan
                 </button>
             </div>
         </div>
@@ -1528,6 +1568,10 @@
             // Refresh history counts as a new metadata file was likely saved
             socket.emit('get_history_counts');
         });
+        socket.on('scan_complete_summary', function(data) {
+            // Display the scan summary banner with statistics
+            showScanSummaryBanner(data);
+        });
         socket.on('scan_results', function(data) {
             // Handle both old format (array) and new format (object with metadata)
             const hosts = Array.isArray(data) ? data : data.hosts;
@@ -1830,15 +1874,34 @@
             banner.classList.add('hidden');
         }
 
-        function runNewScanFromBanner() {
-            // Trigger the main scan with current target
-            const target = document.getElementById('scan-target').value;
-            if (target) {
-                hideHistoricalDataBanner();
-                socket.emit('start_scan', { target });
-            } else {
-                alert('Please enter a target IP or network range');
-            }
+        // Scan Summary Banner Functions
+        function showScanSummaryBanner(data) {
+            const banner = document.getElementById('scan-summary-banner');
+
+            // Update duration
+            document.getElementById('summary-duration').textContent = data.duration_formatted || '--';
+
+            // Update hosts found
+            document.getElementById('summary-hosts').textContent = data.hosts_up || 0;
+
+            // Update open ports
+            document.getElementById('summary-ports').textContent = data.total_ports || 0;
+
+            // Update CVEs found
+            document.getElementById('summary-cves').textContent = data.total_cves || 0;
+
+            // Show the banner
+            banner.classList.remove('hidden');
+
+            // Auto-hide after 30 seconds
+            setTimeout(() => {
+                hideScanSummaryBanner();
+            }, 30000);
+        }
+
+        function hideScanSummaryBanner() {
+            const banner = document.getElementById('scan-summary-banner');
+            banner.classList.add('hidden');
         }
 
         // Customer Management Functions

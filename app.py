@@ -2,20 +2,22 @@ from flask import Flask, render_template, send_file, jsonify, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from typing import Dict, Optional
-import ipaddress
-import json
-import logging
-import os
-import re
-import shutil
 import subprocess
-import sys
+import re
+import json
+import ipaddress
+import socket
 import threading
-
-import netifaces as ni
 import requests
+import netifaces as ni
+import os
+import sys
+import shutil
 import yaml
-from datetime import datetime
+import logging
+import tempfile
+import glob as file_glob
+from datetime import datetime, timedelta
 from pathlib import Path
 from customer_fingerprint import CustomerFingerprinter
 
@@ -224,7 +226,87 @@ def restart_application():
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# ============================================================================
+# SECURITY: HTTP Basic Authentication
+# ============================================================================
+
+# Load auth config from environment or config file
+AUTH_USERNAME = os.environ.get("NMAPUI_USERNAME", "admin")
+AUTH_PASSWORD = os.environ.get("NMAPUI_PASSWORD", "nmapui123")  # Change in production!
+
+
+def check_auth(username, password):
+    """Validate credentials"""
+    return username == AUTH_USERNAME and password == AUTH_PASSWORD
+
+
+def require_auth(f):
+    """Decorator to require HTTP Basic Auth for Flask routes"""
+    from functools import wraps
+    from flask import request, jsonify
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def require_socket_auth():
+    """Check auth for SocketIO events - returns (authenticated, error_response)"""
+    # For SocketIO, we'll handle auth via a login event
+    # This is a placeholder - proper SocketIO auth would use tokens
+    return (True, None)
+
+
+# ============================================================================
+# SECURITY: Input Validation
+# ============================================================================
+
+
+def validate_target(target: str) -> tuple[bool, str]:
+    """
+    Validate scan target IP or CIDR.
+    Returns (is_valid, error_message)
+    """
+    if not target or not target.strip():
+        return False, "Target cannot be empty"
+
+    target = target.strip()
+
+    # Allow single IPs, CIDR ranges, and comma-separated lists
+    targets = [t.strip() for t in target.split(",")]
+
+    for t in targets:
+        try:
+            # Try as IP address
+            ipaddress.ip_address(t)
+        except ValueError:
+            try:
+                # Try as CIDR
+                net = ipaddress.ip_network(t, strict=False)
+                # Warn if scanning entire internet
+                if net == ipaddress.ip_network("0.0.0.0/0"):
+                    return False, "Cannot scan 0.0.0.0/0 (entire internet)"
+            except ValueError:
+                return False, f"Invalid target: {t}"
+
+    return True, None
+
+
+def sanitize_input(value: str) -> str:
+    """Sanitize string input to prevent injection attacks"""
+    if not value:
+        return ""
+    # Remove potentially dangerous characters
+    sanitized = re.sub(r"[;&|`${}()<>]", "", value)
+    return sanitized.strip()
+
 
 # Global network key - populated at startup
 network_key = {
@@ -255,6 +337,61 @@ auto_scan_config = {
     "end_time": "06:00",
     "last_run": None,
 }
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+
+
+class RateLimiter:
+    """Simple in-memory rate limiter for scan operations"""
+
+    def __init__(self, max_scans_per_hour=10, cooldown_seconds=300):
+        self.max_scans_per_hour = max_scans_per_hour
+        self.cooldown_seconds = cooldown_seconds
+        self.scan_timestamps = []
+        self.last_scan_time = None
+
+    def can_scan(self):
+        """Check if a new scan can be started"""
+        now = datetime.now()
+
+        # Check cooldown
+        if self.last_scan_time:
+            elapsed = (now - self.last_scan_time).total_seconds()
+            if elapsed < self.cooldown_seconds:
+                logger.warning(
+                    f"Scan cooldown active. Wait {int(self.cooldown_seconds - elapsed)}s more"
+                )
+                return (
+                    False,
+                    f"Cooldown active. Try again in {int(self.cooldown_seconds - elapsed)}s",
+                )
+
+        # Check hourly limit
+        one_hour_ago = now - timedelta(hours=1)
+        recent_scans = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
+
+        if len(recent_scans) >= self.max_scans_per_hour:
+            logger.warning(f"Rate limit reached: {self.max_scans_per_hour} scans/hour")
+            return False, f"Rate limit reached ({self.max_scans_per_hour} scans/hour)"
+
+        return True, None
+
+    def record_scan(self):
+        """Record a scan start"""
+        now = datetime.now()
+        self.scan_timestamps.append(now)
+        self.last_scan_time = now
+
+        # Clean old entries
+        one_hour_ago = now - timedelta(hours=1)
+        self.scan_timestamps = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
+
+        logger.info(f"Scan recorded. Total in last hour: {len(self.scan_timestamps)}")
+
+
+rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 
 
 def load_auto_scan_config():
@@ -289,6 +426,165 @@ def should_run_auto_scan():
     )
 
 
+def split_subnet_into_chunks(target):
+    """Split large subnets into /29 chunks (~8 hosts each) for manageable scanning"""
+    import ipaddress
+
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+        if network.num_addresses <= 8:  # /29 or smaller
+            return [target]
+
+        # Split into /29 chunks (~8 hosts each)
+        chunks = []
+        for subnet in network.subnets(new_prefix=29):
+            if subnet.num_addresses > 0:
+                chunks.append(str(subnet))
+            if (
+                len(chunks) >= 2048
+            ):  # Limit to prevent excessive chunks (increased for smaller chunks)
+                break
+        return chunks[:2048]  # Max 2048 chunks
+    except ValueError:
+        # Not a valid subnet, return as-is
+        return [target]
+
+
+def merge_nmap_xml_files(xml_files, output_path):
+    """Merge multiple Nmap XML files into one with updated statistics"""
+    import xml.etree.ElementTree as ET
+
+    if not xml_files:
+        raise ValueError("No XML files to merge")
+
+    # Parse first file as base
+    base_tree = ET.parse(xml_files[0])
+    base_root = base_tree.getroot()
+
+    # Find the nmaprun element
+    nmaprun = base_root
+
+    # Collect all hosts from all files
+    all_hosts = []
+    earliest_start = None
+    latest_end = None
+
+    for xml_file in xml_files:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        # Collect host elements
+        for host in root.findall("host"):
+            all_hosts.append(host)
+
+            # Track timing
+            status = host.find("status")
+            if status is not None and status.get("state") == "up":
+                starttime = host.get("starttime")
+                endtime = host.get("endtime")
+                if starttime:
+                    start_ts = int(starttime)
+                    if earliest_start is None or start_ts < earliest_start:
+                        earliest_start = start_ts
+                if endtime:
+                    end_ts = int(endtime)
+                    if latest_end is None or end_ts > latest_end:
+                        latest_end = end_ts
+
+    # Calculate totals
+    total_up = len(all_hosts)
+    total_ips = len(xml_files) * 8  # Each /29 chunk has 8 IPs
+    total_down = total_ips - total_up
+
+    # Remove existing host elements from base
+    for host in base_root.findall("host"):
+        base_root.remove(host)
+
+    # Add all collected hosts
+    for host in all_hosts:
+        nmaprun.append(host)
+
+    # Update runstats with combined statistics
+    runstats = base_root.find("runstats")
+    if runstats is not None:
+        finished = runstats.find("finished")
+        if finished is not None:
+            total_ips = total_up + total_down
+            # Calculate total elapsed time from earliest start to latest end
+            if earliest_start and latest_end:
+                total_elapsed = latest_end - earliest_start
+                elapsed_str = f"{total_elapsed // 60}m{total_elapsed % 60}s"
+            else:
+                elapsed_str = "unknown"
+            finished.set(
+                "summary",
+                f"Nmap done at {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}; {total_ips} IP addresses ({total_up} hosts up) scanned in {elapsed_str}",
+            )
+            finished.set(
+                "hosts", f"{total_up} up, {total_down} down, {total_ips} total"
+            )
+
+        hosts_elem = runstats.find("hosts")
+        if hosts_elem is not None:
+            total_ips = total_up + total_down
+            hosts_elem.set("up", str(total_up))
+            hosts_elem.set("down", str(total_down))
+            hosts_elem.set("total", str(total_ips))
+
+    # Update scaninfo with combined target
+    scaninfo = base_root.find("scaninfo")
+    if scaninfo is not None:
+        # Combine all targets from command line args
+        all_targets = []
+        for xml_file in xml_files:
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            args = root.get("args")
+            if args:
+                # Extract target from args (last part after space)
+                parts = args.split()
+                if parts:
+                    target = parts[-1]
+                    if target not in all_targets:
+                        all_targets.append(target)
+
+        if all_targets:
+            combined_target = " ".join(all_targets)
+            scaninfo.set("numservices", "1000")  # Keep original
+
+    # Write merged XML with proper headers
+    # Read the first XML file to get headers
+    with open(xml_files[0], "r", encoding="utf-8") as f:
+        first_content = f.read()
+
+    # Extract headers (everything before <nmaprun>)
+    header_end = first_content.find("<nmaprun")
+    if header_end != -1:
+        headers = first_content[:header_end]
+    else:
+        headers = '<?xml version="1.0" encoding="UTF-8"?>\n'
+
+    # Extract footer (everything after </nmaprun>)
+    footer_start = first_content.find("</nmaprun>") + len("</nmaprun>")
+    if footer_start > 0:
+        footer = first_content[footer_start:]
+    else:
+        footer = ""
+
+    # Convert tree to string without declaration (we'll add it with headers)
+    import io
+
+    xml_string = io.StringIO()
+    base_tree.write(xml_string, encoding="unicode", xml_declaration=False)
+    merged_content = xml_string.getvalue()
+
+    # Combine headers + merged content + footer
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(headers)
+        f.write(merged_content)
+        f.write(footer)
+
+
 def execute_auto_scan():
     """Execute automatic scan using current target"""
     # Use the last scan target or current network
@@ -296,19 +592,35 @@ def execute_auto_scan():
 
     if not target:
         logger.warning("No target available for auto scan")
+        safe_emit("auto_scan_error", {"error": "No target configured"})
         return
 
-    # Get current customer
-    customer_name = current_customer.get("name", "Auto Scan")
-    customer_name = customer_name.split(" (")[0]  # Remove confidence
+    # Validate target before scanning
+    is_valid, error_msg = validate_target(target)
+    if not is_valid:
+        logger.error(f"Auto scan validation failed: {error_msg}")
+        safe_emit("auto_scan_error", {"error": error_msg})
+        return
+
+    # Check rate limit
+    can_scan, rate_msg = rate_limiter.can_scan()
+    if not can_scan:
+        logger.warning(f"Auto scan rate limited: {rate_msg}")
+        safe_emit("auto_scan_error", {"error": rate_msg})
+        return
+
+    customer_name = current_customer.get("name", "Unknown").split(" (")[
+        0
+    ]  # Remove confidence
+
+    logger.info(f"Executing auto scan for target: {target}, customer: {customer_name}")
 
     try:
-        # Trigger visual feedback (pulsing) on generate report button
-        safe_emit("start_report_generation", {"auto_scan": True})
+        # Record this scan
+        rate_limiter.record_scan()
 
-        # Trigger the same report generation process with auto_scan flag
-        socketio.emit(
-            "generate_report",
+        safe_emit(
+            "trigger_generate_report",
             {"target": target, "customer_name": customer_name, "auto_scan": True},
         )
 
@@ -577,18 +889,6 @@ def get_report_counts():
             continue
 
     return counts
-
-
-@socketio.on("connect")
-def handle_connect():
-    """Handle client connection - send initial state"""
-    logger.info("Client connected")
-    # Send auto scan status to newly connected client
-    emit("auto_scan_status", auto_scan_config)
-    # Send version information
-    emit("versions", get_versions())
-    # Send history counts
-    emit("history_counts", get_report_counts())
 
 
 @socketio.on("get_history_counts")
@@ -1503,8 +1803,29 @@ def start_deep_scan(targets, is_gateway_phase=False):
 
 
 @socketio.on("start_scan")
-def start_scan(target):
+def start_scan(data):
+    """Handle scan start request with validation"""
     try:
+        # Extract target from data (handles both old format (target) and new format {target: ...})
+        if isinstance(data, dict):
+            target = data.get("target", "")
+        else:
+            target = str(data) if data else ""
+
+        # Validate target
+        is_valid, error_msg = validate_target(target)
+        if not is_valid:
+            emit("scan_error", f"Invalid target: {error_msg}")
+            return
+
+        # Check rate limit
+        can_scan, rate_msg = rate_limiter.can_scan()
+        if not can_scan:
+            emit("scan_error", rate_msg)
+            return
+
+        # Record scan start
+        rate_limiter.record_scan()
         idle_state_manager.start_operation("quick_scan")
         emit("quick_scan_start", f"Starting quick scan on {target}")
         command_str = f"nmap -sn {target}"
@@ -2010,7 +2331,7 @@ def convert_xml_to_html(xml_path, html_path, pdf_optimized=True):
 
 
 def convert_html_to_pdf(html_path, pdf_path):
-    """Convert HTML to PDF using wkhtmltopdf or weasyprint"""
+    """Convert HTML to PDF using wkhtmltopdf, weasyprint, or pyppeteer"""
     # Try wkhtmltopdf first
     wkhtml = shutil.which("wkhtmltopdf")
     if wkhtml:
@@ -2051,17 +2372,87 @@ def convert_html_to_pdf(html_path, pdf_path):
     except Exception as e:
         logger.error(f"weasyprint failed: {e}")
 
+    # Final fallback to playwright (Chromium-based)
+    socketio.emit("scan_feedback", f"Falling back to playwright for PDF generation")
+    try:
+        import asyncio
+        from playwright.async_api import async_playwright
+
+        async def generate_pdf():
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+                page = await browser.new_page()
+                await page.goto(f"file://{html_path.resolve()}")
+                await page.pdf(
+                    path=str(pdf_path),
+                    format="A4",
+                    print_background=True,
+                    margin={
+                        "top": "0mm",
+                        "right": "0mm",
+                        "bottom": "0mm",
+                        "left": "0mm",
+                    },
+                )
+                await browser.close()
+
+        asyncio.run(generate_pdf())
+        return True
+    except Exception as e:
+        logger.error(f"playwright failed: {e}")
+
+    # Ultimate fallback to macOS textutil
+    socketio.emit("scan_feedback", f"Falling back to textutil for PDF generation")
+    try:
+        cmd = ["textutil", "-convert", "pdf", "-output", str(pdf_path), str(html_path)]
+        command_str = " ".join(cmd)
+        socketio.emit("scan_feedback", f"Executing: textutil HTML to PDF")
+        socketio.sleep(0)
+
+        subprocess.run(cmd, check=True, capture_output=True)
+        return True
+    except Exception as e:
+        logger.error(f"textutil failed: {e}")
+
     return False
 
 
-def save_scan_metadata(scan_dir, customer_name, target, files):
-    """Save scan metadata to JSON file"""
+def save_scan_metadata(
+    scan_dir, customer_name, target, files, start_time=None, end_time=None
+):
+    """
+    Save scan metadata to JSON file with duration tracking.
+
+    Args:
+        scan_dir: Directory where scan results are stored
+        customer_name: Name of the customer
+        target: Scan target (IP/CIDR)
+        files: Dictionary of output files
+        start_time: Scan start datetime (optional)
+        end_time: Scan end datetime (optional)
+    """
+    # Calculate duration if both times provided
+    duration_seconds = None
+    duration_formatted = None
+
+    if start_time and end_time:
+        duration = end_time - start_time
+        duration_seconds = duration.total_seconds()
+        duration_minutes = int(duration_seconds // 60)
+        duration_secs = int(duration_seconds % 60)
+        duration_formatted = f"{duration_minutes}m{duration_secs}s"
+
     metadata = {
         "customer_name": customer_name,
         "target": target,
         "timestamp": datetime.now().isoformat(),
         "date": datetime.now().strftime("%Y-%m-%d"),
         "time": datetime.now().strftime("%H:%M:%S"),
+        # Duration tracking
+        "scan_start_time": start_time.isoformat() if start_time else None,
+        "scan_end_time": end_time.isoformat() if end_time else None,
+        "duration_seconds": duration_seconds,
+        "duration_formatted": duration_formatted,
         "network_key": network_key,
         "customer_info": current_customer,
         "files": {k: str(v) for k, v in files.items()},
@@ -2069,6 +2460,79 @@ def save_scan_metadata(scan_dir, customer_name, target, files):
 
     with open(scan_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
+
+
+def extract_scan_statistics(xml_path):
+    """
+    Extract comprehensive scan statistics from nmap XML output.
+
+    Args:
+        xml_path: Path to nmap XML file
+
+    Returns:
+        dict: Scan statistics including hosts, ports, timing, and CVE counts
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        stats = {
+            "total_hosts": 0,
+            "hosts_up": 0,
+            "hosts_down": 0,
+            "total_ports_found": 0,
+            "scan_elapsed_seconds": None,
+            "total_cves": 0,
+        }
+
+        # Extract from runstats element
+        runstats = root.find("runstats")
+        if runstats:
+            hosts_elem = runstats.find("hosts")
+            if hosts_elem:
+                stats["hosts_up"] = int(hosts_elem.get("up", 0))
+                stats["hosts_down"] = int(hosts_elem.get("down", 0))
+                stats["total_hosts"] = int(hosts_elem.get("total", 0))
+
+            finished = runstats.find("finished")
+            if finished:
+                stats["scan_elapsed_seconds"] = float(finished.get("elapsed", 0))
+
+        # Count open ports and CVEs
+        for host in root.findall("host"):
+            ports_elem = host.find("ports")
+            if ports_elem:
+                for port in ports_elem.findall("port"):
+                    state = port.find("state")
+                    if state and state.get("state") == "open":
+                        stats["total_ports_found"] += 1
+
+                    # Count CVEs from vulners script
+                    for script in port.findall("script"):
+                        if script.get("id") == "vulners":
+                            # Parse vulners output for CVE count
+                            for table in script.findall(".//table"):
+                                for elem in table.findall("elem"):
+                                    if elem.get("key") == "id" and "CVE" in (
+                                        elem.text or ""
+                                    ):
+                                        stats["total_cves"] += 1
+
+        logger.info(f"Extracted scan statistics: {stats}")
+        return stats
+
+    except Exception as e:
+        logger.error(f"Failed to extract scan statistics from {xml_path}: {e}")
+        return {
+            "total_hosts": 0,
+            "hosts_up": 0,
+            "hosts_down": 0,
+            "total_ports_found": 0,
+            "scan_elapsed_seconds": None,
+            "total_cves": 0,
+        }
 
 
 def parse_scan_xml_for_assets(xml_path):
@@ -2139,9 +2603,8 @@ def parse_scan_xml_for_assets(xml_path):
                 if hostname is not None:
                     asset["hostname"] = hostname.get("name", "")
 
-            # Extract open ports, versions, and vulnerabilities
+            # Extract open ports and vulnerabilities
             ports_elem = host.find("ports")
-            version_info = []
             if ports_elem is not None:
                 open_ports = []
                 for port in ports_elem.findall("port"):
@@ -2155,22 +2618,12 @@ def parse_scan_xml_for_assets(xml_path):
                         service_product = (
                             service.get("product", "") if service is not None else ""
                         )
-                        service_version = (
-                            service.get("version", "") if service is not None else ""
-                        )
 
                         # Format port with service name
                         if service_name:
                             open_ports.append(f"{port_id} ({service_name})")
                         else:
                             open_ports.append(port_id)
-
-                        # Collect version information
-                        if service_product:
-                            version_str = service_product
-                            if service_version:
-                                version_str += f" {service_version}"
-                            version_info.append(f"{port_id}:{version_str}")
 
                         # Extract vulnerability data from vulners script
                         for script in port.findall("script"):
@@ -2181,16 +2634,6 @@ def parse_scan_xml_for_assets(xml_path):
                                 asset["vulnerabilities"].extend(vulns)
 
                 asset["ports"] = ", ".join(open_ports)
-
-            # Transform to match frontend expected format
-            asset["open_ports"] = asset["ports"]  # Frontend expects 'open_ports'
-            asset["version"] = ", ".join(version_info) if version_info else ""
-
-            # Format CVEs as comma-separated string
-            cve_list = [
-                v.get("cve_id", "") for v in asset["vulnerabilities"] if v.get("cve_id")
-            ]
-            asset["cves"] = ", ".join(cve_list) if cve_list else ""
 
             # Only add assets that have an IP address
             if asset["ip"]:
@@ -2494,7 +2937,6 @@ def delete_scan(path):
 @socketio.on("generate_report")
 def generate_report_event(data):
     """Handle report generation request via SocketIO"""
-    logger.info("generate_report event received with data: %s", data)
     idle_state_manager.start_operation("report_generation")
     target = data.get("target")
     is_auto_scan = data.get("auto_scan", False)
@@ -2515,6 +2957,17 @@ def generate_report_event(data):
         emit("report_error", {"error": "No target specified"})
         idle_state_manager.end_operation("report_generation")
         return
+
+    # Split large subnets into manageable chunks
+    targets = split_subnet_into_chunks(target)
+    num_chunks = len(targets)
+    logger.info(f"Target split into {num_chunks} chunks: {targets}")
+
+    if num_chunks > 1:
+        emit(
+            "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks"
+        )
+        socketio.sleep(0)
 
     # Log report generation start
     logger.info("=" * 60)
@@ -2542,14 +2995,41 @@ def generate_report_event(data):
         socketio.sleep(0)
 
         # Phase 2: Run nmap scan (this is the long-running part)
-        emit(
-            "scan_feedback",
-            "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
-        )
-        socketio.sleep(0)
-        if not run_nmap_with_xml_output(target, output_base, "comprehensive"):
-            emit("report_error", {"error": "Nmap scan failed"})
-            return
+        xml_files = []
+        for i, chunk_target in enumerate(targets):
+            if num_chunks > 1:
+                emit(
+                    "scan_feedback",
+                    f"🔍 Scanning chunk {i + 1}/{num_chunks}: {chunk_target}",
+                )
+            else:
+                emit(
+                    "scan_feedback",
+                    "🔍 Starting nmap comprehensive scan (this may take 5-10 minutes)...",
+                )
+            socketio.sleep(0)
+
+            if num_chunks == 1:
+                chunk_output_base = output_base
+            else:
+                chunk_output_base = scan_dir / f"scan_chunk_{i}"
+
+            if not run_nmap_with_xml_output(
+                chunk_target, chunk_output_base, "comprehensive"
+            ):
+                emit("report_error", {"error": f"Nmap scan failed on chunk {i + 1}"})
+                return
+
+            xml_files.append(chunk_output_base.with_suffix(".xml"))
+
+        # If multiple chunks, merge XML files
+        if num_chunks > 1:
+            emit("scan_feedback", "🔀 Merging scan results from chunks...")
+            socketio.sleep(0)
+            xml_path = scan_dir / "scan.xml"
+            merge_nmap_xml_files(xml_files, xml_path)
+        else:
+            xml_path = output_base.with_suffix(".xml")
 
         # Phase 3: Convert to HTML/PDF
         xml_path = scan_dir / "scan.xml"
@@ -2560,15 +3040,40 @@ def generate_report_event(data):
         emit("scan_feedback", "📄 Converting XML to HTML (web view)...")
         socketio.sleep(0)
         # Use the premium Olive PDF stylesheet for BOTH views for consistency
-        convert_xml_to_html(xml_path, web_html_path)
+        if convert_xml_to_html(xml_path, web_html_path):
+            file_size = web_html_path.stat().st_size if web_html_path.exists() else 0
+            logger.info(f"✓ Web HTML created: {web_html_path} ({file_size} bytes)")
+            emit("scan_feedback", f"✓ Web HTML: {file_size} bytes")
+        else:
+            logger.error("✗ Web HTML conversion failed")
+            emit("scan_feedback", "✗ Web HTML conversion failed")
 
         emit("scan_feedback", "📄 Converting XML to HTML (PDF view)...")
         socketio.sleep(0)
-        convert_xml_to_html(xml_path, pdf_html_path)
+        if convert_xml_to_html(xml_path, pdf_html_path):
+            file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
+            logger.info(f"✓ PDF HTML created: {pdf_html_path} ({file_size} bytes)")
+            emit("scan_feedback", f"✓ PDF HTML: {file_size} bytes")
+        else:
+            logger.error("✗ PDF HTML conversion failed")
+            emit("scan_feedback", "✗ PDF HTML conversion failed")
 
         emit("scan_feedback", "📑 Generating PDF report...")
         socketio.sleep(0)
-        convert_html_to_pdf(pdf_html_path, pdf_path)
+        if convert_html_to_pdf(pdf_html_path, pdf_path):
+            file_size = pdf_path.stat().st_size if pdf_path.exists() else 0
+            logger.info(f"✓ PDF created: {pdf_path} ({file_size} bytes)")
+            emit("scan_feedback", f"✓ PDF: {file_size} bytes")
+        else:
+            logger.warning("PDF generation failed - HTML reports are fully functional")
+            emit(
+                "scan_feedback",
+                "✅ HTML reports complete - open in browser or print to PDF manually",
+            )
+            emit(
+                "scan_feedback",
+                f"📄 Files: {web_html_path.name} & {pdf_html_path.name} ({pdf_html_path.stat().st_size} bytes each)",
+            )
 
         files = {
             "xml": xml_path,
@@ -2579,16 +3084,36 @@ def generate_report_event(data):
             "gnmap": scan_dir / "scan.gnmap",
         }
 
-        emit("scan_feedback", "💾 Saving scan metadata...")
-        socketio.sleep(0)
-        save_scan_metadata(scan_dir, customer_name, target, files)
-
-        # Calculate duration and update customer
+        # Calculate duration
         end_time = datetime.now()
         duration = end_time - start_time
         duration_minutes = int(duration.total_seconds() // 60)
         duration_seconds = int(duration.total_seconds() % 60)
         duration_str = f"{duration_minutes}m{duration_seconds}s"
+
+        emit("scan_feedback", "💾 Saving scan metadata with duration...")
+        socketio.sleep(0)
+        save_scan_metadata(scan_dir, customer_name, target, files, start_time, end_time)
+
+        # Extract scan statistics from XML
+        emit("scan_feedback", "📊 Extracting scan statistics...")
+        socketio.sleep(0)
+        scan_stats = extract_scan_statistics(xml_path)
+
+        # Send scan summary banner to client
+        emit(
+            "scan_complete_summary",
+            {
+                "duration_formatted": duration_str,
+                "hosts_up": scan_stats.get("hosts_up", 0) if scan_stats else 0,
+                "total_ports": scan_stats.get("total_ports_found", 0)
+                if scan_stats
+                else 0,
+                "total_cves": scan_stats.get("total_cves", 0) if scan_stats else 0,
+                "target": target,
+            },
+        )
+        socketio.sleep(0)
 
         logger.info(f"Report generation completed in {duration_str}")
         emit("scan_feedback", f"✅ Report generation completed in {duration_str}")
@@ -2794,4 +3319,4 @@ auto_scan_thread.start()
 if __name__ == "__main__":
     quick_mode = "--quick" in sys.argv or "-q" in sys.argv
     startup_checks(quick=quick_mode)
-    socketio.run(app, debug=True, port=9000, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0", port=9000, debug=True, allow_unsafe_werkzeug=True)

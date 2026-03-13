@@ -7,3 +7,4 @@ requests
 reportlab
 Pillow
 PyYAML
+playwright  # For PDF generation on Apple Silicon

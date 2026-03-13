@@ -509,15 +509,416 @@ Updated: 2026
             <div class="grid grid-cols-3 gap-4 mb-6">
               <div class="text-center">
                 <div class="text-3xl font-bold text-olive-900"><xsl:value-of select="/nmaprun/runstats/hosts/@total"/></div>
-                <div class="text-sm text-olive-600">Total Hosts</div>
+                <div class="text-sm text-olive-600">Total IPs Scanned</div>
               </div>
               <div class="text-center">
                 <div class="text-3xl font-bold text-olive-600"><xsl:value-of select="/nmaprun/runstats/hosts/@up"/></div>
-                <div class="text-sm text-olive-600">Hosts Up</div>
+                <div class="text-sm text-olive-600">Hosts Online</div>
               </div>
               <div class="text-center">
                 <div class="text-3xl font-bold text-olive-400"><xsl:value-of select="/nmaprun/runstats/hosts/@down"/></div>
-                <div class="text-sm text-olive-600">Hosts Down</div>
+                <div class="text-sm text-olive-600">Hosts Offline</div>
+              </div>
+            </div>
+
+            <!-- Enhanced Summary Dashboard -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+              <!-- Critical Vulnerabilities -->
+              <div class="card p-4">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <span class="text-red-600 font-bold text-sm">!</span>
+                    </div>
+                  </div>
+                  <div class="ml-3">
+                    <div class="text-2xl font-bold text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '9.') or contains(@output, '10.')])"/>
+                    </div>
+                    <div class="text-sm text-olive-600">Critical Vulns (CVSS ≥9.0)</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Device Types -->
+              <div class="card p-4">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-olive-100 rounded-full flex items-center justify-center">
+                      <span class="text-olive-600 font-bold text-sm">🖥️</span>
+                    </div>
+                  </div>
+                  <div class="ml-3">
+                    <div class="text-2xl font-bold text-olive-700">
+                      <xsl:value-of select="count(/nmaprun/host[os/osmatch/@name])"/>
+                    </div>
+                    <div class="text-sm text-olive-600">OS Identified</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Open Ports -->
+              <div class="card p-4">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span class="text-blue-600 font-bold text-sm">🔓</span>
+                    </div>
+                  </div>
+                  <div class="ml-3">
+                    <div class="text-2xl font-bold text-blue-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open'])"/>
+                    </div>
+                    <div class="text-sm text-olive-600">Total Open Ports</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Web Services -->
+              <div class="card p-4">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <span class="text-green-600 font-bold text-sm">🌐</span>
+                    </div>
+                  </div>
+                  <div class="ml-3">
+                    <div class="text-2xl font-bold text-green-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and (service/@name='http' or service/@name='https' or service/@tunnel='ssl')])"/>
+                    </div>
+                    <div class="text-sm text-olive-600">Web Services</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Network & Vulnerability Summary -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              <!-- Network Range -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Network Scanned</h3>
+                <div class="space-y-1">
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">Target:</span>
+                    <xsl:value-of select="substring-after(/nmaprun/@args, ' ')"/>
+                  </div>
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">IPs:</span> <xsl:value-of select="/nmaprun/runstats/hosts/@total"/>
+                  </div>
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">Started:</span> <xsl:value-of select="/nmaprun/@startstr"/>
+                  </div>
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">Duration:</span>
+                    <xsl:value-of select="/nmaprun/runstats/finished/@elapsed"/>s
+                  </div>
+                </div>
+              </div>
+
+              <!-- Vulnerability Severity -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Vulnerability Levels</h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-red-600 font-medium">Critical (CVSS ≥9.0)</span>
+                    <span class="text-sm font-bold text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '9.') or contains(@output, '10.')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-orange-600 font-medium">High (CVSS ≥7.0)</span>
+                    <span class="text-sm font-bold text-orange-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '7.') or contains(@output, '8.')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-yellow-600 font-medium">Medium (CVSS ≥4.0)</span>
+                    <span class="text-sm font-bold text-yellow-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '4.') or contains(@output, '5.') or contains(@output, '6.')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-green-600 font-medium">Low (CVSS &lt;4.0)</span>
+                    <span class="text-sm font-bold text-green-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '0.') or contains(@output, '1.') or contains(@output, '2.') or contains(@output, '3.')])"/>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Device Vendors -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Top Vendors</h3>
+                <div class="space-y-2">
+                  <xsl:for-each select="/nmaprun/host/address[@addrtype='mac']/@vendor[not(. = preceding::address/@vendor)]">
+                    <xsl:sort select="count(/nmaprun/host[address[@addrtype='mac' and @vendor=current()]])" data-type="number" order="descending"/>
+                    <xsl:if test="position() &lt;= 5 and string-length(.) > 0">
+                      <div class="flex justify-between items-center">
+                        <span class="text-sm text-olive-700 truncate max-w-xs" title="{.}">
+                          <xsl:value-of select="substring(., 1, 25)"/>
+                          <xsl:if test="string-length(.) > 25">...</xsl:if>
+                        </span>
+                        <span class="text-sm font-medium text-olive-900 ml-2">
+                          <xsl:value-of select="count(/nmaprun/host[address[@addrtype='mac' and @vendor=current()]])"/>
+                        </span>
+                      </div>
+                    </xsl:if>
+                  </xsl:for-each>
+                </div>
+              </div>
+            </div>
+
+            <!-- Security Risk Assessment -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <!-- High-Risk Services -->
+              <div class="card p-4 border-l-4 border-red-400">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3 flex items-center">
+                  <span class="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
+                  High-Risk Services
+                </h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">SSH Servers</span>
+                    <span class="text-sm font-medium text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and service/@name='ssh'])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Remote Desktop</span>
+                    <span class="text-sm font-medium text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and (service/@name='rdp' or service/@name='ms-wbt-server')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">SMB/File Shares</span>
+                    <span class="text-sm font-medium text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and (service/@name='netbios-ssn' or service/@name='microsoft-ds')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Telnet (Unencrypted)</span>
+                    <span class="text-sm font-medium text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and service/@name='telnet'])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">FTP (Unencrypted)</span>
+                    <span class="text-sm font-medium text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and service/@name='ftp'])"/>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Compliance & Security Issues -->
+              <div class="card p-4 border-l-4 border-orange-400">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3 flex items-center">
+                  <span class="w-3 h-3 bg-orange-500 rounded-full mr-2"></span>
+                  Security Issues
+                </h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Default HTTP Ports</span>
+                    <span class="text-sm font-medium text-orange-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and @portid='80' and service/@name='http' and not(service/@tunnel='ssl')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Hosts with >10 Open Ports</span>
+                    <span class="text-sm font-medium text-orange-600">
+                      <xsl:value-of select="count(/nmaprun/host[count(ports/port[state/@state='open']) > 10])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Unknown Services</span>
+                    <span class="text-sm font-medium text-orange-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and service/@name='unknown'])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Outdated SSL/TLS</span>
+                    <span class="text-sm font-medium text-orange-600">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[script[@id='ssl-enum-ciphers'] and script/elem[contains(text(), 'SSLv3') or contains(text(), 'TLSv1.0') or contains(text(), 'TLSv1.1')]])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Hosts Without Hostnames</span>
+                    <span class="text-sm font-medium text-orange-600">
+                      <xsl:value-of select="count(/nmaprun/host[not(hostnames/hostname/@name) or hostnames/hostname/@name=''])"/>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top 10 Most Vulnerable & Most Open Ports -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <!-- Hosts with Vulnerabilities -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Hosts with Vulnerabilities</h3>
+                <div class="space-y-2 max-h-64 overflow-y-auto">
+                  <xsl:for-each select="/nmaprun/host[script[@id='vulners']]">
+                    <xsl:if test="position() &lt;= 10">
+                      <div class="flex justify-between items-center py-1">
+                        <span class="text-sm font-mono text-olive-700">
+                          <xsl:value-of select="address/@addr"/>
+                        </span>
+                        <span class="text-sm font-medium text-red-600 bg-red-50 px-2 py-1 rounded">
+                          <xsl:if test="contains(script[@id='vulners']/@output, '9.') or contains(script[@id='vulners']/@output, '10.')">
+                            Critical
+                          </xsl:if>
+                          <xsl:if test="contains(script[@id='vulners']/@output, '7.') or contains(script[@id='vulners']/@output, '8.')">
+                            High
+                          </xsl:if>
+                        </span>
+                      </div>
+                    </xsl:if>
+                  </xsl:for-each>
+                </div>
+              </div>
+
+              <!-- Hosts with Most Open Ports -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Most Open Ports</h3>
+                <div class="space-y-2 max-h-64 overflow-y-auto">
+                  <xsl:for-each select="/nmaprun/host">
+                    <xsl:sort select="count(ports/port[state/@state='open'])" data-type="number" order="descending"/>
+                    <xsl:if test="position() &lt;= 10 and count(ports/port[state/@state='open']) > 0">
+                      <div class="flex justify-between items-center py-1">
+                        <span class="text-sm font-mono text-olive-700">
+                          <xsl:value-of select="address/@addr"/>
+                        </span>
+                        <span class="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                          <xsl:value-of select="count(ports/port[state/@state='open'])"/> ports
+                        </span>
+                      </div>
+                    </xsl:if>
+                  </xsl:for-each>
+                </div>
+              </div>
+            </div>
+
+            <!-- Network Health & Performance -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <!-- Network Utilization -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Network Utilization</h3>
+                <div class="space-y-3">
+                  <div>
+                    <div class="flex justify-between text-sm mb-1">
+                      <span class="text-olive-700">IP Space Used</span>
+                      <span class="font-medium text-olive-900">
+                        <xsl:value-of select="format-number(/nmaprun/runstats/hosts/@up div /nmaprun/runstats/hosts/@total * 100, '0.1')"/>%
+                      </span>
+                    </div>
+                    <div class="w-full bg-olive-200 rounded-full h-2">
+                      <div class="bg-olive-600 h-2 rounded-full">
+                        <xsl:attribute name="style">width: <xsl:value-of select="/nmaprun/runstats/hosts/@up div /nmaprun/runstats/hosts/@total * 100"/>%</xsl:attribute>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-xs text-olive-600">
+                    <xsl:value-of select="/nmaprun/runstats/hosts/@up"/> of <xsl:value-of select="/nmaprun/runstats/hosts/@total"/> IPs responding
+                  </div>
+                </div>
+              </div>
+
+              <!-- Scan Performance -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Scan Performance</h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Duration</span>
+                    <span class="text-sm font-medium text-olive-900">
+                      <xsl:value-of select="/nmaprun/runstats/finished/@elapsed"/>s
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Avg per Host</span>
+                    <span class="text-sm font-medium text-olive-900">
+                      <xsl:value-of select="format-number(/nmaprun/runstats/finished/@elapsed div /nmaprun/runstats/hosts/@total, '0.1')"/>s
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Hosts/sec</span>
+                    <span class="text-sm font-medium text-olive-900">
+                      <xsl:value-of select="format-number(/nmaprun/runstats/hosts/@total div /nmaprun/runstats/finished/@elapsed, '0.1')"/>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Data Collection Summary -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Data Collected</h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">OS Fingerprints</span>
+                    <span class="text-sm font-medium text-olive-900">
+                      <xsl:value-of select="count(/nmaprun/host[os/osmatch])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Service Versions</span>
+                    <span class="text-sm font-medium text-olive-900">
+                      <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open' and service/@version])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">MAC Addresses</span>
+                    <span class="text-sm font-medium text-olive-900">
+                      <xsl:value-of select="count(/nmaprun/host/address[@addrtype='mac'])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-olive-700">Vulnerability Scans</span>
+                    <span class="text-sm font-medium text-olive-900">
+                      <xsl:value-of select="count(/nmaprun/host[script[@id='vulners']])"/>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top Services & OS Summary -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <!-- Top Services -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Top Services</h3>
+                <div class="space-y-2">
+                  <xsl:for-each select="/nmaprun/host/ports/port[state/@state='open']/service/@name[not(. = preceding::service/@name)]">
+                    <xsl:sort select="count(/nmaprun/host/ports/port[state/@state='open']/service[@name=current()])" data-type="number" order="descending"/>
+                    <xsl:if test="position() &lt;= 5">
+                      <div class="flex justify-between items-center">
+                        <span class="text-sm text-olive-700"><xsl:value-of select="."/></span>
+                        <span class="text-sm font-medium text-olive-900">
+                          <xsl:value-of select="count(/nmaprun/host/ports/port[state/@state='open']/service[@name=current()])"/>
+                        </span>
+                      </div>
+                    </xsl:if>
+                  </xsl:for-each>
+                </div>
+              </div>
+
+              <!-- OS Distribution -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">OS Distribution</h3>
+                <div class="space-y-2">
+                  <xsl:for-each select="/nmaprun/host/os/osmatch/@name[not(. = preceding::osmatch/@name)]">
+                    <xsl:sort select="count(/nmaprun/host[os/osmatch/@name=current()])" data-type="number" order="descending"/>
+                    <xsl:if test="position() &lt;= 5">
+                      <div class="flex justify-between items-center">
+                        <span class="text-sm text-olive-700 truncate max-w-xs" title="{.}">
+                          <xsl:value-of select="substring(., 1, 30)"/>
+                          <xsl:if test="string-length(.) > 30">...</xsl:if>
+                        </span>
+                        <span class="text-sm font-medium text-olive-900 ml-2">
+                          <xsl:value-of select="count(/nmaprun/host[os/osmatch/@name=current()])"/>
+                        </span>
+                      </div>
+                    </xsl:if>
+                  </xsl:for-each>
+                </div>
               </div>
             </div>
             
