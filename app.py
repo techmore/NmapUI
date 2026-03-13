@@ -35,6 +35,7 @@ from nmapui.handlers.auto_scan import (
     register_auto_scan_handlers,
     start_auto_scan_thread as handler_start_auto_scan_thread,
 )
+from nmapui.handlers.history import register_history_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.jobs import (
     ClientJobRegistry,
@@ -567,6 +568,21 @@ register_scan_routes(
         "resolve_scan_path": resolve_scan_path,
         "load_json_document": load_json_document,
         "normalize_scan_metadata_document": normalize_scan_metadata_document,
+        "logger": logger,
+    },
+)
+register_history_handlers(
+    socketio,
+    {
+        "get_most_recent_scan_xml": get_most_recent_scan_xml,
+        "customer_fingerprinter": customer_fingerprinter,
+        "scans_dir": SCANS_DIR,
+        "sanitize_customer_dir_name": sanitize_customer_dir_name,
+        "parse_scan_xml_for_assets": parse_scan_xml_for_assets,
+        "get_versions": get_versions,
+        "emit_job_status": emit_job_status,
+        "job_registry": job_registry,
+        "emit_to_client": emit_to_client,
         "logger": logger,
     },
 )
@@ -1355,175 +1371,6 @@ def load_current_assignment():
 
     except Exception as e:
         logger.error(f"Error loading current assignment: {e}")
-
-
-# Asset Resume / Historical Data Socket Events
-@socketio.on("check_resumable_scan")
-def check_resumable_scan_event(data):
-    """
-    Check if there's a recent scan available for resumption.
-    Called when a customer is identified.
-    """
-    customer_id = data.get("customer_id")
-    max_days = data.get("max_days", 7)
-
-    if not customer_id or customer_id == "unknown":
-        emit("resumable_scan_check", {"available": False})
-        return
-
-    xml_path, metadata = get_most_recent_scan_xml(
-        customer_id,
-        customers=customer_fingerprinter.customers,
-        scans_dir=SCANS_DIR,
-        sanitize_customer_dir_name=sanitize_customer_dir_name,
-        max_days=max_days,
-    )
-
-    if xml_path and metadata:
-        # Calculate scan age
-        scan_time = datetime.fromisoformat(metadata.get("timestamp"))
-        age_seconds = (datetime.now() - scan_time).total_seconds()
-        age_days = int(age_seconds / (24 * 3600))
-
-        # Parse XML to count assets
-        assets = parse_scan_xml_for_assets(xml_path)
-        total_vulns = sum(len(asset.get("vulnerabilities", [])) for asset in assets)
-
-        emit(
-            "resumable_scan_check",
-            {
-                "available": True,
-                "scan_date": metadata.get("timestamp"),
-                "target": metadata.get("target"),
-                "duration": "N/A",  # Can be calculated if needed
-                "total_hosts": len(assets),
-                "total_vulnerabilities": total_vulns,
-                "age_days": age_days,
-                "age_seconds": int(age_seconds),
-            },
-        )
-    else:
-        emit("resumable_scan_check", {"available": False})
-
-
-@socketio.on("resume_from_last_scan")
-def resume_from_last_scan_event(data):
-    """
-    Load and emit assets from the most recent scan XML.
-    """
-    customer_id = data.get("customer_id")
-    max_days = data.get("max_days", 7)
-
-    if not customer_id:
-        emit("resume_scan_error", {"error": "No customer ID provided"})
-        return
-
-    xml_path, metadata = get_most_recent_scan_xml(
-        customer_id,
-        customers=customer_fingerprinter.customers,
-        scans_dir=SCANS_DIR,
-        sanitize_customer_dir_name=sanitize_customer_dir_name,
-        max_days=max_days,
-    )
-
-    if not xml_path:
-        emit("resume_scan_error", {"error": "No recent scan found"})
-        return
-
-    # Parse XML to get assets with vulnerabilities
-    assets = parse_scan_xml_for_assets(xml_path)
-
-    if not assets:
-        emit("resume_scan_error", {"error": "No assets found in scan"})
-        return
-
-    metadata = metadata or {}
-
-    # Calculate statistics
-    total_vulns = sum(len(asset.get("vulnerabilities", [])) for asset in assets)
-    total_exploits = sum(
-        len([v for v in asset.get("vulnerabilities", []) if v.get("is_exploit")])
-        for asset in assets
-    )
-
-    scan_time = datetime.fromisoformat(
-        metadata.get("timestamp", datetime.now().isoformat())
-    )
-    age_seconds = (datetime.now() - scan_time).total_seconds()
-    age_days = int(age_seconds / (24 * 3600))
-
-    # Emit assets with metadata indicating it's historical data
-    emit(
-        "scan_results",
-        {
-            "hosts": assets,
-            "total": len(assets),
-            "is_historical": True,
-            "scan_date": metadata.get("timestamp", datetime.now().isoformat()),
-            "target": metadata.get("target", "unknown"),
-            "age_days": age_days,
-            "total_vulnerabilities": total_vulns,
-            "total_exploits": total_exploits,
-        },
-    )
-
-    # Send feedback message
-    if age_days == 0:
-        age_str = "today"
-    elif age_days == 1:
-        age_str = "yesterday"
-    else:
-        age_str = f"{age_days} days ago"
-
-    emit(
-        "scan_feedback",
-        f"Loaded {len(assets)} assets from scan {age_str} ({total_vulns} vulnerabilities, {total_exploits} exploits)",
-    )
-
-
-@socketio.on("get_versions")
-def get_versions_event():
-    """Send version information to the client"""
-    emit("versions", get_versions())
-
-
-@socketio.on("get_job_status")
-def get_job_status_event():
-    """Send current background job status for this client."""
-    emit_job_status(request.sid, "scan")
-    emit_job_status(request.sid, "report")
-
-
-@socketio.on("cancel_job")
-def cancel_job_event(data):
-    """Cancel a running background job for this client."""
-    job_type = data.get("job_type") if isinstance(data, dict) else None
-    if job_type not in {"scan", "report"}:
-        emit("scan_error", "Invalid job type")
-        return
-
-    if not job_registry.cancel(request.sid, job_type):
-        emit_to_client(
-            request.sid,
-            "job_cancelled",
-            {"job_type": job_type, "message": "No running job to cancel"},
-        )
-        emit_job_status(request.sid, job_type)
-        return
-
-    emit_job_status(request.sid, job_type)
-    emit_to_client(
-        request.sid,
-        "job_cancelled",
-        {"job_type": job_type, "message": f"Cancelling {job_type} job..."},
-    )
-
-
-@socketio.on("disconnect")
-def disconnect_event():
-    """Mark per-client jobs as abandoned when the socket disconnects."""
-    logger.info(f"Client disconnected: {request.sid}")
-    job_registry.mark_disconnected(request.sid)
 
 
 @socketio.on("check_app_updates")
