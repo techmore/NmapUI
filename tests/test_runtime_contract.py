@@ -997,6 +997,10 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "function formatReportCompleteMessage(data)" in discovery_module
     assert "window.showReportCompleteStatus(data)" in discovery_module
     assert "window.dispatchEvent(new CustomEvent('report-complete-refresh'));" in discovery_module
+    assert "function requestLocalRuntimeInfo()" in discovery_module
+    assert "socket.on('connect', () => {" in discovery_module
+    assert "window.setTimeout(() => {" in discovery_module
+    assert "socket.emit('get_local_ip');" in discovery_module
     assert "function showReportActions(path)" in report_status_module
     assert "function showReportCompleteStatus(data)" in report_status_module
     assert "buildLink(`/api/scans/${path}/html`, 'View Report', true);" in report_status_module

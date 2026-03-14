@@ -331,14 +331,41 @@ function initializeDiscoveryUI(socket) {
     window.currentCIDR = window.currentCIDR || null;
     window.localStorageLoaded = window.localStorageLoaded || false;
 
+    function requestLocalRuntimeInfo() {
+        socket.emit('get_local_ip');
+        socket.emit('get_network_key');
+        socket.emit('get_customer_info');
+        socket.emit('get_versions');
+        socket.emit('get_customers');
+        socket.emit('get_history_counts');
+        socket.emit('get_job_status');
+    }
+
     socket.on('local_ip', data => {
         ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
         document.getElementById('cidr-value').textContent = data.cidr || '';
-        document.getElementById('scan-target').value = data.cidr;
+        const targetInput = document.getElementById('scan-target');
+        if (targetInput && !targetInput.value) {
+            targetInput.value = data.cidr || '';
+        }
         window.currentCIDR = data.cidr || null;
+        if (typeof window.setLastScanTarget === 'function' && data.cidr) {
+            window.setLastScanTarget(data.cidr);
+        }
         if (typeof window.loadHostsFromStorage === 'function') {
             window.loadHostsFromStorage();
         }
+    });
+
+    socket.on('connect', () => {
+        requestLocalRuntimeInfo();
+
+        const targetInput = document.getElementById('scan-target');
+        window.setTimeout(() => {
+            if (!targetInput?.value) {
+                socket.emit('get_local_ip');
+            }
+        }, 1200);
     });
 
     socket.on('cve_array', data => {
@@ -490,13 +517,7 @@ function initializeDiscoveryUI(socket) {
         if (window.tableSorter) window.tableSorter.resort();
     });
 
-    socket.emit('get_local_ip');
-    socket.emit('get_network_key');
-    socket.emit('get_customer_info');
-    socket.emit('get_versions');
-    socket.emit('get_customers');
-    socket.emit('get_history_counts');
-    socket.emit('get_job_status');
+    requestLocalRuntimeInfo();
 
     document.getElementById('info-icon').addEventListener('click', () => {
         document.getElementById('tooltip').classList.toggle('hidden');
