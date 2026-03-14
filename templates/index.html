@@ -1041,6 +1041,7 @@
     <script src="/static/js/customer_ui.js"></script>
     <script src="/static/js/auto_scan_ui.js"></script>
     <script src="/static/js/report_generation_ui.js"></script>
+    <script src="/static/js/customer_actions.js"></script>
     <script>
         // Set current date and time
         function updateDateTime() {
@@ -1513,24 +1514,6 @@
             }
         });
 
-        // Customer quick add dropdown handler
-        document.getElementById('customer-quick-add').addEventListener('change', function() {
-            const selectedId = this.value;
-            const selectedOption = this.options[this.selectedIndex];
-            const selectedName = selectedOption?.textContent || '';
-
-            // Update history badge for selected customer
-            updateHistoryBadge(selectedName);
-
-            if (selectedId) {
-                // Assign the selected customer to this network
-                socket.emit('assign_customer', {
-                    customer_id: selectedId,
-                    customer_name: selectedName
-                });
-            }
-        });
-
         socket.on('network_key', data => {
             console.log('Network key received:', data);
             document.getElementById('total-hops').textContent = data.total_hops;
@@ -1539,30 +1522,6 @@
             document.getElementById('exit-ip').textContent = data.exit_ip || '--';
             
             renderRoutePath(data);
-        });
-
-        socket.on('customers_list', data => {
-            console.log('customers_list event received with data:', data);
-            populateCustomerDropdown(data);
-            // Request customer info again after dropdown is populated
-            // to ensure the correct selection is applied to the newly created options
-            socket.emit('get_customer_info');
-        });
-
-        socket.on('customer_info', data => {
-            console.log('Customer info received:', data);
-            // Store globally as a string for consistent matching
-            window.currentMatchedCustomerId = data.id ? String(data.id) : '';
-            updateCustomerSelection(data);
-            updateDropdownSelection(window.currentMatchedCustomerId, data.name);
-
-            // Check for resumable scan data when customer is identified
-            if (data.id && data.id !== 'unknown') {
-                socket.emit('check_resumable_scan', {
-                    customer_id: data.id,
-                    max_days: 7
-                });
-            }
         });
 
         // Historical data / asset resume socket handlers
@@ -1809,118 +1768,6 @@
             document.getElementById('tooltip').classList.toggle('hidden');
         });
 
-        // Customer Management Functions
-        function addCustomer() {
-            const customerData = {
-                name: document.getElementById('cust-name').value,
-                id: document.getElementById('cust-id').value,
-                description: document.getElementById('cust-description').value,
-                location: document.getElementById('cust-location').value,
-                connection_type: document.getElementById('cust-connection-type').value,
-                gateway_pattern: document.getElementById('cust-gateway').value,
-                exit_pattern: document.getElementById('cust-exit-pattern').value,
-                hop_count: document.getElementById('cust-hop-count').value,
-                private_ranges: document.getElementById('cust-private-ranges').value,
-                confidence: 0.7
-            };
-
-            // Clear form
-            document.getElementById('cust-name').value = '';
-            document.getElementById('cust-id').value = '';
-            document.getElementById('cust-description').value = '';
-            document.getElementById('cust-location').value = '';
-            document.getElementById('cust-gateway').value = '';
-            document.getElementById('cust-exit-pattern').value = '';
-            document.getElementById('cust-hop-count').value = '';
-            document.getElementById('cust-private-ranges').value = '';
-
-            // Hide form
-            hideCustomerForm();
-
-            // Send to server
-            socket.emit('add_customer', customerData);
-        }
-
-        function assignCustomer() {
-            const dropdown = document.getElementById('current-customer');
-            const selectedId = dropdown.value;
-            const selectedOption = dropdown.options[dropdown.selectedIndex];
-            const selectedName = selectedOption?.textContent || '';
-
-            if (!selectedId) {
-                showCustomerMessage('Please select a customer to assign', 'error');
-                return;
-            }
-
-            // Extract clean name (remove confidence if present)
-            const cleanName = selectedName.split(' (')[0];
-
-            socket.emit('assign_customer', {
-                customer_id: selectedId,
-                customer_name: cleanName
-            });
-        }
-
-        socket.on('customer_added', data => {
-            if (data.success) {
-                showCustomerMessage(data.message, 'success');
-                socket.emit('get_customers'); // Refresh customer list
-            } else {
-                showCustomerMessage('Failed to add customer', 'error');
-            }
-        });
-
-        socket.on('customer_assigned', data => {
-            if (data.success) {
-                showCustomerMessage(data.message, 'success');
-                // Update dropdown selection
-                updateDropdownSelection(data.customer.id, data.customer.name);
-            } else {
-                showCustomerMessage('Failed to assign customer', 'error');
-            }
-        });
-
-        socket.on('customer_identified', data => {
-            console.log('Customer identified:', data);
-            // Update dropdown to show auto-detected customer
-            if (data.customer && data.customer.id) {
-                // Store globally for resume functionality
-                window.currentMatchedCustomerId = String(data.customer.id);
-
-                updateDropdownSelection(data.customer.id, data.customer.name);
-
-                // Show confidence info if available
-                if (data.customer.confidence !== undefined) {
-                    console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
-                }
-
-                // Check for resumable scan data when customer is auto-identified
-                if (data.customer.id !== 'unknown') {
-                    socket.emit('check_resumable_scan', {
-                        customer_id: data.customer.id,
-                        max_days: 7
-                    });
-                }
-            }
-        });
-
-        socket.on('customer_deleted', data => {
-            if (data.success) {
-                showCustomerMessage(data.message, 'success');
-                socket.emit('get_customers'); // Refresh customer list
-            } else {
-                showCustomerMessage('Failed to delete customer', 'error');
-            }
-        });
-
-        socket.on('customer_error', message => {
-            showCustomerMessage(message, 'error');
-        });
-
-        function showCustomerList() {
-            socket.emit('get_customers');
-        }
-
         // Historical Scan Viewer Functions
         document.getElementById('view-history-btn').addEventListener('click', function() {
             showHistoryModal();
@@ -1954,6 +1801,7 @@
         initializeReportGenerationUI(socket, {
             getClientJobs: () => clientJobs,
         });
+        initializeCustomerActions(socket);
 
         // Initialize table sorter when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {

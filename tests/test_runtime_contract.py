@@ -440,3 +440,22 @@ def test_template_loads_external_report_generation_ui_module():
     assert "function stopReportTimer()" not in template
     assert "initializeReportGenerationUI(socket, {" in template
     assert "window.initializeReportGenerationUI = initializeReportGenerationUI;" in report_generation_module
+
+
+def test_template_loads_external_customer_actions_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    customer_actions_module = (ROOT / "static" / "js" / "customer_actions.js").read_text()
+
+    assert '<script src="/static/js/customer_actions.js"></script>' in template
+    assert "function addCustomer()" not in template
+    assert "function assignCustomer()" not in template
+    assert "function showCustomerList()" not in template
+    assert "socket.on('customer_added'" not in template
+    assert "socket.on('customer_assigned'" not in template
+    assert "socket.on('customer_identified'" not in template
+    assert "initializeCustomerActions(socket);" in template
+    assert "window.initializeCustomerActions = initializeCustomerActions;" in customer_actions_module
