@@ -18,7 +18,11 @@ from nmapui.auto_scan import (
     should_run_auto_scan,
     validate_auto_scan_config_update,
 )
-from nmapui.auto_scan_runtime import execute_auto_scan as execute_auto_scan_impl
+from nmapui.app_runtime import (
+    execute_auto_scan as execute_auto_scan_runtime,
+    start_auto_scan_thread as start_auto_scan_thread_runtime,
+    startup_checks as startup_checks_runtime,
+)
 from nmapui.events import (
     emit_job_status as nmapui_emit_job_status,
     emit_to_client as nmapui_emit_to_client,
@@ -27,7 +31,6 @@ from nmapui.events import (
 )
 from nmapui.handlers.auto_scan import (
     register_auto_scan_handlers,
-    start_auto_scan_thread as handler_start_auto_scan_thread,
 )
 from nmapui.handlers.connections import register_connection_handlers
 from nmapui.handlers.customers import register_customer_handlers
@@ -73,7 +76,6 @@ from nmapui.runtime import (
 )
 from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
-from nmapui.startup_checks import run_startup_checks
 from nmapui.state import (
     get_report_counts as get_report_counts_impl,
     load_current_assignment as load_current_assignment_impl,
@@ -298,7 +300,7 @@ client_state_registry = runtime_services["client_state_registry"]
 
 
 def execute_auto_scan():
-    return execute_auto_scan_impl(
+    return execute_auto_scan_runtime(
         deps={
             "auto_scan_config": auto_scan_config,
             "current_customer": current_customer,
@@ -630,8 +632,8 @@ def generate_pdf_from_saved_task(sid, data):
 
 
 def startup_checks(quick=False):
-    run_startup_checks(
-        {
+    startup_checks_runtime(
+        deps={
             "begin_startup_state": begin_startup_state,
             "check_arp_scan": check_arp_scan,
             "check_nmap": check_nmap,
@@ -657,9 +659,8 @@ def startup_checks(quick=False):
 def start_auto_scan_thread():
     """Start the auto-scan worker once per process."""
     global auto_scan_thread
-    thread_ref = {"thread": auto_scan_thread}
-    handler_start_auto_scan_thread(
-        thread_ref=thread_ref,
+    auto_scan_thread = start_auto_scan_thread_runtime(
+        auto_scan_thread=auto_scan_thread,
         socketio=socketio,
         auto_scan_config=auto_scan_config,
         should_run_auto_scan=should_run_auto_scan,
@@ -668,7 +669,6 @@ def start_auto_scan_thread():
         execute_auto_scan=execute_auto_scan,
         logger=logger,
     )
-    auto_scan_thread = thread_ref["thread"]
 
 def run_server(argv=None):
     runtime_options = build_runtime_options(argv or sys.argv)

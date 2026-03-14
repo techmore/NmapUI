@@ -166,15 +166,22 @@ def test_app_delegates_runtime_info_events_to_handler_module():
 
 def test_app_delegates_startup_checks_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
+    app_runtime_source = (ROOT / "nmapui" / "app_runtime.py").read_text()
 
     assert "from nmapui.startup import create_startup_state" in app_source
-    assert "from nmapui.startup_checks import run_startup_checks" in app_source
+    assert "from nmapui.app_runtime import (" in app_source
+    assert "startup_checks as startup_checks_runtime" in app_source
+    assert "start_auto_scan_thread as start_auto_scan_thread_runtime" in app_source
+    assert "execute_auto_scan as execute_auto_scan_runtime" in app_source
     assert "from nmapui.runtime_services import create_runtime_services" in app_source
     assert "from nmapui.tooling import ToolVersionRegistry" in app_source
     assert "runtime_services = create_runtime_services(" in app_source
     assert 'tool_versions = runtime_services["tool_versions"]' in app_source
     assert 'startup_state = runtime_services["startup_state"]' in app_source
-    assert "run_startup_checks(" in app_source
+    assert "startup_checks_runtime(" in app_source
+    assert "run_startup_checks(deps, quick=quick)" in app_runtime_source
+    assert "handler_start_auto_scan_thread(" in app_runtime_source
+    assert "execute_auto_scan_impl(deps=deps)" in app_runtime_source
     assert 'versions["nmap"] = check_nmap()' not in app_source
     assert 'versions["vulners"] = version_result.stdout.strip()' not in app_source
     assert 'versions["arp_scan"] = version' not in app_source
@@ -247,9 +254,11 @@ def test_app_delegates_scanning_helpers_to_shared_module():
 
 def test_app_delegates_auto_scan_execution_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
+    app_runtime_source = (ROOT / "nmapui" / "app_runtime.py").read_text()
 
-    assert "from nmapui.auto_scan_runtime import execute_auto_scan as execute_auto_scan_impl" in app_source
-    assert "return execute_auto_scan_impl(" in app_source
+    assert "execute_auto_scan as execute_auto_scan_runtime" in app_source
+    assert "return execute_auto_scan_runtime(" in app_source
+    assert "execute_auto_scan_impl(deps=deps)" in app_runtime_source
 
 
 def test_app_uses_shared_xml_merge_helper():
