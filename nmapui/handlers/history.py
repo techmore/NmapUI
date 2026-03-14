@@ -14,6 +14,7 @@ def register_history_handlers(socketio, deps):
     emit_job_status = deps["emit_job_status"]
     job_registry = deps["job_registry"]
     emit_to_client = deps["emit_to_client"]
+    release_client_state = deps.get("release_client_state")
     logger = deps["logger"]
 
     @socketio.on("check_resumable_scan")
@@ -156,3 +157,5 @@ def register_history_handlers(socketio, deps):
     def disconnect_event():
         logger.info("Client disconnected: %s", request.sid)
         job_registry.mark_disconnected(request.sid)
+        if release_client_state:
+            release_client_state(request.sid)

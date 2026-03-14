@@ -7,7 +7,7 @@ from nmapui.handlers.history import register_history_handlers
 from nmapui.jobs import ClientJobRegistry
 
 
-def build_history_app(job_registry):
+def build_history_app(job_registry, release_client_state=None):
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
 
@@ -43,6 +43,7 @@ def build_history_app(job_registry):
             "emit_job_status": emit_job_status,
             "job_registry": job_registry,
             "emit_to_client": emit_to_client,
+            "release_client_state": release_client_state,
             "logger": app.logger,
         },
     )
@@ -129,3 +130,18 @@ def test_disconnect_marks_only_that_clients_running_jobs():
     assert disconnected_scan["disconnected"] is True
     assert registry.get(sid_a, "report") is None
     assert registry.get(sid_b, "scan")["status"] == "running"
+
+
+def test_disconnect_releases_client_state_for_that_sid():
+    registry = ClientJobRegistry()
+    released = []
+    app, socketio = build_history_app(
+        registry,
+        release_client_state=lambda sid: released.append(sid),
+    )
+    client = socketio.test_client(app)
+    sid = get_socket_sid(client)
+
+    client.disconnect()
+
+    assert released == [sid]

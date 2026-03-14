@@ -25,6 +25,7 @@ from nmapui.auto_scan import (
     save_auto_scan_config,
     should_run_auto_scan,
 )
+from nmapui.client_state import ClientStateRegistry
 from nmapui.events import (
     emit_job_status as nmapui_emit_job_status,
     emit_to_client as nmapui_emit_to_client,
@@ -281,6 +282,49 @@ AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
 
 rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 job_registry = ClientJobRegistry()
+client_state_registry = ClientStateRegistry(
+    default_customer=current_customer,
+    default_network_key=network_key,
+)
+
+
+def get_client_state(sid: Optional[str] = None):
+    if sid:
+        return client_state_registry.get_state(sid)
+    return {
+        "current_customer": current_customer,
+        "network_key": network_key,
+        "last_scan_target": last_scan_target,
+    }
+
+
+def get_current_customer_state(sid: Optional[str] = None):
+    return get_client_state(sid)["current_customer"]
+
+
+def set_current_customer_state(value, sid: Optional[str] = None):
+    global current_customer
+    if sid:
+        client_state_registry.set_current_customer(sid, value)
+        return
+    current_customer = value
+    client_state_registry.set_default_customer(value)
+
+
+def set_network_key_state(value, sid: Optional[str] = None):
+    global network_key
+    if sid:
+        client_state_registry.set_network_key(sid, value)
+        return
+    network_key = value
+
+
+def set_last_scan_target_state(value, sid: Optional[str] = None):
+    global last_scan_target
+    if sid:
+        client_state_registry.set_last_scan_target(sid, value)
+        return
+    last_scan_target = value
 
 
 def safe_emit(event, data=None):
@@ -586,6 +630,7 @@ register_history_handlers(
         "emit_job_status": emit_job_status,
         "job_registry": job_registry,
         "emit_to_client": emit_to_client,
+        "release_client_state": client_state_registry.release,
         "logger": logger,
     },
 )
@@ -774,7 +819,7 @@ def run_traceroute(target="1.1.1.1"):
         safe_emit(
             "customer_identified",
             {
-                "customer": current_customer,
+                "customer": get_current_customer_state(sid),
                 "match_method": getattr(
                     customer_fingerprinter, "last_match_method", "unknown"
                 ),
@@ -871,10 +916,11 @@ def get_network_key_event():
         logger.info("Network key empty, running traceroute...")
         run_traceroute("1.1.1.1")
 
+    set_network_key_state(network_key, request.sid)
     logger.info(
         f"Sending network_key to client: {network_key.get('total_hops', 0)} hops"
     )
-    emit("network_key", network_key)
+    emit("network_key", get_client_state(request.sid)["network_key"])
 
 
 def save_customers_config():
@@ -899,12 +945,12 @@ def save_customers_config():
         logger.error(f"Error saving customers config: {e}")
 
 
-def save_current_assignment():
+def save_current_assignment(sid: Optional[str] = None):
     try:
         assignment_data = {
             "schema_version": 1,
             "timestamp": datetime.now().isoformat(),
-            "customer": current_customer,
+            "customer": get_current_customer_state(sid),
         }
 
         assignment_path = CURRENT_ASSIGNMENT_FILE
@@ -931,10 +977,10 @@ register_customer_handlers(
     {
         "customer_fingerprinter": customer_fingerprinter,
         "network_key": network_key,
-        "get_current_customer": lambda: current_customer,
-        "set_current_customer": lambda value: globals().__setitem__("current_customer", value),
+        "get_current_customer": lambda: get_current_customer_state(request.sid),
+        "set_current_customer": lambda value: set_current_customer_state(value, request.sid),
         "merge_customer_metadata": merge_customer_metadata,
-        "save_current_assignment": save_current_assignment,
+        "save_current_assignment": lambda: save_current_assignment(request.sid),
         "save_customers_config": save_customers_config,
         "normalize_scan_metadata_document": normalize_scan_metadata_document,
         "load_json_document": load_json_document,
@@ -963,6 +1009,8 @@ def load_current_assignment():
                     current_customer = merge_customer_metadata(
                         current_customer, saved_customer
                     )
+
+            client_state_registry.set_default_customer(current_customer)
 
             logger.info(
                 f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
@@ -1075,6 +1123,7 @@ def identify_gateway_firewall_targets(hosts):
 
 def _scan_workflow_context():
     return {
+        "get_client_state": get_client_state,
         "ensure_job_not_cancelled": ensure_job_not_cancelled,
         "idle_state_manager": idle_state_manager,
         "update_job_progress": update_job_progress,
@@ -1140,6 +1189,7 @@ def start_scan(data):
         emit_job_status(request.sid, "scan")
         return
 
+    set_last_scan_target_state(target, request.sid)
     # Record scan start before dispatching background work
     rate_limiter.record_scan()
     emit_job_status(request.sid, "scan")
@@ -1395,6 +1445,7 @@ def generate_report_task(sid, data):
             "stylesheet": XSL_STYLESHEET_PDF,
             "get_app_version": get_app_version,
             "save_scan_metadata": save_scan_metadata,
+            "get_client_state": get_client_state,
             "network_key": network_key,
             "current_customer": current_customer,
             "extract_scan_statistics": extract_scan_statistics,
