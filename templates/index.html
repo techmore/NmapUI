@@ -1040,6 +1040,7 @@
     <script src="/static/js/auto_update_banner.js"></script>
     <script src="/static/js/customer_ui.js"></script>
     <script src="/static/js/auto_scan_ui.js"></script>
+    <script src="/static/js/report_generation_ui.js"></script>
     <script>
         // Set current date and time
         function updateDateTime() {
@@ -1418,7 +1419,7 @@
 
         socket.on('deep_scan_results', data => {
             data.forEach(updateRowWithResults);
-            lastScanResults.deepScan = data;
+            updateLastScanResults('deepScan', data);
             if (window.tableSorter) window.tableSorter.resort();
         });
 
@@ -1681,7 +1682,7 @@
             }
 
             populateTableWithResults(hosts);
-            lastScanResults.quickScan = data;
+            updateLastScanResults('quickScan', data);
             if (window.tableSorter) window.tableSorter.resort();
         });
         
@@ -1724,7 +1725,7 @@
                     row.cells[3].textContent = data[ip].vendor; // Vendor is now column 3
                 }
             }
-            lastScanResults.arpScan = data;
+            updateLastScanResults('arpScan', data);
             if (window.tableSorter) window.tableSorter.resort();
         });
 
@@ -1920,85 +1921,6 @@
             socket.emit('get_customers');
         }
 
-        // Report Generation Functions
-        let lastScanTarget = '';
-        let lastScanResults = {};
-        let reportTimerInterval = null;
-        let reportStartTime = 0;
-
-        function startReportTimer() {
-            const container = document.getElementById('scan-timer-container');
-            const display = document.getElementById('scan-timer');
-            const feedbackBox = document.getElementById('feedback-container');
-            
-            container.classList.remove('hidden');
-            feedbackBox.classList.add('card-pulsing');
-            reportStartTime = Date.now();
-            
-            if (reportTimerInterval) clearInterval(reportTimerInterval);
-            
-            reportTimerInterval = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - reportStartTime) / 1000);
-                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
-                const secs = (elapsed % 60).toString().padStart(2, '0');
-                display.textContent = `${mins}:${secs}`;
-            }, 1000);
-        }
-
-        function stopReportTimer() {
-            const feedbackBox = document.getElementById('feedback-container');
-            const timerContainer = document.getElementById('scan-timer-container');
-            
-            if (reportTimerInterval) {
-                clearInterval(reportTimerInterval);
-                reportTimerInterval = null;
-            }
-            
-            feedbackBox.classList.remove('card-pulsing');
-            
-            // Hide timer and clear feedback box after 5 seconds
-            setTimeout(() => {
-                timerContainer.classList.add('hidden');
-                feedbackBox.innerHTML = '';
-                // Also hide the feedback container parent div
-                feedbackBox.parentElement.classList.add('hidden');
-            }, 5000);
-        }
-
-        // Store scan results globally for report generation
-
-        document.getElementById('generate-report-btn').addEventListener('click', function() {
-            if (clientJobs.report.status === 'running') {
-                return;
-            }
-            const target = document.getElementById('scan-target').value || lastScanTarget;
-
-            if (!target) {
-                showReportStatus('Please enter a target or run a scan first', 'error');
-                return;
-            }
-
-            const customerOption = document.getElementById('current-customer').selectedOptions[0];
-            let customerName = 'Unknown';
-            
-            if (customerOption) {
-                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
-                customerName = customerOption.text.split(' (')[0];
-            }
-
-            // Add pulsing to the button
-            this.classList.add('card-pulsing');
-            
-            // Start the incrementing timer
-            startReportTimer();
-
-            socket.emit('generate_report', {
-                target: target,
-                customer_name: customerName,
-                scan_results: lastScanResults
-            });
-        });
-
         // Historical Scan Viewer Functions
         document.getElementById('view-history-btn').addEventListener('click', function() {
             showHistoryModal();
@@ -2025,14 +1947,12 @@
             }
         }
 
-        // Store last scan target
-        document.getElementById('start-scan-btn').addEventListener('click', function() {
-            lastScanTarget = document.getElementById('scan-target').value;
-        });
-
         initializeAutoScanUI(socket, {
             getClientJobs: () => clientJobs,
-            getLastScanTarget: () => lastScanTarget,
+            getLastScanTarget: () => document.getElementById('scan-target').value || '',
+        });
+        initializeReportGenerationUI(socket, {
+            getClientJobs: () => clientJobs,
         });
 
         // Initialize table sorter when DOM is ready

@@ -423,3 +423,20 @@ def test_template_loads_external_auto_scan_ui_module():
     assert "function saveAndRunScan()" not in template
     assert "initializeAutoScanUI(socket, {" in template
     assert "window.initializeAutoScanUI = initializeAutoScanUI;" in auto_scan_module
+
+
+def test_template_loads_external_report_generation_ui_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    report_generation_module = (ROOT / "static" / "js" / "report_generation_ui.js").read_text()
+
+    assert '<script src="/static/js/report_generation_ui.js"></script>' in template
+    assert "let lastScanTarget = '';" not in template
+    assert "let lastScanResults = {};" not in template
+    assert "function startReportTimer()" not in template
+    assert "function stopReportTimer()" not in template
+    assert "initializeReportGenerationUI(socket, {" in template
+    assert "window.initializeReportGenerationUI = initializeReportGenerationUI;" in report_generation_module
