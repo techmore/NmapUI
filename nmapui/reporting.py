@@ -183,6 +183,44 @@ def save_scan_metadata(
     )
 
 
+def mark_scan_failure(
+    scan_dir,
+    *,
+    target,
+    customer_name,
+    current_customer,
+    error,
+    stage,
+):
+    """Persist failure metadata for an incomplete scan directory."""
+    metadata_path = scan_dir / "metadata.json"
+    existing = normalize_scan_metadata_document(
+        load_json_document(metadata_path, {})
+    ) if metadata_path.exists() else normalize_scan_metadata_document({})
+
+    customer_id = ""
+    if isinstance(current_customer, dict):
+        customer_id = str(current_customer.get("id", "") or "")
+
+    metadata = {
+        **existing,
+        "schema_version": 1,
+        "customer_name": existing.get("customer_name") or customer_name,
+        "customer_id": existing.get("customer_id") or customer_id,
+        "target": existing.get("target") or target,
+        "timestamp": existing.get("timestamp") or datetime.now().isoformat(),
+        "date": existing.get("date") or datetime.now().strftime("%Y-%m-%d"),
+        "time": existing.get("time") or datetime.now().strftime("%H:%M:%S"),
+        "customer_info": existing.get("customer_info") or current_customer,
+        "status": "failed",
+        "failure_stage": stage,
+        "failure_error": str(error),
+        "completed_successfully": False,
+    }
+
+    save_json_document(metadata_path, metadata)
+
+
 def extract_scan_statistics(xml_path):
     """Extract comprehensive scan statistics from nmap XML output."""
     try:

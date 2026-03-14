@@ -1,6 +1,8 @@
 from datetime import datetime
 import logging
 
+from nmapui.reporting import mark_scan_failure
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,22 +40,27 @@ def start_deep_scan(context, targets, sid, is_gateway_phase=False):
                 job_type="scan",
             )
             output = result.stdout
-            cve_array, parsed_data, lines = [], [], output.split("\n")
-            current_host = None
+            # Use target as the authoritative IP — avoids parentheses when nmap
+            # resolves a hostname: "Nmap scan report for host (1.2.3.4)"
+            current_host = {"ip": target, "ports": [], "cves": []}
+            parsed_data = [current_host]
             cve_pattern = context["cve_pattern"]
 
-            for line in lines:
-                if "Nmap scan report for" in line:
-                    current_host = {"ip": line.split(" ")[-1], "ports": []}
-                    parsed_data.append(current_host)
-                elif "/tcp" in line and current_host:
+            # Emit raw nmap output to the client log for auditing
+            emit_to_client(sid, "scan_raw_output", {"target": target, "output": output})
+
+            import re as _re
+            for line in output.split("\n"):
+                if "/tcp" in line:
                     port_info = context["port_info_regex"].search(line)
                     if port_info:
+                        # Normalize internal whitespace that nmap uses for column alignment
+                        service_raw = _re.sub(r"\s+", " ", port_info.group(3)).strip()
                         current_host["ports"].append(
                             {
                                 "port": port_info.group(1),
                                 "state": port_info.group(2),
-                                "service": port_info.group(3),
+                                "service": service_raw,
                             }
                         )
                 elif "CVE" in line:
@@ -62,16 +69,21 @@ def start_deep_scan(context, targets, sid, is_gateway_phase=False):
                         cve_id = match.group(0).split()[0]
                         cve_score = match.group(1)
                         cve_url = match.group(2)
-                        if float(cve_score) >= 7.0:
-                            cve_array.append({"id": cve_id, "score": cve_score, "url": cve_url})
+                        try:
+                            score_f = float(cve_score)
+                        except ValueError:
+                            score_f = 0.0
+                        # Log all CVEs found (regardless of score) for auditing
+                        logger.info("CVE found for %s: %s score=%s", target, cve_id, cve_score)
+                        if score_f >= 6.0:
+                            current_host["cves"].append({"id": cve_id, "score": cve_score, "url": cve_url})
                 elif "Service Info: " in line:
-                    trimmed_line = line.replace("Service Info: ", "")
-                    if current_host:
-                        current_host.setdefault("service_info", []).append(trimmed_line)
+                    trimmed_line = line.replace("Service Info: ", "").strip()
+                    current_host.setdefault("service_info", []).append(trimmed_line)
                     emit_to_client(sid, "service_info", {"target": target, "line": trimmed_line})
 
             emit_to_client(sid, "deep_scan_results", parsed_data)
-            emit_to_client(sid, "cve_array", {"target": target, "cve_array": cve_array})
+            emit_to_client(sid, "cve_array", {"target": target, "cve_array": current_host["cves"]})
             emit_to_client(sid, "deep_scan_host_complete", {"ip": target})
 
         emit_to_client(sid, "deep_scan_complete")
@@ -278,6 +290,7 @@ def generate_report_task(context, sid, data):
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
     target = data.get("target")
+    scan_dir = None
     is_auto_scan = data.get("auto_scan", False)
 
     customer_name = data.get("customer_name")
@@ -364,10 +377,28 @@ def generate_report_task(context, sid, data):
             chunk_output_base = output_base if num_chunks == 1 else scan_dir / f"scan_chunk_{i}"
             if not run_nmap_with_xml_output(chunk_target, chunk_output_base, "comprehensive", sid=sid):
                 if job_registry.is_cancelled(sid, "report"):
+                    if scan_dir is not None:
+                        mark_scan_failure(
+                            scan_dir,
+                            target=target,
+                            customer_name=customer_name,
+                            current_customer=current_customer,
+                            error="Report generation cancelled",
+                            stage="scan_chunks",
+                        )
                     job_registry.complete(sid, "report", status="cancelled")
                     emit_job_status(sid, "report")
                     emit_to_client(sid, "report_error", {"error": "Report generation cancelled"})
                     return
+                if scan_dir is not None:
+                    mark_scan_failure(
+                        scan_dir,
+                        target=target,
+                        customer_name=customer_name,
+                        current_customer=current_customer,
+                        error=f"Nmap scan failed on chunk {i + 1}",
+                        stage="scan_chunks",
+                    )
                 job_registry.complete(
                     sid,
                     "report",
@@ -526,6 +557,15 @@ def generate_report_task(context, sid, data):
         )
         emit_job_status(sid, "report")
     except Exception as exc:
+        if scan_dir is not None:
+            mark_scan_failure(
+                scan_dir,
+                target=target,
+                customer_name=customer_name,
+                current_customer=current_customer,
+                error=str(exc),
+                stage="exception",
+            )
         logger.exception("Report generation failed")
         logger.error("=" * 60)
         logger.error("REPORT GENERATION FAILED")

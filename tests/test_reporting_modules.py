@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from nmapui.reporting import (
     extract_scan_statistics,
     get_most_recent_scan_xml,
+    mark_scan_failure,
     parse_scan_xml_for_assets,
     parse_vulners_script,
     save_scan_metadata,
@@ -135,4 +136,26 @@ def test_get_most_recent_scan_xml_prefers_customer_id_over_folder_name(tmp_path)
     )
 
     assert xml_path == renamed_customer_dir / "scan.xml"
+    assert metadata["customer_id"] == "cust-123"
+
+
+def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
+    scan_dir = tmp_path / "scan"
+    scan_dir.mkdir()
+
+    mark_scan_failure(
+        scan_dir,
+        target="192.168.1.0/24",
+        customer_name="Acme Customer",
+        current_customer={"id": "cust-123", "name": "Acme Customer"},
+        error="Nmap scan failed on chunk 2",
+        stage="scan_chunks",
+    )
+
+    metadata = json.loads((scan_dir / "metadata.json").read_text())
+
+    assert metadata["status"] == "failed"
+    assert metadata["failure_stage"] == "scan_chunks"
+    assert metadata["failure_error"] == "Nmap scan failed on chunk 2"
+    assert metadata["completed_successfully"] is False
     assert metadata["customer_id"] == "cust-123"
