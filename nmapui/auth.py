@@ -26,6 +26,29 @@ def default_credentials_allowed():
     }
 
 
+def local_ui_trusted():
+    return os.environ.get("NMAPUI_TRUST_LOCAL_UI", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def request_is_local_ui():
+    if not local_ui_trusted():
+        return False
+
+    host = (request.host or "").split(":", 1)[0].lower()
+    remote_addr = (request.remote_addr or "").lower()
+    origin = (request.headers.get("Origin") or "").lower()
+
+    allowed_hosts = {"127.0.0.1", "localhost"}
+    origin_is_local = any(token in origin for token in ("127.0.0.1", "localhost"))
+
+    return host in allowed_hosts and (remote_addr in {"", "127.0.0.1", "::1", "localhost"} or origin_is_local)
+
+
 def auth_uses_insecure_defaults():
     username, password = get_auth_credentials()
     return (
@@ -50,6 +73,8 @@ def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
+        if request_is_local_ui():
+            return f(*args, **kwargs)
         if not auth or not check_auth(auth.username, auth.password):
             if auth_uses_insecure_defaults():
                 return jsonify({"error": "Authentication is not configured securely"}), 503
@@ -66,6 +91,8 @@ def require_socket_auth():
         @wraps(f)
         def wrapped(*args, **kwargs):
             auth = request.authorization
+            if request_is_local_ui():
+                return f(*args, **kwargs)
             if not auth:
                 header = request.headers.get("Authorization", "")
                 if header.startswith("Basic "):

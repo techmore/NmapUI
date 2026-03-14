@@ -15,6 +15,7 @@ def basic_auth_header(username="scanner", password="secret-pass"):
 def configure_auth(monkeypatch, username="scanner", password="secret-pass", allow_defaults=False):
     monkeypatch.setenv("NMAPUI_USERNAME", username)
     monkeypatch.setenv("NMAPUI_PASSWORD", password)
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
     if allow_defaults:
         monkeypatch.setenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", "true")
     else:
@@ -124,6 +125,7 @@ def test_http_auth_rejects_builtin_default_credentials_by_default(tmp_path, monk
     monkeypatch.delenv("NMAPUI_USERNAME", raising=False)
     monkeypatch.delenv("NMAPUI_PASSWORD", raising=False)
     monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
     app = build_scan_app(tmp_path)
     client = app.test_client()
 

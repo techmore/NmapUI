@@ -16,6 +16,7 @@ def basic_auth_header(username="scanner", password="secret-pass"):
 def configure_auth(monkeypatch, username="scanner", password="secret-pass", allow_defaults=False):
     monkeypatch.setenv("NMAPUI_USERNAME", username)
     monkeypatch.setenv("NMAPUI_PASSWORD", password)
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
     if allow_defaults:
         monkeypatch.setenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", "true")
     else:
@@ -128,6 +129,7 @@ def test_require_socket_auth_rejects_builtin_default_credentials_by_default(monk
     monkeypatch.delenv("NMAPUI_USERNAME", raising=False)
     monkeypatch.delenv("NMAPUI_PASSWORD", raising=False)
     monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
 
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
@@ -150,3 +152,27 @@ def test_require_socket_auth_rejects_builtin_default_credentials_by_default(monk
         for event in received
     )
     assert not any(event["name"] == "protected_ok" for event in received)
+
+
+def test_require_socket_auth_allows_trusted_local_ui_without_basic_auth(monkeypatch):
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "true")
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+
+    @socketio.on("protected")
+    @require_socket_auth()
+    def protected_event():
+        emit("protected_ok", {"ok": True})
+
+    client = socketio.test_client(app)
+    client.emit("protected")
+    received = client.get_received()
+
+    assert any(
+        event["name"] == "protected_ok"
+        and event["args"] == [{"ok": True}]
+        for event in received
+    )

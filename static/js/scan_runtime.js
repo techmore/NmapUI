@@ -144,6 +144,18 @@ function initializeScanRuntime(socket) {
         showReportStatus(data.message, 'info');
     });
 
+    socket.on('auth_error', function(data) {
+        const message = data?.error || 'Unauthorized';
+        console.error('Socket auth error:', message);
+        showReportStatus(message, 'error');
+    });
+
+    socket.on('scan_error', function(message) {
+        const text = typeof message === 'string' ? message : (message?.error || 'Scan failed');
+        console.error('Scan error:', text);
+        showReportStatus(text, 'error');
+    });
+
     document.getElementById('start-scan-btn').addEventListener('click', () => {
         if (clientJobs.scan.status === 'running') {
             return;
