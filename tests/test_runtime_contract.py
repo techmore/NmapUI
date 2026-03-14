@@ -197,6 +197,19 @@ def test_app_exposes_explicit_stack_builder_and_runtime_registration():
     assert "ensure_runtime_modules_registered()" in app_source
 
 
+def test_app_imports_runtime_dependencies_used_at_server_start():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "import sys" in app_source
+    assert "import requests" in app_source
+    assert "build_runtime_options(argv or sys.argv)" in app_source
+    assert '"requests": requests' in app_source
+
+
 def test_app_registers_extracted_runtime_info_handlers():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
