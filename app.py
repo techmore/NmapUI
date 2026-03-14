@@ -110,6 +110,8 @@ from nmapui.scanning import (
     check_nmap,
     check_vulners,
     create_scan_folder,
+    run_arp_scan as run_arp_scan_impl,
+    run_nmap_with_xml_output as run_nmap_with_xml_output_impl,
     run_quick_auto_scan,
 )
 from nmapui.traceroute import run_traceroute as run_traceroute_for_state
@@ -974,240 +976,32 @@ def on_connect():
 
 
 def run_arp_scan(target, interface=None, sid=None):
-    if interface is None:
-        interface = DEFAULT_INTERFACE
-
-    if not shutil.which("arp-scan"):
-        logger.warning("arp-scan not found, skipping MAC/vendor detection")
-        if sid:
-            emit_to_client(
-                sid, "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
-            )
-        else:
-            socketio.emit(
-                "scan_feedback", "arp-scan not found, skipping MAC/vendor detection"
-            )
-        return {}
-
-    try:
-        command_str = f"arp-scan {target} --interface {interface}"
-        if sid:
-            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
-        else:
-            socketio.emit("scan_feedback", f"Executing: {command_str}")
-        logger.info(command_str)
-        socketio.sleep(0)
-
-        result = run_cancellable_command(
-            ["arp-scan", target, "--interface", interface],
-            sid=sid,
-            job_type="scan" if sid else None,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            output = result.stdout
-        else:
-            combined_output = " ".join(
-                str(part or "")
-                for part in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
-            ).lower()
-            if any(
-                token in combined_output
-                for token in (
-                    "permission denied",
-                    "operation not permitted",
-                    "not permitted",
-                    "requires root",
-                )
-            ):
-                message = "arp-scan requires elevated privileges; skipping MAC/vendor detection"
-                logger.warning(message)
-                if sid:
-                    emit_to_client(sid, "scan_feedback", message)
-                else:
-                    socketio.emit("scan_feedback", message)
-                return {}
-            output = result.stdout
-
-        arp_data = {}
-        arp_pattern = re.compile(r"^(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F:]{17})\s+(.*)$")
-
-        for line in output.split("\n"):
-            match = arp_pattern.match(line.strip())
-            if match:
-                ip = match.group(1)
-                mac = match.group(2).lower()
-                vendor = match.group(3).strip()
-                arp_data[ip] = {"mac": mac, "vendor": vendor}
-
-        logger.info(f"ARP scan found {len(arp_data)} hosts with MAC addresses")
-        return arp_data
-
-    except FileNotFoundError:
-        logger.warning("arp-scan not found, skipping MAC/vendor detection")
-        return {}
-    except RuntimeError as e:
-        if str(e) == "scan cancelled":
-            return {}
-        logger.error(f"arp-scan error: {e}")
-        return {}
-    except subprocess.TimeoutExpired:
-        logger.warning("arp-scan timed out")
-        return {}
-    except Exception as e:
-        logger.error(f"arp-scan error: {e}")
-        return {}
+    return run_arp_scan_impl(
+        target,
+        interface=interface,
+        sid=sid,
+        get_default_interface_cached=lambda: DEFAULT_INTERFACE,
+        which=shutil.which,
+        emit_to_client=emit_to_client,
+        socketio_emit=socketio.emit,
+        socketio_sleep=socketio.sleep,
+        run_cancellable_command=run_cancellable_command,
+    )
 
 
 def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
-    """Run nmap with all formats output (-oA)"""
-    scan_technique = "-sS" if getattr(os, "geteuid", lambda: -1)() == 0 else "-sT"
-
-    if scan_type == "quick":
-        logger.info(f"Running quick scan on {target}...")
-        if sid:
-            emit_to_client(sid, "scan_feedback", f"Starting quick scan on {target}...")
-        else:
-            socketio.emit("scan_feedback", f"Starting quick scan on {target}...")
-        cmd = [
-            "nmap",
-            scan_technique,
-            "-T3",  # Polite timing
-            "--top-ports",
-            "100",  # Top 100 ports only
-            "-oA",
-            str(output_base),
-            target,
-        ]
-        timeout_seconds = 180  # 3 minutes for quick scan
-    else:
-        logger.info(f"Running comprehensive scan on {target}...")
-        if sid:
-            emit_to_client(
-                sid,
-                "scan_feedback",
-                f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
-            )
-        else:
-            socketio.emit(
-                "scan_feedback",
-                f"Starting comprehensive scan with vulnerability detection on {target} (may take 10+ minutes)...",
-            )
-        cmd = [
-            "nmap",
-            scan_technique,
-            "-T4",
-            "-A",
-            "-sC",
-            "--script",
-            str(VULNERS_SCRIPT),
-            "--stylesheet",
-            str(XSL_STYLESHEET_PDF),
-            "-oA",
-            str(output_base),
-            target,
-        ]
-        timeout_seconds = 1200  # 20 minutes for comprehensive scan with vulners
-
-    # Log the full command for debugging
-    cmd_str = " ".join(cmd)
-    logger.info(f"Executing: {cmd_str}")
-    if sid:
-        emit_to_client(sid, "scan_feedback", f"Command: {cmd_str}")
-    else:
-        socketio.emit("scan_feedback", f"Command: {cmd_str}")
-    socketio.sleep(0)
-
-    # Record start time
-    from datetime import datetime
-
-    start_time = datetime.now()
-    logger.info(f"Scan started at {start_time.strftime('%H:%M:%S')}")
-    if sid:
-        emit_to_client(
-            sid, "scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}"
-        )
-    else:
-        socketio.emit(
-            "scan_feedback", f"Scan started at {start_time.strftime('%H:%M:%S')}"
-        )
-    socketio.sleep(0)
-
-    try:
-        result = run_cancellable_command(
-            cmd, sid=sid, job_type="report" if sid else None, timeout=timeout_seconds
-        )
-
-        # Log completion
-        end_time = datetime.now()
-        duration = (end_time - start_time).total_seconds()
-        logger.info(f"Scan completed in {duration:.1f} seconds")
-        if sid:
-            emit_to_client(
-                sid, "scan_feedback", f"Scan completed in {duration:.1f} seconds"
-            )
-        else:
-            socketio.emit("scan_feedback", f"Scan completed in {duration:.1f} seconds")
-        socketio.sleep(0)
-
-        # Log stdout/stderr for debugging
-        if result.stdout:
-            logger.info(f"Nmap stdout:\n{result.stdout}")
-        if result.stderr:
-            logger.warning(f"Nmap stderr:\n{result.stderr}")
-
-        if result.returncode != 0:
-            logger.error(f"Nmap failed with return code {result.returncode}")
-            if sid:
-                emit_to_client(
-                    sid,
-                    "scan_feedback",
-                    f"❌ Nmap failed with return code {result.returncode}",
-                )
-            else:
-                socketio.emit(
-                    "scan_feedback", f"❌ Nmap failed with return code {result.returncode}"
-                )
-            socketio.sleep(0)
-
-        return result.returncode == 0
-
-    except RuntimeError as e:
-        if str(e) == "report cancelled":
-            if sid:
-                emit_to_client(sid, "scan_feedback", "Report generation cancelled")
-            return False
-        raise
-    except subprocess.TimeoutExpired:
-        end_time = datetime.now()
-        duration = (end_time - start_time).total_seconds()
-        error_msg = f"⏱️  Nmap scan TIMED OUT after {duration:.1f} seconds (limit: {timeout_seconds}s / {timeout_seconds // 60}min) on {target}"
-        logger.error(error_msg)
-        if sid:
-            emit_to_client(sid, "scan_feedback", error_msg)
-            emit_to_client(
-                sid,
-                "report_error",
-                {
-                    "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
-                    "timeout": True,
-                    "timeout_seconds": timeout_seconds,
-                    "elapsed_seconds": duration,
-                },
-            )
-        else:
-            socketio.emit("scan_feedback", error_msg)
-            socketio.emit(
-                "report_error",
-                {
-                    "error": f"Scan timed out after {timeout_seconds // 60} minutes. Your network requires a longer scan time.",
-                    "timeout": True,
-                    "timeout_seconds": timeout_seconds,
-                    "elapsed_seconds": duration,
-                },
-            )
-        socketio.sleep(0)
-        return False
+    return run_nmap_with_xml_output_impl(
+        target,
+        output_base,
+        scan_type=scan_type,
+        sid=sid,
+        vulners_script=VULNERS_SCRIPT,
+        stylesheet_pdf=XSL_STYLESHEET_PDF,
+        emit_to_client=emit_to_client,
+        socketio_emit=socketio.emit,
+        socketio_sleep=socketio.sleep,
+        run_cancellable_command=run_cancellable_command,
+    )
 
 
 
