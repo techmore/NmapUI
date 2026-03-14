@@ -38,6 +38,7 @@ from nmapui.handlers.auto_scan import (
     register_auto_scan_handlers,
     start_auto_scan_thread as handler_start_auto_scan_thread,
 )
+from nmapui.handlers.connections import register_connection_handlers
 from nmapui.handlers.customers import register_customer_handlers
 from nmapui.handlers.history import register_history_handlers
 from nmapui.handlers.routes import register_core_routes
@@ -710,6 +711,15 @@ register_update_handlers(
         "logger": logger,
     },
 )
+register_connection_handlers(
+    socketio,
+    {
+        "broadcaster": broadcaster,
+        "emit_to_client": emit_to_client,
+        "job_registry": job_registry,
+        "logger": logger,
+    },
+)
 register_core_routes(
     app,
     {
@@ -933,33 +943,6 @@ def start_deep_scan(targets, sid, is_gateway_phase=False):
 def start_scan_task(sid, target):
     """Run scan workflow in a background task for a single client."""
     return workflow_start_scan_task(_scan_workflow_context(sid), sid, target)
-
-
-@socketio.on("connect")
-def on_connect():
-    """Catch up a newly connected tab if a scan is already running."""
-    new_sid = request.sid
-    owner_sid = broadcaster.find_active_owner()
-    if owner_sid is None:
-        return
-
-    job = job_registry.get(owner_sid, "scan")
-    if not job or job.get("status") not in ("running", "cancelling"):
-        broadcaster.end_job(owner_sid)
-        return
-
-    logger.info("New tab %s joining active scan owned by %s — replaying %d events",
-                new_sid, owner_sid, len(broadcaster.get_replay_buffer(owner_sid)))
-
-    # Subscribe before replaying so we don't miss any events during replay
-    broadcaster.subscribe(owner_sid, new_sid)
-
-    # Send current job status so the UI shows the progress bar immediately
-    emit_to_client(new_sid, "job_status", {**job, "job_type": "scan"})
-
-    # Replay the accumulated event log to catch the new tab up
-    for event, data in broadcaster.get_replay_buffer(owner_sid):
-        emit_to_client(new_sid, event, data)
 
 
 def run_arp_scan(target, interface=None, sid=None):

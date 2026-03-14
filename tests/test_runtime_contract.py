@@ -196,6 +196,14 @@ def test_app_delegates_scan_job_handlers_to_shared_module():
     assert '@socketio.on("generate_report")' not in app_source
 
 
+def test_app_delegates_connection_handlers_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.handlers.connections import register_connection_handlers" in app_source
+    assert "register_connection_handlers(" in app_source
+    assert '@socketio.on("connect")' not in app_source
+
+
 def test_app_delegates_scanning_helpers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
 

@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_socketio import SocketIO
 
+from nmapui.handlers.connections import register_connection_handlers
 from nmapui.handlers.runtime_info import register_runtime_info_handlers
 from nmapui.handlers.scan_jobs import register_scan_job_handlers
 
@@ -30,6 +31,13 @@ def build_scan_jobs_app(deps):
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
     register_scan_job_handlers(socketio, deps)
+    return app, socketio
+
+
+def build_connection_app(deps):
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    register_connection_handlers(socketio, deps)
     return app, socketio
 
 
@@ -174,3 +182,81 @@ def test_runtime_info_handlers_reject_unauthenticated_socket_events(monkeypatch)
         for event in received
     )
     assert not any(event["name"] == "network_key" for event in received)
+
+
+def test_connect_replays_active_scan_events_to_new_tab():
+    observed = {}
+
+    class BroadcasterStub:
+        def find_active_owner(self):
+            return "owner-sid"
+
+        def get_replay_buffer(self, owner_sid):
+            observed["buffer_owner"] = owner_sid
+            return [("scan_feedback", "Scanning..."), ("scan_progress", {"pct": 50})]
+
+        def subscribe(self, owner_sid, new_sid):
+            observed["subscribe"] = (owner_sid, new_sid)
+            return True
+
+        def end_job(self, owner_sid):
+            observed["ended_owner"] = owner_sid
+
+    class JobRegistryStub:
+        def get(self, sid, job_type):
+            observed["job_lookup"] = (sid, job_type)
+            return {"status": "running", "details": {"target": "192.168.1.0/24"}}
+
+    emitted = []
+    app, socketio = build_connection_app(
+        {
+            "broadcaster": BroadcasterStub(),
+            "emit_to_client": lambda sid, event, data=None: emitted.append((sid, event, data)),
+            "job_registry": JobRegistryStub(),
+            "logger": Flask(__name__).logger,
+        }
+    )
+
+    client = socketio.test_client(app)
+
+    assert client.is_connected()
+    assert observed["job_lookup"] == ("owner-sid", "scan")
+    assert observed["buffer_owner"] == "owner-sid"
+    assert observed["subscribe"][0] == "owner-sid"
+    assert emitted[0][1] == "job_status"
+    assert emitted[0][2]["job_type"] == "scan"
+    assert emitted[1:] == [
+        (observed["subscribe"][1], "scan_feedback", "Scanning..."),
+        (observed["subscribe"][1], "scan_progress", {"pct": 50}),
+    ]
+
+
+def test_connect_clears_stale_broadcast_slot_when_no_scan_job():
+    observed = {}
+
+    class BroadcasterStub:
+        def find_active_owner(self):
+            return "owner-sid"
+
+        def end_job(self, owner_sid):
+            observed["ended_owner"] = owner_sid
+
+    class JobRegistryStub:
+        def get(self, sid, job_type):
+            observed["job_lookup"] = (sid, job_type)
+            return None
+
+    app, socketio = build_connection_app(
+        {
+            "broadcaster": BroadcasterStub(),
+            "emit_to_client": lambda sid, event, data=None: None,
+            "job_registry": JobRegistryStub(),
+            "logger": Flask(__name__).logger,
+        }
+    )
+
+    client = socketio.test_client(app)
+
+    assert client.is_connected()
+    assert observed["job_lookup"] == ("owner-sid", "scan")
+    assert observed["ended_owner"] == "owner-sid"
