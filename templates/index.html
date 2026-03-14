@@ -455,13 +455,24 @@
         </div>
     </div>
 
-    <div class="mb-6 flex items-center gap-2 rounded-2xl border border-olive-200 bg-white/80 p-2 shadow-sm backdrop-blur">
+    <div class="mb-6 rounded-2xl border border-olive-200 bg-white/85 p-2 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center gap-2">
         <button id="tab-dashboard-btn" class="action-button action-button-primary" aria-label="Show dashboard tab">
             Dashboard
+        </button>
+        <button id="tab-history-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show history tab">
+            History
         </button>
         <button id="tab-reports-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show reports tab">
             Reports
         </button>
+        <button id="tab-logs-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show logs tab">
+            Logs
+        </button>
+        <button id="tab-settings-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show settings tab">
+            Settings
+        </button>
+        </div>
     </div>
 
     <div id="dashboard-tab-panel">
@@ -562,6 +573,20 @@
         </div>
     </div>
 
+    <section id="history-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">History</h2>
+                <p class="mt-1 text-sm text-olive-600">Review prior scans, compare changes, and reopen historical artifacts.</p>
+            </div>
+            <button id="refresh-history-tab-btn" class="action-button action-button-primary action-button-compact" aria-label="Refresh scan history">
+                Refresh History
+            </button>
+        </div>
+        <div id="history-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div id="history-tab-list" class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    </section>
+
     <section id="reports-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
         <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
             <div>
@@ -574,6 +599,38 @@
         </div>
         <div id="reports-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
         <div id="reports-tab-list" class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    </section>
+
+    <section id="logs-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">Logs</h2>
+                <p class="mt-1 text-sm text-olive-600">Open the live audit log drawer while the dedicated historical logs surface is being expanded.</p>
+            </div>
+            <button onclick="toggleLogPanel()" class="action-button action-button-primary action-button-compact" aria-label="Open live audit log drawer">
+                Open Live Log
+            </button>
+        </div>
+        <div class="mt-6 rounded-2xl border border-olive-200 bg-olive-50 p-5 text-sm text-olive-800">
+            The live log drawer remains available for real-time scan output and runtime errors. Historical log indexing is tracked separately and will be surfaced here as the logging work lands.
+        </div>
+    </section>
+
+    <section id="settings-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="border-b border-olive-100 pb-4">
+            <h2 class="text-3xl font-display italic text-olive-950">Settings</h2>
+            <p class="mt-1 text-sm text-olive-600">This tab is reserved for reusable target profiles, per-network scan rules, and sync configuration.</p>
+        </div>
+        <div class="mt-6 grid gap-4 md:grid-cols-2">
+            <div class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                <h3 class="text-xl font-display italic text-olive-900">Planned Scan Controls</h3>
+                <p class="mt-2 text-sm text-olive-700">Per-network rule sets, exclusions, and scan-only mode will live here.</p>
+            </div>
+            <div class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                <h3 class="text-xl font-display italic text-olive-900">Planned Sync Options</h3>
+                <p class="mt-2 text-sm text-olive-700">Google Drive and remote sync configuration will be surfaced here once the settings work is implemented.</p>
+            </div>
+        </div>
     </section>
 
     <div id="add-customer-form" class="hidden modal-overlay z-50">

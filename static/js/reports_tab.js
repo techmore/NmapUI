@@ -1,9 +1,10 @@
-let reportsTabInitialized = false;
+let appTabsInitialized = false;
 let reportsTabLoaded = false;
+let historyTabLoaded = false;
 let currentAppTab = 'dashboard';
 
-function setReportsTabStatus(message, isError = false) {
-    const status = document.getElementById('reports-tab-status');
+function setTabStatus(elementId, message, isError = false) {
+    const status = document.getElementById(elementId);
     if (!status) {
         return;
     }
@@ -22,7 +23,19 @@ function setReportsTabStatus(message, isError = false) {
     status.classList.add(isError ? 'text-red-700' : 'text-olive-800');
 }
 
-function createReportsTabCard(scan) {
+function createScanActionLink(href, label, newTab = false) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.textContent = label;
+    link.className = 'action-button action-button-primary action-button-compact';
+    if (newTab) {
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+    }
+    return link;
+}
+
+function createHistoryCard(scan) {
     const card = document.createElement('article');
     card.className = 'rounded-2xl border border-olive-200 bg-olive-50 p-4 shadow-sm';
 
@@ -31,15 +44,22 @@ function createReportsTabCard(scan) {
     title.textContent = scan.customer_name || 'Unknown';
     card.appendChild(title);
 
-    const date = document.createElement('p');
-    date.className = 'mt-1 text-sm text-olive-600';
-    date.textContent = new Date(scan.timestamp).toLocaleString();
-    card.appendChild(date);
+    const meta = document.createElement('p');
+    meta.className = 'mt-1 text-sm text-olive-600';
+    meta.textContent = new Date(scan.timestamp).toLocaleString();
+    card.appendChild(meta);
 
     const target = document.createElement('p');
     target.className = 'mt-2 text-sm text-olive-800';
     target.innerHTML = `Target: <span class="font-mono">${scan.target || '--'}</span>`;
     card.appendChild(target);
+
+    if (scan.status && scan.status !== 'completed') {
+        const status = document.createElement('p');
+        status.className = 'mt-2 text-sm font-medium text-amber-700';
+        status.textContent = `Status: ${scan.status}`;
+        card.appendChild(status);
+    }
 
     if (scan.diff_summary?.has_changes && typeof window.createHistoryDiffSummary === 'function') {
         const diffCard = window.createHistoryDiffSummary(scan.diff_summary);
@@ -51,30 +71,37 @@ function createReportsTabCard(scan) {
     const actions = document.createElement('div');
     actions.className = 'mt-4 flex flex-wrap gap-2';
 
-    const buildLink = (href, label, newTab = false) => {
-        const link = document.createElement('a');
-        link.href = href;
-        link.textContent = label;
-        link.className = 'action-button action-button-primary action-button-compact';
-        if (newTab) {
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-        }
-        actions.appendChild(link);
-    };
-
     if (scan.has_html) {
-        buildLink(`/api/scans/${scan.path}/html`, 'View Report', true);
+        actions.appendChild(createScanActionLink(`/api/scans/${scan.path}/html`, 'View Report', true));
     }
     if (scan.has_pdf) {
-        buildLink(`/api/scans/${scan.path}/pdf`, 'Download PDF');
+        actions.appendChild(createScanActionLink(`/api/scans/${scan.path}/pdf`, 'Download PDF'));
     }
     if (scan.has_xml) {
-        buildLink(`/api/scans/${scan.path}/xml`, 'Download XML');
+        actions.appendChild(createScanActionLink(`/api/scans/${scan.path}/xml`, 'Download XML'));
     }
 
     card.appendChild(actions);
     return card;
+}
+
+function renderHistoryTab(scans) {
+    const list = document.getElementById('history-tab-list');
+    if (!list) {
+        return;
+    }
+
+    list.replaceChildren();
+
+    if (!scans.length) {
+        setTabStatus('history-tab-status', 'No scan history found yet.');
+        return;
+    }
+
+    setTabStatus('history-tab-status', '');
+    scans.forEach((scan) => {
+        list.appendChild(createHistoryCard(scan));
+    });
 }
 
 function renderReportsTab(scans) {
@@ -86,14 +113,39 @@ function renderReportsTab(scans) {
     list.replaceChildren();
 
     if (!scans.length) {
-        setReportsTabStatus('No completed reports found yet.');
+        setTabStatus('reports-tab-status', 'No completed reports found yet.');
         return;
     }
 
-    setReportsTabStatus('');
+    setTabStatus('reports-tab-status', '');
     scans.forEach((scan) => {
-        list.appendChild(createReportsTabCard(scan));
+        list.appendChild(createHistoryCard(scan));
     });
+}
+
+async function fetchScansForTabs() {
+    const response = await fetch('/api/scans');
+    if (!response.ok) {
+        throw new Error(`Failed to load scans (${response.status})`);
+    }
+    const data = await response.json();
+    return data.scans || [];
+}
+
+async function loadHistoryTab(force = false) {
+    if (historyTabLoaded && !force) {
+        return;
+    }
+
+    setTabStatus('history-tab-status', 'Loading history...');
+    try {
+        const scans = await fetchScansForTabs();
+        renderHistoryTab(scans);
+        historyTabLoaded = true;
+    } catch (error) {
+        console.error('Error loading history tab:', error);
+        setTabStatus('history-tab-status', 'Failed to load history.', true);
+    }
 }
 
 async function loadReportsTab(force = false) {
@@ -101,59 +153,70 @@ async function loadReportsTab(force = false) {
         return;
     }
 
-    setReportsTabStatus('Loading reports...');
-
+    setTabStatus('reports-tab-status', 'Loading reports...');
     try {
-        const response = await fetch('/api/scans');
-        if (!response.ok) {
-            throw new Error(`Failed to load reports (${response.status})`);
-        }
-        const data = await response.json();
-        const scans = (data.scans || []).filter((scan) => scan.has_html || scan.has_pdf || scan.has_xml);
-        renderReportsTab(scans);
+        const scans = await fetchScansForTabs();
+        renderReportsTab(scans.filter((scan) => scan.has_html || scan.has_pdf || scan.has_xml));
         reportsTabLoaded = true;
     } catch (error) {
         console.error('Error loading reports tab:', error);
-        setReportsTabStatus('Failed to load reports.', true);
+        setTabStatus('reports-tab-status', 'Failed to load reports.', true);
     }
+}
+
+function setTabButtonState(button, active) {
+    if (!button) {
+        return;
+    }
+
+    button.classList.toggle('action-button-primary', active);
+    button.classList.toggle('text-olive-700', !active);
+    button.classList.toggle('hover:bg-olive-100', !active);
 }
 
 function switchAppTab(tabName) {
     currentAppTab = tabName;
-    const dashboardPanel = document.getElementById('dashboard-tab-panel');
-    const reportsPanel = document.getElementById('reports-tab-panel');
-    const dashboardButton = document.getElementById('tab-dashboard-btn');
-    const reportsButton = document.getElementById('tab-reports-btn');
 
-    const dashboardActive = tabName === 'dashboard';
-    dashboardPanel?.classList.toggle('hidden', !dashboardActive);
-    reportsPanel?.classList.toggle('hidden', dashboardActive);
+    const panels = {
+        dashboard: document.getElementById('dashboard-tab-panel'),
+        history: document.getElementById('history-tab-panel'),
+        reports: document.getElementById('reports-tab-panel'),
+        logs: document.getElementById('logs-tab-panel'),
+        settings: document.getElementById('settings-tab-panel'),
+    };
 
-    dashboardButton?.classList.toggle('action-button-primary', dashboardActive);
-    dashboardButton?.classList.toggle('text-olive-700', !dashboardActive);
-    dashboardButton?.classList.toggle('hover:bg-olive-100', !dashboardActive);
+    Object.entries(panels).forEach(([name, panel]) => {
+        panel?.classList.toggle('hidden', name !== tabName);
+    });
 
-    reportsButton?.classList.toggle('action-button-primary', !dashboardActive);
-    reportsButton?.classList.toggle('text-olive-700', dashboardActive);
-    reportsButton?.classList.toggle('hover:bg-olive-100', dashboardActive);
+    setTabButtonState(document.getElementById('tab-dashboard-btn'), tabName === 'dashboard');
+    setTabButtonState(document.getElementById('tab-history-btn'), tabName === 'history');
+    setTabButtonState(document.getElementById('tab-reports-btn'), tabName === 'reports');
+    setTabButtonState(document.getElementById('tab-logs-btn'), tabName === 'logs');
+    setTabButtonState(document.getElementById('tab-settings-btn'), tabName === 'settings');
 
-    if (!dashboardActive) {
+    if (tabName === 'history') {
+        loadHistoryTab();
+    } else if (tabName === 'reports') {
         loadReportsTab();
     }
 }
 
 function initializeReportsTab() {
-    if (reportsTabInitialized) {
+    if (appTabsInitialized) {
         return;
     }
-    reportsTabInitialized = true;
+    appTabsInitialized = true;
 
-    document.getElementById('tab-dashboard-btn')?.addEventListener('click', () => {
-        switchAppTab('dashboard');
-    });
+    document.getElementById('tab-dashboard-btn')?.addEventListener('click', () => switchAppTab('dashboard'));
+    document.getElementById('tab-history-btn')?.addEventListener('click', () => switchAppTab('history'));
+    document.getElementById('tab-reports-btn')?.addEventListener('click', () => switchAppTab('reports'));
+    document.getElementById('tab-logs-btn')?.addEventListener('click', () => switchAppTab('logs'));
+    document.getElementById('tab-settings-btn')?.addEventListener('click', () => switchAppTab('settings'));
 
-    document.getElementById('tab-reports-btn')?.addEventListener('click', () => {
-        switchAppTab('reports');
+    document.getElementById('refresh-history-tab-btn')?.addEventListener('click', () => {
+        historyTabLoaded = false;
+        loadHistoryTab(true);
     });
 
     document.getElementById('refresh-reports-btn')?.addEventListener('click', () => {
@@ -162,14 +225,18 @@ function initializeReportsTab() {
     });
 
     window.addEventListener('report-complete-refresh', () => {
+        historyTabLoaded = false;
         reportsTabLoaded = false;
+        if (currentAppTab === 'history') {
+            loadHistoryTab(true);
+        }
         if (currentAppTab === 'reports') {
             loadReportsTab(true);
         }
     });
 }
 
-window.setReportsTabStatus = setReportsTabStatus;
+window.loadHistoryTab = loadHistoryTab;
 window.loadReportsTab = loadReportsTab;
 window.switchAppTab = switchAppTab;
 window.initializeReportsTab = initializeReportsTab;

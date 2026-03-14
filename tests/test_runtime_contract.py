@@ -628,8 +628,14 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'aria-label="Run a complete scan and generate a new PDF"' in template
     assert 'id="report-status-actions"' in template
     assert 'id="tab-dashboard-btn"' in template
+    assert 'id="tab-history-btn"' in template
     assert 'id="tab-reports-btn"' in template
+    assert 'id="tab-logs-btn"' in template
+    assert 'id="tab-settings-btn"' in template
+    assert 'id="history-tab-panel"' in template
     assert 'id="reports-tab-panel"' in template
+    assert 'id="logs-tab-panel"' in template
+    assert 'id="settings-tab-panel"' in template
     assert '<script src="/static/js/reports_tab.js"></script>' in template
 
 
@@ -662,9 +668,15 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "buildLink(`/api/scans/${path}/html`, 'View Report', true);" in report_status_module
     assert "buildLink(`/api/scans/${path}/pdf`, 'Download PDF');" in report_status_module
     assert "function initializeReportsTab()" in reports_tab_module
+    assert "switchAppTab('history')" in reports_tab_module
+    assert "switchAppTab('reports')" in reports_tab_module
+    assert "switchAppTab('logs')" in reports_tab_module
+    assert "switchAppTab('settings')" in reports_tab_module
+    assert "const panels = {" in reports_tab_module
     assert "function loadReportsTab(force = false)" in reports_tab_module
+    assert "function loadHistoryTab(force = false)" in reports_tab_module
     assert "window.addEventListener('report-complete-refresh'" in reports_tab_module
-    assert "buildLink(`/api/scans/${scan.path}/html`, 'View Report', true);" in reports_tab_module
+    assert "createScanActionLink(`/api/scans/${scan.path}/html`, 'View Report', true)" in reports_tab_module
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template
