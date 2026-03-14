@@ -159,3 +159,16 @@ def test_template_uses_dom_helpers_for_asset_modal_and_history_rendering():
     assert "serviceDiv.innerHTML =" not in template
     assert "cveDiv.innerHTML =" not in template
     assert "historyList.innerHTML = scans.map" not in template
+
+
+def test_template_validates_external_links_and_avoids_report_card_innerhtml():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "function setSafeExternalLink(link, rawUrl)" in template
+    assert "if (setSafeExternalLink(link, cve.url))" in template
+    assert "if (setSafeExternalLink(link, vuln.url))" in template
+    assert "reportCard.innerHTML =" not in template

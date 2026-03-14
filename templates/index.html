@@ -1214,6 +1214,25 @@
             log.scrollTop = log.scrollHeight;
         }
 
+        function setSafeExternalLink(link, rawUrl) {
+            if (!rawUrl) return false;
+
+            try {
+                const url = new URL(String(rawUrl), window.location.origin);
+                if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                    return false;
+                }
+
+                link.href = url.href;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                return true;
+            } catch (error) {
+                console.warn('Ignoring invalid external URL:', rawUrl);
+                return false;
+            }
+        }
+
         function renderDelimitedCell(cell, items, options = {}) {
             cell.replaceChildren();
             const values = Array.isArray(items) ? items : [];
@@ -1241,12 +1260,16 @@
                 row.appendChild(score);
 
                 const link = document.createElement('a');
-                link.href = cve.url;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
                 link.className = 'text-olive-600 hover:text-olive-800 hover:underline';
                 link.textContent = cve.id;
-                row.appendChild(link);
+                if (setSafeExternalLink(link, cve.url)) {
+                    row.appendChild(link);
+                } else {
+                    const fallback = document.createElement('span');
+                    fallback.className = 'text-olive-700';
+                    fallback.textContent = cve.id;
+                    row.appendChild(fallback);
+                }
 
                 cell.appendChild(row);
             });
@@ -1348,12 +1371,11 @@
 
                     if (vuln.url) {
                         const link = document.createElement('a');
-                        link.href = vuln.url;
-                        link.target = '_blank';
-                        link.rel = 'noopener noreferrer';
                         link.className = 'text-sm text-olive-600 hover:text-olive-800 hover:underline';
                         link.textContent = 'View Details';
-                        cveDiv.appendChild(link);
+                        if (setSafeExternalLink(link, vuln.url)) {
+                            cveDiv.appendChild(link);
+                        }
                     }
                     cveContainer.appendChild(cveDiv);
                 });
@@ -2543,15 +2565,28 @@
             const reportCard = document.createElement('div');
             reportCard.id = 'report-progress-card';
             reportCard.className = 'mt-4 bg-olive-50 p-4 rounded-xl border border-olive-300 card-pulsing';
-            reportCard.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <span class="relative flex size-3">
-                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-500 opacity-75"></span>
-                        <span class="relative inline-flex size-3 rounded-full bg-olive-600"></span>
-                    </span>
-                    <p id="report-progress-text" class="text-sm font-medium text-olive-900">${message}</p>
-                </div>
-            `;
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-3';
+
+            const indicator = document.createElement('span');
+            indicator.className = 'relative flex size-3';
+
+            const ping = document.createElement('span');
+            ping.className = 'absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-500 opacity-75';
+            indicator.appendChild(ping);
+
+            const dot = document.createElement('span');
+            dot.className = 'relative inline-flex size-3 rounded-full bg-olive-600';
+            indicator.appendChild(dot);
+
+            const text = document.createElement('p');
+            text.id = 'report-progress-text';
+            text.className = 'text-sm font-medium text-olive-900';
+            text.textContent = message;
+
+            row.appendChild(indicator);
+            row.appendChild(text);
+            reportCard.appendChild(row);
             const statusDiv = document.getElementById('report-status');
             statusDiv.parentNode.insertBefore(reportCard, statusDiv.nextSibling);
         }
