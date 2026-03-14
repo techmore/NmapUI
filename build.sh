@@ -18,6 +18,19 @@ APP_NAME="$ROOT_DIR/NmapUIMenuBar.app"
 BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
 BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
 SDK=$(xcrun --show-sdk-path --sdk macosx)
+HOST_ARCH="$(uname -m)"
+
+if [[ -n "${NMAPUI_SWIFT_TARGET:-}" ]]; then
+    SWIFT_TARGET="$NMAPUI_SWIFT_TARGET"
+elif [[ "$HOST_ARCH" == "arm64" ]]; then
+    SWIFT_TARGET="arm64-apple-macosx13.0"
+elif [[ "$HOST_ARCH" == "x86_64" ]]; then
+    SWIFT_TARGET="x86_64-apple-macosx13.0"
+else
+    echo "ERROR: Unsupported macOS architecture: $HOST_ARCH" >&2
+    echo "Set NMAPUI_SWIFT_TARGET explicitly if you know the correct target." >&2
+    exit 1
+fi
 
 if [[ ! -f "$SRC" ]]; then
     echo "ERROR: Wrapper source file not found: $SRC"
@@ -33,12 +46,13 @@ fi
 echo "Building NmapUI Menu Bar Wrapper..."
 echo "Source: $SRC"
 echo "SDK: $SDK"
-echo "Target: arm64-apple-macosx13.0"
+echo "Host architecture: $HOST_ARCH"
+echo "Target: $SWIFT_TARGET"
 
 # Compile the Swift binary using the requested format
 swiftc \
   -sdk "$SDK" \
-  -target arm64-apple-macosx13.0 \
+  -target "$SWIFT_TARGET" \
   -framework AppKit \
   "$SRC" \
   -o "$BIN"

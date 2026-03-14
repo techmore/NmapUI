@@ -46,6 +46,7 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
    ```
 
    `build.sh` will automatically run `install.sh` if dependencies haven't been set up yet. After a successful build, look for the network icon in your macOS menu bar. The app serves NmapUI at `http://127.0.0.1:9000`.
+   The wrapper target is selected automatically from your host architecture (`arm64` or `x86_64`). Override it explicitly with `NMAPUI_SWIFT_TARGET` if needed.
 
    > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 

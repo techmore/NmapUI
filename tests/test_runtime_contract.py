@@ -54,6 +54,16 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert not (ROOT / "NmapUIMenuBarSimple.swift").exists()
     assert not (ROOT / "NmapUIMenuBarWithServer.swift").exists()
     assert (ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift").exists()
+    assert 'HOST_ARCH="$(uname -m)"' in build_script
+    assert 'if [[ -n "${NMAPUI_SWIFT_TARGET:-}" ]]; then' in build_script
+    assert 'SWIFT_TARGET="$NMAPUI_SWIFT_TARGET"' in build_script
+    assert 'elif [[ "$HOST_ARCH" == "arm64" ]]; then' in build_script
+    assert 'SWIFT_TARGET="arm64-apple-macosx13.0"' in build_script
+    assert 'elif [[ "$HOST_ARCH" == "x86_64" ]]; then' in build_script
+    assert 'SWIFT_TARGET="x86_64-apple-macosx13.0"' in build_script
+    assert 'echo "Host architecture: $HOST_ARCH"' in build_script
+    assert 'echo "Target: $SWIFT_TARGET"' in build_script
+    assert '  -target "$SWIFT_TARGET" \\' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
@@ -62,10 +72,11 @@ def test_wrapper_contract_uses_single_supported_launcher():
 
 
 def test_wrapper_docs_reference_current_local_port():
-    for doc_name in ("packaging/macos/README.md", "packaging/macos/SETUP.md"):
+    for doc_name in ("README.md", "packaging/macos/README.md", "packaging/macos/SETUP.md"):
         source = (ROOT / doc_name).read_text()
         assert "127.0.0.1:9000" in source
         assert "localhost:9999" not in source
+    assert "NMAPUI_SWIFT_TARGET" in (ROOT / "README.md").read_text()
 
 
 def test_pyinstaller_spec_includes_runtime_assets():
