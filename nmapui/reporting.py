@@ -10,10 +10,15 @@ from persistence import (
     load_json_document,
     normalize_scan_metadata_document,
     save_json_document,
+    upsert_scan_metadata_index_entry,
 )
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_scans_dir_for_scan(scan_dir):
+    return scan_dir.parents[2]
 
 
 def merge_nmap_xml_files(xml_files, output_path):
@@ -319,6 +324,11 @@ def save_scan_metadata(
     save_json_document(
         scan_dir / "metadata.json", normalize_scan_metadata_document(metadata)
     )
+    upsert_scan_metadata_index_entry(
+        _get_scans_dir_for_scan(scan_dir),
+        scan_dir,
+        metadata,
+    )
 
 
 def mark_scan_failure(
@@ -357,6 +367,11 @@ def mark_scan_failure(
     }
 
     save_json_document(metadata_path, metadata)
+    upsert_scan_metadata_index_entry(
+        _get_scans_dir_for_scan(scan_dir),
+        scan_dir,
+        metadata,
+    )
 
 
 def extract_scan_statistics(xml_path):

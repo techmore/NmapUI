@@ -95,8 +95,8 @@ def test_parse_scan_xml_for_assets_extracts_asset_data(tmp_path):
 
 
 def test_save_scan_metadata_persists_customer_id(tmp_path):
-    scan_dir = tmp_path / "scan"
-    scan_dir.mkdir()
+    scan_dir = tmp_path / "data" / "scans" / "Acme" / "2026-03-14" / "scan_010000_target"
+    scan_dir.mkdir(parents=True)
 
     save_scan_metadata(
         scan_dir,
@@ -110,9 +110,12 @@ def test_save_scan_metadata_persists_customer_id(tmp_path):
     )
 
     metadata = json.loads((scan_dir / "metadata.json").read_text())
+    index = json.loads((tmp_path / "data" / "scans" / ".scan_metadata_index.json").read_text())
 
     assert metadata["customer_id"] == "cust-123"
     assert metadata["customer_name"] == "Acme Customer"
+    assert index["entries"][0]["path"] == "Acme/2026-03-14/scan_010000_target"
+    assert index["entries"][0]["metadata"]["customer_id"] == "cust-123"
 
 
 def test_get_most_recent_scan_xml_prefers_customer_id_over_folder_name(tmp_path):
@@ -175,8 +178,8 @@ def test_get_most_recent_scan_xml_ignores_invalid_metadata_files(tmp_path):
 
 
 def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
-    scan_dir = tmp_path / "scan"
-    scan_dir.mkdir()
+    scan_dir = tmp_path / "data" / "scans" / "Acme" / "2026-03-14" / "scan_010000_target"
+    scan_dir.mkdir(parents=True)
 
     mark_scan_failure(
         scan_dir,
@@ -188,12 +191,15 @@ def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
     )
 
     metadata = json.loads((scan_dir / "metadata.json").read_text())
+    index = json.loads((tmp_path / "data" / "scans" / ".scan_metadata_index.json").read_text())
 
     assert metadata["status"] == "failed"
     assert metadata["failure_stage"] == "scan_chunks"
     assert metadata["failure_error"] == "Nmap scan failed on chunk 2"
     assert metadata["completed_successfully"] is False
     assert metadata["customer_id"] == "cust-123"
+    assert index["entries"][0]["metadata"]["status"] == "failed"
+    assert index["entries"][0]["metadata"]["failure_stage"] == "scan_chunks"
 
 
 def test_merge_nmap_xml_files_combines_hosts_and_updates_runstats(tmp_path):

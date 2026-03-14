@@ -4,7 +4,7 @@ import shutil
 
 from flask import jsonify, send_file
 from nmapui.auth import require_auth
-from persistence import iter_scan_metadata_documents
+from persistence import iter_scan_metadata_documents, remove_scan_metadata_index_entry
 
 
 def register_scan_routes(app, deps):
@@ -131,6 +131,7 @@ def register_scan_routes(app, deps):
 
         try:
             shutil.rmtree(scan_dir)
+            remove_scan_metadata_index_entry(scans_dir, scan_dir)
             return jsonify({"success": True})
         except Exception as exc:
             return jsonify({"success": False, "error": str(exc)}), 500

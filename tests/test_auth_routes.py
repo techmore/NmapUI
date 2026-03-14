@@ -42,14 +42,8 @@ def build_scan_app(tmp_path):
         {
             "scans_dir": scans_dir,
             "resolve_scan_path": lambda path: scans_dir / path,
-            "load_json_document": lambda path, default: {
-                "timestamp": "2026-03-13T01:00:00",
-                "customer_name": "Acme",
-                "target": "10.0.0.0/24",
-                "date": "2026-03-13",
-                "time": "01:00:00",
-            },
-            "normalize_scan_metadata_document": lambda value: value,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
             "logger": app.logger,
         },
     )
@@ -148,6 +142,35 @@ def test_scan_routes_surface_failed_report_metadata(tmp_path, monkeypatch):
     assert payload["scans"][0]["failure_stage"] == "scan_chunks"
     assert payload["scans"][0]["failure_error"] == "Nmap scan failed on chunk 2"
     assert payload["scans"][0]["completed_successfully"] is False
+
+
+def test_delete_scan_removes_index_entry(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = build_scan_app_with_real_metadata(
+        tmp_path,
+        """
+        {
+          "timestamp": "2026-03-13T01:00:00",
+          "customer_name": "Acme",
+          "target": "10.0.0.0/24"
+        }
+        """,
+    )
+    client = app.test_client()
+
+    list_response = client.get("/api/scans", headers=basic_auth_header())
+    assert list_response.status_code == 200
+    index_path = tmp_path / "scans" / ".scan_metadata_index.json"
+    assert index_path.exists()
+
+    delete_response = client.delete(
+        "/api/scans/Acme/2026-03-13/scan_010000_target",
+        headers=basic_auth_header(),
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.get_json() == {"success": True}
+    assert __import__("json").loads(index_path.read_text())["entries"] == []
 
 
 def test_auto_scan_routes_require_http_basic_auth(monkeypatch):

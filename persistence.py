@@ -6,9 +6,11 @@ import yaml
 
 CURRENT_ASSIGNMENT_SCHEMA_VERSION = 1
 SCAN_METADATA_SCHEMA_VERSION = 1
+SCAN_METADATA_INDEX_SCHEMA_VERSION = 1
 SCAN_HISTORY_SCHEMA_VERSION = 1
 TRACEROUTE_HISTORY_SCHEMA_VERSION = 1
 CUSTOMER_CONFIG_SCHEMA_VERSION = "1.0"
+SCAN_METADATA_INDEX_FILENAME = ".scan_metadata_index.json"
 
 
 def sanitize_customer_dir_name(customer_name: str) -> str:
@@ -133,6 +135,160 @@ def normalize_scan_metadata_document(document: Any) -> dict[str, Any]:
     }
 
 
+def get_scan_metadata_index_path(scans_dir: Path) -> Path:
+    return scans_dir / SCAN_METADATA_INDEX_FILENAME
+
+
+def build_scan_metadata_index_entry(
+    *, scans_dir: Path, metadata_path: Path, metadata: dict[str, Any]
+) -> dict[str, Any]:
+    scan_dir = metadata_path.parent
+    rel_path = scan_dir.relative_to(scans_dir)
+    return {
+        "path": str(rel_path),
+        "metadata": metadata,
+        "has_html": (scan_dir / "scan_web.html").exists() or (scan_dir / "scan.html").exists(),
+        "has_pdf": (scan_dir / "scan_report.pdf").exists(),
+        "has_xml": (scan_dir / "scan.xml").exists(),
+    }
+
+
+def normalize_scan_metadata_index_document(document: Any) -> dict[str, Any]:
+    document = document if isinstance(document, dict) else {}
+    entries = document.get("entries")
+    normalized_entries = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        normalized_entries.append(
+            {
+                "path": str(entry.get("path", "") or ""),
+                "metadata": normalize_scan_metadata_document(entry.get("metadata", {})),
+                "has_html": bool(entry.get("has_html", False)),
+                "has_pdf": bool(entry.get("has_pdf", False)),
+                "has_xml": bool(entry.get("has_xml", False)),
+            }
+        )
+    normalized_entries.sort(
+        key=lambda item: item["metadata"].get("timestamp", ""),
+        reverse=True,
+    )
+    return {
+        "schema_version": int(
+            document.get("schema_version", SCAN_METADATA_INDEX_SCHEMA_VERSION)
+        ),
+        "entries": normalized_entries,
+    }
+
+
+def build_scan_metadata_index(
+    scans_dir: Path,
+    load_json_document,
+    normalize_scan_metadata_document,
+    *,
+    logger=None,
+):
+    entries = []
+    if scans_dir.exists():
+        for metadata_path in scans_dir.glob("**/metadata.json"):
+            try:
+                metadata = normalize_scan_metadata_document(
+                    load_json_document(metadata_path, {})
+                )
+                entries.append(
+                    build_scan_metadata_index_entry(
+                        scans_dir=scans_dir,
+                        metadata_path=metadata_path,
+                        metadata=metadata,
+                    )
+                )
+            except Exception as exc:
+                if logger is not None:
+                    logger.error("Error reading metadata at %s: %s", metadata_path, exc)
+    return normalize_scan_metadata_index_document({"entries": entries})
+
+
+def load_scan_metadata_index(
+    scans_dir: Path,
+    load_json_document,
+    normalize_scan_metadata_index_document,
+):
+    return normalize_scan_metadata_index_document(
+        load_json_document(get_scan_metadata_index_path(scans_dir), {})
+    )
+
+
+def save_scan_metadata_index(scans_dir: Path, index_document: dict[str, Any]) -> None:
+    save_json_document(
+        get_scan_metadata_index_path(scans_dir),
+        normalize_scan_metadata_index_document(index_document),
+    )
+
+
+def rebuild_scan_metadata_index(
+    scans_dir: Path,
+    load_json_document,
+    normalize_scan_metadata_document,
+    *,
+    logger=None,
+):
+    index_document = build_scan_metadata_index(
+        scans_dir,
+        load_json_document,
+        normalize_scan_metadata_document,
+        logger=logger,
+    )
+    save_scan_metadata_index(scans_dir, index_document)
+    return index_document
+
+
+def upsert_scan_metadata_index_entry(
+    scans_dir: Path,
+    scan_dir: Path,
+    metadata: dict[str, Any],
+    *,
+    load_json_document=load_json_document,
+):
+    rel_path = str(scan_dir.relative_to(scans_dir))
+    index_document = load_scan_metadata_index(
+        scans_dir,
+        load_json_document,
+        normalize_scan_metadata_index_document,
+    )
+    entry = build_scan_metadata_index_entry(
+        scans_dir=scans_dir,
+        metadata_path=scan_dir / "metadata.json",
+        metadata=normalize_scan_metadata_document(metadata),
+    )
+    entries = [
+        existing
+        for existing in index_document["entries"]
+        if existing.get("path") != rel_path
+    ]
+    entries.append(entry)
+    save_scan_metadata_index(scans_dir, {"entries": entries})
+
+
+def remove_scan_metadata_index_entry(
+    scans_dir: Path,
+    scan_dir: Path,
+    *,
+    load_json_document=load_json_document,
+):
+    rel_path = str(scan_dir.relative_to(scans_dir))
+    index_document = load_scan_metadata_index(
+        scans_dir,
+        load_json_document,
+        normalize_scan_metadata_index_document,
+    )
+    entries = [
+        entry
+        for entry in index_document["entries"]
+        if entry.get("path") != rel_path
+    ]
+    save_scan_metadata_index(scans_dir, {"entries": entries})
+
+
 def normalize_scan_history_document(document: Any) -> dict[str, Any]:
     if isinstance(document, list):
         entries = document
@@ -178,6 +334,31 @@ def iter_scan_metadata_documents(
 ):
     if not scans_dir.exists():
         return
+
+    index_path = get_scan_metadata_index_path(scans_dir)
+    if not index_path.exists():
+        rebuild_scan_metadata_index(
+            scans_dir,
+            load_json_document,
+            normalize_scan_metadata_document,
+            logger=logger,
+        )
+
+    try:
+        index_document = load_scan_metadata_index(
+            scans_dir,
+            load_json_document,
+            normalize_scan_metadata_index_document,
+        )
+        for entry in index_document["entries"]:
+            rel_path = entry.get("path")
+            if not rel_path:
+                continue
+            yield scans_dir / rel_path / "metadata.json", entry.get("metadata", {})
+        return
+    except Exception:
+        if logger is not None:
+            logger.warning("Falling back to filesystem metadata traversal")
 
     for metadata_path in scans_dir.glob("**/metadata.json"):
         try:
