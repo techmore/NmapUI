@@ -23,6 +23,15 @@ def test_main_template_no_longer_duplicates_extracted_socket_runtime_handlers():
     html = (ROOT / "templates" / "index.html").read_text()
 
     for duplicated_handler in (
+        "socket.on('quick_scan_start', () => {",
+        "socket.on('quick_scan_complete', () => {",
+        "socket.on('arp_scan_start', () => {",
+        "socket.on('arp_scan_complete', () => {",
+        "socket.on('deep_scan_start', () => {",
+        "socket.on('deep_scan_host_start', (data) => {",
+        "socket.on('deep_scan_host_complete', (data) => {",
+        "socket.on('deep_scan_complete', () => {",
+        "socket.on('scan_feedback', msg => {",
         "socket.on('local_ip', data => {",
         "socket.on('network_key', data => {",
         "socket.on('customers_list', data => {",
@@ -590,6 +599,8 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "function getLastScanTarget()" in report_generation_module
     assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
+    assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module
+    assert "const saveHostsToStorage = window.saveHostsToStorage || (() => {});" in scan_runtime_module
 
 
 def test_template_does_not_keep_inline_report_generation_block():

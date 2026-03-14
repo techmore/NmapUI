@@ -69,12 +69,15 @@ function clearAllHostStatusIndicators() {
 function initializeScanRuntime(socket) {
     const showReportStatus = window.showReportStatus || (() => {});
     const updateReportProgress = window.updateReportProgress || (() => {});
+    const dimExistingRows = window.dimExistingRows || (() => {});
+    const saveHostsToStorage = window.saveHostsToStorage || (() => {});
 
     socket.on('connect', () => console.log('Socket.IO connected'));
 
     socket.on('quick_scan_start', () => {
         console.log('Quick scan started - pulsing card');
         setCardPulsing('quick-scan-card', true);
+        dimExistingRows();
     });
 
     socket.on('quick_scan_complete', () => {
@@ -110,6 +113,11 @@ function initializeScanRuntime(socket) {
         console.log('All deep scans complete - stopping pulse');
         setCardPulsing('deep-scan-card', false);
         clearAllHostStatusIndicators();
+        saveHostsToStorage();
+        const reloadButton = document.getElementById('reload-last-scan-btn');
+        if (reloadButton) {
+            reloadButton.classList.remove('hidden');
+        }
     });
 
     socket.on('scan_feedback', msg => {
