@@ -566,6 +566,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
         ROOT / "static" / "js" / "report_generation_ui.js"
     ).read_text()
     auto_scan_module = (ROOT / "static" / "js" / "auto_scan_ui.js").read_text()
+    scan_runtime_module = (ROOT / "static" / "js" / "scan_runtime.js").read_text()
     update_modal_module = (ROOT / "static" / "js" / "update_modal.js").read_text()
 
     assert "let getClientJobs = null;" not in report_generation_module
@@ -576,6 +577,9 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "autoScanGetClientJobs = deps?.getClientJobs || window.getClientJobs || autoScanGetClientJobs;" in auto_scan_module
     assert "function initializeUpdateModal(socket, deps = {})" in update_modal_module
     assert "const showReportStatus =" in update_modal_module
+    assert 'const version = document.getElementById("update-version");' in update_modal_module
+    assert "if (version) {" in update_modal_module
+    assert 'const status = document.getElementById("update-current-status");' in update_modal_module
     assert "reportSocket.emit('generate_report'" in report_generation_module
     assert "chunked: false" in report_generation_module
     assert "chunked: true" in report_generation_module
@@ -584,6 +588,8 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert "socket.on('scan_results'" in report_generation_module
     assert "function getLastScanTarget()" in report_generation_module
+    assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
+    assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
 
 
 def test_template_does_not_keep_inline_report_generation_block():

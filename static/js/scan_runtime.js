@@ -67,6 +67,9 @@ function clearAllHostStatusIndicators() {
 }
 
 function initializeScanRuntime(socket) {
+    const showReportStatus = window.showReportStatus || (() => {});
+    const updateReportProgress = window.updateReportProgress || (() => {});
+
     socket.on('connect', () => console.log('Socket.IO connected'));
 
     socket.on('quick_scan_start', () => {

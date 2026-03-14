@@ -1,5 +1,8 @@
 function setUpdateReleaseNotes(data) {
     const notesDiv = document.getElementById("update-release-notes");
+    if (!notesDiv) {
+        return;
+    }
     notesDiv.replaceChildren();
 
     const title = document.createElement("strong");
@@ -23,6 +26,9 @@ function setUpdateReleaseNotes(data) {
 
 function appendUpdateLogLine(message, isError = false) {
     const log = document.getElementById("update-log");
+    if (!log) {
+        return;
+    }
     const line = document.createElement("div");
     line.className = isError ? "py-0.5 text-red-400 font-bold" : "py-0.5";
 
@@ -38,21 +44,45 @@ function appendUpdateLogLine(message, isError = false) {
 }
 
 function showUpdateModal() {
-    document.getElementById("update-modal").classList.remove("hidden");
+    const modal = document.getElementById("update-modal");
+    if (!modal) {
+        return;
+    }
+    modal.classList.remove("hidden");
 }
 
 function hideUpdateModal() {
-    document.getElementById("update-modal").classList.add("hidden");
-    document.getElementById("update-log").innerHTML = "";
-    document.getElementById("update-current-status").textContent = "Ready to update";
-    document.getElementById("update-progress-bar").style.width = "0%";
-    document.getElementById("update-percentage").textContent = "0%";
+    const modal = document.getElementById("update-modal");
+    const log = document.getElementById("update-log");
+    const status = document.getElementById("update-current-status");
+    const progressBar = document.getElementById("update-progress-bar");
+    const percentage = document.getElementById("update-percentage");
+
+    if (modal) {
+        modal.classList.add("hidden");
+    }
+    if (log) {
+        log.innerHTML = "";
+    }
+    if (status) {
+        status.textContent = "Ready to update";
+    }
+    if (progressBar) {
+        progressBar.style.width = "0%";
+        progressBar.classList.remove("bg-red-500");
+    }
+    if (percentage) {
+        percentage.textContent = "0%";
+    }
 }
 
 function startAppUpdate(socket) {
     appendUpdateLogLine("Starting application update...");
     socket.emit("perform_app_update");
-    document.getElementById("update-current-status").textContent = "Updating...";
+    const status = document.getElementById("update-current-status");
+    if (status) {
+        status.textContent = "Updating...";
+    }
 }
 
 function initializeUpdateModal(socket, deps = {}) {
@@ -60,8 +90,14 @@ function initializeUpdateModal(socket, deps = {}) {
         deps.showReportStatus || window.showReportStatus || (() => {});
 
     socket.on("app_update_available", (data) => {
-        document.getElementById("app-update-badge").classList.remove("hidden");
-        document.getElementById("update-version").textContent = data.latest_version;
+        const badge = document.getElementById("app-update-badge");
+        const version = document.getElementById("update-version");
+        if (badge) {
+            badge.classList.remove("hidden");
+        }
+        if (version) {
+            version.textContent = data.latest_version;
+        }
         setUpdateReleaseNotes(data);
     });
 
@@ -71,7 +107,9 @@ function initializeUpdateModal(socket, deps = {}) {
         const progressBar = document.getElementById("update-progress-bar");
         const percentageText = document.getElementById("update-percentage");
 
-        statusText.textContent = data.message;
+        if (statusText) {
+            statusText.textContent = data.message;
+        }
         appendUpdateLogLine(data.message);
 
         let progress = 0;
@@ -85,16 +123,26 @@ function initializeUpdateModal(socket, deps = {}) {
             progress = 100;
         }
 
-        progressBar.style.width = `${progress}%`;
-        percentageText.textContent = `${progress}%`;
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+        if (percentageText) {
+            percentageText.textContent = `${progress}%`;
+        }
     });
 
     socket.on("update_error", (data) => {
         console.error("Update error:", data.message);
         appendUpdateLogLine(data.message, true);
-        document.getElementById("update-current-status").textContent = "Update failed";
-        document.getElementById("update-current-status").classList.add("text-red-500");
-        document.getElementById("update-progress-bar").classList.add("bg-red-500");
+        const status = document.getElementById("update-current-status");
+        const progressBar = document.getElementById("update-progress-bar");
+        if (status) {
+            status.textContent = "Update failed";
+            status.classList.add("text-red-500");
+        }
+        if (progressBar) {
+            progressBar.classList.add("bg-red-500");
+        }
     });
 
     socket.on("show_auto_update_banner", (data) => {
