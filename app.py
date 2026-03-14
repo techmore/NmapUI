@@ -119,6 +119,7 @@ from nmapui.scanning import (
     run_arp_scan as run_arp_scan_impl,
     run_nmap_with_xml_output as run_nmap_with_xml_output_impl,
     run_quick_auto_scan,
+    split_subnet_into_chunks,
 )
 from nmapui.traceroute import run_traceroute as run_traceroute_for_state
 from nmapui.validation import sanitize_input, validate_target
@@ -396,30 +397,6 @@ def run_cancellable_command(
         job_type=job_type,
         timeout=timeout,
     )
-
-
-def split_subnet_into_chunks(target):
-    """Split large subnets into /29 chunks (~8 hosts each) for manageable scanning"""
-    import ipaddress
-
-    try:
-        network = ipaddress.ip_network(target, strict=False)
-        if network.num_addresses <= 8:  # /29 or smaller
-            return [target]
-
-        # Split into /29 chunks (~8 hosts each)
-        chunks = []
-        for subnet in network.subnets(new_prefix=29):
-            if subnet.num_addresses > 0:
-                chunks.append(str(subnet))
-            if (
-                len(chunks) >= 2048
-            ):  # Limit to prevent excessive chunks (increased for smaller chunks)
-                break
-        return chunks[:2048]  # Max 2048 chunks
-    except ValueError:
-        # Not a valid subnet, return as-is
-        return [target]
 
 
 def execute_auto_scan():

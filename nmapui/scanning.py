@@ -1,4 +1,5 @@
 from datetime import datetime
+import ipaddress
 import logging
 import os
 import re
@@ -140,6 +141,24 @@ def run_quick_auto_scan(target, output_base):
     except subprocess.TimeoutExpired:
         logger.error("Auto scan timed out after 120 seconds on %s", target)
         return False
+
+
+def split_subnet_into_chunks(target):
+    """Split large subnets into /29 chunks for manageable scanning."""
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+        if network.num_addresses <= 8:
+            return [target]
+
+        chunks = []
+        for subnet in network.subnets(new_prefix=29):
+            if subnet.num_addresses > 0:
+                chunks.append(str(subnet))
+            if len(chunks) >= 2048:
+                break
+        return chunks[:2048]
+    except ValueError:
+        return [target]
 
 
 def run_arp_scan(

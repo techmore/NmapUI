@@ -61,3 +61,14 @@ def test_run_arp_scan_does_not_retry_with_sudo_on_permission_error():
         "scan_feedback",
         "arp-scan requires elevated privileges; skipping MAC/vendor detection",
     )
+
+
+def test_split_subnet_into_chunks_splits_large_networks():
+    chunks = scanning.split_subnet_into_chunks("192.168.1.0/24")
+
+    assert chunks[0] == "192.168.1.0/29"
+    assert len(chunks) > 1
+
+
+def test_split_subnet_into_chunks_returns_original_target_for_invalid_input():
+    assert scanning.split_subnet_into_chunks("not-a-target") == ["not-a-target"]

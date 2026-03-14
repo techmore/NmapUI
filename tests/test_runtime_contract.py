@@ -254,6 +254,13 @@ def test_app_uses_shared_saved_pdf_helpers():
     assert "def find_latest_saved_scan_for_pdf(" not in app_source
 
 
+def test_app_uses_shared_scan_chunking_helper():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "split_subnet_into_chunks," in app_source
+    assert "def split_subnet_into_chunks(" not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],
