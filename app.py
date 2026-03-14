@@ -79,6 +79,7 @@ from nmapui.runtime import (
     get_app_version,
     restart_application,
 )
+from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
 from nmapui.startup_checks import run_startup_checks
 from nmapui.state import (
@@ -307,46 +308,32 @@ def sanitize_input(value: str) -> str:
     return sanitized.strip()
 
 
-# Global network key - populated at startup
-network_key = {
-    "hops": [],
-    "total_hops": 0,
-    "private_hops": [],
-    "public_hops": [],
-    "exit_ip": None,
-    "target": "1.1.1.1",
-    "raw": "",
-}
-
 # Global idle state manager
 idle_state_manager = IdleStateManager()
 
 # Global customer fingerprinter
 customer_fingerprinter = CustomerFingerprinter()
-current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
-
-# Global scan target tracking
-last_scan_target = None
-
-
-# Auto Scan System
-auto_scan_config = dict(DEFAULT_AUTO_SCAN_CONFIG)
-auto_scan_thread = None
-AUTO_SCAN_STARTUP_AT = datetime.now()
-AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
-
-# ============================================================================
-# RATE LIMITING
-# ============================================================================
-
-
-rate_limiter = PerClientRateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
-job_registry = ClientJobRegistry()
-broadcaster = ScanBroadcaster()
-client_state_registry = ClientStateRegistry(
-    default_customer=current_customer,
-    default_network_key=network_key,
+runtime_services = create_runtime_services(
+    default_auto_scan_config=DEFAULT_AUTO_SCAN_CONFIG,
+    rate_limiter_cls=PerClientRateLimiter,
+    job_registry_cls=ClientJobRegistry,
+    client_state_registry_cls=ClientStateRegistry,
+    tool_version_registry_cls=ToolVersionRegistry,
+    startup_state_factory=create_startup_state,
+    idle_state_manager=idle_state_manager,
 )
+
+network_key = runtime_services["network_key"]
+current_customer = runtime_services["current_customer"]
+last_scan_target = runtime_services["last_scan_target"]
+auto_scan_config = runtime_services["auto_scan_config"]
+auto_scan_thread = runtime_services["auto_scan_thread"]
+AUTO_SCAN_STARTUP_AT = runtime_services["auto_scan_startup_at"]
+AUTO_SCAN_STARTUP_GRACE_SECONDS = runtime_services["auto_scan_startup_grace_seconds"]
+rate_limiter = runtime_services["rate_limiter"]
+job_registry = runtime_services["job_registry"]
+broadcaster = ScanBroadcaster()
+client_state_registry = runtime_services["client_state_registry"]
 
 
 def safe_emit(event, data=None):
@@ -688,8 +675,8 @@ register_scan_routes(
     },
 )
 # Global version information — populated by startup_checks(), readable via get_versions()
-tool_versions = ToolVersionRegistry()
-startup_state = create_startup_state()
+tool_versions = runtime_services["tool_versions"]
+startup_state = runtime_services["startup_state"]
 
 
 def get_versions():

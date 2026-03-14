@@ -154,9 +154,11 @@ def test_app_delegates_startup_checks_to_shared_module():
 
     assert "from nmapui.startup import create_startup_state" in app_source
     assert "from nmapui.startup_checks import run_startup_checks" in app_source
+    assert "from nmapui.runtime_services import create_runtime_services" in app_source
     assert "from nmapui.tooling import ToolVersionRegistry" in app_source
-    assert "tool_versions = ToolVersionRegistry()" in app_source
-    assert "startup_state = create_startup_state()" in app_source
+    assert "runtime_services = create_runtime_services(" in app_source
+    assert 'tool_versions = runtime_services["tool_versions"]' in app_source
+    assert 'startup_state = runtime_services["startup_state"]' in app_source
     assert "run_startup_checks(" in app_source
     assert 'versions["nmap"] = check_nmap()' not in app_source
     assert 'versions["vulners"] = version_result.stdout.strip()' not in app_source
