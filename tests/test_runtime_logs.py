@@ -1,6 +1,10 @@
+import subprocess
+
 from flask import Flask
 
 from nmapui.handlers.routes import register_core_routes
+from nmapui.startup_checks import run_startup_checks
+from nmapui.traceroute import run_traceroute
 
 
 def test_runtime_logs_route_returns_persisted_entries():
@@ -39,3 +43,93 @@ def test_runtime_logs_route_returns_persisted_entries():
 
     assert response.status_code == 200
     assert payload["entries"][0]["message"] == "Hydrated network topology"
+
+
+def test_startup_checks_append_runtime_log_entries():
+    entries = []
+
+    class RuntimeStoreStub:
+        def append_log(self, **kwargs):
+            entries.append(kwargs)
+            return len(entries)
+
+    run_startup_checks(
+        {
+            "begin_startup_state": lambda startup_state, quick=False: startup_state.update({"startup_complete": False}),
+            "check_arp_scan": lambda: False,
+            "check_nmap": lambda: "nmap 7.97",
+            "check_vulners": lambda path: None,
+            "complete_startup_state": lambda startup_state, traceroute_initialized=False: startup_state.update({"startup_complete": True, "traceroute_initialized": traceroute_initialized}),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "load_auto_scan_config": lambda config: None,
+            "load_current_assignment": lambda: None,
+            "logger": type("LoggerStub", (), {"info": lambda self, *a, **k: None})(),
+            "run_traceroute": lambda target: {"target": target, "total_hops": 3},
+            "safe_emit": lambda *args, **kwargs: None,
+            "startup_state": {},
+            "tool_versions": type("ToolVersionsStub", (), {"set_version": lambda self, key, value: None})(),
+            "auto_scan_config": {"enabled": False},
+            "runtime_store": RuntimeStoreStub(),
+            "vulners_script": __import__("pathlib").Path("."),
+        },
+        quick=True,
+    )
+
+    assert [entry["message"] for entry in entries] == [
+        "Startup checks started",
+        "Startup network initialization completed",
+        "Startup checks completed",
+    ]
+
+
+def test_traceroute_appends_success_runtime_log():
+    entries = []
+
+    class RuntimeStoreStub:
+        def append_log(self, **kwargs):
+            entries.append(kwargs)
+            return len(entries)
+
+    class FingerprinterStub:
+        last_match_method = "public_ip"
+
+        def match_customer(self, network_key):
+            return ({"id": "cust-1", "name": "Acme"}, 1.0)
+
+        def save_scan_result(self, *args, **kwargs):
+            return None
+
+        def save_traceroute_to_history(self, *args, **kwargs):
+            return None
+
+    original = subprocess.check_output
+    subprocess.check_output = lambda *args, **kwargs: b" 1  192.168.1.1  1.0 ms\n 2  1.1.1.1  2.0 ms\n"
+    try:
+        run_traceroute(
+            "1.1.1.1",
+            deps={
+                "emit_to_client": lambda *args, **kwargs: None,
+                "safe_emit": lambda *args, **kwargs: None,
+                "get_client_state": lambda sid=None: {
+                    "network_key": {"target": "1.1.1.1"},
+                    "current_customer": {"id": "unknown", "name": "Unknown Network", "confidence": 0.0},
+                },
+                "socketio_sleep": lambda value: None,
+                "logger": type("LoggerStub", (), {"info": lambda self, *a, **k: None, "warning": lambda self, *a, **k: None, "error": lambda self, *a, **k: None})(),
+                "is_private_ip": lambda ip: ip.startswith("192.168."),
+                "requests": type("RequestsStub", (), {"get": staticmethod(lambda url, timeout=5: type("Resp", (), {"text": "203.0.113.10"})())}),
+                "set_network_key_state": lambda *, value, sid=None: None,
+                "get_customer_fingerprinter": lambda: FingerprinterStub(),
+                "merge_customer_metadata": lambda active, customer: {**active, **customer},
+                "set_current_customer_state": lambda *, value, sid=None: None,
+                "get_current_customer_state": lambda sid=None: {"id": "cust-1", "name": "Acme", "confidence": 1.0},
+                "runtime_store": RuntimeStoreStub(),
+            },
+        )
+    finally:
+        subprocess.check_output = original
+
+    assert entries[-1]["message"] == "Traceroute completed and customer identified"
+    assert entries[-1]["category"] == "topology"

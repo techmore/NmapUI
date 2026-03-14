@@ -460,6 +460,7 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
                 (),
                 {
                     "upsert_report_artifact": lambda self, **kwargs: runtime_calls.append(kwargs),
+                    "append_log": lambda self, **kwargs: None,
                 },
             )(),
             "scans_dir": scans_dir,

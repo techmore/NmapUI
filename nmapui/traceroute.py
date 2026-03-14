@@ -2,6 +2,8 @@ import platform
 import re
 import subprocess
 
+from nmapui.runtime_log import append_runtime_log
+
 
 def run_traceroute(target="1.1.1.1", *, sid=None, deps):
     emit_to_client = deps["emit_to_client"]
@@ -16,6 +18,7 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
     merge_customer_metadata = deps["merge_customer_metadata"]
     set_current_customer_state = deps["set_current_customer_state"]
     get_current_customer_state = deps["get_current_customer_state"]
+    runtime_store = deps.get("runtime_store")
 
     def emit_customer_event(event, data=None):
         if sid:
@@ -200,11 +203,32 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
             active_customer["name"],
             confidence,
         )
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="topology",
+            level="INFO",
+            message="Traceroute completed and customer identified",
+            payload={
+                "sid": sid,
+                "target": target,
+                "total_hops": active_network_key["total_hops"],
+                "public_ip": active_network_key.get("public_ip"),
+                "customer_id": active_customer.get("id"),
+                "customer_name": active_customer.get("name"),
+            },
+        )
 
     except subprocess.TimeoutExpired:
         logger.error("Traceroute timed out")
         active_network_key["error"] = "Traceroute timed out"
         set_network_key_state(value=active_network_key, sid=sid)
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="topology",
+            level="ERROR",
+            message="Traceroute timed out",
+            payload={"sid": sid, "target": target},
+        )
         emit_customer_event(
             "customer_identification_error", {"error": "Traceroute timed out"}
         )
@@ -212,6 +236,13 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
         logger.error("Traceroute error: %s", exc)
         active_network_key["error"] = str(exc)
         set_network_key_state(value=active_network_key, sid=sid)
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="topology",
+            level="ERROR",
+            message="Traceroute failed",
+            payload={"sid": sid, "target": target, "error": str(exc)},
+        )
         emit_customer_event("customer_identification_error", {"error": str(exc)})
 
     return active_network_key

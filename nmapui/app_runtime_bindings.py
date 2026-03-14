@@ -88,6 +88,7 @@ def build_traceroute_bindings(
     merge_customer_metadata,
     set_current_customer_state,
     get_current_customer_state,
+    runtime_store=None,
 ):
     def traceroute_deps():
         return build_traceroute_deps(
@@ -103,6 +104,7 @@ def build_traceroute_bindings(
             merge_customer_metadata=merge_customer_metadata,
             set_current_customer_state=set_current_customer_state,
             get_current_customer_state=get_current_customer_state,
+            runtime_store=runtime_store,
         )
 
     def run_traceroute(target="1.1.1.1", sid=None):

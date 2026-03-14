@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 import re
 
+from nmapui.runtime_log import append_runtime_log
 from nmapui.reporting import (
     build_report_diff_summary,
     inject_diff_summary_into_report_html,
@@ -657,6 +658,18 @@ def generate_report_task(context, sid, data):
             status="completed",
             details={"target": target, "path": relative_path},
         )
+        append_runtime_log(
+            runtime_store=context.runtime_store,
+            category="report",
+            level="INFO",
+            message="Report generation completed",
+            payload={
+                "sid": sid,
+                "target": target,
+                "path": relative_path,
+                "duration_formatted": duration_str,
+            },
+        )
         emit_job_status(sid, "report")
     except Exception as exc:
         if scan_dir is not None:
@@ -674,6 +687,13 @@ def generate_report_task(context, sid, data):
         logger.error("  Error: %s", exc)
         logger.error("=" * 60)
         job_registry.complete(sid, "report", status="failed", details={"error": str(exc)})
+        append_runtime_log(
+            runtime_store=context.runtime_store,
+            category="report",
+            level="ERROR",
+            message="Report generation failed",
+            payload={"sid": sid, "target": target, "error": str(exc)},
+        )
         emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": str(exc)})
     finally:

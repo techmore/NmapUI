@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import xml.etree.ElementTree as ET
 
+from nmapui.runtime_log import append_runtime_log
 from persistence import (
     get_scan_metadata_index_path,
     iter_scan_metadata_documents,
@@ -1209,10 +1210,24 @@ def generate_pdf_from_saved_task(context, sid, data):
             metadata=current_metadata,
             runtime_store=runtime_store,
         )
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="report",
+            level="INFO",
+            message="Saved PDF generation completed",
+            payload={"sid": sid, "target": target, "path": relative_path, "mode": "pdf_only"},
+        )
         emit_job_status(sid, "report")
     except Exception as exc:
         logger.exception("PDF generation from saved scan failed")
         job_registry.complete(sid, "report", status="failed", details={"error": str(exc)})
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="report",
+            level="ERROR",
+            message="Saved PDF generation failed",
+            payload={"sid": sid, "target": target, "error": str(exc), "mode": "pdf_only"},
+        )
         emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": str(exc)})
     finally:

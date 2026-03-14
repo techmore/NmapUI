@@ -249,6 +249,7 @@ traceroute_bindings = build_traceroute_bindings(
     merge_customer_metadata=merge_customer_metadata,
     set_current_customer_state=set_current_customer_state,
     get_current_customer_state=get_current_customer_state,
+    runtime_store=runtime_store,
 )
 run_traceroute = traceroute_bindings["run_traceroute"]
 
@@ -394,6 +395,7 @@ def startup_checks(quick=False):
             load_current_assignment=load_current_assignment,
             logger=logger,
             network_key=network_key,
+            runtime_store=runtime_store,
             run_traceroute=run_traceroute,
             safe_emit=safe_emit,
             startup_state=startup_state,

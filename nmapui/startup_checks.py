@@ -1,5 +1,7 @@
 import subprocess
 
+from nmapui.runtime_log import append_runtime_log
+
 
 def run_startup_checks(deps, quick=False):
     begin_startup_state = deps["begin_startup_state"]
@@ -18,12 +20,20 @@ def run_startup_checks(deps, quick=False):
     startup_state = deps["startup_state"]
     tool_versions = deps["tool_versions"]
     auto_scan_config = deps["auto_scan_config"]
+    runtime_store = deps.get("runtime_store")
     vulners_script = deps["vulners_script"]
 
     import platform
 
     begin_startup_state(startup_state, quick=quick)
     load_auto_scan_config(auto_scan_config)
+    append_runtime_log(
+        runtime_store=runtime_store,
+        category="startup",
+        level="INFO",
+        message="Startup checks started",
+        payload={"quick": bool(quick)},
+    )
 
     logger.info("\n" + "=" * 50)
     logger.info("NmapUI Startup Checks")
@@ -94,6 +104,17 @@ def run_startup_checks(deps, quick=False):
         traceroute_initialized=not bool(network_key.get("error")),
     )
     logger.info(f"Network key initialized with {network_key.get('total_hops', 0)} hops")
+    append_runtime_log(
+        runtime_store=runtime_store,
+        category="startup",
+        level="INFO" if not network_key.get("error") else "ERROR",
+        message="Startup network initialization completed",
+        payload={
+            "target": network_key.get("target"),
+            "total_hops": network_key.get("total_hops", 0),
+            "error": network_key.get("error"),
+        },
+    )
 
     logger.info("\n" + "=" * 50)
     logger.info("All checks passed. Starting server...")
@@ -102,3 +123,10 @@ def run_startup_checks(deps, quick=False):
     tool_versions.set_version("app", get_app_version())
     safe_emit("versions", get_versions())
     safe_emit("auto_scan_status", auto_scan_config)
+    append_runtime_log(
+        runtime_store=runtime_store,
+        category="startup",
+        level="INFO",
+        message="Startup checks completed",
+        payload={"dependencies_ok": startup_state.get("dependencies_ok", False)},
+    )
