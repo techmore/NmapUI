@@ -566,18 +566,19 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "socket.on('client_state_snapshot'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert "socket.on('scan_results'" in report_generation_module
+    assert "function getLastScanTarget()" in report_generation_module
 
 
 def test_template_does_not_keep_inline_report_generation_block():
-    template = subprocess.check_output(
-        ["git", "show", ":templates/index.html"],
-        cwd=ROOT,
-        text=True,
-    )
+    template = (ROOT / "templates" / "index.html").read_text()
 
     assert "document.getElementById('generate-report-btn').addEventListener('click'" not in template
     assert "function startReportTimer()" not in template
     assert "function stopReportTimer()" not in template
+    assert "const clientJobs =" not in template
+    assert "let autoScanEnabled = false;" not in template
+    assert "getClientJobs: window.getClientJobs" in template
+    assert "getLastScanTarget: window.getLastScanTarget" in template
 
 
 def test_pdf_generation_prefers_browser_renderer_before_wkhtml():

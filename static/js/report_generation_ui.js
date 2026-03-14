@@ -46,6 +46,10 @@ function setLastScanTarget(target) {
     lastScanTarget = target;
 }
 
+function getLastScanTarget() {
+    return lastScanTarget;
+}
+
 function updateLastScanResults(key, data) {
     lastScanResults[key] = data;
 }
@@ -141,5 +145,6 @@ function initializeReportGenerationUI(socket, deps) {
 window.startReportTimer = startReportTimer;
 window.stopReportTimer = stopReportTimer;
 window.setLastScanTarget = setLastScanTarget;
+window.getLastScanTarget = getLastScanTarget;
 window.updateLastScanResults = updateLastScanResults;
 window.initializeReportGenerationUI = initializeReportGenerationUI;

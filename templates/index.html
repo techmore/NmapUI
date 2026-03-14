@@ -1398,87 +1398,6 @@
             saveHostsToStorage();
         }
 
-        document.getElementById('start-scan-btn').addEventListener('click', () => {
-            if (clientJobs.scan.status === 'running') {
-                return;
-            }
-            const target = document.getElementById('scan-target').value;
-            socket.emit('start_scan', target);
-        });
-
-        const clientJobs = {
-            scan: { status: 'idle' },
-            report: { status: 'idle' }
-        };
-
-        function updateJobButtons() {
-            const scanRunning = clientJobs.scan.status === 'running';
-            const reportRunning = clientJobs.report.status === 'running';
-            const stopButton = document.getElementById('stop-scan-btn');
-
-            const startScanBtn = document.getElementById('start-scan-btn');
-            const generateReportBtn = document.getElementById('generate-report-btn');
-
-            if (startScanBtn) {
-                startScanBtn.disabled = scanRunning;
-                startScanBtn.classList.toggle('opacity-60', scanRunning);
-                startScanBtn.classList.toggle('cursor-not-allowed', scanRunning);
-            }
-
-            if (generateReportBtn) {
-                generateReportBtn.disabled = reportRunning;
-                generateReportBtn.classList.toggle('opacity-60', reportRunning);
-                generateReportBtn.classList.toggle('cursor-not-allowed', reportRunning);
-            }
-
-            if (stopButton) {
-                const canStop = scanRunning || reportRunning;
-                stopButton.disabled = !canStop;
-                stopButton.classList.toggle('opacity-50', !canStop);
-                stopButton.classList.toggle('cursor-not-allowed', !canStop);
-            }
-        }
-
-        socket.on('job_status', function(data) {
-            if (!data || !data.job_type) return;
-            clientJobs[data.job_type] = data;
-            updateJobButtons();
-
-            if (data.job_type === 'report' && data.status === 'running' && data.details) {
-                const message = data.details.message || 'Generating report...';
-                updateReportProgress(message);
-                showReportStatus(message, 'info');
-            }
-
-            if (data.job_type === 'scan' && data.status === 'running' && data.details?.message) {
-                showReportStatus(data.details.message, 'info');
-            }
-        });
-
-        socket.on('job_cancelled', function(data) {
-            if (!data || !data.message) return;
-            showReportStatus(data.message, 'info');
-        });
-
-        socket.emit('get_local_ip');
-        socket.emit('get_network_key');
-        socket.emit('get_customer_info');
-        socket.emit('get_versions');
-        socket.emit('get_customers');
-        socket.emit('get_history_counts');
-        socket.emit('get_job_status');
-
-        document.getElementById('stop-scan-btn').addEventListener('click', function() {
-            if (clientJobs.report.status === 'running') {
-                socket.emit('cancel_job', { job_type: 'report' });
-                return;
-            }
-
-            if (clientJobs.scan.status === 'running') {
-                socket.emit('cancel_job', { job_type: 'scan' });
-            }
-        });
-
         // Customer quick add dropdown handler
         document.getElementById('customer-quick-add').addEventListener('change', function() {
             const selectedId = this.value;
@@ -1703,13 +1622,13 @@
             }
             if (typeof initializeAutoScanUI === 'function') {
                 initializeAutoScanUI(socket, {
-                    getClientJobs: () => clientJobs,
-                    getLastScanTarget: () => lastScanTarget
+                    getClientJobs: window.getClientJobs,
+                    getLastScanTarget: window.getLastScanTarget
                 });
             }
             if (typeof initializeReportGenerationUI === 'function') {
                 initializeReportGenerationUI(socket, {
-                    getClientJobs: () => clientJobs
+                    getClientJobs: window.getClientJobs
                 });
             }
 
@@ -2235,156 +2154,6 @@
                     });
                 }
             }
-        });
-
-        // Store last scan target
-        document.getElementById('start-scan-btn').addEventListener('click', function() {
-            lastScanTarget = document.getElementById('scan-target').value;
-        });
-
-        // Auto Scan Toggle
-        let autoScanEnabled = false;
-        let autoScanStartTime = '01:00';
-        let autoScanEndTime = '06:00';
-
-        document.getElementById('auto-scan-toggle').addEventListener('change', function() {
-            autoScanEnabled = this.checked;
-            const timesDiv = document.getElementById('auto-scan-times');
-
-            if (autoScanEnabled) {
-                // Show time selection modal
-                showAutoScanTimeModal();
-            } else {
-                // Disable auto scanning
-                timesDiv.classList.add('hidden');
-                socket.emit('update_auto_scan', { enabled: false });
-                showReportStatus('Automatic scanning disabled', 'info');
-            }
-        });
-
-        function showAutoScanTimeModal() {
-            const modal = document.getElementById('auto-scan-modal');
-            modal.classList.remove('hidden');
-
-            // Pre-fill with current values
-            document.getElementById('auto-start-time').value = autoScanStartTime;
-            document.getElementById('auto-end-time').value = autoScanEndTime;
-        }
-
-        function hideAutoScanTimeModal() {
-            document.getElementById('auto-scan-modal').classList.add('hidden');
-        }
-
-        function saveAutoScanTimes() {
-            const startTime = document.getElementById('auto-start-time').value;
-            const endTime = document.getElementById('auto-end-time').value;
-
-            if (!startTime || !endTime) {
-                showReportStatus('Please select both start and end times', 'error');
-                return;
-            }
-
-            autoScanStartTime = startTime;
-            autoScanEndTime = endTime;
-
-            // Update display
-            const windowEl = document.getElementById('auto-scan-window');
-            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
-            const timesDiv = document.getElementById('auto-scan-times');
-            if (timesDiv) timesDiv.classList.remove('hidden');
-
-            // Enable auto scanning
-            socket.emit('update_auto_scan', {
-                enabled: true,
-                start_time: startTime,
-                end_time: endTime
-            });
-
-            hideAutoScanTimeModal();
-            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
-        }
-
-        function saveAndRunScan() {
-            if (clientJobs.report.status === 'running') {
-                showReportStatus('A report job is already running', 'error');
-                return;
-            }
-
-            const startTime = document.getElementById('auto-start-time').value;
-            const endTime = document.getElementById('auto-end-time').value;
-
-            if (!startTime || !endTime) {
-                showReportStatus('Please select both start and end times', 'error');
-                return;
-            }
-
-            // Close modal immediately
-            hideAutoScanTimeModal();
-
-            autoScanStartTime = startTime;
-            autoScanEndTime = endTime;
-
-            // Update display
-            const windowEl = document.getElementById('auto-scan-window');
-            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
-            const timesDiv = document.getElementById('auto-scan-times');
-            if (timesDiv) timesDiv.classList.remove('hidden');
-
-            // Enable auto scanning
-            socket.emit('update_auto_scan', {
-                enabled: true,
-                start_time: startTime,
-                end_time: endTime
-            });
-
-            hideAutoScanTimeModal();
-            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
-
-            // Immediately trigger a scan using generate_report
-            // Use the same target selection logic as the main Generate Report button
-            const target = document.getElementById('scan-target').value || lastScanTarget || '127.0.0.1';
-
-            // Use the same customer name logic as the main Generate Report button
-            const customerOption = document.getElementById('current-customer').selectedOptions[0];
-            let customerName = 'Auto Scan'; // Default for auto scans
-
-             if (customerOption) {
-                 // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
-                 customerName = customerOption.textContent.split(' (')[0];
-             }
-
-            console.log('About to emit generate_report with target:', target, 'customer:', customerName);
-            console.log('Socket connected:', socket.connected);
-            showReportStatus(`Starting scan of ${target}...`, 'info');
-
-            // Use the same generate_report event as the main Generate Report button
-            socket.emit('generate_report', {
-                target: target,
-                customer_name: customerName
-            });
-            console.log('generate_report emitted');
-        }
-
-        // Auto scan status updates
-        socket.on('auto_scan_status', function(status) {
-            autoScanEnabled = status.enabled || false;
-            document.getElementById('auto-scan-toggle').checked = autoScanEnabled;
-
-            if (status.start_time && status.end_time) {
-                autoScanStartTime = status.start_time;
-                autoScanEndTime = status.end_time;
-                const windowEl = document.getElementById('auto-scan-window');
-                if (windowEl) windowEl.textContent = `${status.start_time} to ${status.end_time}`;
-                const timesDiv = document.getElementById('auto-scan-times');
-                if (timesDiv) timesDiv.classList.remove('hidden');
-            } else {
-                const timesDiv = document.getElementById('auto-scan-times');
-                if (timesDiv) timesDiv.classList.add('hidden');
-            }
-        });
-
-        socket.on('auto_scan_error', function(data) {
-            showReportStatus(`Automatic scan error: ${data.error}`, 'error');
         });
 
         // TableSorter class for sortable table functionality
