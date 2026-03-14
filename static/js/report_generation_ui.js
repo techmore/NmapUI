@@ -108,10 +108,11 @@ function initializeReportGenerationUI(socket, deps) {
         this.classList.add('card-pulsing');
         startReportTimer();
 
-        reportSocket.emit('generate_pdf_from_saved', {
+        reportSocket.emit('generate_report', {
             target: target,
             customer_name: customerName,
-            max_days: 30
+            scan_results: lastScanResults,
+            chunked: false
         });
     });
 

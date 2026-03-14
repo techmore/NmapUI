@@ -576,9 +576,11 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "autoScanGetClientJobs = deps?.getClientJobs || window.getClientJobs || autoScanGetClientJobs;" in auto_scan_module
     assert "function initializeUpdateModal(socket, deps = {})" in update_modal_module
     assert "const showReportStatus =" in update_modal_module
-    assert "reportSocket.emit('generate_pdf_from_saved'" in report_generation_module
     assert "reportSocket.emit('generate_report'" in report_generation_module
+    assert "chunked: false" in report_generation_module
+    assert "chunked: true" in report_generation_module
     assert "socket.on('client_state_snapshot'" in report_generation_module
+    assert "document.getElementById('generate-report-btn').addEventListener('click'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert "socket.on('scan_results'" in report_generation_module
     assert "function getLastScanTarget()" in report_generation_module
@@ -594,6 +596,8 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert "let autoScanEnabled = false;" not in template
     assert "getClientJobs: window.getClientJobs" in template
     assert "getLastScanTarget: window.getLastScanTarget" in template
+    assert "Complete + PDF" in template
+    assert 'aria-label="Run a complete scan and generate a new PDF"' in template
 
 
 def test_pdf_generation_prefers_browser_renderer_before_wkhtml():

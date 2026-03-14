@@ -302,3 +302,86 @@ def test_generate_report_task_injects_diff_summary_into_generated_html(tmp_path)
     assert 'id="scan-diff-summary"' in (scan_dir / "scan_pdf.html").read_text(encoding="utf-8")
     report_complete = next(payload for event, payload in observed_events if event == "report_complete")
     assert report_complete["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+
+
+def test_generate_report_task_respects_non_chunked_full_scan_requests(tmp_path):
+    scan_dir = tmp_path / "Acme" / "2026-03-14" / "scan_030000_target"
+    observed_targets = []
+    observed_events = []
+    registry = type(
+        "JobRegistryStub",
+        (),
+        {
+            "complete": lambda self, *args, **kwargs: None,
+            "is_cancelled": lambda self, *args, **kwargs: False,
+            "get": lambda self, *args, **kwargs: {"status": "completed"},
+            "clear_if_disconnected": lambda self, *args, **kwargs: None,
+        },
+    )()
+
+    def create_scan_folder_stub(*args, **kwargs):
+        scan_dir.mkdir(parents=True, exist_ok=True)
+        return scan_dir
+
+    def run_nmap_with_xml_output_stub(target, output_base, scan_type, sid=None):
+        observed_targets.append(target)
+        output_base.with_suffix(".xml").write_text("<nmaprun></nmaprun>", encoding="utf-8")
+        return True
+
+    def convert_xml_to_html_stub(xml_path, html_path, *, stylesheet, get_app_version, feedback=None):
+        html_path.write_text("<html><body>Report</body></html>", encoding="utf-8")
+        return True
+
+    generate_report_task(
+        build_report_workflow_context(
+            {
+            "job_registry": registry,
+            "idle_state_manager": IdleStateStub(),
+            "emit_job_status": lambda sid, job_type: None,
+            "emit_to_client": lambda sid, event, data=None: observed_events.append((event, data)),
+            "update_job_progress": lambda *args, **kwargs: None,
+            "validate_target": lambda target: (True, None),
+            "split_subnet_into_chunks": lambda target: ["192.168.1.0/25", "192.168.1.128/25"],
+            "create_scan_folder": create_scan_folder_stub,
+            "scans_dir": tmp_path,
+            "sanitize_customer_dir_name": lambda value: value.replace(" ", "_"),
+            "run_nmap_with_xml_output": run_nmap_with_xml_output_stub,
+            "merge_nmap_xml_files": lambda *args, **kwargs: None,
+            "socketio_sleep": lambda value: None,
+            "convert_xml_to_html": convert_xml_to_html_stub,
+            "convert_html_to_pdf": lambda *args, **kwargs: True,
+            "stylesheet": "web.xsl",
+            "web_stylesheet": "web.xsl",
+            "pdf_stylesheet": "pdf.xsl",
+            "get_app_version": lambda: "v1.0.0",
+            "save_scan_metadata": lambda *args, **kwargs: None,
+            "get_client_state": lambda sid=None: {
+                "network_key": {"target": "shared"},
+                "current_customer": {"id": "cust-123", "name": "Acme Customer"},
+            },
+            "network_key": {"target": "shared"},
+            "current_customer": {"id": "cust-123", "name": "Acme Customer"},
+            "extract_scan_statistics": lambda path: {},
+            "customer_fingerprinter": type(
+                "FingerprinterStub",
+                (),
+                {
+                    "customers": [],
+                    "update_last_scan_duration": lambda self, customer_id, duration: None,
+                },
+            )(),
+            }
+        ),
+        "sid-1",
+        {
+            "target": "192.168.1.0/24",
+            "customer_name": "Acme Customer",
+            "chunked": False,
+        },
+    )
+
+    assert observed_targets == ["192.168.1.0/24"]
+    assert (
+        "scan_feedback",
+        "Running a single comprehensive scan without chunking",
+    ) in observed_events
