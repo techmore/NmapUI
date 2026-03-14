@@ -349,6 +349,34 @@
         color: oklch(22% 0.025 110);
         background-color: oklch(91% 0.020 110);
     }
+
+    .action-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .action-button-primary {
+        background: oklch(42% 0.055 110);
+        color: white;
+    }
+
+    .action-button-primary:hover {
+        background: oklch(35% 0.045 110);
+    }
+
+    .action-button-secondary {
+        background: oklch(50% 0.065 110);
+        color: white;
+    }
+
+    .action-button-secondary:hover {
+        background: oklch(42% 0.055 110);
+    }
     
     /* Custom button press effect */
     .btn-press:active {
@@ -571,10 +599,10 @@
             </div>
             
             <div class="flex justify-end gap-2 mt-4">
-                <button onclick="hideCustomerForm()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                <button onclick="hideCustomerForm()" class="action-button action-button-secondary">
                     Cancel
                 </button>
-                <button onclick="addCustomer()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors">
+                <button onclick="addCustomer()" class="action-button action-button-primary">
                     Add Customer
                 </button>
             </div>
@@ -605,7 +633,7 @@
                         <option value="">All Customers</option>
                     </select>
                     <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="form-control form-control-sm">
-                    <button onclick="loadScanHistory()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
+                    <button onclick="loadScanHistory()" class="action-button action-button-primary text-sm">
                         Refresh
                     </button>
                 </div>
@@ -766,7 +794,7 @@
 
             <!-- Modal Footer -->
             <div class="p-4 border-t border-olive-300 bg-olive-50 flex justify-end">
-                <button onclick="closeAssetDetailsModal()" class="px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white font-medium rounded-lg transition-colors">
+                <button onclick="closeAssetDetailsModal()" class="action-button action-button-primary">
                     Close
                 </button>
             </div>
@@ -2754,13 +2782,13 @@
                 </div>
 
                 <div class="flex gap-3 pt-4">
-                    <button onclick="saveAutoScanTimes()" class="flex-1 bg-olive-600 text-white py-2 px-4 rounded-lg hover:bg-olive-700 transition-colors">
+                    <button onclick="saveAutoScanTimes()" class="action-button action-button-primary flex-1">
                         Enable Auto Scan
                     </button>
-                    <button onclick="saveAndRunScan()" class="flex-1 bg-olive-600 text-white py-2 px-4 rounded-lg hover:bg-olive-700 transition-colors">
+                    <button onclick="saveAndRunScan()" class="action-button action-button-primary flex-1">
                         Save and Run Scan
                     </button>
-                    <button onclick="hideAutoScanTimeModal()" class="px-4 py-2 bg-olive-500 text-white rounded-lg hover:bg-olive-600 transition-colors">
+                    <button onclick="hideAutoScanTimeModal()" class="action-button action-button-secondary">
                         Cancel
                     </button>
                 </div>
