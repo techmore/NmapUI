@@ -220,6 +220,13 @@ def test_app_delegates_auto_scan_execution_to_shared_module():
     assert "return execute_auto_scan_impl(" in app_source
 
 
+def test_app_uses_shared_xml_merge_helper():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "merge_nmap_xml_files," in app_source
+    assert "def merge_nmap_xml_files(" not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

@@ -6,6 +6,7 @@ from nmapui.reporting import (
     extract_scan_statistics,
     get_most_recent_scan_xml,
     mark_scan_failure,
+    merge_nmap_xml_files,
     parse_scan_xml_for_assets,
     parse_vulners_script,
     save_scan_metadata,
@@ -191,3 +192,50 @@ def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
     assert metadata["failure_error"] == "Nmap scan failed on chunk 2"
     assert metadata["completed_successfully"] is False
     assert metadata["customer_id"] == "cust-123"
+
+
+def test_merge_nmap_xml_files_combines_hosts_and_updates_runstats(tmp_path):
+    first = tmp_path / "first.xml"
+    second = tmp_path / "second.xml"
+    merged = tmp_path / "merged.xml"
+
+    first.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun args="nmap 192.168.1.1">
+  <host starttime="100" endtime="130">
+    <status state="up"/>
+    <address addr="192.168.1.1" addrtype="ipv4"/>
+  </host>
+  <runstats>
+    <finished summary="first" />
+    <hosts up="1" down="0" total="1"/>
+  </runstats>
+</nmaprun>
+"""
+    )
+    second.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun args="nmap 192.168.1.2">
+  <host starttime="140" endtime="190">
+    <status state="up"/>
+    <address addr="192.168.1.2" addrtype="ipv4"/>
+  </host>
+  <runstats>
+    <finished summary="second" />
+    <hosts up="1" down="0" total="1"/>
+  </runstats>
+</nmaprun>
+"""
+    )
+
+    merge_nmap_xml_files([first, second], merged)
+
+    root = ET.fromstring(merged.read_text())
+    hosts = root.findall("host")
+    runstats = root.find("runstats")
+    hosts_elem = runstats.find("hosts")
+
+    assert len(hosts) == 2
+    assert hosts_elem.get("up") == "2"
+    assert hosts_elem.get("down") == "0"
+    assert hosts_elem.get("total") == "2"

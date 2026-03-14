@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import io
 import logging
 import shutil
 import subprocess
@@ -13,6 +14,118 @@ from persistence import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def merge_nmap_xml_files(xml_files, output_path):
+    """Merge multiple Nmap XML files into one with updated statistics."""
+    if not xml_files:
+        raise ValueError("No XML files to merge")
+
+    base_tree = ET.parse(xml_files[0])
+    base_root = base_tree.getroot()
+    nmaprun = base_root
+
+    all_hosts = []
+    earliest_start = None
+    latest_end = None
+    total_up = 0
+    total_down = 0
+    total_ips = 0
+
+    for xml_file in xml_files:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        for host in root.findall("host"):
+            all_hosts.append(host)
+            starttime = host.get("starttime")
+            endtime = host.get("endtime")
+            if starttime:
+                start_ts = int(starttime)
+                if earliest_start is None or start_ts < earliest_start:
+                    earliest_start = start_ts
+            if endtime:
+                end_ts = int(endtime)
+                if latest_end is None or end_ts > latest_end:
+                    latest_end = end_ts
+
+        runstats = root.find("runstats")
+        if runstats is not None:
+            hosts = runstats.find("hosts")
+            if hosts is not None:
+                total_up += int(hosts.get("up", "0"))
+                total_down += int(hosts.get("down", "0"))
+                total_ips += int(hosts.get("total", "0"))
+
+    if total_ips == 0:
+        for host in all_hosts:
+            status = host.find("status")
+            if status is not None and status.get("state") == "up":
+                total_up += 1
+            else:
+                total_down += 1
+        total_ips = total_up + total_down
+
+    for host in base_root.findall("host"):
+        base_root.remove(host)
+
+    for host in all_hosts:
+        nmaprun.append(host)
+
+    runstats = base_root.find("runstats")
+    if runstats is not None:
+        finished = runstats.find("finished")
+        if finished is not None:
+            if earliest_start and latest_end:
+                total_elapsed = latest_end - earliest_start
+                elapsed_str = f"{total_elapsed // 60}m{total_elapsed % 60}s"
+            else:
+                elapsed_str = "unknown"
+            finished.set(
+                "summary",
+                f"Nmap done at {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}; {total_ips} IP addresses ({total_up} hosts up) scanned in {elapsed_str}",
+            )
+            finished.set("hosts", f"{total_up} up, {total_down} down, {total_ips} total")
+
+        hosts = runstats.find("hosts")
+        if hosts is not None:
+            hosts.set("up", str(total_up))
+            hosts.set("down", str(total_down))
+            hosts.set("total", str(total_ips))
+
+    scaninfo = base_root.find("scaninfo")
+    if scaninfo is not None:
+        all_targets = []
+        for xml_file in xml_files:
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            args = root.get("args")
+            if args:
+                parts = args.split()
+                if parts:
+                    target = parts[-1]
+                    if target not in all_targets:
+                        all_targets.append(target)
+
+        if all_targets:
+            scaninfo.set("numservices", "1000")
+
+    first_content = xml_files[0].read_text(encoding="utf-8")
+    header_end = first_content.find("<nmaprun")
+    headers = (
+        first_content[:header_end]
+        if header_end != -1
+        else '<?xml version="1.0" encoding="UTF-8"?>\n'
+    )
+
+    footer_start = first_content.find("</nmaprun>") + len("</nmaprun>")
+    footer = first_content[footer_start:] if footer_start > 0 else ""
+
+    xml_string = io.StringIO()
+    base_tree.write(xml_string, encoding="unicode", xml_declaration=False)
+    merged_content = xml_string.getvalue()
+
+    output_path.write_text(headers + merged_content + footer, encoding="utf-8")
 
 
 def convert_xml_to_html(
