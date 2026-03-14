@@ -2,7 +2,7 @@ from datetime import datetime
 import re
 import shutil
 
-from flask import jsonify, send_file
+from flask import jsonify, request, send_file
 from nmapui.auth import require_auth
 from nmapui.reporting import (
     find_previous_scan_metadata,
@@ -179,3 +179,68 @@ def register_scan_routes(app, deps):
             return jsonify({"success": True})
         except Exception as exc:
             return jsonify({"success": False, "error": str(exc)}), 500
+
+    @app.route("/api/scans/compare")
+    @require_auth
+    def compare_scans():
+        base_path = str(request.args.get("base_path", "") or "").strip()
+        current_path = str(request.args.get("current_path", "") or "").strip()
+        if not base_path or not current_path:
+            return jsonify({"success": False, "error": "Both base_path and current_path are required"}), 400
+
+        base_dir = resolve_scan_path(base_path)
+        current_dir = resolve_scan_path(current_path)
+        if base_dir is None or current_dir is None:
+            return jsonify({"success": False, "error": "Invalid scan path"}), 400
+
+        base_metadata_path = base_dir / "metadata.json"
+        current_metadata_path = current_dir / "metadata.json"
+        base_xml = base_dir / "scan.xml"
+        current_xml = current_dir / "scan.xml"
+
+        if not base_metadata_path.exists() or not current_metadata_path.exists():
+            return jsonify({"success": False, "error": "Scan metadata not found"}), 404
+        if not base_xml.exists() or not current_xml.exists():
+            return jsonify({"success": False, "error": "Scan XML not found"}), 404
+
+        base_metadata = normalize_scan_metadata_document(load_json_document(base_metadata_path, {}))
+        current_metadata = normalize_scan_metadata_document(load_json_document(current_metadata_path, {}))
+
+        if str(base_metadata.get("customer_id", "") or "") != str(current_metadata.get("customer_id", "") or ""):
+            return jsonify({"success": False, "error": "Scans must belong to the same customer"}), 400
+        if str(base_metadata.get("target", "") or "") != str(current_metadata.get("target", "") or ""):
+            return jsonify({"success": False, "error": "Scans must target the same network"}), 400
+
+        try:
+            diff_summary = summarize_asset_differences(
+                parse_scan_xml_for_assets(current_xml),
+                parse_scan_xml_for_assets(base_xml),
+            )
+        except Exception as exc:
+            logger.error("Error comparing scans %s and %s: %s", base_path, current_path, exc)
+            return jsonify({"success": False, "error": "Failed to compare scans"}), 500
+
+        return jsonify(
+            {
+                "success": True,
+                "base_scan": {
+                    "path": base_path,
+                    "timestamp": base_metadata.get("timestamp"),
+                    "customer_name": base_metadata.get("customer_name"),
+                    "target": base_metadata.get("target"),
+                    "status": base_metadata.get("status"),
+                },
+                "current_scan": {
+                    "path": current_path,
+                    "timestamp": current_metadata.get("timestamp"),
+                    "customer_name": current_metadata.get("customer_name"),
+                    "target": current_metadata.get("target"),
+                    "status": current_metadata.get("status"),
+                },
+                "diff_summary": {
+                    **diff_summary,
+                    "baseline_path": base_path,
+                    "baseline_timestamp": base_metadata.get("timestamp", ""),
+                },
+            }
+        )

@@ -252,6 +252,160 @@ def test_scan_routes_include_diff_summary_against_previous_scan(tmp_path, monkey
     assert latest["diff_summary"]["new_ports"] == ["443 (https)"]
 
 
+def test_compare_scans_returns_explicit_diff_summary(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    base_scan = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    current_scan = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    base_scan.mkdir(parents=True, exist_ok=True)
+    current_scan.mkdir(parents=True, exist_ok=True)
+    (base_scan / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24","status":"completed"}'
+    )
+    (current_scan / "metadata.json").write_text(
+        '{"timestamp":"2026-03-14T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24","status":"completed"}'
+    )
+    (base_scan / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.10" addrtype="ipv4"/>
+            <ports>
+              <port portid="80"><state state="open"/><service name="http"/></port>
+            </ports>
+          </host>
+        </nmaprun>
+        """
+    )
+    (current_scan / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.10" addrtype="ipv4"/>
+            <ports>
+              <port portid="443"><state state="open"/><service name="https"/></port>
+            </ports>
+          </host>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.20" addrtype="ipv4"/>
+          </host>
+        </nmaprun>
+        """
+    )
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+        },
+    )
+
+    response = app.test_client().get(
+        "/api/scans/compare?base_path=Acme/2026-03-13/scan_010000_target&current_path=Acme/2026-03-14/scan_020000_target",
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["base_scan"]["path"] == "Acme/2026-03-13/scan_010000_target"
+    assert payload["current_scan"]["path"] == "Acme/2026-03-14/scan_020000_target"
+    assert payload["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+    assert payload["diff_summary"]["added_hosts"] == ["10.0.0.20"]
+    assert payload["diff_summary"]["new_ports"] == ["443 (https)"]
+
+
+def test_compare_scans_rejects_mismatched_targets(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    base_scan = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    current_scan = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    base_scan.mkdir(parents=True, exist_ok=True)
+    current_scan.mkdir(parents=True, exist_ok=True)
+    (base_scan / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24"}'
+    )
+    (current_scan / "metadata.json").write_text(
+        '{"timestamp":"2026-03-14T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.1.0/24"}'
+    )
+    (base_scan / "scan.xml").write_text("<nmaprun></nmaprun>")
+    (current_scan / "scan.xml").write_text("<nmaprun></nmaprun>")
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+        },
+    )
+
+    response = app.test_client().get(
+        "/api/scans/compare?base_path=Acme/2026-03-13/scan_010000_target&current_path=Acme/2026-03-14/scan_020000_target",
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "success": False,
+        "error": "Scans must target the same network",
+    }
+
+
+def test_compare_scans_rejects_mismatched_customers(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    base_scan = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    current_scan = scans_dir / "Bravo" / "2026-03-14" / "scan_020000_target"
+    base_scan.mkdir(parents=True, exist_ok=True)
+    current_scan.mkdir(parents=True, exist_ok=True)
+    (base_scan / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24"}'
+    )
+    (current_scan / "metadata.json").write_text(
+        '{"timestamp":"2026-03-14T01:00:00","customer_name":"Bravo","customer_id":"cust-456","target":"10.0.0.0/24"}'
+    )
+    (base_scan / "scan.xml").write_text("<nmaprun></nmaprun>")
+    (current_scan / "scan.xml").write_text("<nmaprun></nmaprun>")
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+        },
+    )
+
+    response = app.test_client().get(
+        "/api/scans/compare?base_path=Acme/2026-03-13/scan_010000_target&current_path=Bravo/2026-03-14/scan_020000_target",
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "success": False,
+        "error": "Scans must belong to the same customer",
+    }
+
+
 def test_delete_scan_removes_index_entry(tmp_path, monkeypatch):
     configure_auth(monkeypatch)
     app = build_scan_app_with_real_metadata(

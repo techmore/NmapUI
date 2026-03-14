@@ -864,6 +864,8 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="reports-tab-panel"' in template
     assert 'id="logs-tab-panel"' in template
     assert 'id="settings-tab-panel"' in template
+    assert 'id="history-compare-panel"' in template
+    assert 'id="history-compare-summary"' in template
     assert 'id="logs-search-input"' in template
     assert 'id="logs-level-filter"' in template
     assert 'id="logs-tab-entries"' in template
@@ -902,6 +904,8 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "buildLink(`/api/scans/${path}/html`, 'View Report', true);" in report_status_module
     assert "buildLink(`/api/scans/${path}/pdf`, 'Download PDF');" in report_status_module
     assert "function initializeReportsTab()" in reports_tab_module
+    assert "async function compareHistoryScans(basePath, currentPath)" in reports_tab_module
+    assert "function createHistoryDetailBlock(scan)" in reports_tab_module
     assert "function ensureTabPanelsAreSiblings()" in reports_tab_module
     assert "panel.parentElement !== dashboardPanel" in reports_tab_module
     assert "parent.insertBefore(panel, dashboardPanel.nextSibling);" in reports_tab_module
@@ -914,6 +918,8 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "function loadHistoryTab(force = false)" in reports_tab_module
     assert "window.addEventListener('report-complete-refresh'" in reports_tab_module
     assert "createScanActionLink(`/api/scans/${scan.path}/html`, 'View Report', true)" in reports_tab_module
+    assert "Select Base" in reports_tab_module
+    assert "Compare to Base" in reports_tab_module
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template

@@ -118,9 +118,9 @@ def playwright_browser():
 def scan_fixture():
     fixture_id = uuid.uuid4().hex[:8]
     customer_name = f"Browser Regression {fixture_id}"
-    customer_dir = SCANS_DIR / customer_name / "2026-03-14"
-    primary_dir = customer_dir / "scan_120000_198.51.100.0_24"
-    baseline_dir = customer_dir / "2026-03-13" / "scan_110000_198.51.100.0_24"
+    customer_root = SCANS_DIR / customer_name
+    primary_dir = customer_root / "2026-03-14" / "scan_120000_198.51.100.0_24"
+    baseline_dir = customer_root / "2026-03-13" / "scan_110000_198.51.100.0_24"
 
     for scan_dir, timestamp, diff_summary in (
         (
@@ -173,8 +173,8 @@ def scan_fixture():
         for scan_dir in (primary_dir, baseline_dir):
             if scan_dir.exists():
                 remove_scan_metadata_index_entry(SCANS_DIR, scan_dir)
-        if customer_dir.parent.exists():
-            shutil.rmtree(customer_dir.parent, ignore_errors=True)
+        if customer_root.exists():
+            shutil.rmtree(customer_root, ignore_errors=True)
 
 
 def test_reports_tab_renders_saved_report_and_view_action(browser_server, playwright_browser, scan_fixture):
@@ -210,6 +210,25 @@ def test_history_tab_renders_diff_summary(browser_server, playwright_browser, sc
     history_list.get_by_text("Changes since previous scan").wait_for()
     history_list.get_by_text("1 new host(s)").wait_for()
     history_list.get_by_text("1 changed host(s)").wait_for()
+
+    context.close()
+
+
+def test_history_tab_compares_selected_scan_pair(browser_server, playwright_browser, scan_fixture):
+    context = playwright_browser.new_context()
+    page = context.new_page()
+
+    page.goto(browser_server["base_url"], wait_until="networkidle")
+    page.locator("#tab-history-btn").click()
+
+    history_cards = page.locator("#history-tab-list article")
+    history_cards.first.get_by_role("button", name="Select Base").click()
+    history_cards.nth(1).get_by_role("button", name="Compare to Base").click()
+
+    page.locator("#history-compare-panel").wait_for()
+    page.locator("#history-compare-summary").get_by_text("new host(s)").wait_for()
+    page.locator("#history-compare-details").get_by_text("198.51.100.12").wait_for()
+    page.locator("#history-compare-details").get_by_text("198.51.100.10").wait_for()
 
     context.close()
 
