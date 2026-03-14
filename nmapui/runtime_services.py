@@ -55,9 +55,16 @@ def create_runtime_services(
         "auto_scan_startup_at": datetime.now(),
         "auto_scan_startup_grace_seconds": 300,
         "rate_limiter": rate_limiter_cls(max_scans_per_hour=10, cooldown_seconds=300),
-        "job_registry": job_registry_cls(),
+        "job_registry": _build_job_registry(job_registry_cls, runtime_store),
         "client_state_registry": client_state_registry,
         "tool_versions": tool_version_registry_cls(),
         "startup_state": startup_state_factory(),
         "runtime_store": runtime_store,
     }
+
+
+def _build_job_registry(job_registry_cls, runtime_store):
+    try:
+        return job_registry_cls(runtime_store=runtime_store)
+    except TypeError:
+        return job_registry_cls()

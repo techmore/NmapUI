@@ -153,10 +153,35 @@ class PerClientRateLimiter:
 class ClientJobRegistry:
     """Track active scan/report jobs per connected client."""
 
-    def __init__(self):
+    def __init__(self, runtime_store=None):
         self._jobs = {}
         self._lock = threading.Lock()
         self._processes = {}
+        self._runtime_store = runtime_store
+
+    def _job_id(self, sid: str, job_type: str) -> str:
+        return f"{sid}:{job_type}"
+
+    def _persist_job(self, sid: str, job_type: str) -> None:
+        if self._runtime_store is None:
+            return
+        job = self._jobs.get((sid, job_type))
+        if not job:
+            return
+        self._runtime_store.upsert_job(
+            job_id=self._job_id(sid, job_type),
+            owner_sid=sid,
+            job_type=job_type,
+            status=job.get("status", "idle"),
+            payload={
+                "cancel_requested": bool(job.get("cancel_requested")),
+                "details": dict(job.get("details", {})),
+                "started_at": job.get("started_at"),
+                "finished_at": job.get("finished_at"),
+                "cancel_requested_at": job.get("cancel_requested_at"),
+                "disconnected": bool(job.get("disconnected")),
+            },
+        )
 
     def start(self, sid: str, job_type: str, details=None) -> bool:
         with self._lock:
@@ -170,6 +195,7 @@ class ClientJobRegistry:
                 "cancel_requested": False,
                 "details": details or {},
             }
+            self._persist_job(sid, job_type)
             return True
 
     def complete(self, sid: str, job_type: str, status="completed", details=None):
@@ -182,6 +208,7 @@ class ClientJobRegistry:
                 merged.update(details)
                 current["details"] = merged
             self._jobs[key] = current
+            self._persist_job(sid, job_type)
 
     def update(self, sid: str, job_type: str, details=None, **fields):
         with self._lock:
@@ -195,6 +222,7 @@ class ClientJobRegistry:
                 merged.update(details)
                 current["details"] = merged
             self._jobs[key] = current
+            self._persist_job(sid, job_type)
 
     def cancel(self, sid: str, job_type: str) -> bool:
         with self._lock:
@@ -213,6 +241,7 @@ class ClientJobRegistry:
                     process.terminate()
                 except Exception:
                     logger.exception("Failed to terminate subprocess for %s", key)
+            self._persist_job(sid, job_type)
             return True
 
     def is_cancelled(self, sid: str, job_type: str) -> bool:

@@ -170,6 +170,44 @@ class RuntimeStateStore:
             "updated_at": row["updated_at"],
         }
 
+    def list_jobs(
+        self,
+        *,
+        statuses: list[str] | tuple[str, ...] | None = None,
+        job_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        query = """
+            SELECT job_id, owner_sid, job_type, status, payload_json, created_at, updated_at
+            FROM jobs
+        """
+        conditions = []
+        params: list[Any] = []
+        if statuses:
+            conditions.append(f"status IN ({','.join('?' for _ in statuses)})")
+            params.extend(statuses)
+        if job_type:
+            conditions.append("job_type = ?")
+            params.append(job_type)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY updated_at DESC LIMIT ?"
+        params.append(limit)
+        with self.connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [
+            {
+                "job_id": row["job_id"],
+                "owner_sid": row["owner_sid"],
+                "job_type": row["job_type"],
+                "status": row["status"],
+                "payload": _json_loads(row["payload_json"]),
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
+
     def upsert_report_artifact(
         self,
         *,

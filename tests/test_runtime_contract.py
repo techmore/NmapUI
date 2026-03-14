@@ -201,6 +201,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert "CREATE TABLE IF NOT EXISTS jobs" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS report_artifacts" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS runtime_logs" in runtime_db_source
+    assert "def list_jobs(" in runtime_db_source
     assert "def create_runtime_state_store" in runtime_db_source
     assert "runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)" in app_source
     assert '"runtime_store": runtime_store' in runtime_services_source
@@ -228,10 +229,13 @@ def test_connection_handler_prefers_sqlite_snapshots_without_active_owner():
     app_handler_registration_source = (ROOT / "nmapui" / "app_handler_registration.py").read_text()
 
     assert "def _load_persisted_source_state(runtime_store):" in connections_source
+    assert "def _load_persisted_active_job(runtime_store):" in connections_source
+    assert 'runtime_store.list_jobs(statuses=("running", "cancelling"), limit=1)' in connections_source
     assert 'runtime_store.get_runtime_snapshot("current_customer")' in connections_source
     assert 'runtime_store.get_runtime_snapshot("network_key")' in connections_source
     assert 'runtime_store.get_runtime_snapshot("last_scan_target")' in connections_source
     assert "source_state = _load_persisted_source_state(runtime_store) or get_client_state()" in connections_source
+    assert 'emit_to_client(new_sid, "job_status", persisted_job)' in connections_source
     assert "runtime_store=runtime_store" in app_handler_registration_source
 
 

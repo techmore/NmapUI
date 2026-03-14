@@ -519,6 +519,56 @@ def test_connect_hydrates_new_tab_from_sqlite_snapshot_without_active_scan():
     assert emitted[2][2] == {"last_scan_target": "10.10.10.0/24"}
 
 
+def test_connect_emits_persisted_active_job_status_without_active_owner():
+    emitted = []
+
+    class BroadcasterStub:
+        def find_active_owner(self, job_type="scan"):
+            return None
+
+    class RuntimeStoreStub:
+        def get_runtime_snapshot(self, key):
+            return None
+
+        def list_jobs(self, statuses=None, limit=50):
+            return [
+                {
+                    "job_id": "owner-sid:report",
+                    "owner_sid": "owner-sid",
+                    "job_type": "report",
+                    "status": "running",
+                    "payload": {
+                        "cancel_requested": False,
+                        "details": {"target": "10.10.10.0/24", "customer_name": "Persisted"},
+                        "started_at": "2026-03-14T12:00:00",
+                        "finished_at": None,
+                        "disconnected": True,
+                    },
+                    "created_at": "2026-03-14T12:00:00",
+                    "updated_at": "2026-03-14T12:05:00",
+                }
+            ]
+
+    app, socketio = build_connection_app(
+        {
+            "auto_scan_config": {"enabled": False},
+            "broadcaster": BroadcasterStub(),
+            "emit_to_client": lambda sid, event, data=None: emitted.append((sid, event, data)),
+            "job_registry": type("JobRegistryStub", (), {})(),
+            "logger": Flask(__name__).logger,
+            "runtime_store": RuntimeStoreStub(),
+        }
+    )
+
+    client = socketio.test_client(app)
+
+    assert client.is_connected()
+    assert emitted[-1][1] == "job_status"
+    assert emitted[-1][2]["job_type"] == "report"
+    assert emitted[-1][2]["status"] == "running"
+    assert emitted[-1][2]["details"]["target"] == "10.10.10.0/24"
+
+
 def test_connect_clears_stale_broadcast_slot_when_no_scan_job():
     observed = {}
 

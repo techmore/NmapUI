@@ -27,6 +27,26 @@ def _load_persisted_source_state(runtime_store):
     }
 
 
+def _load_persisted_active_job(runtime_store):
+    if runtime_store is None or not hasattr(runtime_store, "list_jobs"):
+        return None
+    jobs = runtime_store.list_jobs(statuses=("running", "cancelling"), limit=1)
+    if not jobs:
+        return None
+    job = jobs[0]
+    payload = dict(job.get("payload", {}))
+    details = dict(payload.get("details", {}))
+    return {
+        "job_type": job["job_type"],
+        "status": job["status"],
+        "details": details,
+        "cancel_requested": bool(payload.get("cancel_requested")),
+        "started_at": payload.get("started_at") or job.get("created_at"),
+        "finished_at": payload.get("finished_at"),
+        "disconnected": bool(payload.get("disconnected")),
+    }
+
+
 def register_connection_handlers(socketio, deps):
     auto_scan_config = deps.get("auto_scan_config")
     broadcaster = deps["broadcaster"]
@@ -73,6 +93,9 @@ def register_connection_handlers(socketio, deps):
             emit_to_client(new_sid, "auto_scan_status", auto_scan_config)
 
         if owner_sid is None:
+            persisted_job = _load_persisted_active_job(runtime_store)
+            if persisted_job is not None:
+                emit_to_client(new_sid, "job_status", persisted_job)
             return
 
         job = job_registry.get(owner_sid, active_job_type)
