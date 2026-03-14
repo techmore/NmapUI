@@ -51,6 +51,31 @@ def test_wrapper_docs_reference_current_local_port():
         assert "localhost:9999" not in source
 
 
+def test_docs_match_current_pdf_generation_runtime_contract():
+    readme = subprocess.check_output(
+        ["git", "show", ":README.md"],
+        cwd=ROOT,
+        text=True,
+    )
+    building = subprocess.check_output(
+        ["git", "show", ":BUILDING.md"],
+        cwd=ROOT,
+        text=True,
+    )
+    setup = subprocess.check_output(
+        ["git", "show", ":docs/guides/SETUP.md"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "wkhtmltopdf (primary HTML to PDF backend)" in readme
+    assert "playwright install chromium" in readme
+    assert "The managed Python environment in `requirements.txt` includes Playwright, but not WeasyPrint." in readme
+    assert "Optional PDF fallback: playwright install chromium" in building
+    assert "**wkhtmltopdf** - Primary HTML to PDF conversion" in setup
+    assert "**textutil** - macOS-only last-resort PDF fallback" in setup
+
+
 def test_pyinstaller_spec_includes_runtime_assets():
     spec = (ROOT / "packaging" / "pyinstaller" / "nmapui.spec").read_text()
 

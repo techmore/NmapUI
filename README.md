@@ -28,8 +28,9 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 - Nmap installed and available in PATH
 - arp-scan (optional, for MAC/vendor detection)
 - xsltproc (for XML to HTML conversion)
-- wkhtmltopdf or weasyprint (for HTML to PDF conversion)
-- Chrome/Chromium (for headless screenshot functionality)
+- wkhtmltopdf (primary HTML to PDF backend)
+- Playwright plus `playwright install chromium` (optional PDF fallback)
+- macOS only: `textutil` is used as a final fallback when other PDF backends are unavailable
 
 ## Installation
 
@@ -51,9 +52,11 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 
    # Ubuntu/Debian
    sudo apt install nmap arp-scan xsltproc wkhtmltopdf
+   ```
 
-   # Alternative: Install weasyprint for PDF conversion (Python-based)
-   pip install weasyprint
+   Optional PDF fallback:
+   ```bash
+   playwright install chromium
    ```
 
 4. Copy the XSL stylesheet:
@@ -119,6 +122,15 @@ Click the **Generate Report** button after completing a scan to create comprehen
 2. **HTML Report**: Styled web report using XSL transformation (`scan.html`)
 3. **PDF Report**: Portable document for sharing (`scan_report.pdf`)
 4. **Metadata**: Scan details and customer information (`metadata.json`)
+
+PDF generation fallback order:
+
+1. `wkhtmltopdf` as the preferred backend
+2. `weasyprint` if it is installed manually in the runtime environment
+3. `playwright` with Chromium if `playwright install chromium` has been run
+4. `textutil` on macOS as a last-resort fallback
+
+The managed Python environment in `requirements.txt` includes Playwright, but not WeasyPrint. Treat WeasyPrint as an extra runtime dependency rather than part of the default install path.
 
 Reports are saved in an organized folder structure:
 ```

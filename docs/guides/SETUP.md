@@ -99,6 +99,7 @@ python -c "import flask, socketio, requests, netifaces; print('Core dependencies
 - **git** - For vulners script management
 - **xsltproc** - XML to HTML report conversion
 - **wkhtmltopdf** - Primary HTML to PDF conversion
+- **textutil** - macOS-only last-resort PDF fallback
 
 ### Optional Components
 - **nmap-vulners** script - Automatically cloned from GitHub
@@ -126,9 +127,10 @@ The app writes local scheduler state to `auto_scan_config.json` in the repositor
    - arp-scan may require sudo: `sudo arp-scan --localnet`
 
 2. **PDF generation issues**
-   - Install `wkhtmltopdf` or `xsltproc`
-   - Optional fallback: `pip install weasyprint`
+   - Ensure `wkhtmltopdf` and `xsltproc` are installed
    - Optional fallback: `playwright install chromium`
+   - Optional extra backend: `pip install weasyprint`
+   - On macOS, `textutil` is used only as a final fallback
 
 3. **nmap not found**
    - Ensure nmap is installed and in PATH

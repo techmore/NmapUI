@@ -9,6 +9,7 @@ This guide explains how to build and package NmapUI for macOS distribution and h
    ```bash
    pip install pyinstaller
    # Also ensure Nmap, ARP-Scan, wkhtmltopdf, xsltproc are available (for testing)
+   # Optional PDF fallback: playwright install chromium
    ```
 
 3. **macOS Development Tools**: Xcode command line tools
