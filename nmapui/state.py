@@ -1,6 +1,52 @@
 from datetime import datetime
 
 
+from persistence import load_json_document, normalize_scan_metadata_document
+
+
+def get_report_counts(scans_dir):
+    """Count reports and find last scan date per customer name."""
+    counts = {"total": 0, "last_scans": {}}
+    if not scans_dir.exists():
+        return counts
+
+    for metadata_path in scans_dir.glob("**/metadata.json"):
+        try:
+            data = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
+
+            name = data.get("customer_name")
+            if not name:
+                customer_info = data.get("customer_info", {})
+                name = customer_info.get("name")
+            if not name:
+                name = data.get("customer", "Unassigned")
+
+            name = name.split(" (")[0]
+            key = name if name else "Unassigned"
+
+            counts[key] = counts.get(key, 0) + 1
+            counts["total"] = counts.get("total", 0) + 1
+
+            timestamp = data.get("timestamp")
+            if timestamp:
+                if (
+                    key not in counts["last_scans"]
+                    or timestamp > counts["last_scans"][key]
+                ):
+                    counts["last_scans"][key] = timestamp
+                if (
+                    "total" not in counts["last_scans"]
+                    or timestamp > counts["last_scans"]["total"]
+                ):
+                    counts["last_scans"]["total"] = timestamp
+        except Exception:
+            continue
+
+    return counts
+
+
 def save_customers_config(get_customer_fingerprinter, save_yaml_document, logger):
     try:
         customer_fingerprinter = get_customer_fingerprinter()

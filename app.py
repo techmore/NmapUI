@@ -94,6 +94,7 @@ from nmapui.scanning import (
     run_quick_auto_scan,
 )
 from nmapui.state import (
+    get_report_counts as get_report_counts_state,
     load_current_assignment as load_current_assignment_state,
     merge_customer_metadata,
     save_current_assignment as save_current_assignment_state,
@@ -835,52 +836,6 @@ def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
     return active_network_key
 
 
-def get_report_counts():
-    """Count reports and find last scan date per customer name"""
-    counts = {"total": 0, "last_scans": {}}
-    if not SCANS_DIR.exists():
-        return counts
-
-    for metadata_path in SCANS_DIR.glob("**/metadata.json"):
-        try:
-            data = normalize_scan_metadata_document(
-                load_json_document(metadata_path, {})
-            )
-
-            # Use normalized customer name as the key
-            name = data.get("customer_name")
-            if not name:
-                customer_info = data.get("customer_info", {})
-                name = customer_info.get("name")
-            if not name:
-                name = data.get("customer", "Unassigned")
-
-            # Normalize: remove confidence score if present
-            name = name.split(" (")[0]
-            key = name if name else "Unassigned"
-
-            counts[key] = counts.get(key, 0) + 1
-            counts["total"] = counts.get("total", 0) + 1
-
-            # Track last scan timestamp
-            timestamp = data.get("timestamp")
-            if timestamp:
-                if (
-                    key not in counts["last_scans"]
-                    or timestamp > counts["last_scans"][key]
-                ):
-                    counts["last_scans"][key] = timestamp
-                if (
-                    "total" not in counts["last_scans"]
-                    or timestamp > counts["last_scans"]["total"]
-                ):
-                    counts["last_scans"]["total"] = timestamp
-        except Exception:
-            continue
-
-    return counts
-
-
 def save_customers_config():
     save_customers_config_state(
         get_customer_fingerprinter=get_customer_fingerprinter,
@@ -954,7 +909,7 @@ def register_runtime_modules(app, socketio):
             "calculate_cidr": calculate_cidr,
             "get_client_state": get_client_state,
             "get_default_interface_cached": get_default_interface_cached,
-            "get_report_counts": get_report_counts,
+            "get_report_counts": lambda: get_report_counts_state(SCANS_DIR),
             "logger": logger,
             "netifaces": ni,
             "requests": requests,

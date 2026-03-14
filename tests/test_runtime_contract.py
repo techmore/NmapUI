@@ -238,10 +238,14 @@ def test_app_uses_extracted_state_helpers():
     assert "save_customers_config_state(" in app_source
     assert "save_current_assignment_state(" in app_source
     assert "load_current_assignment_state(" in app_source
+    assert "get_report_counts as get_report_counts_state" in app_source
     assert 'def merge_customer_metadata(customer_dict, saved_customer):' not in app_source
+    assert 'def get_report_counts():' not in app_source
     assert 'def save_customers_config():' in app_source
     assert 'def save_current_assignment(sid: Optional[str] = None):' in app_source
     assert 'def load_current_assignment():' in app_source
+    assert "get_report_counts_state(SCANS_DIR)" in app_source
+    assert 'def get_report_counts(scans_dir):' in state_source
     assert 'def merge_customer_metadata(customer_dict, saved_customer):' in state_source
     assert 'def save_customers_config(' in state_source
     assert 'def save_current_assignment(' in state_source
