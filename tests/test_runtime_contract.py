@@ -156,6 +156,24 @@ def test_app_delegates_state_persistence_to_shared_module():
     assert "return get_report_counts_impl(" in app_state_runtime_source
 
 
+def test_app_delegates_client_state_wrappers_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+    app_client_state_runtime_source = (
+        ROOT / "nmapui" / "app_client_state_runtime.py"
+    ).read_text()
+
+    assert "from nmapui.app_client_state_runtime import (" in app_source
+    assert "get_client_state as get_client_state_runtime" in app_source
+    assert "get_current_customer_state as get_current_customer_state_runtime" in app_source
+    assert "set_current_customer_state as set_current_customer_state_runtime" in app_source
+    assert "set_network_key_state as set_network_key_state_runtime" in app_source
+    assert "set_last_scan_target_state as set_last_scan_target_state_runtime" in app_source
+    assert "release_client_state as release_client_state_runtime" in app_source
+    assert "return get_client_state_runtime(" in app_source
+    assert "return get_current_customer_state_runtime(" in app_source
+    assert "client_state_registry.release(sid)" in app_client_state_runtime_source
+
+
 def test_app_delegates_runtime_info_events_to_handler_module():
     app_source = (ROOT / "app.py").read_text()
 

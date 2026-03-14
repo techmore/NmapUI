@@ -23,6 +23,14 @@ from nmapui.app_runtime import (
     start_auto_scan_thread as start_auto_scan_thread_runtime,
     startup_checks as startup_checks_runtime,
 )
+from nmapui.app_client_state_runtime import (
+    get_client_state as get_client_state_runtime,
+    get_current_customer_state as get_current_customer_state_runtime,
+    release_client_state as release_client_state_runtime,
+    set_current_customer_state as set_current_customer_state_runtime,
+    set_last_scan_target_state as set_last_scan_target_state_runtime,
+    set_network_key_state as set_network_key_state_runtime,
+)
 from nmapui.app_state_runtime import (
     get_report_counts as get_report_counts_runtime,
     load_current_assignment as load_current_assignment_runtime,
@@ -84,13 +92,6 @@ from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
 from nmapui.state import merge_customer_metadata
 from nmapui.tooling import ToolVersionRegistry
-from nmapui.runtime_state import (
-    get_client_state as get_client_state_impl,
-    get_current_customer_state as get_current_customer_state_impl,
-    set_current_customer_state as set_current_customer_state_impl,
-    set_last_scan_target_state as set_last_scan_target_state_impl,
-    set_network_key_state as set_network_key_state_impl,
-)
 from nmapui.reporting import (
     convert_html_to_pdf,
     convert_xml_to_html,
@@ -199,7 +200,7 @@ def ensure_job_not_cancelled(sid: str, job_type: str):
 
 
 def get_client_state(*, sid=None):
-    return get_client_state_impl(
+    return get_client_state_runtime(
         sid=sid,
         client_state_registry=client_state_registry,
         current_customer=current_customer,
@@ -209,11 +210,14 @@ def get_client_state(*, sid=None):
 
 
 def get_current_customer_state(sid=None):
-    return get_current_customer_state_impl(sid=sid, get_client_state=get_client_state)
+    return get_current_customer_state_runtime(
+        sid=sid,
+        get_client_state=get_client_state,
+    )
 
 
 def set_current_customer_state(value, sid=None):
-    result = set_current_customer_state_impl(
+    result = set_current_customer_state_runtime(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
@@ -226,7 +230,7 @@ def set_current_customer_state(value, sid=None):
 
 
 def set_network_key_state(value, sid=None):
-    result = set_network_key_state_impl(
+    result = set_network_key_state_runtime(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
@@ -239,7 +243,7 @@ def set_network_key_state(value, sid=None):
 
 
 def set_last_scan_target_state(value, sid=None):
-    result = set_last_scan_target_state_impl(
+    result = set_last_scan_target_state_runtime(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
@@ -252,7 +256,10 @@ def set_last_scan_target_state(value, sid=None):
 
 
 def release_client_state(sid):
-    client_state_registry.release(sid)
+    release_client_state_runtime(
+        sid=sid,
+        client_state_registry=client_state_registry,
+    )
 
 
 def run_cancellable_command(
