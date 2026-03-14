@@ -316,12 +316,16 @@ def generate_report_task(context, sid, data):
         idle_state_manager.end_operation(operation_id)
         return
 
-    targets = split_subnet_into_chunks(target)
+    chunked_scan = data.get("chunked", True)
+    targets = split_subnet_into_chunks(target) if chunked_scan else [target]
     num_chunks = len(targets)
     logger.info("Target split into %s chunks: %s", num_chunks, targets)
 
     if num_chunks > 1:
         emit_to_client(sid, "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks")
+        socketio_sleep(0)
+    elif not chunked_scan:
+        emit_to_client(sid, "scan_feedback", "Running a single comprehensive scan without chunking")
         socketio_sleep(0)
 
     logger.info("=" * 60)

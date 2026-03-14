@@ -2391,10 +2391,10 @@
             this.classList.add('card-pulsing');
             startReportTimer();
 
-            socket.emit('generate_pdf_from_saved', {
+            socket.emit('generate_report', {
                 target: target,
                 customer_name: customerName,
-                max_days: 30
+                chunked: false
             });
         });
 
@@ -2422,7 +2422,8 @@
             socket.emit('generate_report', {
                 target: target,
                 customer_name: customerName,
-                scan_results: lastScanResults
+                scan_results: lastScanResults,
+                chunked: true
             });
         });
 
