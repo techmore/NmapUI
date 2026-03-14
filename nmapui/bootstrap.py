@@ -26,6 +26,9 @@ def build_runtime_options(argv):
         "host": os.environ.get("NMAPUI_HOST", "127.0.0.1"),
         "port": int(os.environ.get("NMAPUI_PORT", "9000")),
         "debug": env_flag("NMAPUI_DEBUG", default=False),
+        "allow_unsafe_werkzeug": env_flag(
+            "NMAPUI_ALLOW_UNSAFE_WERKZEUG", default=False
+        ),
     }
 
 
@@ -63,5 +66,7 @@ def run_socketio_server(socketio, app, runtime_options):
         host=runtime_options["host"],
         port=runtime_options["port"],
         debug=runtime_options["debug"],
-        allow_unsafe_werkzeug=runtime_options["debug"],
+        allow_unsafe_werkzeug=(
+            runtime_options["debug"] or runtime_options["allow_unsafe_werkzeug"]
+        ),
     )

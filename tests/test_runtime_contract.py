@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,7 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert not (ROOT / "NmapUIMenuBarSimple.swift").exists()
     assert not (ROOT / "NmapUIMenuBarWithServer.swift").exists()
     assert (ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift").exists()
+    assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
 
 
 def test_wrapper_docs_reference_current_local_port():
@@ -160,6 +162,28 @@ def test_app_exposes_explicit_run_server_entrypoint():
 
     assert "def run_server(argv=None):" in app_source
     assert 'if __name__ == "__main__":\n    run_server()' in app_source
+
+
+def test_app_module_imports_successfully():
+    result = subprocess.run(
+        [sys.executable, "-c", "import app"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_app_startup_checks_quick_mode_executes_successfully():
+    result = subprocess.run(
+        [sys.executable, "-c", "import app; app.startup_checks(quick=True)"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
 
 
 def test_app_runtime_uses_bootstrap_origin_and_server_policy():

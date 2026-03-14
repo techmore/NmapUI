@@ -63,7 +63,9 @@ from nmapui.jobs import (
 )
 from nmapui.client_state import ClientStateRegistry
 from nmapui.bootstrap import (
+    begin_startup_state,
     build_runtime_options,
+    complete_startup_state,
     get_allowed_origins,
     run_socketio_server,
 )
@@ -400,9 +402,9 @@ register_shared_handlers(
             value,
             sid,
         ),
-        start_scan_task=start_scan_task,
-        generate_report_task=generate_report_task,
-        generate_pdf_from_saved_task=generate_pdf_from_saved_task,
+        start_scan_task=lambda sid, target: start_scan_task(sid, target),
+        generate_report_task=lambda sid, data: generate_report_task(sid, data),
+        generate_pdf_from_saved_task=lambda sid, data: generate_pdf_from_saved_task(sid, data),
         broadcaster=broadcaster,
     ),
 )

@@ -113,6 +113,11 @@ fi
 
 source "$VENV_ACTIVATE"
 
+# The menu bar wrapper runs a local embedded Flask-SocketIO server rather than
+# a separate production WSGI stack, so allow Werkzeug explicitly for this
+# packaged desktop entrypoint.
+export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true
+
 # Run the NmapUI application
 exec python3 app.py
 EOF

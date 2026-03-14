@@ -12,6 +12,7 @@ def test_build_runtime_options_uses_env_and_argv(monkeypatch):
     monkeypatch.setenv("NMAPUI_HOST", "0.0.0.0")
     monkeypatch.setenv("NMAPUI_PORT", "9100")
     monkeypatch.setenv("NMAPUI_DEBUG", "true")
+    monkeypatch.setenv("NMAPUI_ALLOW_UNSAFE_WERKZEUG", "true")
 
     options = build_runtime_options(["app.py", "--quick"])
 
@@ -20,6 +21,7 @@ def test_build_runtime_options_uses_env_and_argv(monkeypatch):
         "host": "0.0.0.0",
         "port": 9100,
         "debug": True,
+        "allow_unsafe_werkzeug": True,
     }
 
 
@@ -140,6 +142,7 @@ def test_run_socketio_server_requires_debug_even_for_loopback_hosts():
         "host": "127.0.0.1",
         "port": 9000,
         "debug": False,
+        "allow_unsafe_werkzeug": False,
     }
 
     run_socketio_server(SocketIOStub(), app, runtime_options)
@@ -169,6 +172,7 @@ def test_run_socketio_server_requires_debug_for_non_loopback_hosts():
         "host": "0.0.0.0",
         "port": 9000,
         "debug": False,
+        "allow_unsafe_werkzeug": False,
     }
 
     run_socketio_server(SocketIOStub(), app, runtime_options)
@@ -198,6 +202,7 @@ def test_run_socketio_server_allows_werkzeug_in_explicit_debug_mode():
         "host": "127.0.0.1",
         "port": 9000,
         "debug": True,
+        "allow_unsafe_werkzeug": False,
     }
 
     run_socketio_server(SocketIOStub(), app, runtime_options)
@@ -207,5 +212,35 @@ def test_run_socketio_server_allows_werkzeug_in_explicit_debug_mode():
         "host": "127.0.0.1",
         "port": 9000,
         "debug": True,
+        "allow_unsafe_werkzeug": True,
+    }
+
+
+def test_run_socketio_server_allows_explicit_unsafe_werkzeug_override():
+    calls = {}
+
+    class SocketIOStub:
+        def run(self, app, host, port, debug, allow_unsafe_werkzeug):
+            calls["app"] = app
+            calls["host"] = host
+            calls["port"] = port
+            calls["debug"] = debug
+            calls["allow_unsafe_werkzeug"] = allow_unsafe_werkzeug
+
+    app = object()
+    runtime_options = {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "debug": False,
+        "allow_unsafe_werkzeug": True,
+    }
+
+    run_socketio_server(SocketIOStub(), app, runtime_options)
+
+    assert calls == {
+        "app": app,
+        "host": "127.0.0.1",
+        "port": 9000,
+        "debug": False,
         "allow_unsafe_werkzeug": True,
     }
