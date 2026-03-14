@@ -244,6 +244,20 @@ def test_app_uses_extracted_auto_scan_execution_helper():
     assert 'def execute_auto_scan(deps):' in auto_scan_source
 
 
+def test_app_uses_extracted_traceroute_helper():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    traceroute_source = (ROOT / "nmapui" / "traceroute.py").read_text()
+
+    assert "from nmapui.traceroute import run_traceroute as run_traceroute_helper" in app_source
+    assert "return run_traceroute_helper(" in app_source
+    assert 'def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):' in app_source
+    assert 'def run_traceroute(target="1.1.1.1", *, sid=None, deps):' in traceroute_source
+
+
 def test_app_uses_extracted_state_helpers():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],

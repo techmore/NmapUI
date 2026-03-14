@@ -109,6 +109,7 @@ from nmapui.state import (
 from nmapui.startup import create_startup_state
 from nmapui.startup_checks import run_startup_checks
 from nmapui.tooling import ToolVersionRegistry
+from nmapui.traceroute import run_traceroute as run_traceroute_helper
 from nmapui.validation import sanitize_input, validate_target
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
@@ -342,192 +343,26 @@ startup_state = create_startup_state()
 
 
 def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
-    global current_customer, network_key
-
-    def emit_customer_event(event, data=None):
-        if sid:
-            emit_to_client(socketio, sid, event, data)
-        else:
-            safe_emit(event, data)
-
-    state = get_client_state(sid)
-    active_network_key = dict(state["network_key"])
-    active_customer = dict(state["current_customer"])
-
-    try:
-        emit_customer_event("customer_identification_start")
-        socketio.sleep(0)
-
-        logger.info(f"Running traceroute to {target}...")
-        emit_customer_event(
-            "customer_identification_progress",
-            {"message": f"Running traceroute to {target}..."},
-        )
-        socketio.sleep(0)
-
-        import platform
-
-        system = platform.system()
-
-        if system == "Darwin":
-            traceroute_cmd = ["traceroute", "-I", "-n", "-q", "1", target]
-        else:
-            traceroute_cmd = ["traceroute", "-n", "-I", "-q", "1", target]
-
-        logger.info(f"Running traceroute: {' '.join(traceroute_cmd)}")
-        output = subprocess.check_output(
-            traceroute_cmd, stderr=subprocess.STDOUT, timeout=60
-        ).decode("utf-8")
-
-        active_network_key["raw"] = output
-        active_network_key["target"] = target
-        active_network_key["hops"] = []
-        active_network_key["private_hops"] = []
-        active_network_key["public_hops"] = []
-        active_network_key.pop("error", None)
-
-        hop_pattern = re.compile(r"^\s*(\d+)\s+(\S+)\s+(.+)$", re.MULTILINE)
-
-        for match in hop_pattern.finditer(output):
-            hop_num = int(match.group(1))
-            ip_or_star = match.group(2)
-            latencies = match.group(3)
-
-            if ip_or_star == "*" or "traceroute" in ip_or_star.lower():
-                continue
-
-            latency_matches = re.findall(r"([\d.]+)\s*ms", latencies)
-            avg_latency = None
-            if latency_matches:
-                avg_latency = round(
-                    sum(float(lat) for lat in latency_matches) / len(latency_matches), 2
-                )
-
-            hop_data = {
-                "hop": hop_num,
-                "ip": ip_or_star,
-                "latency_ms": avg_latency,
-                "is_private": is_private_ip(ip_or_star),
-            }
-
-            active_network_key["hops"].append(hop_data)
-
-            if hop_data["is_private"]:
-                active_network_key["private_hops"].append(hop_data)
-            else:
-                active_network_key["public_hops"].append(hop_data)
-
-        active_network_key["total_hops"] = len(active_network_key["hops"])
-
-        if active_network_key["hops"]:
-            active_network_key["exit_ip"] = active_network_key["hops"][-1]["ip"]
-
-        try:
-            active_network_key["public_ip"] = requests.get(
-                "https://api.ipify.org", timeout=5
-            ).text
-            logger.info(f"Detected public IP: {active_network_key['public_ip']}")
-        except Exception as e:
-            logger.warning(f"Could not detect public IP: {e}")
-            active_network_key["public_ip"] = None
-
-        set_network_key_state(active_network_key, sid)
-
-        logger.info(
-            f"Traceroute complete: {active_network_key['total_hops']} hops, {len(active_network_key['private_hops'])} private, {len(active_network_key['public_hops'])} public"
-        )
-        emit_customer_event(
-            "customer_identification_progress",
-            {"message": f"Traceroute complete ({active_network_key['total_hops']} hops)"},
-        )
-        socketio.sleep(0)
-
-        logger.info("Running customer identification...")
-        emit_customer_event(
-            "customer_identification_progress", {"message": "Identifying customer..."}
-        )
-        socketio.sleep(0)
-
-        if not active_customer.get("manual_assignment"):
-            fingerprinter = get_customer_fingerprinter()
-            customer, confidence = fingerprinter.match_customer(active_network_key)
-            if confidence > 0 and customer and customer.get("id") != "unknown":
-                active_customer = {
-                    "id": customer.get("id"),
-                    "name": customer.get("name"),
-                    "confidence": confidence,
-                }
-                active_customer = merge_customer_metadata(active_customer, customer)
-                logger.info(f"Auto-detected customer: {active_customer['name']}")
-                save_customer = customer
-            else:
-                active_customer = {
-                    "id": "",
-                    "name": "Unassigned",
-                    "confidence": 0.0,
-                }
-                logger.info("No customer match found, setting to Unassigned")
-                save_customer = fingerprinter.unknown_customer or {}
-        else:
-            logger.info(f"Preserving manual assignment: {active_customer['name']}")
-            if active_customer.get("id"):
-                saved_customer = get_customer_fingerprinter().get_customer_by_id(
-                    active_customer["id"]
-                )
-                if saved_customer:
-                    active_customer = merge_customer_metadata(
-                        active_customer, saved_customer
-                    )
-            save_customer = {
-                "id": active_customer["id"],
-                "name": active_customer["name"],
-            }
-            confidence = active_customer.get("confidence", 1.0)
-
-        set_current_customer_state(active_customer, sid)
-        fingerprinter = get_customer_fingerprinter()
-        fingerprinter.save_scan_result(active_network_key, save_customer, confidence)
-        fingerprinter.save_traceroute_to_history(
-            active_customer["id"],
-            active_network_key,
-            f"WAN: {active_network_key.get('public_ip', 'unknown')}",
-        )
-
-        emit_customer_event(
-            "customer_identified",
-            {
-                "customer": get_current_customer_state(sid),
-                "match_method": getattr(
-                    fingerprinter, "last_match_method", "unknown"
-                ),
-                "public_ip": active_network_key.get("public_ip"),
-                "exit_ip": active_network_key.get("exit_ip"),
-                "hop_count": active_network_key["total_hops"],
-            },
-        )
-
-        emit_customer_event("file_updated", {"file": "data/scan_history.json", "action": "saved"})
-        emit_customer_event(
-            "file_updated",
-            {"file": "data/customer_traceroutes.json", "action": "saved"},
-        )
-
-        logger.info(
-            f"Customer identified: {active_customer['name']} (confidence: {confidence:.2f})"
-        )
-
-    except subprocess.TimeoutExpired:
-        logger.error("Traceroute timed out")
-        active_network_key["error"] = "Traceroute timed out"
-        set_network_key_state(active_network_key, sid)
-        emit_customer_event("customer_identification_error", {"error": "Traceroute timed out"})
-    except Exception as e:
-        logger.error(f"Traceroute error: {e}")
-        active_network_key["error"] = str(e)
-        set_network_key_state(active_network_key, sid)
-        emit_customer_event("customer_identification_error", {"error": str(e)})
-
-    return active_network_key
+    return run_traceroute_helper(
+        target,
+        sid=sid,
+        deps={
+            "emit_to_client": lambda sid, event, data=None: emit_to_client(
+                socketio, sid, event, data
+            ),
+            "safe_emit": safe_emit,
+            "get_client_state": get_client_state,
+            "socketio_sleep": socketio.sleep,
+            "logger": logger,
+            "is_private_ip": is_private_ip,
+            "requests": requests,
+            "set_network_key_state": set_network_key_state,
+            "get_customer_fingerprinter": get_customer_fingerprinter,
+            "merge_customer_metadata": merge_customer_metadata,
+            "set_current_customer_state": set_current_customer_state,
+            "get_current_customer_state": get_current_customer_state,
+        },
+    )
 
 
 def save_customers_config():
