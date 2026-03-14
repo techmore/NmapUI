@@ -343,6 +343,24 @@ def test_socket_event_docs_match_current_runtime_contract():
     assert '@socketio.on("generate_pdf_from_saved")' in scan_jobs
 
 
+def test_update_runtime_uses_manual_download_contract():
+    runtime_source = (ROOT / "nmapui" / "runtime.py").read_text()
+    updates_source = (ROOT / "nmapui" / "handlers" / "updates.py").read_text()
+    update_modal_source = (ROOT / "static" / "js" / "update_modal.js").read_text()
+    auto_update_source = (ROOT / "static" / "js" / "auto_update_banner.js").read_text()
+
+    assert 'def _select_release_asset(' in runtime_source
+    assert '"install_method": "manual_download"' in runtime_source
+    assert '"asset_name": asset_name' in runtime_source
+    assert '"current_version": current_version' in runtime_source
+    assert 'Manual install required. Download the installer, complete installation, then relaunch NmapUI.' in updates_source
+    assert '"manual_install": True' in updates_source
+    assert 'socket.on("update_complete", (data) => {' in update_modal_source
+    assert "Opening installer download..." in update_modal_source
+    assert "Installer download will open when the countdown ends." in update_modal_source
+    assert "is available to download" in auto_update_source
+
+
 def test_release_paths_prefer_dot_venv():
     deploy_script = (ROOT / "deploy.sh").read_text()
     building_guide = (ROOT / "BUILDING.md").read_text()

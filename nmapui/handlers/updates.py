@@ -25,37 +25,39 @@ def register_update_handlers(socketio, deps):
     @require_socket_auth()
     def perform_app_update_event():
         try:
-            emit("update_status", {"message": "Opening download page..."})
-            socketio.sleep(1)
-
             update_info = check_for_updates()
+            download_url = None
+            message = None
             if (
                 isinstance(update_info, dict)
                 and update_info.get("available")
-                and update_info.get("download_url")
             ):
-                subprocess.run(["open", str(update_info["download_url"])], check=False)
-                emit(
-                    "update_status",
-                    {
-                        "message": "Download page opened. Please download and install the new version manually."
-                    },
-                )
+                download_url = update_info.get("download_url") or update_info.get("release_url")
+                asset_name = update_info.get("asset_name")
+                if asset_name:
+                    message = f"Opening installer download for {asset_name}..."
+                else:
+                    message = "Opening release download page..."
             else:
-                subprocess.run(
-                    ["open", "https://github.com/techmore/NmapUI/releases"], check=False
-                )
-                emit(
-                    "update_status",
-                    {
-                        "message": "Releases page opened. Please download the latest .dmg or .pkg file."
-                    },
-                )
+                download_url = "https://github.com/techmore/NmapUI/releases"
+                message = "Opening releases page..."
 
+            emit("update_status", {"message": message})
+            socketio.sleep(1)
+            subprocess.run(["open", str(download_url)], check=False)
+
+            emit(
+                "update_status",
+                {
+                    "message": "Manual install required. Download the installer, complete installation, then relaunch NmapUI."
+                },
+            )
             emit(
                 "update_complete",
                 {
-                    "message": "Update initiated. Please install the new version and restart the application."
+                    "message": "Installer page opened. Finish the update manually and relaunch NmapUI.",
+                    "manual_install": True,
+                    "download_url": download_url,
                 },
             )
         except Exception as exc:

@@ -77,11 +77,11 @@ function hideUpdateModal() {
 }
 
 function startAppUpdate(socket) {
-    appendUpdateLogLine("Starting application update...");
+    appendUpdateLogLine("Opening installer download...");
     socket.emit("perform_app_update");
     const status = document.getElementById("update-current-status");
     if (status) {
-        status.textContent = "Updating...";
+        status.textContent = "Opening installer...";
     }
 }
 
@@ -92,11 +92,13 @@ function initializeUpdateModal(socket, deps = {}) {
     socket.on("app_update_available", (data) => {
         const badge = document.getElementById("app-update-badge");
         const version = document.getElementById("update-version");
-        if (badge) {
+        if (badge && data.available) {
             badge.classList.remove("hidden");
+        } else if (badge) {
+            badge.classList.add("hidden");
         }
         if (version) {
-            version.textContent = data.latest_version;
+            version.textContent = data.latest_version || data.current_version || "";
         }
         setUpdateReleaseNotes(data);
     });
@@ -112,14 +114,12 @@ function initializeUpdateModal(socket, deps = {}) {
         }
         appendUpdateLogLine(data.message);
 
-        let progress = 0;
-        if (data.message.includes("Downloading")) {
-            progress = 25;
-        } else if (data.message.includes("Installing")) {
-            progress = 60;
-        } else if (data.message.includes("Restarting")) {
-            progress = 90;
-        } else if (data.message.includes("complete")) {
+        let progress = 15;
+        if (data.message.includes("Opening installer")) {
+            progress = 35;
+        } else if (data.message.includes("Opening release")) {
+            progress = 35;
+        } else if (data.message.includes("Manual install required")) {
             progress = 100;
         }
 
@@ -129,6 +129,22 @@ function initializeUpdateModal(socket, deps = {}) {
         if (percentageText) {
             percentageText.textContent = `${progress}%`;
         }
+    });
+
+    socket.on("update_complete", (data) => {
+        const status = document.getElementById("update-current-status");
+        const progressBar = document.getElementById("update-progress-bar");
+        const percentageText = document.getElementById("update-percentage");
+        if (status) {
+            status.textContent = data.message;
+        }
+        if (progressBar) {
+            progressBar.style.width = "100%";
+        }
+        if (percentageText) {
+            percentageText.textContent = "100%";
+        }
+        appendUpdateLogLine(data.message);
     });
 
     socket.on("update_error", (data) => {
@@ -147,7 +163,7 @@ function initializeUpdateModal(socket, deps = {}) {
 
     socket.on("show_auto_update_banner", (data) => {
         showReportStatus(
-            `Application update available: ${data.latest_version}. Auto-update countdown started.`,
+            `Application update available: ${data.latest_version}. Installer download will open when the countdown ends.`,
             "info"
         );
     });

@@ -12,7 +12,7 @@ function showAutoUpdateBanner(updateInfo) {
 
     const descElement = document.getElementById('update-description');
     if (updateInfo.latest_version) {
-        descElement.textContent = `NmapUI ${updateInfo.latest_version} is ready to install`;
+        descElement.textContent = `NmapUI ${updateInfo.latest_version} is available to download`;
     }
 
     const banner = document.getElementById('auto-update-banner');
