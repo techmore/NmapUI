@@ -149,6 +149,20 @@ def test_app_delegates_runtime_info_events_to_handler_module():
     assert '@socketio.on("get_local_ip")' not in app_source
 
 
+def test_app_delegates_startup_checks_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.startup import create_startup_state" in app_source
+    assert "from nmapui.startup_checks import run_startup_checks" in app_source
+    assert "from nmapui.tooling import ToolVersionRegistry" in app_source
+    assert "tool_versions = ToolVersionRegistry()" in app_source
+    assert "startup_state = create_startup_state()" in app_source
+    assert "run_startup_checks(" in app_source
+    assert 'versions["nmap"] = check_nmap()' not in app_source
+    assert 'versions["vulners"] = version_result.stdout.strip()' not in app_source
+    assert 'versions["arp_scan"] = version' not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

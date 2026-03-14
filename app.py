@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-from typing import Dict, Optional
+from typing import Optional
 import subprocess
 import sys
 import requests
@@ -73,6 +73,8 @@ from nmapui.runtime import (
     get_app_version,
     restart_application,
 )
+from nmapui.startup import create_startup_state
+from nmapui.startup_checks import run_startup_checks
 from nmapui.state import (
     get_report_counts as get_report_counts_impl,
     load_current_assignment as load_current_assignment_impl,
@@ -80,6 +82,7 @@ from nmapui.state import (
     save_current_assignment as save_current_assignment_impl,
     save_customers_config as save_customers_config_impl,
 )
+from nmapui.tooling import ToolVersionRegistry
 from nmapui.runtime_state import (
     get_client_state as get_client_state_impl,
     get_current_customer_state as get_current_customer_state_impl,
@@ -677,25 +680,13 @@ register_scan_routes(
     },
 )
 # Global version information — populated by startup_checks(), readable via get_versions()
-versions: Dict[str, Optional[str]] = {
-    "nmap": None,
-    "vulners": None,
-    "arp_scan": None,
-}
-
-startup_state = {
-    "startup_complete": False,
-    "dependency_checks_skipped": False,
-    "dependencies_ok": False,
-    "traceroute_initialized": False,
-    "last_started_at": None,
-    "errors": [],
-}
+tool_versions = ToolVersionRegistry()
+startup_state = create_startup_state()
 
 
 def get_versions():
     """Get version information for all tools"""
-    return versions
+    return tool_versions.get_versions()
 
 
 register_history_handlers(
@@ -1472,94 +1463,29 @@ def generate_pdf_from_saved_event(data):
 
 
 def startup_checks(quick=False):
-    import platform
-
-    startup_state["startup_complete"] = False
-    startup_state["dependency_checks_skipped"] = bool(quick)
-    startup_state["dependencies_ok"] = False
-    startup_state["traceroute_initialized"] = False
-    startup_state["last_started_at"] = datetime.now().isoformat()
-    startup_state["errors"] = []
-
-    logger.info("\n" + "=" * 50)
-    logger.info("NmapUI Startup Checks")
-    logger.info("=" * 50)
-
-    system_platform = platform.system()
-    platform_release = platform.release()
-    logger.info(f"Platform detected: {system_platform} ({platform_release})")
-    logger.info(f"Default Network Interface: {DEFAULT_INTERFACE}")
-
-    if quick:
-        logger.info("Quick mode: skipping dependency checks")
-        startup_state["dependencies_ok"] = True
-    else:
-        logger.info("\nChecking nmap...")
-        versions["nmap"] = check_nmap()
-
-        logger.info("\nChecking vulners script...")
-        check_vulners(VULNERS_SCRIPT)
-        vulners_dir = VULNERS_SCRIPT.parent
-        if vulners_dir.exists():
-            try:
-                version_result = subprocess.run(
-                    [
-                        "git",
-                        "log",
-                        "-1",
-                        "--oneline",
-                        "--date=short",
-                        "--pretty=format:%h %ad %s",
-                    ],
-                    cwd=vulners_dir,
-                    capture_output=True,
-                    text=True,
-                )
-                if version_result.returncode == 0:
-                    versions["vulners"] = version_result.stdout.strip()
-                else:
-                    versions["vulners"] = "Unknown"
-            except Exception:
-                versions["vulners"] = "Unknown"
-
-        logger.info("\nChecking arp-scan...")
-        if check_arp_scan():
-            try:
-                version = (
-                    subprocess.check_output(
-                        ["arp-scan", "--version"], stderr=subprocess.STDOUT
-                    )
-                    .decode()
-                    .split("\n")[0]
-                )
-                versions["arp_scan"] = version
-            except Exception:
-                versions["arp_scan"] = "arp-scan (version unknown)"
-        else:
-            versions["arp_scan"] = "Not installed"
-        startup_state["dependencies_ok"] = True
-
-    logger.info("\nLoading previous customer assignment...")
-    load_current_assignment()
-
-    logger.info("\nInitializing network key...")
-    run_traceroute("1.1.1.1")
-    startup_state["traceroute_initialized"] = not bool(network_key.get("error"))
-    logger.info(f"Network key initialized with {network_key.get('total_hops', 0)} hops")
-
-    logger.info("\n" + "=" * 50)
-    logger.info("All checks passed. Starting server...")
-    logger.info("=" * 50 + "\n")
-
-    # Add app version to versions dict
-    versions["app"] = get_app_version()
-
-    # Send initial versions to any connected clients
-    safe_emit("versions", get_versions())
-
-    # Send initial auto scan status
-    safe_emit("auto_scan_status", auto_scan_config)
-    startup_state["startup_complete"] = True
+    run_startup_checks(
+        {
+            "begin_startup_state": begin_startup_state,
+            "check_arp_scan": check_arp_scan,
+            "check_nmap": check_nmap,
+            "check_vulners": check_vulners,
+            "complete_startup_state": complete_startup_state,
+            "get_app_version": get_app_version,
+            "get_default_interface_cached": lambda: DEFAULT_INTERFACE,
+            "get_versions": get_versions,
+            "load_auto_scan_config": load_auto_scan_config,
+            "load_current_assignment": load_current_assignment,
+            "logger": logger,
+            "network_key": network_key,
+            "run_traceroute": run_traceroute,
+            "safe_emit": safe_emit,
+            "startup_state": startup_state,
+            "tool_versions": tool_versions,
+            "auto_scan_config": auto_scan_config,
+            "vulners_script": VULNERS_SCRIPT,
+        },
+        quick=quick,
+    )
 
 @app.route("/api/health")
 def health_check():
