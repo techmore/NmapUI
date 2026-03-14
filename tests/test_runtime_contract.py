@@ -205,6 +205,24 @@ def test_app_registers_extracted_runtime_info_handlers():
     assert '@socketio.on("get_history_counts")' in runtime_info_source
 
 
+def test_app_uses_extracted_networking_helpers():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    networking_source = (ROOT / "nmapui" / "networking.py").read_text()
+
+    assert "from nmapui.networking import (" in app_source
+    assert "DEFAULT_INTERFACE_CACHE = DefaultInterfaceCache()" in app_source
+    assert "def get_default_interface():" not in app_source
+    assert "def calculate_cidr(ip, subnet_mask):" not in app_source
+    assert "def identify_gateway_firewall_targets(hosts):" not in app_source
+    assert "def get_default_interface(netifaces, logger):" in networking_source
+    assert "def calculate_cidr(ip, subnet_mask):" in networking_source
+    assert "def identify_gateway_firewall_targets(hosts, network_key):" in networking_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

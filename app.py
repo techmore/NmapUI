@@ -54,6 +54,13 @@ from nmapui.jobs import (
     ensure_job_not_cancelled as nmapui_ensure_job_not_cancelled,
     run_cancellable_command as nmapui_run_cancellable_command,
 )
+from nmapui.networking import (
+    DefaultInterfaceCache,
+    calculate_cidr,
+    get_default_interface,
+    identify_gateway_firewall_targets,
+    ip_sort_key,
+)
 from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
@@ -1047,85 +1054,11 @@ def load_current_assignment():
         logger.error(f"Error loading current assignment: {e}")
 
 
-def get_default_interface():
-    """Detect the primary network interface dynamically for cross-platform compatibility."""
-    import platform
-
-    system = platform.system()
-    preferred_order = []
-
-    if system == "Darwin":
-        preferred_order = ["en0", "en1", "en2", "en3", "en4", "bridge0", "utun"]
-    elif system == "Linux":
-        preferred_order = ["eth0", "ens", "eno", "enp", "wlan0", "wlp", "br-"]
-
-    available = ni.interfaces()
-    logger.info(f"Detected network interfaces: {available}")
-
-    for iface in preferred_order:
-        for avail in available:
-            if avail.startswith(iface) or avail == iface:
-                try:
-                    if ni.ifaddresses(avail).get(ni.AF_INET):
-                        logger.info(f"Using primary interface: {avail}")
-                        return avail
-                except ValueError:
-                    continue
-
-    for avail in available:
-        if avail == "lo":
-            continue
-        try:
-            if ni.ifaddresses(avail).get(ni.AF_INET):
-                logger.info(f"Using fallback interface: {avail}")
-                return avail
-        except ValueError:
-            continue
-
-    logger.warning("No suitable network interface found, defaulting to 'en0'")
-    return "en0"
-
-
-DEFAULT_INTERFACE = None
+DEFAULT_INTERFACE_CACHE = DefaultInterfaceCache()
 
 
 def get_default_interface_cached():
-    global DEFAULT_INTERFACE
-    if DEFAULT_INTERFACE is None:
-        DEFAULT_INTERFACE = get_default_interface()
-    return DEFAULT_INTERFACE
-
-
-def calculate_cidr(ip, subnet_mask):
-    cidr_prefix = sum(bin(int(x)).count("1") for x in subnet_mask.split("."))
-    ip_nodes, mask_nodes = (
-        list(map(int, ip.split("."))),
-        list(map(int, subnet_mask.split("."))),
-    )
-    network_address = ".".join([str(ip_nodes[i] & mask_nodes[i]) for i in range(4)])
-    return f"{network_address}/{cidr_prefix}"
-
-
-def identify_gateway_firewall_targets(hosts):
-    gateway_targets = []
-
-    if network_key["hops"]:
-        first_private_hop = next(
-            (hop for hop in network_key["hops"] if hop["is_private"]), None
-        )
-        if first_private_hop:
-            gateway_targets.append(first_private_hop["ip"])
-
-        first_public_hop = next(
-            (hop for hop in network_key["hops"] if not hop["is_private"]), None
-        )
-        if first_public_hop:
-            gateway_targets.append(first_public_hop["ip"])
-
-    gateway_hosts = [host for host in hosts if host["ip"] in gateway_targets]
-    regular_hosts = [host for host in hosts if host["ip"] not in gateway_targets]
-
-    return regular_hosts, gateway_hosts
+    return DEFAULT_INTERFACE_CACHE.get(ni, logger)
 
 
 def _scan_workflow_context():
@@ -1138,7 +1071,7 @@ def _scan_workflow_context():
         "socketio_sleep": socketio.sleep,
         "run_cancellable_command": run_cancellable_command,
         "run_arp_scan": run_arp_scan,
-        "identify_gateway_firewall_targets": identify_gateway_firewall_targets,
+        "identify_gateway_firewall_targets": lambda hosts: identify_gateway_firewall_targets(hosts, network_key),
         "start_deep_scan": workflow_start_deep_scan,
         "job_registry": job_registry,
         "emit_job_status": emit_job_status,
@@ -1157,7 +1090,7 @@ def _scan_workflow_context():
         "nmap_done_regex": re.compile(
             r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
         ),
-        "ip_sort_key": ipaddress.IPv4Address,
+        "ip_sort_key": ip_sort_key,
     }
 
 
