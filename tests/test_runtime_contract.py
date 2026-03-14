@@ -204,6 +204,10 @@ def test_runtime_sqlite_store_schema_exists():
     assert "def create_runtime_state_store" in runtime_db_source
     assert "runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)" in app_source
     assert '"runtime_store": runtime_store' in runtime_services_source
+    assert "def _load_runtime_defaults(runtime_store):" in runtime_services_source
+    assert 'saved_customer = runtime_store.get_runtime_snapshot("current_customer")' in runtime_services_source
+    assert 'saved_network_key = runtime_store.get_runtime_snapshot("network_key")' in runtime_services_source
+    assert 'saved_last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")' in runtime_services_source
 
 
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
