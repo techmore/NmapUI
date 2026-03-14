@@ -82,6 +82,16 @@ def test_repository_layout_guide_exists():
     assert "docs/notes/" in guide
 
 
+def test_frontend_layout_guide_and_page_shell_exist():
+    template = (ROOT / "templates" / "index.html").read_text()
+    guide = (ROOT / "docs" / "guides" / "FRONTEND_LAYOUT_GUIDE.md").read_text()
+
+    assert ".page-shell {" in template
+    assert template.count('class="page-shell"') >= 2
+    assert "Do not repeat `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` inline. Use `page-shell`." in guide
+    assert "/Users/techmore/projects/NmapUI/templates/index.html" in guide
+
+
 def test_auto_scan_config_has_tracked_example_only():
     assert (ROOT / "config" / "auto_scan_config.example.json").exists()
 

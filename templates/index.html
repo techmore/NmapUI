@@ -258,6 +258,25 @@
         transform: translateY(-2px);
         box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
     }
+
+    .page-shell {
+        width: 100%;
+        max-width: 80rem;
+        margin-inline: auto;
+        padding-inline: 1rem;
+    }
+
+    @media (min-width: 640px) {
+        .page-shell {
+            padding-inline: 1.5rem;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .page-shell {
+            padding-inline: 2rem;
+        }
+    }
     
     /* Custom button press effect */
     .btn-press:active {
@@ -286,7 +305,7 @@
 </head>
 <body class="py-8">
     <!-- Main Content Container (1200px) -->
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="page-shell">
     <!-- Header with Title -->
     <div class="flex items-center justify-between mb-8">
         <div class="flex items-center gap-6">
@@ -1038,7 +1057,7 @@
         </table>
         </div>
     </div>
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="page-shell">
 
     <script>
         // Set current date and time
