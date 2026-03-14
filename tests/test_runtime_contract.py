@@ -139,11 +139,15 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     report_generation_module = (
         ROOT / "static" / "js" / "report_generation_ui.js"
     ).read_text()
+    auto_scan_module = (ROOT / "static" / "js" / "auto_scan_ui.js").read_text()
     update_modal_module = (ROOT / "static" / "js" / "update_modal.js").read_text()
 
     assert "let getClientJobs = null;" not in report_generation_module
     assert "let reportGetClientJobs =" in report_generation_module
     assert "reportGetClientJobs = deps?.getClientJobs || window.getClientJobs || reportGetClientJobs;" in report_generation_module
+    assert "let getClientJobs = null;" not in auto_scan_module
+    assert "let autoScanGetClientJobs =" in auto_scan_module
+    assert "autoScanGetClientJobs = deps?.getClientJobs || window.getClientJobs || autoScanGetClientJobs;" in auto_scan_module
     assert "function initializeUpdateModal(socket, deps = {})" in update_modal_module
     assert "const showReportStatus =" in update_modal_module
 

@@ -2,8 +2,8 @@ let autoScanEnabled = false;
 let autoScanStartTime = '01:00';
 let autoScanEndTime = '06:00';
 let autoScanSocket = null;
-let getClientJobs = null;
-let getLastScanTarget = null;
+let autoScanGetClientJobs = () => ({ report: { status: 'idle' } });
+let autoScanGetLastScanTarget = () => '';
 
 function showAutoScanTimeModal() {
     const modal = document.getElementById('auto-scan-modal');
@@ -53,7 +53,7 @@ function saveAutoScanTimes() {
 }
 
 function saveAndRunScan() {
-    const jobs = getClientJobs();
+    const jobs = autoScanGetClientJobs();
     if (jobs.report.status === 'running') {
         showReportStatus('A report job is already running', 'error');
         return;
@@ -82,7 +82,7 @@ function saveAndRunScan() {
     hideAutoScanTimeModal();
     showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
 
-    const target = document.getElementById('scan-target').value || getLastScanTarget() || '127.0.0.1';
+    const target = document.getElementById('scan-target').value || autoScanGetLastScanTarget() || '127.0.0.1';
     const customerOption = document.getElementById('current-customer').selectedOptions[0];
     let customerName = 'Auto Scan';
 
@@ -103,8 +103,8 @@ function saveAndRunScan() {
 
 function initializeAutoScanUI(socket, deps) {
     autoScanSocket = socket;
-    getClientJobs = deps.getClientJobs;
-    getLastScanTarget = deps.getLastScanTarget;
+    autoScanGetClientJobs = deps?.getClientJobs || window.getClientJobs || autoScanGetClientJobs;
+    autoScanGetLastScanTarget = deps?.getLastScanTarget || window.getLastScanTarget || autoScanGetLastScanTarget;
 
     document.getElementById('auto-scan-toggle').addEventListener('change', function() {
         autoScanEnabled = this.checked;
