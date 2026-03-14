@@ -23,6 +23,12 @@ if [[ ! -f "$SRC" ]]; then
     exit 1
 fi
 
+# Run install.sh if .venv doesn't exist yet
+if [[ ! -d "$ROOT_DIR/.venv" && ! -d "$ROOT_DIR/venv" ]]; then
+    echo "No virtual environment found — running install.sh first..."
+    bash "$ROOT_DIR/install.sh" || { echo "install.sh failed"; exit 1; }
+fi
+
 echo "Building NmapUI Menu Bar Wrapper..."
 echo "Source: $SRC"
 echo "SDK: $SDK"
@@ -65,30 +71,30 @@ else
     echo "Warning: icon.jpg not found, using default icon"
 fi
 
-# Copy the Python app and related files to Resources
-echo "Copying NmapUI Python application and resources..."
-cp -r "$ROOT_DIR/app.py" "$APP_NAME/Contents/Resources/"
-cp -r "$ROOT_DIR/templates" "$APP_NAME/Contents/Resources/"
-cp -r "$ROOT_DIR/static" "$APP_NAME/Contents/Resources/"
-cp -r "$ROOT_DIR/nmapui" "$APP_NAME/Contents/Resources/"
-cp -r "$ROOT_DIR/nmap-vulners" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/scripts" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/config" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/requirements.txt" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/VERSION" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/AGENTS.md" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/customer_fingerprint.py" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/persistence.py" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/nmap-modern.xsl" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
-cp -r "$ROOT_DIR/nmap-pdf-olive-legacy.xsl" "$APP_NAME/Contents/Resources/" 2>/dev/null || true
+echo "Copying NmapUI Python application and resources from HEAD..."
+git archive --format=tar HEAD \
+  app.py \
+  nmapui \
+  templates \
+  static \
+  nmap-vulners \
+  scripts \
+  config \
+  requirements.txt \
+  VERSION \
+  AGENTS.md \
+  customer_fingerprint.py \
+  persistence.py \
+  nmap-modern.xsl \
+  nmap-pdf-olive-legacy.xsl | tar -xf - -C "$APP_NAME/Contents/Resources"
 
 echo "Creating clean bundled virtual environment..."
 python3 -m venv "$BUNDLE_VENV"
 source "$BUNDLE_VENV/bin/activate"
 python -m pip install --upgrade pip
-PIP_DISABLE_PIP_VERSION_CHECK=1 python -m pip install -r "$ROOT_DIR/requirements.txt"
+PIP_DISABLE_PIP_VERSION_CHECK=1 python -m pip install -r "$APP_NAME/Contents/Resources/requirements.txt"
 deactivate
-echo "Bundled virtual environment created from requirements.txt."
+echo "Bundled virtual environment created from HEAD requirements.txt."
 
 # Create a run script that activates the bundled venv and runs the app.
 # Dependencies must already be installed in the venv — runtime pip installs
@@ -148,7 +154,7 @@ EOF
 echo "Application bundle created: $APP_NAME"
 
 # Make the binary executable
-chmod +x "$APP_NAME/Contents/MacOS/$BIN"
+chmod +x "$APP_NAME/Contents/MacOS/NmapUIMenuBar"
 
 # Open the application
 echo "Opening the application..."
