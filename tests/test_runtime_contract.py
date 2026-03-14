@@ -527,6 +527,7 @@ def test_template_uses_dom_helpers_for_asset_modal_and_history_rendering():
         cwd=ROOT,
         text=True,
     )
+    live_template = (ROOT / "templates" / "index.html").read_text()
     asset_module = (ROOT / "static" / "js" / "asset_details_modal.js").read_text()
     layout_module = (ROOT / "static" / "js" / "layout_runtime.js").read_text()
 
@@ -536,6 +537,9 @@ def test_template_uses_dom_helpers_for_asset_modal_and_history_rendering():
     assert "function createHistoryDiffSummary(diffSummary)" in layout_module
     assert "function renderHistoryList(scans)" in layout_module
     assert "createHistoryDiffSummary(scan.diff_summary)" in layout_module
+    assert 'id="history-changed-filter"' in live_template
+    assert 'document.getElementById("history-changed-filter").checked' in (ROOT / "static" / "js" / "history_modal.js").read_text()
+    assert 'scans = scans.filter((scan) => scan.diff_summary?.has_changes);' in (ROOT / "static" / "js" / "history_modal.js").read_text()
     assert "details.className = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';" not in layout_module
     assert "serviceDiv.innerHTML =" not in template
     assert "cveDiv.innerHTML =" not in template

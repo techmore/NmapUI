@@ -189,6 +189,7 @@ async function loadScanHistory(isInitialLoad = false) {
     const modal = document.getElementById("history-modal");
     const filter = document.getElementById("history-customer-filter");
     const dateFilter = document.getElementById("history-date-filter").value;
+    const changedOnly = document.getElementById("history-changed-filter").checked;
 
     let customerFilter = filter.value;
     if (isInitialLoad && !customerFilter && modal.dataset.defaultCustomer) {
@@ -208,6 +209,9 @@ async function loadScanHistory(isInitialLoad = false) {
         }
         if (dateFilter) {
             scans = scans.filter((scan) => scan.date === dateFilter);
+        }
+        if (changedOnly) {
+            scans = scans.filter((scan) => scan.diff_summary?.has_changes);
         }
 
         displayScanHistory(scans);
