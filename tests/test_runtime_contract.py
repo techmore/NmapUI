@@ -182,11 +182,18 @@ def test_app_exposes_explicit_stack_builder_and_runtime_registration():
     assert "def create_app_stack(import_name):" in app_source
     assert "def register_runtime_modules(app, socketio):" in app_source
     assert "def create_application(import_name):" in app_source
+    assert "def ensure_application_created(import_name=__name__):" in app_source
+    assert "def get_app():" in app_source
+    assert "def get_socketio():" in app_source
     assert "def ensure_runtime_modules_registered():" in app_source
     assert "app, socketio = create_app_stack(import_name)" in app_source
     assert "register_runtime_modules(app, socketio)" in app_source
-    assert "app, socketio = create_app_stack(__name__)" in app_source
+    assert "_app = None" in app_source
+    assert "_socketio = None" in app_source
+    assert "app, socketio = create_app_stack(__name__)" not in app_source
     assert "app, socketio = create_application(__name__)" not in app_source
+    assert "app = LazyObjectProxy(get_app)" in app_source
+    assert "socketio = LazyObjectProxy(get_socketio)" in app_source
     assert "ensure_runtime_modules_registered()" in app_source
 
 

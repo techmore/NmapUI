@@ -57,6 +57,7 @@ from nmapui.jobs import (
     ensure_job_not_cancelled,
     run_cancellable_command,
 )
+from nmapui.lazy import LazyObjectProxy
 from nmapui.networking import (
     DefaultInterfaceCache,
     calculate_cidr,
@@ -500,16 +501,39 @@ def create_application(import_name):
     return app, socketio
 
 
-app, socketio = create_app_stack(__name__)
+_app = None
+_socketio = None
 _runtime_modules_registered = False
+
+
+def ensure_application_created(import_name=__name__):
+    global _app, _socketio
+    if _app is None or _socketio is None:
+        _app, _socketio = create_app_stack(import_name)
+    return _app, _socketio
+
+
+def get_app():
+    app, _ = ensure_application_created()
+    return app
+
+
+def get_socketio():
+    _, socketio = ensure_application_created()
+    return socketio
+
+
+app = LazyObjectProxy(get_app)
+socketio = LazyObjectProxy(get_socketio)
 
 
 def ensure_runtime_modules_registered():
     global _runtime_modules_registered
     if not _runtime_modules_registered:
-        register_runtime_modules(app, socketio)
+        app_obj, socketio_obj = ensure_application_created()
+        register_runtime_modules(app_obj, socketio_obj)
         _runtime_modules_registered = True
-    return app, socketio
+    return _app, _socketio
 
 
 def load_current_assignment():
