@@ -1,0 +1,56 @@
+from pathlib import Path
+
+from nmapui.runtime_db import create_runtime_state_store
+
+
+def test_runtime_state_store_initializes_schema_and_round_trips_snapshots(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    store.upsert_runtime_snapshot(
+        "network_topology",
+        {"target": "192.168.1.0/24", "total_hops": 4},
+    )
+
+    assert store.get_runtime_snapshot("network_topology") == {
+        "target": "192.168.1.0/24",
+        "total_hops": 4,
+    }
+
+
+def test_runtime_state_store_tracks_jobs_reports_and_logs(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    store.upsert_job(
+        job_id="job-1",
+        owner_sid="sid-1",
+        job_type="report",
+        status="running",
+        payload={"target": "192.168.1.0/24"},
+    )
+    store.upsert_report_artifact(
+        scan_path="Acme/2026-03-14/scan_120000_192.168.1.0_24",
+        customer_id="cust-1",
+        target="192.168.1.0/24",
+        html_path="scan_web.html",
+        pdf_path="scan_report.pdf",
+        xml_path="scan.xml",
+        payload={"status": "completed"},
+    )
+    log_id = store.append_log(
+        category="runtime",
+        level="INFO",
+        message="Hydrated network topology",
+        payload={"target": "192.168.1.0/24"},
+    )
+
+    job = store.get_job("job-1")
+    reports = store.list_report_artifacts(customer_id="cust-1")
+    logs = store.get_recent_logs(category="runtime", limit=10)
+
+    assert job is not None
+    assert job["job_type"] == "report"
+    assert job["payload"]["target"] == "192.168.1.0/24"
+    assert reports[0]["pdf_path"] == "scan_report.pdf"
+    assert reports[0]["payload"]["status"] == "completed"
+    assert logs[0]["id"] == log_id
+    assert logs[0]["message"] == "Hydrated network topology"

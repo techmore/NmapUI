@@ -186,9 +186,24 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
 
     assert 'XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"' in paths_source
     assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
+    assert 'RUNTIME_DB_FILE = BASE_DIR / "data" / "runtime.sqlite3"' in paths_source
     assert 'GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"' in paths_source
     assert '"web_stylesheet": web_stylesheet' in app_composition_source
     assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
+
+
+def test_runtime_sqlite_store_schema_exists():
+    runtime_db_source = (ROOT / "nmapui" / "runtime_db.py").read_text()
+    app_source = (ROOT / "app.py").read_text()
+    runtime_services_source = (ROOT / "nmapui" / "runtime_services.py").read_text()
+
+    assert "CREATE TABLE IF NOT EXISTS runtime_snapshots" in runtime_db_source
+    assert "CREATE TABLE IF NOT EXISTS jobs" in runtime_db_source
+    assert "CREATE TABLE IF NOT EXISTS report_artifacts" in runtime_db_source
+    assert "CREATE TABLE IF NOT EXISTS runtime_logs" in runtime_db_source
+    assert "def create_runtime_state_store" in runtime_db_source
+    assert "runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)" in app_source
+    assert '"runtime_store": runtime_store' in runtime_services_source
 
 
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():

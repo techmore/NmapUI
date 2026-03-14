@@ -59,6 +59,7 @@ from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
     GOOGLE_DRIVE_CREDENTIALS_FILE,
+    RUNTIME_DB_FILE,
     SCANS_DIR,
     SETTINGS_FILE,
     VULNERS_SCRIPT,
@@ -70,6 +71,7 @@ from nmapui.runtime import (
     check_for_updates,
     get_app_version,
 )
+from nmapui.runtime_db import create_runtime_state_store
 from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
 from nmapui.state import merge_customer_metadata
@@ -131,6 +133,7 @@ idle_state_manager = IdleStateManager(
 
 # Global customer fingerprinter
 customer_fingerprinter = CustomerFingerprinter()
+runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)
 runtime_services = create_runtime_services(
     default_auto_scan_config=DEFAULT_AUTO_SCAN_CONFIG,
     rate_limiter_cls=PerClientRateLimiter,
@@ -139,6 +142,7 @@ runtime_services = create_runtime_services(
     tool_version_registry_cls=ToolVersionRegistry,
     startup_state_factory=create_startup_state,
     idle_state_manager=idle_state_manager,
+    runtime_store=runtime_store,
 )
 
 network_key = runtime_services["network_key"]

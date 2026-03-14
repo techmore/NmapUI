@@ -1,7 +1,17 @@
 from datetime import datetime
 
 
-def create_runtime_services(*, default_auto_scan_config, rate_limiter_cls, job_registry_cls, client_state_registry_cls, tool_version_registry_cls, startup_state_factory, idle_state_manager):
+def create_runtime_services(
+    *,
+    default_auto_scan_config,
+    rate_limiter_cls,
+    job_registry_cls,
+    client_state_registry_cls,
+    tool_version_registry_cls,
+    startup_state_factory,
+    idle_state_manager,
+    runtime_store=None,
+):
     network_key = {
         "hops": [],
         "total_hops": 0,
@@ -31,4 +41,5 @@ def create_runtime_services(*, default_auto_scan_config, rate_limiter_cls, job_r
         ),
         "tool_versions": tool_version_registry_cls(),
         "startup_state": startup_state_factory(),
+        "runtime_store": runtime_store,
     }
