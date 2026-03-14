@@ -167,7 +167,9 @@ def test_require_socket_auth_allows_trusted_local_ui_without_basic_auth(monkeypa
     def protected_event():
         emit("protected_ok", {"ok": True})
 
-    client = socketio.test_client(app)
+    flask_client = app.test_client()
+    flask_client.environ_base["REMOTE_ADDR"] = "127.0.0.1"
+    client = socketio.test_client(app, flask_test_client=flask_client)
     client.emit("protected")
     received = client.get_received()
 
@@ -176,3 +178,34 @@ def test_require_socket_auth_allows_trusted_local_ui_without_basic_auth(monkeypa
         and event["args"] == [{"ok": True}]
         for event in received
     )
+
+
+def test_require_socket_auth_rejects_spoofed_local_host_without_loopback_peer(monkeypatch):
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "true")
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+
+    @socketio.on("protected")
+    @require_socket_auth()
+    def protected_event():
+        emit("protected_ok", {"ok": True})
+
+    flask_client = app.test_client()
+    flask_client.environ_base["REMOTE_ADDR"] = "203.0.113.7"
+    client = socketio.test_client(
+        app,
+        flask_test_client=flask_client,
+        headers={"Host": "localhost:9000"},
+    )
+    client.emit("protected")
+    received = client.get_received()
+
+    assert any(
+        event["name"] == "auth_error"
+        and event["args"] == [{"error": "Unauthorized"}]
+        for event in received
+    )
+    assert not any(event["name"] == "protected_ok" for event in received)

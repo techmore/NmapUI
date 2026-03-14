@@ -1,4 +1,5 @@
 import base64
+import ipaddress
 import os
 from functools import wraps
 
@@ -44,14 +45,31 @@ def request_is_local_ui():
     origin = (request.headers.get("Origin") or "").lower()
 
     allowed_hosts = {"127.0.0.1", "localhost"}
-    local_remote_addrs = {"", "127.0.0.1", "::1", "localhost"}
-    origin_is_local = any(token in origin for token in ("127.0.0.1", "localhost"))
+    local_remote_addrs = {"127.0.0.1", "::1", "localhost"}
 
-    return (
-        host in allowed_hosts
-        or remote_addr in local_remote_addrs
-        or origin_is_local
-    )
+    def is_loopback_remote_addr(value):
+        if value in local_remote_addrs:
+            return True
+        try:
+            return ipaddress.ip_address(value).is_loopback
+        except ValueError:
+            return False
+
+    def origin_is_local_ui(value):
+        if not value:
+            return True
+        return any(token in value for token in ("127.0.0.1", "localhost"))
+
+    if not is_loopback_remote_addr(remote_addr):
+        return False
+
+    if host and host not in allowed_hosts:
+        return False
+
+    if not origin_is_local_ui(origin):
+        return False
+
+    return True
 
 
 def auth_uses_insecure_defaults():

@@ -116,6 +116,43 @@ def test_scan_routes_allow_authorized_access(tmp_path, monkeypatch):
     assert payload["scans"][0]["customer_name"] == "Acme"
 
 
+def test_scan_routes_reject_spoofed_local_host_without_loopback_peer(tmp_path, monkeypatch):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "true")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+    app = build_scan_app(tmp_path)
+    client = app.test_client()
+
+    response = client.get(
+        "/api/scans",
+        headers={"Host": "localhost:9000"},
+        environ_overrides={"REMOTE_ADDR": "203.0.113.7"},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "Unauthorized"}
+
+
+def test_scan_routes_allow_trusted_loopback_peer_without_basic_auth(tmp_path, monkeypatch):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "true")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+    app = build_scan_app(tmp_path)
+    client = app.test_client()
+
+    response = client.get(
+        "/api/scans",
+        headers={"Host": "127.0.0.1:9000"},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["scans"][0]["customer_name"] == "Acme"
+
+
 def test_scan_routes_surface_failed_report_metadata(tmp_path, monkeypatch):
     configure_auth(monkeypatch)
     app = build_scan_app_with_real_metadata(
