@@ -139,6 +139,38 @@ def test_get_most_recent_scan_xml_prefers_customer_id_over_folder_name(tmp_path)
     assert metadata["customer_id"] == "cust-123"
 
 
+def test_get_most_recent_scan_xml_ignores_invalid_metadata_files(tmp_path):
+    scans_dir = tmp_path / "data" / "scans"
+    valid_dir = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    invalid_dir = scans_dir / "Broken" / "2026-03-13" / "scan_020000_target"
+    valid_dir.mkdir(parents=True)
+    invalid_dir.mkdir(parents=True)
+
+    (valid_dir / "scan.xml").write_text("<nmaprun/>")
+    (valid_dir / "metadata.json").write_text(
+        """
+        {
+          "customer_id": "cust-123",
+          "customer_name": "Acme Customer",
+          "timestamp": "2026-03-13T01:00:00"
+        }
+        """
+    )
+    (invalid_dir / "scan.xml").write_text("<nmaprun/>")
+    (invalid_dir / "metadata.json").write_text("{not-json")
+
+    xml_path, metadata = get_most_recent_scan_xml(
+        "cust-123",
+        customers=[{"id": "cust-123", "name": "Acme Customer"}],
+        scans_dir=scans_dir,
+        sanitize_customer_dir_name=lambda value: value.replace(" ", "_"),
+        max_days=30,
+    )
+
+    assert xml_path == valid_dir / "scan.xml"
+    assert metadata["customer_id"] == "cust-123"
+
+
 def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
     scan_dir = tmp_path / "scan"
     scan_dir.mkdir()

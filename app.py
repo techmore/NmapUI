@@ -1429,13 +1429,17 @@ def find_latest_saved_scan_for_pdf(target, customer_id=None, max_days=30):
     cutoff_date = datetime.now() - timedelta(days=max_days)
     matches = []
 
-    for metadata_file in SCANS_DIR.glob("**/metadata.json"):
+    for metadata_file, metadata in iter_scan_metadata_documents(
+        SCANS_DIR,
+        load_json_document,
+        normalize_scan_metadata_document,
+        logger=logger,
+    ):
         scan_dir = metadata_file.parent
         xml_file = scan_dir / "scan.xml"
         if not xml_file.exists():
             continue
 
-        metadata = normalize_scan_metadata_document(load_json_document(metadata_file, {}))
         timestamp = metadata.get("timestamp")
         if not timestamp or metadata.get("target") != target:
             continue

@@ -5,6 +5,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 
 from persistence import (
+    iter_scan_metadata_documents,
     load_json_document,
     normalize_scan_metadata_document,
     save_json_document,
@@ -430,40 +431,44 @@ def get_most_recent_scan_xml(
 
     cutoff_date = datetime.now() - timedelta(days=max_days)
     recent_scans = []
-    for metadata_file in scans_dir.glob("**/metadata.json"):
+    for metadata_file, metadata in iter_scan_metadata_documents(
+        scans_dir,
+        load_json_document,
+        normalize_scan_metadata_document,
+        logger=logger,
+    ):
         scan_dir = metadata_file.parent
         xml_file = scan_dir / "scan.xml"
         if not xml_file.exists():
             continue
 
-        try:
-            metadata = normalize_scan_metadata_document(
-                load_json_document(metadata_file, {})
+        scan_time_str = metadata.get("timestamp", "")
+        if not scan_time_str:
+            continue
+
+        metadata_customer_id = metadata.get("customer_id", "")
+        if not metadata_customer_id:
+            metadata_customer_id = str(
+                metadata.get("customer_info", {}).get("id", "") or ""
             )
-            scan_time_str = metadata.get("timestamp", "")
-            if not scan_time_str:
-                continue
 
-            metadata_customer_id = metadata.get("customer_id", "")
-            if not metadata_customer_id:
-                metadata_customer_id = str(
-                    metadata.get("customer_info", {}).get("id", "") or ""
-                )
+        if metadata_customer_id != customer_id:
+            continue
 
-            if metadata_customer_id != customer_id:
-                continue
-
+        try:
             scan_time = datetime.fromisoformat(scan_time_str)
-            if scan_time >= cutoff_date:
-                recent_scans.append(
-                    {
-                        "xml_path": xml_file,
-                        "metadata": metadata,
-                        "scan_time": scan_time,
-                    }
-                )
-        except Exception as exc:
-            logger.warning("Failed to load metadata from %s: %s", metadata_file, exc)
+        except ValueError as exc:
+            logger.warning("Failed to parse scan timestamp from %s: %s", metadata_file, exc)
+            continue
+
+        if scan_time >= cutoff_date:
+            recent_scans.append(
+                {
+                    "xml_path": xml_file,
+                    "metadata": metadata,
+                    "scan_time": scan_time,
+                }
+            )
 
     if not recent_scans and customer:
         safe_customer_name = sanitize_customer_dir_name(customer_name)
