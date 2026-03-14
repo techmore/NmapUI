@@ -31,6 +31,11 @@ from nmapui.app_events_runtime import (
     safe_emit as safe_emit_runtime,
     update_job_progress as update_job_progress_runtime,
 )
+from nmapui.app_scan_runtime import (
+    run_arp_scan as run_arp_scan_runtime,
+    run_nmap_with_xml_output as run_nmap_with_xml_output_runtime,
+    start_scan_task as start_scan_task_runtime,
+)
 from nmapui.app_client_state_runtime import (
     get_client_state as get_client_state_runtime,
     get_current_customer_state as get_current_customer_state_runtime,
@@ -106,14 +111,11 @@ from nmapui.report_runtime import (
     generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime,
     generate_report_task as generate_report_task_runtime,
 )
-from nmapui.scan_runtime import start_scan_task as start_scan_task_impl
 from nmapui.scanning import (
     check_arp_scan,
     check_nmap,
     check_vulners,
     create_scan_folder,
-    run_arp_scan as run_arp_scan_impl,
-    run_nmap_with_xml_output as run_nmap_with_xml_output_impl,
     split_subnet_into_chunks,
 )
 from nmapui.traceroute_runtime import (
@@ -533,7 +535,7 @@ register_scan_job_handlers(
 
 def start_scan_task(sid, target):
     """Run scan workflow in a background task for a single client."""
-    return start_scan_task_impl(
+    return start_scan_task_runtime(
         sid=sid,
         target=target,
         broadcaster=broadcaster,
@@ -556,8 +558,8 @@ def start_scan_task(sid, target):
 
 
 def run_arp_scan(target, interface=None, sid=None):
-    return run_arp_scan_impl(
-        target,
+    return run_arp_scan_runtime(
+        target=target,
         interface=interface,
         sid=sid,
         get_default_interface_cached=lambda: DEFAULT_INTERFACE,
@@ -570,9 +572,9 @@ def run_arp_scan(target, interface=None, sid=None):
 
 
 def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
-    return run_nmap_with_xml_output_impl(
-        target,
-        output_base,
+    return run_nmap_with_xml_output_runtime(
+        target=target,
+        output_base=output_base,
         scan_type=scan_type,
         sid=sid,
         vulners_script=VULNERS_SCRIPT,

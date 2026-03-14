@@ -263,9 +263,13 @@ def test_app_delegates_networking_helpers_to_shared_module():
 def test_app_delegates_scan_job_handlers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
     scan_runtime_source = (ROOT / "nmapui" / "scan_runtime.py").read_text()
+    app_scan_runtime_source = (ROOT / "nmapui" / "app_scan_runtime.py").read_text()
 
     assert "from nmapui.handlers.scan_jobs import register_scan_job_handlers" in app_source
-    assert "from nmapui.scan_runtime import start_scan_task as start_scan_task_impl" in app_source
+    assert "from nmapui.app_scan_runtime import (" in app_source
+    assert "start_scan_task as start_scan_task_runtime" in app_source
+    assert "run_arp_scan as run_arp_scan_runtime" in app_source
+    assert "run_nmap_with_xml_output as run_nmap_with_xml_output_runtime" in app_source
     assert "register_scan_job_handlers(" in app_source
     assert '@socketio.on("start_scan")' not in app_source
     assert '@socketio.on("generate_report")' not in app_source
@@ -273,6 +277,7 @@ def test_app_delegates_scan_job_handlers_to_shared_module():
     assert "def _make_broadcast_emit(" not in app_source
     assert "def _scan_workflow_context(" not in app_source
     assert "def make_broadcast_emit(" in scan_runtime_source
+    assert "return start_scan_task_impl(" in app_scan_runtime_source
 
 
 def test_app_delegates_connection_handlers_to_shared_module():
@@ -285,11 +290,14 @@ def test_app_delegates_connection_handlers_to_shared_module():
 
 def test_app_delegates_scanning_helpers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
+    app_scan_runtime_source = (ROOT / "nmapui" / "app_scan_runtime.py").read_text()
 
-    assert "run_arp_scan as run_arp_scan_impl" in app_source
-    assert "run_nmap_with_xml_output as run_nmap_with_xml_output_impl" in app_source
-    assert "return run_arp_scan_impl(" in app_source
-    assert "return run_nmap_with_xml_output_impl(" in app_source
+    assert "run_arp_scan as run_arp_scan_runtime" in app_source
+    assert "run_nmap_with_xml_output as run_nmap_with_xml_output_runtime" in app_source
+    assert "return run_arp_scan_runtime(" in app_source
+    assert "return run_nmap_with_xml_output_runtime(" in app_source
+    assert "return run_arp_scan_impl(" in app_scan_runtime_source
+    assert "return run_nmap_with_xml_output_impl(" in app_scan_runtime_source
 
 
 def test_app_delegates_auto_scan_execution_to_shared_module():
