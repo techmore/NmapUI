@@ -1042,6 +1042,7 @@
     <script src="/static/js/auto_scan_ui.js"></script>
     <script src="/static/js/report_generation_ui.js"></script>
     <script src="/static/js/customer_actions.js"></script>
+    <script src="/static/js/scan_runtime.js"></script>
     <script>
         // Set current date and time
         function updateDateTime() {
@@ -1079,108 +1080,7 @@
 
         var socket = io.connect(`http://${document.domain}:${location.port}`);
         window.socket = socket;
-        socket.on('connect', () => console.log('Socket.IO connected'));
         initializeUpdateModal(socket);
-        
-        // Quick scan indicator handlers
-        socket.on('quick_scan_start', () => {
-            console.log('Quick scan started - pulsing card');
-            const quickCard = document.getElementById('quick-scan-card');
-            if (quickCard) {
-                quickCard.classList.add('card-pulsing');
-            }
-        });
-
-        socket.on('quick_scan_complete', () => {
-            console.log('Quick scan complete - stopping pulse');
-            const quickCard = document.getElementById('quick-scan-card');
-            if (quickCard) {
-                quickCard.classList.remove('card-pulsing');
-            }
-        });
-
-        // ARP scan indicator handler (no visual pulse - happens between quick and deep)
-        socket.on('arp_scan_start', () => {
-            console.log('ARP scan started');
-            // No visual indicator - ARP scan is very quick and happens between phases
-        });
-
-        socket.on('arp_scan_complete', () => {
-            console.log('ARP scan complete');
-            // No visual indicator needed
-        });
-
-        // Deep scan indicator handlers
-        socket.on('deep_scan_start', () => {
-            console.log('Deep scan started - pulsing card');
-            // Stop quick scan card pulsing if still active
-            const quickCard = document.getElementById('quick-scan-card');
-            if (quickCard) {
-                quickCard.classList.remove('card-pulsing');
-            }
-            // Start deep scan card pulsing
-            const deepCard = document.getElementById('deep-scan-card');
-            if (deepCard) {
-                deepCard.classList.add('card-pulsing');
-            }
-        });
-
-        socket.on('deep_scan_host_start', (data) => {
-            console.log('Deep scan started for host:', data.ip);
-            const tb = document.querySelector('#discovery-table tbody');
-            for (let row of tb.rows) {
-                if (row.cells[1].textContent === data.ip) {
-                    row.cells[0].innerHTML = '<span class="relative flex size-3"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-400 opacity-75"></span><span class="relative inline-flex size-3 rounded-full bg-olive-500"></span></span>';
-                    break;
-                }
-            }
-        });
-
-        socket.on('deep_scan_host_complete', (data) => {
-            console.log('Deep scan complete for host:', data.ip);
-            const tb = document.querySelector('#discovery-table tbody');
-            for (let row of tb.rows) {
-                if (row.cells[1].textContent === data.ip) {
-                    row.cells[0].innerHTML = '';
-                    break;
-                }
-            }
-        });
-
-        socket.on('deep_scan_complete', () => {
-            console.log('All deep scans complete - stopping pulse');
-            const deepCard = document.getElementById('deep-scan-card');
-            if (deepCard) {
-                deepCard.classList.remove('card-pulsing');
-            }
-            // Clear all status indicators
-            const tb = document.querySelector('#discovery-table tbody');
-            Array.from(tb.rows).forEach(row => {
-                row.cells[0].innerHTML = '';
-            });
-        });
-
-        function normalizeFeedbackMessage(msg) {
-            if (typeof msg === 'string') return msg;
-            if (msg && typeof msg.message === 'string') return msg.message;
-            return '';
-        }
-
-        socket.on('scan_feedback', msg => {
-            const message = normalizeFeedbackMessage(msg);
-            if (!message) return;
-            // Hide feedback container for standard info messages if they are from recovery
-            if (message.includes('Loaded') && message.includes('assets from scan')) {
-                console.log('Suppressed recovery feedback in container');
-                return;
-            }
-            const container = document.getElementById('feedback-container');
-            // Ensure the container is visible when feedback starts
-            container.parentElement.classList.remove('hidden');
-            const paragraph = document.createElement('p');
-            paragraph.textContent = message;
-            container.appendChild(paragraph);
-        });
 
         socket.on('local_ip', data => {
             ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
@@ -1433,68 +1333,6 @@
             }
         }
 
-        document.getElementById('start-scan-btn').addEventListener('click', () => {
-            if (clientJobs.scan.status === 'running') {
-                return;
-            }
-            const target = document.getElementById('scan-target').value;
-            socket.emit('start_scan', target);
-        });
-
-        const clientJobs = {
-            scan: { status: 'idle' },
-            report: { status: 'idle' }
-        };
-
-        function updateJobButtons() {
-            const scanRunning = clientJobs.scan.status === 'running';
-            const reportRunning = clientJobs.report.status === 'running';
-            const stopButton = document.getElementById('stop-scan-btn');
-
-            const startScanBtn = document.getElementById('start-scan-btn');
-            const generateReportBtn = document.getElementById('generate-report-btn');
-
-            if (startScanBtn) {
-                startScanBtn.disabled = scanRunning;
-                startScanBtn.classList.toggle('opacity-60', scanRunning);
-                startScanBtn.classList.toggle('cursor-not-allowed', scanRunning);
-            }
-
-            if (generateReportBtn) {
-                generateReportBtn.disabled = reportRunning;
-                generateReportBtn.classList.toggle('opacity-60', reportRunning);
-                generateReportBtn.classList.toggle('cursor-not-allowed', reportRunning);
-            }
-
-            if (stopButton) {
-                const canStop = scanRunning || reportRunning;
-                stopButton.disabled = !canStop;
-                stopButton.classList.toggle('opacity-50', !canStop);
-                stopButton.classList.toggle('cursor-not-allowed', !canStop);
-            }
-        }
-
-        socket.on('job_status', function(data) {
-            if (!data || !data.job_type) return;
-            clientJobs[data.job_type] = data;
-            updateJobButtons();
-
-            if (data.job_type === 'report' && data.status === 'running' && data.details) {
-                const message = data.details.message || 'Generating report...';
-                updateReportProgress(message);
-                showReportStatus(message, 'info');
-            }
-
-            if (data.job_type === 'scan' && data.status === 'running' && data.details?.message) {
-                showReportStatus(data.details.message, 'info');
-            }
-        });
-
-        socket.on('job_cancelled', function(data) {
-            if (!data || !data.message) return;
-            showReportStatus(data.message, 'info');
-        });
-
         socket.emit('get_local_ip');
         socket.emit('get_network_key');
         socket.emit('get_customer_info');
@@ -1502,17 +1340,6 @@
         socket.emit('get_customers');
         socket.emit('get_history_counts');
         socket.emit('get_job_status');
-
-        document.getElementById('stop-scan-btn').addEventListener('click', function() {
-            if (clientJobs.report.status === 'running') {
-                socket.emit('cancel_job', { job_type: 'report' });
-                return;
-            }
-
-            if (clientJobs.scan.status === 'running') {
-                socket.emit('cancel_job', { job_type: 'scan' });
-            }
-        });
 
         socket.on('network_key', data => {
             console.log('Network key received:', data);
@@ -1795,13 +1622,14 @@
         }
 
         initializeAutoScanUI(socket, {
-            getClientJobs: () => clientJobs,
+            getClientJobs: () => getClientJobs(),
             getLastScanTarget: () => document.getElementById('scan-target').value || '',
         });
         initializeReportGenerationUI(socket, {
-            getClientJobs: () => clientJobs,
+            getClientJobs: () => getClientJobs(),
         });
         initializeCustomerActions(socket);
+        initializeScanRuntime(socket);
 
         // Initialize table sorter when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {

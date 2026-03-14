@@ -193,12 +193,13 @@ def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
         cwd=ROOT,
         text=True,
     )
+    scan_runtime_module = (ROOT / "static" / "js" / "scan_runtime.js").read_text()
 
     assert template.count("socket.on('scan_results'") == 1
     assert template.count("socket.on('deep_scan_results'") == 1
     assert template.count("socket.on('arp_results'") == 1
-    assert "function normalizeFeedbackMessage(msg)" in template
-    assert "const message = normalizeFeedbackMessage(msg);" in template
+    assert "function normalizeFeedbackMessage(msg)" in scan_runtime_module
+    assert "const message = normalizeFeedbackMessage(msg);" in scan_runtime_module
 
 
 def test_template_uses_dom_helpers_for_update_and_route_rendering():
@@ -459,3 +460,21 @@ def test_template_loads_external_customer_actions_module():
     assert "socket.on('customer_identified'" not in template
     assert "initializeCustomerActions(socket);" in template
     assert "window.initializeCustomerActions = initializeCustomerActions;" in customer_actions_module
+
+
+def test_template_loads_external_scan_runtime_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    scan_runtime_module = (ROOT / "static" / "js" / "scan_runtime.js").read_text()
+
+    assert '<script src="/static/js/scan_runtime.js"></script>' in template
+    assert "const clientJobs = {" not in template
+    assert "function updateJobButtons()" not in template
+    assert "function normalizeFeedbackMessage(msg)" not in template
+    assert "socket.on('quick_scan_start'" not in template
+    assert "socket.on('job_status'" not in template
+    assert "initializeScanRuntime(socket);" in template
+    assert "window.initializeScanRuntime = initializeScanRuntime;" in scan_runtime_module
