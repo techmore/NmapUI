@@ -200,9 +200,7 @@ class IdleStateManager:
 
 
 
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+app, socketio = create_web_app(__name__)
 
 # ============================================================================
 # SECURITY: Input Validation
@@ -1624,17 +1622,8 @@ def start_auto_scan_thread():
     auto_scan_thread = thread_ref["thread"]
 
 if __name__ == "__main__":
-    quick_mode = "--quick" in sys.argv or "-q" in sys.argv
-    host = os.environ.get("NMAPUI_HOST", "127.0.0.1")
-    port = int(os.environ.get("NMAPUI_PORT", "9000"))
-    debug = env_flag("NMAPUI_DEBUG", default=False)
+    runtime_options = build_runtime_options(sys.argv)
 
-    startup_checks(quick=quick_mode)
+    startup_checks(quick=runtime_options["quick_mode"])
     start_auto_scan_thread()
-    socketio.run(
-        app,
-        host=host,
-        port=port,
-        debug=debug,
-        allow_unsafe_werkzeug=debug,
-    )
+    run_socketio_server(socketio, app, runtime_options)
