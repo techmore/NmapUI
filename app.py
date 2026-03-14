@@ -100,6 +100,7 @@ from nmapui.reporting import (
     parse_scan_xml_for_assets,
     save_scan_metadata,
 )
+from nmapui.scan_runtime import start_scan_task as start_scan_task_impl
 from nmapui.scanning import (
     check_arp_scan,
     check_nmap,
@@ -111,14 +112,9 @@ from nmapui.scanning import (
 )
 from nmapui.traceroute import run_traceroute as run_traceroute_for_state
 from nmapui.validation import validate_target
-from nmapui.workflows import (
-    generate_report_task as workflow_generate_report_task,
-    start_deep_scan as workflow_start_deep_scan,
-    start_scan_task as workflow_start_scan_task,
-)
+from nmapui.workflows import generate_report_task as workflow_generate_report_task
 from nmapui.workflow_context import (
     build_report_workflow_context,
-    build_scan_workflow_context,
 )
 from persistence import (
     load_json_document,
@@ -518,44 +514,28 @@ register_scan_job_handlers(
     },
 )
 
-def _make_broadcast_emit(owner_sid: str):
-    """Return an emit_to_client that fans out to all subscribers and records events."""
-    def _emit(sid: str, event: str, data=None):
-        # Record in replay buffer (keyed by owner, not subscriber sid)
-        broadcaster.record(owner_sid, event, data)
-        # Emit to every subscribed tab
-        for sub_sid in broadcaster.get_subscribers(owner_sid):
-            emit_to_client(sub_sid, event, data)
-    return _emit
-
-
-def _scan_workflow_context(owner_sid: str):
-    return build_scan_workflow_context(
-        {
-            "get_client_state": get_client_state,
-            "ensure_job_not_cancelled": ensure_job_not_cancelled,
-            "idle_state_manager": idle_state_manager,
-            "update_job_progress": update_job_progress,
-            "emit_to_client": _make_broadcast_emit(owner_sid),
-            "socketio_sleep": socketio.sleep,
-            "run_cancellable_command": run_cancellable_command,
-            "run_arp_scan": run_arp_scan,
-            "identify_gateway_firewall_targets": lambda hosts: identify_gateway_firewall_targets_for_key(
-                hosts, get_client_state(sid=owner_sid)["network_key"]
-            ),
-            "start_deep_scan": workflow_start_deep_scan,
-            "job_registry": job_registry,
-            "emit_job_status": emit_job_status,
-            "logger": logger,
-            "vulners_script": VULNERS_SCRIPT,
-            "ip_sort_key": ipaddress.IPv4Address,
-            "on_job_end": lambda: broadcaster.end_job(owner_sid),
-        }
-    )
-
 def start_scan_task(sid, target):
     """Run scan workflow in a background task for a single client."""
-    return workflow_start_scan_task(_scan_workflow_context(sid), sid, target)
+    return start_scan_task_impl(
+        sid=sid,
+        target=target,
+        broadcaster=broadcaster,
+        emit_to_client=emit_to_client,
+        get_client_state=get_client_state,
+        ensure_job_not_cancelled=ensure_job_not_cancelled,
+        idle_state_manager=idle_state_manager,
+        update_job_progress=update_job_progress,
+        socketio_sleep=socketio.sleep,
+        run_cancellable_command=run_cancellable_command,
+        run_arp_scan=run_arp_scan,
+        identify_gateway_firewall_targets=lambda hosts: identify_gateway_firewall_targets_for_key(
+            hosts, get_client_state(sid=sid)["network_key"]
+        ),
+        job_registry=job_registry,
+        emit_job_status=emit_job_status,
+        logger=logger,
+        vulners_script=VULNERS_SCRIPT,
+    )
 
 
 def run_arp_scan(target, interface=None, sid=None):

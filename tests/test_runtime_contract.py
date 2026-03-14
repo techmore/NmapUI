@@ -215,12 +215,17 @@ def test_app_delegates_networking_helpers_to_shared_module():
 
 def test_app_delegates_scan_job_handlers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
+    scan_runtime_source = (ROOT / "nmapui" / "scan_runtime.py").read_text()
 
     assert "from nmapui.handlers.scan_jobs import register_scan_job_handlers" in app_source
+    assert "from nmapui.scan_runtime import start_scan_task as start_scan_task_impl" in app_source
     assert "register_scan_job_handlers(" in app_source
     assert '@socketio.on("start_scan")' not in app_source
     assert '@socketio.on("generate_report")' not in app_source
     assert '@socketio.on("generate_pdf_from_saved")' not in app_source
+    assert "def _make_broadcast_emit(" not in app_source
+    assert "def _scan_workflow_context(" not in app_source
+    assert "def make_broadcast_emit(" in scan_runtime_source
 
 
 def test_app_delegates_connection_handlers_to_shared_module():
@@ -257,14 +262,14 @@ def test_app_uses_shared_xml_merge_helper():
 def test_app_uses_shared_workflow_context_builders():
     app_source = (ROOT / "app.py").read_text()
     workflow_context_source = (ROOT / "nmapui" / "workflow_context.py").read_text()
+    scan_runtime_source = (ROOT / "nmapui" / "scan_runtime.py").read_text()
 
     assert "from nmapui.workflow_context import (" in app_source
     assert "build_report_workflow_context" in app_source
-    assert "build_scan_workflow_context" in app_source
-    assert "return build_scan_workflow_context(" in app_source
     assert "build_report_workflow_context(" in app_source
     assert "class ScanWorkflowContext" in workflow_context_source
     assert "class ReportWorkflowContext" in workflow_context_source
+    assert "context = build_scan_workflow_context(" in scan_runtime_source
     assert "def identify_gateway_firewall_targets(" not in app_source
     assert "def start_deep_scan(" not in app_source
     assert '"cve_pattern":' not in app_source
