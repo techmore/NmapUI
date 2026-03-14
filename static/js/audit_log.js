@@ -13,6 +13,7 @@
         update: 'text-amber-300',
     };
     let logsTabInitialized = false;
+    let persistedLogsLoaded = false;
 
     function timestamp() {
         return new Date().toISOString().replace('T', ' ').slice(0, 23);
@@ -47,6 +48,18 @@
         div.appendChild(levelSpan);
         div.appendChild(msgSpan);
         return div;
+    }
+
+    function appendStructuredLog(entry) {
+        if (!entry || !entry.message) {
+            return;
+        }
+        logCount += 1;
+        logEntries.push({
+            timestamp: entry.created_at || entry.timestamp || timestamp(),
+            level: entry.level || 'info',
+            message: String(entry.message),
+        });
     }
 
     function updateCounts(visibleCount = logCount) {
@@ -152,7 +165,27 @@
         document.getElementById('logs-level-filter')?.addEventListener('change', renderLogsTab);
         document.getElementById('logs-export-btn')?.addEventListener('click', exportVisibleLogs);
         document.getElementById('logs-clear-btn')?.addEventListener('click', () => window.clearLog());
+        loadPersistedLogs();
         renderLogsTab();
+    }
+
+    function loadPersistedLogs() {
+        if (persistedLogsLoaded) {
+            return;
+        }
+        persistedLogsLoaded = true;
+        fetch('/api/runtime/logs?limit=200')
+            .then((response) => response.json())
+            .then((data) => {
+                const entries = Array.isArray(data?.entries) ? data.entries : [];
+                entries
+                    .slice()
+                    .reverse()
+                    .forEach((entry) => appendStructuredLog(entry));
+                renderLogsTab();
+            })
+            .catch(() => {
+            });
     }
 
     function appendLog(level, message) {

@@ -8,6 +8,7 @@ def register_core_routes(app, deps):
     get_default_interface_cached = deps["get_default_interface_cached"]
     get_versions = deps["get_versions"]
     job_registry = deps["job_registry"]
+    runtime_store = deps.get("runtime_store")
     settings_state = deps["settings_state"]
     startup_state = deps["startup_state"]
     get_auto_scan_thread = deps["get_auto_scan_thread"]
@@ -77,3 +78,25 @@ def register_core_routes(app, deps):
                 ),
             }
         )
+
+    @app.route("/api/runtime/logs")
+    def runtime_logs():
+        category = None
+        if runtime_store is not None:
+            from flask import request
+
+            category = request.args.get("category") or None
+            limit_value = request.args.get("limit", "200")
+            try:
+                limit = max(1, min(int(limit_value), 1000))
+            except ValueError:
+                limit = 200
+            return jsonify(
+                {
+                    "entries": runtime_store.get_recent_logs(
+                        category=category,
+                        limit=limit,
+                    )
+                }
+            )
+        return jsonify({"entries": []})

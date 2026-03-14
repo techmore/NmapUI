@@ -212,6 +212,16 @@ def test_runtime_sqlite_store_schema_exists():
     assert "def persist_report_artifact(" in (ROOT / "nmapui" / "reporting.py").read_text()
 
 
+def test_runtime_logs_route_and_ui_hydration_exist():
+    routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
+    audit_log_source = (ROOT / "static" / "js" / "audit_log.js").read_text()
+
+    assert '@app.route("/api/runtime/logs")' in routes_source
+    assert 'runtime_store.get_recent_logs(' in routes_source
+    assert "function loadPersistedLogs()" in audit_log_source
+    assert "fetch('/api/runtime/logs?limit=200')" in audit_log_source
+
+
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
     pdf_stylesheet = (ROOT / "nmap-pdf-olive-legacy.xsl").read_text()
     web_stylesheet = (ROOT / "nmap-modern.xsl").read_text()

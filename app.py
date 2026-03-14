@@ -289,6 +289,7 @@ register_app_handlers(
     get_default_interface_cached=lambda: DEFAULT_INTERFACE,
     settings_state=settings_state,
     startup_state=startup_state,
+    runtime_store=runtime_store,
     get_auto_scan_thread=runtime_bindings["get_auto_scan_thread"],
     get_customer_fingerprinter=lambda: customer_fingerprinter,
     get_current_customer=lambda: get_current_customer_state(request.sid),
