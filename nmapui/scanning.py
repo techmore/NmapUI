@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -7,6 +8,14 @@ import sys
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_nmap_scan_technique():
+    """Choose a connect scan when the process is not running with root privileges."""
+    geteuid = getattr(os, "geteuid", None)
+    if callable(geteuid) and geteuid() == 0:
+        return "-sS"
+    return "-sT"
 
 
 def check_arp_scan():
@@ -210,6 +219,8 @@ def run_nmap_with_xml_output(
     run_cancellable_command,
 ):
     """Run nmap with all formats output (-oA)."""
+    scan_technique = get_nmap_scan_technique()
+
     if scan_type == "quick":
         logger.info("Running quick scan on %s...", target)
         if sid:
@@ -218,7 +229,7 @@ def run_nmap_with_xml_output(
             socketio_emit("scan_feedback", f"Starting quick scan on {target}...")
         cmd = [
             "nmap",
-            "-sS",
+            scan_technique,
             "-T3",
             "--top-ports",
             "100",
@@ -239,7 +250,7 @@ def run_nmap_with_xml_output(
             socketio_emit("scan_feedback", message)
         cmd = [
             "nmap",
-            "-sS",
+            scan_technique,
             "-T4",
             "-A",
             "-sC",

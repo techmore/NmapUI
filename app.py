@@ -1296,6 +1296,7 @@ def run_arp_scan(target, interface=None, sid=None):
 
 def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
     """Run nmap with all formats output (-oA)"""
+    scan_technique = "-sS" if getattr(os, "geteuid", lambda: -1)() == 0 else "-sT"
 
     if scan_type == "quick":
         logger.info(f"Running quick scan on {target}...")
@@ -1305,7 +1306,7 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
             socketio.emit("scan_feedback", f"Starting quick scan on {target}...")
         cmd = [
             "nmap",
-            "-sS",  # SYN scan
+            scan_technique,
             "-T3",  # Polite timing
             "--top-ports",
             "100",  # Top 100 ports only
@@ -1329,7 +1330,7 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
             )
         cmd = [
             "nmap",
-            "-sS",
+            scan_technique,
             "-T4",
             "-A",
             "-sC",

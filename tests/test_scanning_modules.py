@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import nmapui.scanning as scanning
 from nmapui.scanning import create_scan_folder
 
 
@@ -15,3 +16,13 @@ def test_create_scan_folder_uses_customer_and_target_structure(tmp_path):
     assert scan_dir.parent.parent == tmp_path / "Acme_Customer"
     assert scan_dir.name.startswith("scan_")
     assert "192.168.1.0_24" in scan_dir.name
+
+
+def test_get_nmap_scan_technique_uses_connect_scan_without_root(monkeypatch):
+    monkeypatch.setattr(scanning.os, "geteuid", lambda: 501, raising=False)
+    assert scanning.get_nmap_scan_technique() == "-sT"
+
+
+def test_get_nmap_scan_technique_uses_syn_scan_as_root(monkeypatch):
+    monkeypatch.setattr(scanning.os, "geteuid", lambda: 0, raising=False)
+    assert scanning.get_nmap_scan_technique() == "-sS"
