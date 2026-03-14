@@ -1,7 +1,6 @@
 from flask import Flask, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
-from typing import Optional
 import sys
 import requests
 import re
@@ -23,26 +22,14 @@ from nmapui.app_runtime import (
     start_auto_scan_thread as start_auto_scan_thread_runtime,
     startup_checks as startup_checks_runtime,
 )
+from nmapui.app_bindings import build_client_state_helpers, build_event_helpers
 from nmapui.app_events_runtime import (
-    emit_job_status as emit_job_status_runtime,
-    emit_to_client as emit_to_client_runtime,
-    ensure_job_not_cancelled as ensure_job_not_cancelled_runtime,
-    run_cancellable_command as run_cancellable_command_runtime,
     safe_emit as safe_emit_runtime,
-    update_job_progress as update_job_progress_runtime,
 )
 from nmapui.app_scan_runtime import (
     run_arp_scan as run_arp_scan_runtime,
     run_nmap_with_xml_output as run_nmap_with_xml_output_runtime,
     start_scan_task as start_scan_task_runtime,
-)
-from nmapui.app_client_state_runtime import (
-    get_client_state as get_client_state_runtime,
-    get_current_customer_state as get_current_customer_state_runtime,
-    release_client_state as release_client_state_runtime,
-    set_current_customer_state as set_current_customer_state_runtime,
-    set_last_scan_target_state as set_last_scan_target_state_runtime,
-    set_network_key_state as set_network_key_state_runtime,
 )
 from nmapui.app_composition import (
     build_auto_scan_handler_deps,
@@ -171,127 +158,9 @@ allowed_origins = get_allowed_origins()
 socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
+
 def safe_emit(event, data=None):
     return safe_emit_runtime(event, data)
-
-
-def emit_to_client(sid: str, event: str, data=None):
-    return emit_to_client_runtime(socketio=socketio, sid=sid, event=event, data=data)
-
-
-def emit_job_status(sid: str, job_type: str):
-    return emit_job_status_runtime(
-        socketio=socketio,
-        job_registry=job_registry,
-        sid=sid,
-        job_type=job_type,
-    )
-
-
-def update_job_progress(
-    sid: str,
-    job_type: str,
-    phase: str,
-    message: Optional[str] = None,
-    progress: Optional[int] = None,
-    details=None,
-):
-    return update_job_progress_runtime(
-        socketio=socketio,
-        job_registry=job_registry,
-        sid=sid,
-        job_type=job_type,
-        phase=phase,
-        message=message,
-        progress=progress,
-        details=details,
-    )
-
-
-def ensure_job_not_cancelled(sid: str, job_type: str):
-    return ensure_job_not_cancelled_runtime(
-        job_registry=job_registry,
-        sid=sid,
-        job_type=job_type,
-    )
-
-
-def get_client_state(*, sid=None):
-    return get_client_state_runtime(
-        sid=sid,
-        client_state_registry=client_state_registry,
-        current_customer=current_customer,
-        network_key=network_key,
-        last_scan_target=last_scan_target,
-    )
-
-
-def get_current_customer_state(sid=None):
-    return get_current_customer_state_runtime(
-        sid=sid,
-        get_client_state=get_client_state,
-    )
-
-
-def set_current_customer_state(value, sid=None):
-    return set_current_customer_state_runtime(
-        value=value,
-        sid=sid,
-        client_state_registry=client_state_registry,
-        set_default_customer=lambda customer: globals().__setitem__("current_customer", customer),
-        sync_default_state=lambda customer: (
-            globals().__setitem__("current_customer", customer),
-            client_state_registry.set_default_customer(customer),
-        ),
-    )
-
-
-def set_network_key_state(value, sid=None):
-    return set_network_key_state_runtime(
-        value=value,
-        sid=sid,
-        client_state_registry=client_state_registry,
-        set_default_network_key=lambda key: globals().__setitem__("network_key", key),
-        sync_default_state=lambda key: (
-            globals().__setitem__("network_key", key),
-            client_state_registry.set_default_network_key(key),
-        ),
-    )
-
-
-def set_last_scan_target_state(value, sid=None):
-    return set_last_scan_target_state_runtime(
-        value=value,
-        sid=sid,
-        client_state_registry=client_state_registry,
-        set_default_last_scan_target=lambda target: globals().__setitem__("last_scan_target", target),
-        sync_default_state=lambda target: (
-            globals().__setitem__("last_scan_target", target),
-            client_state_registry.set_default_last_scan_target(target),
-        ),
-    )
-
-
-def release_client_state(sid):
-    release_client_state_runtime(
-        sid=sid,
-        client_state_registry=client_state_registry,
-    )
-
-
-def run_cancellable_command(
-    cmd,
-    sid: Optional[str] = None,
-    job_type: Optional[str] = None,
-    timeout: Optional[int] = None,
-):
-    return run_cancellable_command_runtime(
-        job_registry=job_registry,
-        cmd=cmd,
-        sid=sid,
-        job_type=job_type,
-        timeout=timeout,
-    )
 
 
 # Global idle state manager
@@ -324,6 +193,32 @@ rate_limiter = runtime_services["rate_limiter"]
 job_registry = runtime_services["job_registry"]
 broadcaster = ScanBroadcaster()
 client_state_registry = runtime_services["client_state_registry"]
+
+event_helpers = build_event_helpers(
+    socketio=socketio,
+    job_registry=job_registry,
+)
+emit_to_client = event_helpers["emit_to_client"]
+emit_job_status = event_helpers["emit_job_status"]
+update_job_progress = event_helpers["update_job_progress"]
+ensure_job_not_cancelled = event_helpers["ensure_job_not_cancelled"]
+run_cancellable_command = event_helpers["run_cancellable_command"]
+
+client_state_helpers = build_client_state_helpers(
+    client_state_registry=client_state_registry,
+    get_current_customer=lambda: current_customer,
+    get_network_key=lambda: network_key,
+    get_last_scan_target=lambda: last_scan_target,
+    set_default_customer=lambda customer: globals().__setitem__("current_customer", customer),
+    set_default_network_key=lambda key: globals().__setitem__("network_key", key),
+    set_default_last_scan_target=lambda target: globals().__setitem__("last_scan_target", target),
+)
+get_client_state = client_state_helpers["get_client_state"]
+get_current_customer_state = client_state_helpers["get_current_customer_state"]
+set_current_customer_state = client_state_helpers["set_current_customer_state"]
+set_network_key_state = client_state_helpers["set_network_key_state"]
+set_last_scan_target_state = client_state_helpers["set_last_scan_target_state"]
+release_client_state = client_state_helpers["release_client_state"]
 
 
 def execute_auto_scan():

@@ -198,20 +198,21 @@ def test_app_delegates_client_state_wrappers_to_shared_module():
     app_client_state_runtime_source = (
         ROOT / "nmapui" / "app_client_state_runtime.py"
     ).read_text()
+    app_bindings_source = (ROOT / "nmapui" / "app_bindings.py").read_text()
 
-    assert "from nmapui.app_client_state_runtime import (" in app_source
-    assert "get_client_state as get_client_state_runtime" in app_source
-    assert "get_current_customer_state as get_current_customer_state_runtime" in app_source
-    assert "set_current_customer_state as set_current_customer_state_runtime" in app_source
-    assert "set_network_key_state as set_network_key_state_runtime" in app_source
-    assert "set_last_scan_target_state as set_last_scan_target_state_runtime" in app_source
-    assert "release_client_state as release_client_state_runtime" in app_source
-    assert "return get_client_state_runtime(" in app_source
-    assert "return get_current_customer_state_runtime(" in app_source
+    assert "from nmapui.app_bindings import build_client_state_helpers, build_event_helpers" in app_source
+    assert 'client_state_helpers = build_client_state_helpers(' in app_source
+    assert 'get_client_state = client_state_helpers["get_client_state"]' in app_source
+    assert 'get_current_customer_state = client_state_helpers["get_current_customer_state"]' in app_source
+    assert 'set_current_customer_state = client_state_helpers["set_current_customer_state"]' in app_source
+    assert 'set_network_key_state = client_state_helpers["set_network_key_state"]' in app_source
+    assert 'set_last_scan_target_state = client_state_helpers["set_last_scan_target_state"]' in app_source
+    assert 'release_client_state = client_state_helpers["release_client_state"]' in app_source
     assert "if sid is not None:" not in app_source
-    assert "sync_default_state=lambda customer:" in app_source
-    assert "sync_default_state=lambda key:" in app_source
-    assert "sync_default_state=lambda target:" in app_source
+    assert "set_default_customer=lambda customer:" in app_source
+    assert "set_default_network_key=lambda key:" in app_source
+    assert "set_default_last_scan_target=lambda target:" in app_source
+    assert "def build_client_state_helpers(" in app_bindings_source
     assert "client_state_registry.release(sid)" in app_client_state_runtime_source
     assert "if sid is not None and sync_default_state is not None:" in app_client_state_runtime_source
 
@@ -219,18 +220,17 @@ def test_app_delegates_client_state_wrappers_to_shared_module():
 def test_app_delegates_event_and_job_wrappers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
     app_events_runtime_source = (ROOT / "nmapui" / "app_events_runtime.py").read_text()
+    app_bindings_source = (ROOT / "nmapui" / "app_bindings.py").read_text()
 
-    assert "from nmapui.app_events_runtime import (" in app_source
-    assert "emit_to_client as emit_to_client_runtime" in app_source
-    assert "emit_job_status as emit_job_status_runtime" in app_source
-    assert "update_job_progress as update_job_progress_runtime" in app_source
-    assert "ensure_job_not_cancelled as ensure_job_not_cancelled_runtime" in app_source
-    assert "run_cancellable_command as run_cancellable_command_runtime" in app_source
+    assert "from nmapui.app_bindings import build_client_state_helpers, build_event_helpers" in app_source
+    assert 'event_helpers = build_event_helpers(' in app_source
+    assert 'emit_to_client = event_helpers["emit_to_client"]' in app_source
+    assert 'emit_job_status = event_helpers["emit_job_status"]' in app_source
+    assert 'update_job_progress = event_helpers["update_job_progress"]' in app_source
+    assert 'ensure_job_not_cancelled = event_helpers["ensure_job_not_cancelled"]' in app_source
+    assert 'run_cancellable_command = event_helpers["run_cancellable_command"]' in app_source
     assert "safe_emit as safe_emit_runtime" in app_source
-    assert "return emit_to_client_runtime(" in app_source
-    assert "return emit_job_status_runtime(" in app_source
-    assert "return update_job_progress_runtime(" in app_source
-    assert "return run_cancellable_command_runtime(" in app_source
+    assert "def build_event_helpers(" in app_bindings_source
     assert "return nmapui_emit_to_client(" not in app_source
     assert "return nmapui_run_cancellable_command(" not in app_source
     assert "return nmapui_emit_to_client(socketio, sid, event, data)" in app_events_runtime_source
