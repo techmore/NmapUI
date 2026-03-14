@@ -1032,6 +1032,7 @@
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
     <script src="/static/js/table_sorter.js"></script>
+    <script src="/static/js/history_modal.js"></script>
     <script>
         // Set current date and time
         function updateDateTime() {
@@ -2632,106 +2633,6 @@
         document.getElementById('view-history-btn').addEventListener('click', function() {
             showHistoryModal();
         });
-
-        function showHistoryModal() {
-            const modal = document.getElementById('history-modal');
-            const customerDropdown = document.getElementById('current-customer');
-            const filter = document.getElementById('history-customer-filter');
-            
-            modal.classList.remove('hidden');
-            
-            // Get current customer name from the main UI
-            let currentName = '';
-            if (customerDropdown && customerDropdown.selectedOptions[0]) {
-                currentName = customerDropdown.selectedOptions[0].text.split(' (')[0];
-            }
-            
-            if (currentName && currentName !== 'Unassigned' && currentName !== 'Unknown Network' && currentName !== 'Auto-detect network...') {
-                // Set the filter to this customer by default
-                modal.dataset.defaultCustomer = currentName;
-            } else {
-                delete modal.dataset.defaultCustomer;
-            }
-            
-            loadScanHistory(true);
-        }
-
-        function hideHistoryModal() {
-            document.getElementById('history-modal').classList.add('hidden');
-        }
-
-        async function loadScanHistory(isInitialLoad = false) {
-            const modal = document.getElementById('history-modal');
-            const filter = document.getElementById('history-customer-filter');
-            const dateFilter = document.getElementById('history-date-filter').value;
-            
-            let customerFilter = filter.value;
-            
-            // On initial load, use the default customer from the modal dataset if filter is empty
-            if (isInitialLoad && !customerFilter && modal.dataset.defaultCustomer) {
-                customerFilter = modal.dataset.defaultCustomer;
-            }
-
-            try {
-                const response = await fetch('/api/scans');
-                const data = await response.json();
-
-                let scans = data.scans || [];
-
-                // Re-populate the customer filter list first so we can select the right one
-                populateCustomerFilter(scans, customerFilter);
-                
-                // Now get the possibly updated filter value (if populateCustomerFilter set it)
-                const activeFilter = filter.value;
-
-                // Apply filters
-                if (activeFilter) {
-                    scans = scans.filter(s => s.customer_name === activeFilter);
-                }
-                if (dateFilter) {
-                    scans = scans.filter(s => s.date === dateFilter);
-                }
-
-                displayScanHistory(scans);
-
-            } catch (error) {
-                console.error('Error loading scan history:', error);
-                renderHistoryState('Error loading scan history', true);
-            }
-        }
-
-        function populateCustomerFilter(scans, defaultValue = '') {
-            const filter = document.getElementById('history-customer-filter');
-            const customers = [...new Set(scans.map(s => s.customer_name))].sort();
-
-            const currentValue = filter.value || defaultValue;
-            filter.innerHTML = '<option value="">All Customers</option>';
-
-            customers.forEach(customer => {
-                const option = document.createElement('option');
-                option.value = customer;
-                option.textContent = customer;
-                filter.appendChild(option);
-            });
-
-            // Set to current/default value if it exists in the new list
-            if (customers.includes(currentValue)) {
-                filter.value = currentValue;
-            } else {
-                filter.value = '';
-            }
-        }
-
-        function displayScanHistory(scans) {
-            const historyList = document.getElementById('history-list');
-
-            if (scans.length === 0) {
-                renderHistoryState('No scans found');
-                return;
-            }
-
-            renderHistoryList(scans);
-        }
 
         async function deleteScan(path) {
             if (!confirm('Are you sure you want to delete this scan?')) {

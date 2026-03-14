@@ -287,3 +287,18 @@ def test_template_loads_external_table_sorter_module():
     assert '<script src="/static/js/table_sorter.js"></script>' in template
     assert "class TableSorter" not in template
     assert "window.TableSorter = TableSorter;" in sorter_module
+
+
+def test_template_loads_external_history_modal_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    history_module = (ROOT / "static" / "js" / "history_modal.js").read_text()
+
+    assert '<script src="/static/js/history_modal.js"></script>' in template
+    assert "async function loadScanHistory(" not in template
+    assert "function showHistoryModal()" not in template
+    assert "window.loadScanHistory = loadScanHistory;" in history_module
+    assert "window.showHistoryModal = showHistoryModal;" in history_module
