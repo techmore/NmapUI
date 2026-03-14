@@ -132,6 +132,19 @@ def test_app_defers_fingerprinter_and_default_interface_side_effects():
     assert 'get_customer_fingerprinter = deps["get_customer_fingerprinter"]' in customer_source
 
 
+def test_app_exposes_explicit_stack_builder_and_runtime_registration():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "def create_app_stack(import_name):" in app_source
+    assert "app, socketio = create_app_stack(__name__)" in app_source
+    assert "def register_runtime_modules(app, socketio):" in app_source
+    assert "register_runtime_modules(app, socketio)" in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

@@ -203,9 +203,12 @@ class IdleStateManager:
         self.countdown_active = False
         self.update_available = False
 
+def create_app_stack(import_name):
+    """Build the Flask and Socket.IO objects for this module."""
+    return create_web_app(import_name)
 
 
-app, socketio = create_web_app(__name__)
+app, socketio = create_app_stack(__name__)
 
 # ============================================================================
 # SECURITY: Input Validation
@@ -608,50 +611,6 @@ def execute_auto_scan():
         safe_emit("auto_scan_error", {"error": str(e)})
 
 
-register_auto_scan_handlers(
-    app,
-    socketio,
-    {
-        "auto_scan_config": auto_scan_config,
-        "save_auto_scan_config": save_auto_scan_config,
-        "logger": logger,
-    },
-)
-register_scan_routes(
-    app,
-    {
-        "scans_dir": SCANS_DIR,
-        "resolve_scan_path": resolve_scan_path,
-        "load_json_document": load_json_document,
-        "normalize_scan_metadata_document": normalize_scan_metadata_document,
-        "logger": logger,
-    },
-)
-register_history_handlers(
-    socketio,
-    {
-        "get_most_recent_scan_xml": get_most_recent_scan_xml,
-        "get_customer_fingerprinter": get_customer_fingerprinter,
-        "scans_dir": SCANS_DIR,
-        "sanitize_customer_dir_name": sanitize_customer_dir_name,
-        "parse_scan_xml_for_assets": parse_scan_xml_for_assets,
-        "get_versions": get_versions,
-        "emit_job_status": emit_job_status,
-        "job_registry": job_registry,
-        "emit_to_client": emit_to_client,
-        "release_client_state": client_state_registry.release,
-        "logger": logger,
-    },
-)
-register_update_handlers(
-    socketio,
-    {
-        "check_for_updates": check_for_updates,
-        "idle_state_manager": idle_state_manager,
-        "logger": logger,
-    },
-)
-
 # Global version information - populated at startup
 versions: Dict[str, Optional[str]] = {
     "nmap": None,
@@ -994,22 +953,70 @@ def merge_customer_metadata(customer_dict, saved_customer):
     return customer_dict
 
 
-register_customer_handlers(
-    socketio,
-    {
-        "get_customer_fingerprinter": get_customer_fingerprinter,
-        "network_key": network_key,
-        "get_current_customer": lambda: get_current_customer_state(request.sid),
-        "set_current_customer": lambda value: set_current_customer_state(value, request.sid),
-        "merge_customer_metadata": merge_customer_metadata,
-        "save_current_assignment": lambda: save_current_assignment(request.sid),
-        "save_customers_config": save_customers_config,
-        "normalize_scan_metadata_document": normalize_scan_metadata_document,
-        "load_json_document": load_json_document,
-        "save_json_document": save_json_document,
-        "logger": logger,
-    },
-)
+def register_runtime_modules(app, socketio):
+    """Register extracted route and Socket.IO modules on the active app stack."""
+    register_auto_scan_handlers(
+        app,
+        socketio,
+        {
+            "auto_scan_config": auto_scan_config,
+            "save_auto_scan_config": save_auto_scan_config,
+            "logger": logger,
+        },
+    )
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": SCANS_DIR,
+            "resolve_scan_path": resolve_scan_path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": logger,
+        },
+    )
+    register_history_handlers(
+        socketio,
+        {
+            "get_most_recent_scan_xml": get_most_recent_scan_xml,
+            "get_customer_fingerprinter": get_customer_fingerprinter,
+            "scans_dir": SCANS_DIR,
+            "sanitize_customer_dir_name": sanitize_customer_dir_name,
+            "parse_scan_xml_for_assets": parse_scan_xml_for_assets,
+            "get_versions": get_versions,
+            "emit_job_status": emit_job_status,
+            "job_registry": job_registry,
+            "emit_to_client": emit_to_client,
+            "release_client_state": client_state_registry.release,
+            "logger": logger,
+        },
+    )
+    register_update_handlers(
+        socketio,
+        {
+            "check_for_updates": check_for_updates,
+            "idle_state_manager": idle_state_manager,
+            "logger": logger,
+        },
+    )
+    register_customer_handlers(
+        socketio,
+        {
+            "get_customer_fingerprinter": get_customer_fingerprinter,
+            "network_key": network_key,
+            "get_current_customer": lambda: get_current_customer_state(request.sid),
+            "set_current_customer": lambda value: set_current_customer_state(value, request.sid),
+            "merge_customer_metadata": merge_customer_metadata,
+            "save_current_assignment": lambda: save_current_assignment(request.sid),
+            "save_customers_config": save_customers_config,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "load_json_document": load_json_document,
+            "save_json_document": save_json_document,
+            "logger": logger,
+        },
+    )
+
+
+register_runtime_modules(app, socketio)
 
 
 def load_current_assignment():
