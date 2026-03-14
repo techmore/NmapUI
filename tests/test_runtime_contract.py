@@ -110,6 +110,21 @@ def test_app_exposes_explicit_run_server_entrypoint():
     assert 'if __name__ == "__main__":\n    run_server()' in app_source
 
 
+def test_app_runtime_uses_bootstrap_origin_and_server_policy():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert 'allowed_origins = get_allowed_origins()' in app_source
+    assert 'SocketIO(app, cors_allowed_origins=allowed_origins)' in app_source
+    assert 'CORS(app, resources={r"/api/*": {"origins": allowed_origins}})' in app_source
+    assert "runtime_options = build_runtime_options(argv or sys.argv)" in app_source
+    assert "run_socketio_server(socketio, app, runtime_options)" in app_source
+    assert 'cors_allowed_origins="*"' not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

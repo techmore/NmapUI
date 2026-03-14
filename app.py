@@ -51,6 +51,11 @@ from nmapui.jobs import (
     run_cancellable_command as nmapui_run_cancellable_command,
 )
 from nmapui.client_state import ClientStateRegistry
+from nmapui.bootstrap import (
+    build_runtime_options,
+    get_allowed_origins,
+    run_socketio_server,
+)
 from nmapui.networking import identify_gateway_firewall_targets as identify_gateway_firewall_targets_for_key
 from nmapui.paths import (
     BASE_DIR,
@@ -234,8 +239,9 @@ class IdleStateManager:
 
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+allowed_origins = get_allowed_origins()
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
+CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
 # ============================================================================
 # SECURITY: Input Validation
@@ -1698,22 +1704,13 @@ def start_auto_scan_thread():
     auto_scan_thread = thread_ref["thread"]
 
 def run_server(argv=None):
-    argv = argv or sys.argv
-    quick_mode = "--quick" in argv or "-q" in argv
-    host = os.environ.get("NMAPUI_HOST", "127.0.0.1")
-    port = int(os.environ.get("NMAPUI_PORT", "9000"))
-    debug = env_flag("NMAPUI_DEBUG", default=False)
+    runtime_options = build_runtime_options(argv or sys.argv)
+    quick_mode = runtime_options["quick_mode"]
 
     log_auth_posture()
     startup_checks(quick=quick_mode)
     start_auto_scan_thread()
-    socketio.run(
-        app,
-        host=host,
-        port=port,
-        debug=debug,
-        allow_unsafe_werkzeug=True,
-    )
+    run_socketio_server(socketio, app, runtime_options)
 
 
 if __name__ == "__main__":
