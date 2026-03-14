@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+import base64
 
 from flask import Flask
 from flask_socketio import SocketIO
@@ -16,6 +17,11 @@ from nmapui.handlers.auto_scan import (
 )
 from nmapui.paths import AUTO_SCAN_SCHEDULER_LOCK_FILE, resolve_scan_path
 from nmapui.runtime import env_flag
+
+
+def basic_auth_header(username="admin", password="nmapui123"):
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
 
 
 def test_should_run_auto_scan_allows_same_day_window():
@@ -91,7 +97,11 @@ def test_http_auto_scan_update_rejects_invalid_payload():
     )
 
     client = app.test_client()
-    response = client.post("/api/auto_scan/update", json={"enabled": "yes"})
+    response = client.post(
+        "/api/auto_scan/update",
+        json={"enabled": "yes"},
+        headers=basic_auth_header(),
+    )
 
     assert response.status_code == 400
     assert response.get_json() == {
