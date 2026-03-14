@@ -55,7 +55,10 @@ function startAppUpdate(socket) {
     document.getElementById("update-current-status").textContent = "Updating...";
 }
 
-function initializeUpdateModal(socket, { showReportStatus }) {
+function initializeUpdateModal(socket, deps = {}) {
+    const showReportStatus =
+        deps.showReportStatus || window.showReportStatus || (() => {});
+
     socket.on("app_update_available", (data) => {
         document.getElementById("app-update-badge").classList.remove("hidden");
         document.getElementById("update-version").textContent = data.latest_version;

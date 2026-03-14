@@ -3,7 +3,7 @@ let lastScanResults = {};
 let reportTimerInterval = null;
 let reportStartTime = 0;
 let reportSocket = null;
-let getClientJobs = null;
+let reportGetClientJobs = () => ({ report: { status: 'idle' } });
 
 function startReportTimer() {
     const container = document.getElementById('scan-timer-container');
@@ -52,10 +52,10 @@ function updateLastScanResults(key, data) {
 
 function initializeReportGenerationUI(socket, deps) {
     reportSocket = socket;
-    getClientJobs = deps.getClientJobs;
+    reportGetClientJobs = deps?.getClientJobs || window.getClientJobs || reportGetClientJobs;
 
     document.getElementById('generate-report-btn').addEventListener('click', function() {
-        if (getClientJobs().report.status === 'running') {
+        if (reportGetClientJobs().report.status === 'running') {
             return;
         }
 
