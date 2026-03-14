@@ -3,6 +3,7 @@ import subprocess
 
 import nmapui.scanning as scanning
 from nmapui.scanning import create_scan_folder
+from nmapui.networking import is_private_ip
 
 
 def test_create_scan_folder_uses_customer_and_target_structure(tmp_path):
@@ -72,3 +73,9 @@ def test_split_subnet_into_chunks_splits_large_networks():
 
 def test_split_subnet_into_chunks_returns_original_target_for_invalid_input():
     assert scanning.split_subnet_into_chunks("not-a-target") == ["not-a-target"]
+
+
+def test_is_private_ip_supports_private_and_cgnat_ranges():
+    assert is_private_ip("192.168.1.10") is True
+    assert is_private_ip("100.64.1.10") is True
+    assert is_private_ip("8.8.8.8") is False

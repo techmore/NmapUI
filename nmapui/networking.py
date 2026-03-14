@@ -1,6 +1,17 @@
 import ipaddress
 
 
+def is_private_ip(ip):
+    try:
+        addr = ipaddress.ip_address(ip)
+        if addr.is_private:
+            return True
+        cgnat = ipaddress.ip_network("100.64.0.0/10")
+        return addr in cgnat
+    except ValueError:
+        return False
+
+
 def get_default_interface(netifaces, logger):
     """Detect the primary network interface dynamically for cross-platform compatibility."""
     import platform

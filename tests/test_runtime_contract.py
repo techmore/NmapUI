@@ -261,6 +261,13 @@ def test_app_uses_shared_scan_chunking_helper():
     assert "def split_subnet_into_chunks(" not in app_source
 
 
+def test_app_uses_shared_private_ip_helper():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "is_private_ip," in app_source
+    assert "def is_private_ip(" not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

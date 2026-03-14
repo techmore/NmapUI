@@ -65,6 +65,7 @@ from nmapui.networking import identify_gateway_firewall_targets as identify_gate
 from nmapui.networking import (
     calculate_cidr as calculate_cidr_impl,
     get_default_interface as get_default_interface_impl,
+    is_private_ip,
 )
 from nmapui.paths import (
     BASE_DIR,
@@ -494,21 +495,6 @@ register_core_routes(
         "get_auto_scan_thread": lambda: auto_scan_thread,
     },
 )
-
-
-def is_private_ip(ip):
-    try:
-        addr = ipaddress.ip_address(ip)
-        # Check standard private + CGNAT (100.64.0.0/10) + link-local
-        if addr.is_private:
-            return True
-        # CGNAT range: 100.64.0.0 - 100.127.255.255
-        cgnat = ipaddress.ip_network("100.64.0.0/10")
-        return addr in cgnat
-    except ValueError:
-        return False
-
-
 
 
 def run_traceroute(target="1.1.1.1"):
