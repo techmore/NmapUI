@@ -531,7 +531,10 @@ def test_template_uses_dom_helpers_for_asset_modal_and_history_rendering():
     assert "function renderAssetServices(asset)" in asset_module
     assert "function renderAssetVulnerabilities(asset)" in asset_module
     assert "function renderHistoryState(message, isError = false)" in layout_module
+    assert "function createHistoryDiffSummary(diffSummary)" in layout_module
     assert "function renderHistoryList(scans)" in layout_module
+    assert "createHistoryDiffSummary(scan.diff_summary)" in layout_module
+    assert "details.className = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';" not in layout_module
     assert "serviceDiv.innerHTML =" not in template
     assert "cveDiv.innerHTML =" not in template
     assert "historyList.innerHTML = scans.map" not in template
