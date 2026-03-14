@@ -13,7 +13,6 @@ def run_startup_checks(deps, quick=False):
     load_auto_scan_config = deps["load_auto_scan_config"]
     load_current_assignment = deps["load_current_assignment"]
     logger = deps["logger"]
-    network_key = deps["network_key"]
     run_traceroute = deps["run_traceroute"]
     safe_emit = deps["safe_emit"]
     startup_state = deps["startup_state"]
@@ -89,7 +88,7 @@ def run_startup_checks(deps, quick=False):
     load_current_assignment()
 
     logger.info("\nInitializing network key...")
-    run_traceroute("1.1.1.1")
+    network_key = run_traceroute("1.1.1.1")
     complete_startup_state(
         startup_state,
         traceroute_initialized=not bool(network_key.get("error")),

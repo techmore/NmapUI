@@ -13,7 +13,7 @@ def register_connection_handlers(socketio, deps):
     set_network_key_state = deps["set_network_key_state"]
 
     @socketio.on("connect")
-    def on_connect():
+    def on_connect(auth=None):
         new_sid = request.sid
         active_job_type = None
         owner_sid = broadcaster.find_active_owner("scan")
@@ -25,9 +25,12 @@ def register_connection_handlers(socketio, deps):
                 active_job_type = "report"
         source_state = get_client_state(sid=owner_sid) if owner_sid else get_client_state()
 
-        set_current_customer_state(source_state["current_customer"], sid=new_sid)
-        set_network_key_state(source_state["network_key"], sid=new_sid)
-        set_last_scan_target_state(source_state.get("last_scan_target"), sid=new_sid)
+        set_current_customer_state(value=source_state["current_customer"], sid=new_sid)
+        set_network_key_state(value=source_state["network_key"], sid=new_sid)
+        set_last_scan_target_state(
+            value=source_state.get("last_scan_target"),
+            sid=new_sid,
+        )
 
         emit_to_client(new_sid, "customer_info", source_state["current_customer"])
         emit_to_client(new_sid, "network_key", source_state["network_key"])

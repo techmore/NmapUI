@@ -274,8 +274,8 @@ register_app_handlers(
     get_client_state=get_client_state,
     set_current_customer_state=set_current_customer_state,
     set_last_scan_target_state=lambda *, value, sid=None: set_last_scan_target_state(
-        value,
-        sid,
+        value=value,
+        sid=sid,
     ),
     set_network_key_state=set_network_key_state,
     build_liveness_payload=build_liveness_payload,
@@ -287,7 +287,10 @@ register_app_handlers(
     get_auto_scan_thread=runtime_bindings["get_auto_scan_thread"],
     get_customer_fingerprinter=lambda: customer_fingerprinter,
     get_current_customer=lambda: get_current_customer_state(request.sid),
-    set_current_customer=lambda value: set_current_customer_state(value, request.sid),
+    set_current_customer=lambda value: set_current_customer_state(
+        value=value,
+        sid=request.sid,
+    ),
     merge_customer_metadata=merge_customer_metadata,
     save_current_assignment=lambda: save_current_assignment(request.sid),
     save_customers_config=save_customers_config,

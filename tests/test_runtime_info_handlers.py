@@ -55,15 +55,15 @@ def build_connection_app(deps):
             "logger": deps["logger"],
             "set_current_customer_state": deps.get(
                 "set_current_customer_state",
-                lambda value, sid=None: None,
+                lambda *, value, sid=None: None,
             ),
             "set_last_scan_target_state": deps.get(
                 "set_last_scan_target_state",
-                lambda value, sid=None: None,
+                lambda *, value, sid=None: None,
             ),
             "set_network_key_state": deps.get(
                 "set_network_key_state",
-                lambda value, sid=None: None,
+                lambda *, value, sid=None: None,
             ),
         },
     )
@@ -329,9 +329,9 @@ def test_connect_replays_active_scan_events_to_new_tab():
             },
             "job_registry": JobRegistryStub(),
             "logger": Flask(__name__).logger,
-            "set_current_customer_state": lambda value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
-            "set_network_key_state": lambda value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
-            "set_last_scan_target_state": lambda value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
+            "set_current_customer_state": lambda *, value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
+            "set_network_key_state": lambda *, value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
+            "set_last_scan_target_state": lambda *, value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
         }
     )
 
@@ -400,9 +400,9 @@ def test_connect_replays_active_report_events_to_new_tab():
             },
             "job_registry": JobRegistryStub(),
             "logger": Flask(__name__).logger,
-            "set_current_customer_state": lambda value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
-            "set_network_key_state": lambda value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
-            "set_last_scan_target_state": lambda value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
+            "set_current_customer_state": lambda *, value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
+            "set_network_key_state": lambda *, value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
+            "set_last_scan_target_state": lambda *, value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
         }
     )
 
@@ -445,9 +445,9 @@ def test_connect_hydrates_new_tab_from_shared_snapshot_without_active_scan():
             },
             "job_registry": type("JobRegistryStub", (), {})(),
             "logger": Flask(__name__).logger,
-            "set_current_customer_state": lambda value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
-            "set_network_key_state": lambda value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
-            "set_last_scan_target_state": lambda value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
+            "set_current_customer_state": lambda *, value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
+            "set_network_key_state": lambda *, value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
+            "set_last_scan_target_state": lambda *, value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
         }
     )
 
