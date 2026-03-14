@@ -50,6 +50,18 @@ function updateLastScanResults(key, data) {
     lastScanResults[key] = data;
 }
 
+function getReportRequestContext() {
+    const target = document.getElementById('scan-target').value || lastScanTarget;
+    const customerOption = document.getElementById('current-customer').selectedOptions[0];
+    let customerName = 'Unknown';
+
+    if (customerOption) {
+        customerName = customerOption.textContent.split(' (')[0];
+    }
+
+    return { target, customerName };
+}
+
 function initializeReportGenerationUI(socket, deps) {
     reportSocket = socket;
     reportGetClientJobs = deps?.getClientJobs || window.getClientJobs || reportGetClientJobs;
@@ -71,27 +83,19 @@ function initializeReportGenerationUI(socket, deps) {
             return;
         }
 
-        const target = document.getElementById('scan-target').value || lastScanTarget;
+        const { target, customerName } = getReportRequestContext();
         if (!target) {
             showReportStatus('Please enter a target or run a scan first', 'error');
             return;
         }
 
-        const customerOption = document.getElementById('current-customer').selectedOptions[0];
-        let customerName = 'Unknown';
-
-         if (customerOption) {
-             customerName = customerOption.textContent.split(' (')[0];
-         }
-
         this.classList.add('card-pulsing');
         startReportTimer();
 
-        reportSocket.emit('generate_report', {
+        reportSocket.emit('generate_pdf_from_saved', {
             target: target,
             customer_name: customerName,
-            scan_results: lastScanResults,
-            chunked: false
+            max_days: 30
         });
     });
 
@@ -100,17 +104,10 @@ function initializeReportGenerationUI(socket, deps) {
             return;
         }
 
-        const target = document.getElementById('scan-target').value || lastScanTarget;
+        const { target, customerName } = getReportRequestContext();
         if (!target) {
             showReportStatus('Please enter a target or run a scan first', 'error');
             return;
-        }
-
-        const customerOption = document.getElementById('current-customer').selectedOptions[0];
-        let customerName = 'Unknown';
-
-        if (customerOption) {
-            customerName = customerOption.textContent.split(' (')[0];
         }
 
         this.classList.add('card-pulsing');
