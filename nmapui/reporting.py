@@ -150,6 +150,9 @@ def save_scan_metadata(
     """Save scan metadata to JSON file with duration tracking."""
     duration_seconds = None
     duration_formatted = None
+    customer_id = ""
+    if isinstance(current_customer, dict):
+        customer_id = str(current_customer.get("id", "") or "")
 
     if start_time and end_time:
         duration = end_time - start_time
@@ -161,6 +164,7 @@ def save_scan_metadata(
     metadata = {
         "schema_version": 1,
         "customer_name": customer_name,
+        "customer_id": customer_id,
         "target": target,
         "timestamp": datetime.now().isoformat(),
         "date": datetime.now().strftime("%Y-%m-%d"),
@@ -356,60 +360,94 @@ def get_most_recent_scan_xml(
     max_days=7,
 ):
     """Find the most recent scan XML file for a customer within max_days."""
-    customer = None
-    for candidate in customers:
-        if candidate.get("id") == customer_id:
-            customer = candidate
-            break
-
-    if not customer:
-        logger.warning("Customer not found for ID: %s", customer_id)
-        return None, None
-
-    customer_name = customer.get("name", "Unknown")
-    safe_customer_name = sanitize_customer_dir_name(customer_name)
-    search_dirs = [
-        scans_dir / safe_customer_name,
-        scans_dir / customer_name,
-        scans_dir / "Unknown_Network",
-    ]
+    customer = next(
+        (candidate for candidate in customers if candidate.get("id") == customer_id),
+        None,
+    )
+    customer_name = customer.get("name", "Unknown") if customer else "Unknown"
 
     cutoff_date = datetime.now() - timedelta(days=max_days)
     recent_scans = []
-
-    for customer_scans_dir in search_dirs:
-        if not customer_scans_dir.exists():
+    for metadata_file in scans_dir.glob("**/metadata.json"):
+        scan_dir = metadata_file.parent
+        xml_file = scan_dir / "scan.xml"
+        if not xml_file.exists():
             continue
-        for date_dir in customer_scans_dir.iterdir():
-            if not date_dir.is_dir():
+
+        try:
+            metadata = normalize_scan_metadata_document(
+                load_json_document(metadata_file, {})
+            )
+            scan_time_str = metadata.get("timestamp", "")
+            if not scan_time_str:
                 continue
-            for scan_dir in date_dir.iterdir():
-                if not scan_dir.is_dir():
-                    continue
 
-                metadata_file = scan_dir / "metadata.json"
-                xml_file = scan_dir / "scan.xml"
-                if not (metadata_file.exists() and xml_file.exists()):
-                    continue
+            metadata_customer_id = metadata.get("customer_id", "")
+            if not metadata_customer_id:
+                metadata_customer_id = str(
+                    metadata.get("customer_info", {}).get("id", "") or ""
+                )
 
-                try:
-                    metadata = normalize_scan_metadata_document(
-                        load_json_document(metadata_file, {})
-                    )
-                    scan_time_str = metadata.get("timestamp", "")
-                    if not scan_time_str:
+            if metadata_customer_id != customer_id:
+                continue
+
+            scan_time = datetime.fromisoformat(scan_time_str)
+            if scan_time >= cutoff_date:
+                recent_scans.append(
+                    {
+                        "xml_path": xml_file,
+                        "metadata": metadata,
+                        "scan_time": scan_time,
+                    }
+                )
+        except Exception as exc:
+            logger.warning("Failed to load metadata from %s: %s", metadata_file, exc)
+
+    if not recent_scans and customer:
+        safe_customer_name = sanitize_customer_dir_name(customer_name)
+        search_dirs = [
+            scans_dir / safe_customer_name,
+            scans_dir / customer_name,
+            scans_dir / "Unknown_Network",
+        ]
+
+        for customer_scans_dir in search_dirs:
+            if not customer_scans_dir.exists():
+                continue
+            for date_dir in customer_scans_dir.iterdir():
+                if not date_dir.is_dir():
+                    continue
+                for scan_dir in date_dir.iterdir():
+                    if not scan_dir.is_dir():
                         continue
-                    scan_time = datetime.fromisoformat(scan_time_str)
-                    if scan_time >= cutoff_date:
-                        recent_scans.append(
-                            {
-                                "xml_path": xml_file,
-                                "metadata": metadata,
-                                "scan_time": scan_time,
-                            }
+
+                    metadata_file = scan_dir / "metadata.json"
+                    xml_file = scan_dir / "scan.xml"
+                    if not (metadata_file.exists() and xml_file.exists()):
+                        continue
+
+                    try:
+                        metadata = normalize_scan_metadata_document(
+                            load_json_document(metadata_file, {})
                         )
-                except Exception as exc:
-                    logger.warning("Failed to load metadata from %s: %s", metadata_file, exc)
+                        scan_time_str = metadata.get("timestamp", "")
+                        if not scan_time_str:
+                            continue
+                        scan_time = datetime.fromisoformat(scan_time_str)
+                        if scan_time >= cutoff_date:
+                            recent_scans.append(
+                                {
+                                    "xml_path": xml_file,
+                                    "metadata": metadata,
+                                    "scan_time": scan_time,
+                                }
+                            )
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to load metadata from %s: %s",
+                            metadata_file,
+                            exc,
+                        )
 
     if not recent_scans:
         logger.info(

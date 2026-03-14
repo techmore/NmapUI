@@ -1,9 +1,13 @@
+import json
 import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
 
 from nmapui.reporting import (
     extract_scan_statistics,
+    get_most_recent_scan_xml,
     parse_scan_xml_for_assets,
     parse_vulners_script,
+    save_scan_metadata,
 )
 
 
@@ -84,3 +88,51 @@ def test_parse_scan_xml_for_assets_extracts_asset_data(tmp_path):
     assert assets[0]["hostname"] == "router.local"
     assert assets[0]["vendor"] == "Acme"
     assert assets[0]["ports"] == "80 (http)"
+
+
+def test_save_scan_metadata_persists_customer_id(tmp_path):
+    scan_dir = tmp_path / "scan"
+    scan_dir.mkdir()
+
+    save_scan_metadata(
+        scan_dir,
+        "Acme Customer",
+        "192.168.1.0/24",
+        {"xml": scan_dir / "scan.xml"},
+        network_key={"target": "192.168.1.0/24"},
+        current_customer={"id": "cust-123", "name": "Acme Customer"},
+        start_time=datetime.now() - timedelta(minutes=3),
+        end_time=datetime.now(),
+    )
+
+    metadata = json.loads((scan_dir / "metadata.json").read_text())
+
+    assert metadata["customer_id"] == "cust-123"
+    assert metadata["customer_name"] == "Acme Customer"
+
+
+def test_get_most_recent_scan_xml_prefers_customer_id_over_folder_name(tmp_path):
+    scans_dir = tmp_path / "data" / "scans"
+    renamed_customer_dir = scans_dir / "Renamed_Customer" / "2026-03-13" / "scan_010000_target"
+    renamed_customer_dir.mkdir(parents=True)
+    (renamed_customer_dir / "scan.xml").write_text("<nmaprun/>")
+    (renamed_customer_dir / "metadata.json").write_text(
+        """
+        {
+          "customer_id": "cust-123",
+          "customer_name": "Renamed Customer",
+          "timestamp": "2026-03-13T01:00:00"
+        }
+        """
+    )
+
+    xml_path, metadata = get_most_recent_scan_xml(
+        "cust-123",
+        customers=[{"id": "cust-123", "name": "Original Customer"}],
+        scans_dir=scans_dir,
+        sanitize_customer_dir_name=lambda value: value.replace(" ", "_"),
+        max_days=30,
+    )
+
+    assert xml_path == renamed_customer_dir / "scan.xml"
+    assert metadata["customer_id"] == "cust-123"
