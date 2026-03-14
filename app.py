@@ -93,6 +93,12 @@ from nmapui.scanning import (
     create_scan_folder,
     run_quick_auto_scan,
 )
+from nmapui.state import (
+    load_current_assignment as load_current_assignment_state,
+    merge_customer_metadata,
+    save_current_assignment as save_current_assignment_state,
+    save_customers_config as save_customers_config_state,
+)
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
     start_deep_scan as workflow_start_deep_scan,
@@ -885,53 +891,21 @@ def get_report_counts():
 
 
 def save_customers_config():
-    try:
-        customer_fingerprinter = get_customer_fingerprinter()
-        config = customer_fingerprinter.config or {}
-        config_data = {
-            "version": config.get("version", "1.0"),
-            "description": config.get(
-                "description", "Customer network fingerprinting database"
-            ),
-            "settings": customer_fingerprinter.settings,
-            "customers": customer_fingerprinter.customers,
-            "unknown_customer": customer_fingerprinter.unknown_customer,
-            "indexing": config.get("indexing", {}),
-        }
-
-        save_yaml_document(customer_fingerprinter.config_path, config_data)
-
-        logger.info(f"Customers config saved to {customer_fingerprinter.config_path}")
-
-    except Exception as e:
-        logger.error(f"Error saving customers config: {e}")
+    save_customers_config_state(
+        get_customer_fingerprinter=get_customer_fingerprinter,
+        save_yaml_document=save_yaml_document,
+        logger=logger,
+    )
 
 
 def save_current_assignment(sid: Optional[str] = None):
-    try:
-        assignment_data = {
-            "schema_version": 1,
-            "timestamp": datetime.now().isoformat(),
-            "customer": get_current_customer_state(sid),
-        }
-
-        assignment_path = CURRENT_ASSIGNMENT_FILE
-        save_json_document(assignment_path, assignment_data)
-
-        logger.info(f"Current assignment saved to {assignment_path}")
-
-    except Exception as e:
-        logger.error(f"Error saving current assignment: {e}")
-
-
-def merge_customer_metadata(customer_dict, saved_customer):
-    """Merge metadata from saved customer configuration into customer dictionary"""
-    if saved_customer and "metadata" in saved_customer:
-        if "metadata" not in customer_dict:
-            customer_dict["metadata"] = {}
-        # Merge all metadata fields, preserving any existing ones
-        customer_dict["metadata"].update(saved_customer["metadata"])
-    return customer_dict
+    save_current_assignment_state(
+        current_assignment_file=CURRENT_ASSIGNMENT_FILE,
+        get_current_customer_state=get_current_customer_state,
+        save_json_document=save_json_document,
+        logger=logger,
+        sid=sid,
+    )
 
 
 def register_runtime_modules(app, socketio):
@@ -1034,32 +1008,16 @@ app, socketio = create_application(__name__)
 
 def load_current_assignment():
     global current_customer
-    try:
-        assignment_path = CURRENT_ASSIGNMENT_FILE
-        if assignment_path.exists():
-            data = normalize_current_assignment_document(
-                load_json_document(assignment_path, {})
-            )
-            current_customer = data.get("customer", current_customer)
-
-            # Merge metadata from saved customer configuration
-            if current_customer.get("id"):
-                saved_customer = get_customer_fingerprinter().get_customer_by_id(
-                    current_customer["id"]
-                )
-                if saved_customer:
-                    current_customer = merge_customer_metadata(
-                        current_customer, saved_customer
-                    )
-
-            client_state_registry.set_default_customer(current_customer)
-
-            logger.info(
-                f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
-            )
-
-    except Exception as e:
-        logger.error(f"Error loading current assignment: {e}")
+    current_customer = load_current_assignment_state(
+        current_assignment_file=CURRENT_ASSIGNMENT_FILE,
+        current_customer=current_customer,
+        normalize_current_assignment_document=normalize_current_assignment_document,
+        load_json_document=load_json_document,
+        get_customer_fingerprinter=get_customer_fingerprinter,
+        merge_customer_metadata=merge_customer_metadata,
+        client_state_registry=client_state_registry,
+        logger=logger,
+    )
 
 
 DEFAULT_INTERFACE_CACHE = DefaultInterfaceCache()

@@ -223,6 +223,28 @@ def test_app_uses_extracted_networking_helpers():
     assert "def identify_gateway_firewall_targets(hosts, network_key):" in networking_source
 
 
+def test_app_uses_extracted_state_helpers():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    state_source = (ROOT / "nmapui" / "state.py").read_text()
+
+    assert "from nmapui.state import (" in app_source
+    assert "save_customers_config_state(" in app_source
+    assert "save_current_assignment_state(" in app_source
+    assert "load_current_assignment_state(" in app_source
+    assert 'def merge_customer_metadata(customer_dict, saved_customer):' not in app_source
+    assert 'def save_customers_config():' in app_source
+    assert 'def save_current_assignment(sid: Optional[str] = None):' in app_source
+    assert 'def load_current_assignment():' in app_source
+    assert 'def merge_customer_metadata(customer_dict, saved_customer):' in state_source
+    assert 'def save_customers_config(' in state_source
+    assert 'def save_current_assignment(' in state_source
+    assert 'def load_current_assignment(' in state_source
+
+
 def test_app_registers_extracted_core_routes():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
