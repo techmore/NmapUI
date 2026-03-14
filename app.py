@@ -632,11 +632,6 @@ def _scan_workflow_context(owner_sid: str):
         }
     )
 
-
-def start_deep_scan(targets, sid, is_gateway_phase=False):
-    return workflow_start_deep_scan(_scan_workflow_context(sid), targets, sid, is_gateway_phase=is_gateway_phase)
-
-
 def start_scan_task(sid, target):
     """Run scan workflow in a background task for a single client."""
     return workflow_start_scan_task(_scan_workflow_context(sid), sid, target)

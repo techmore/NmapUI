@@ -237,6 +237,7 @@ def test_app_uses_shared_workflow_context_builders():
     assert "return build_scan_workflow_context(" in app_source
     assert "build_report_workflow_context(" in app_source
     assert "def identify_gateway_firewall_targets(" not in app_source
+    assert "def start_deep_scan(" not in app_source
     assert '"cve_pattern":' not in app_source
     assert '"port_info_regex":' not in app_source
     assert '"ip_regex":' not in app_source
