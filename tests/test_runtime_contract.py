@@ -406,3 +406,20 @@ def test_template_loads_external_customer_ui_module():
     assert "function updateCustomerSelection(customer)" not in template
     assert "window.showCustomerForm = showCustomerForm;" in customer_module
     assert "window.populateCustomerDropdown = populateCustomerDropdown;" in customer_module
+
+
+def test_template_loads_external_auto_scan_ui_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    auto_scan_module = (ROOT / "static" / "js" / "auto_scan_ui.js").read_text()
+
+    assert '<script src="/static/js/auto_scan_ui.js"></script>' in template
+    assert "let autoScanEnabled = false;" not in template
+    assert "function showAutoScanTimeModal()" not in template
+    assert "function saveAutoScanTimes()" not in template
+    assert "function saveAndRunScan()" not in template
+    assert "initializeAutoScanUI(socket, {" in template
+    assert "window.initializeAutoScanUI = initializeAutoScanUI;" in auto_scan_module
