@@ -2,6 +2,7 @@ const clientJobs = {
     scan: { status: 'idle' },
     report: { status: 'idle' }
 };
+let scanRuntimeInitialized = false;
 
 function getClientJobs() {
     return clientJobs;
@@ -67,6 +68,10 @@ function clearAllHostStatusIndicators() {
 }
 
 function initializeScanRuntime(socket) {
+    if (scanRuntimeInitialized) {
+        return;
+    }
+    scanRuntimeInitialized = true;
     const showReportStatus = window.showReportStatus || (() => {});
     const updateReportProgress = window.updateReportProgress || (() => {});
     const dimExistingRows = window.dimExistingRows || (() => {});

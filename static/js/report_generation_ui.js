@@ -4,6 +4,8 @@ let reportTimerInterval = null;
 let reportStartTime = 0;
 let reportSocket = null;
 let reportGetClientJobs = () => ({ report: { status: 'idle' } });
+let reportGenerationInitialized = false;
+let reportActionPending = false;
 
 function startReportTimer() {
     const container = document.getElementById('scan-timer-container');
@@ -67,6 +69,10 @@ function getReportRequestContext() {
 }
 
 function initializeReportGenerationUI(socket, deps) {
+    if (reportGenerationInitialized) {
+        return;
+    }
+    reportGenerationInitialized = true;
     reportSocket = socket;
     reportGetClientJobs = deps?.getClientJobs || window.getClientJobs || reportGetClientJobs;
 
@@ -94,8 +100,25 @@ function initializeReportGenerationUI(socket, deps) {
         }
     });
 
+    socket.on('job_status', function(data) {
+        if (data?.job_type !== 'report') {
+            return;
+        }
+        if (data.status !== 'running' && data.status !== 'cancelling') {
+            reportActionPending = false;
+        }
+    });
+
+    socket.on('report_complete', function() {
+        reportActionPending = false;
+    });
+
+    socket.on('report_error', function() {
+        reportActionPending = false;
+    });
+
     document.getElementById('generate-report-btn').addEventListener('click', function() {
-        if (reportGetClientJobs().report.status === 'running') {
+        if (reportActionPending || reportGetClientJobs().report.status === 'running') {
             return;
         }
 
@@ -105,6 +128,7 @@ function initializeReportGenerationUI(socket, deps) {
             return;
         }
 
+        reportActionPending = true;
         this.classList.add('card-pulsing');
         startReportTimer();
 
@@ -117,7 +141,7 @@ function initializeReportGenerationUI(socket, deps) {
     });
 
     document.getElementById('chunked-scan-btn')?.addEventListener('click', function() {
-        if (reportGetClientJobs().report.status === 'running') {
+        if (reportActionPending || reportGetClientJobs().report.status === 'running') {
             return;
         }
 
@@ -127,6 +151,7 @@ function initializeReportGenerationUI(socket, deps) {
             return;
         }
 
+        reportActionPending = true;
         this.classList.add('card-pulsing');
         startReportTimer();
 

@@ -592,11 +592,18 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "reportSocket.emit('generate_report'" in report_generation_module
     assert "chunked: false" in report_generation_module
     assert "chunked: true" in report_generation_module
+    assert "let reportGenerationInitialized = false;" in report_generation_module
+    assert "let reportActionPending = false;" in report_generation_module
+    assert "if (reportGenerationInitialized) {" in report_generation_module
+    assert "reportActionPending = true;" in report_generation_module
     assert "socket.on('client_state_snapshot'" in report_generation_module
+    assert "socket.on('job_status', function(data) {" in report_generation_module
     assert "document.getElementById('generate-report-btn').addEventListener('click'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert "socket.on('scan_results'" in report_generation_module
     assert "function getLastScanTarget()" in report_generation_module
+    assert "let scanRuntimeInitialized = false;" in scan_runtime_module
+    assert "if (scanRuntimeInitialized) {" in scan_runtime_module
     assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
     assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module
