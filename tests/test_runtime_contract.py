@@ -237,9 +237,10 @@ def test_template_uses_dom_helpers_for_asset_modal_and_history_rendering():
         cwd=ROOT,
         text=True,
     )
+    asset_module = (ROOT / "static" / "js" / "asset_details_modal.js").read_text()
 
-    assert "function renderAssetServices(asset)" in template
-    assert "function renderAssetVulnerabilities(asset)" in template
+    assert "function renderAssetServices(asset)" in asset_module
+    assert "function renderAssetVulnerabilities(asset)" in asset_module
     assert "function renderHistoryState(message, isError = false)" in template
     assert "function renderHistoryList(scans)" in template
     assert "serviceDiv.innerHTML =" not in template
@@ -335,3 +336,20 @@ def test_template_loads_external_report_status_module():
     assert "function showReportStatus(message, type)" not in template
     assert "window.updateReportProgress = updateReportProgress;" in report_module
     assert "window.showReportStatus = showReportStatus;" in report_module
+
+
+def test_template_loads_external_asset_details_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    asset_module = (ROOT / "static" / "js" / "asset_details_modal.js").read_text()
+
+    assert '<script src="/static/js/asset_details_modal.js"></script>' in template
+    assert "function renderAssetServices(asset)" not in template
+    assert "function renderAssetVulnerabilities(asset)" not in template
+    assert "function showAssetDetailsModal(asset)" not in template
+    assert "function closeAssetDetailsModal()" not in template
+    assert "window.showAssetDetailsModal = showAssetDetailsModal;" in asset_module
+    assert "window.closeAssetDetailsModal = closeAssetDetailsModal;" in asset_module
