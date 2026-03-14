@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from flask_socketio import emit
+from nmapui.auth import require_socket_auth
 
 
 def register_customer_handlers(socketio, deps):
@@ -20,6 +21,7 @@ def register_customer_handlers(socketio, deps):
     logger = deps["logger"]
 
     @socketio.on("get_customer_info")
+    @require_socket_auth()
     def get_customer_info_event():
         current_customer = get_current_customer()
         if not current_customer.get("id") and not current_customer.get("manual_assignment"):
@@ -38,6 +40,7 @@ def register_customer_handlers(socketio, deps):
         emit("customer_info", current_customer)
 
     @socketio.on("search_scan_history")
+    @require_socket_auth()
     def search_scan_history_event(data):
         customer_id = data.get("customer_id")
         limit = data.get("limit", 50)
@@ -48,6 +51,7 @@ def register_customer_handlers(socketio, deps):
             emit("scan_error", f"Search failed: {str(exc)}")
 
     @socketio.on("get_network_statistics")
+    @require_socket_auth()
     def get_network_statistics_event():
         try:
             history = customer_fingerprinter.get_scan_history(limit=1000)
@@ -88,6 +92,7 @@ def register_customer_handlers(socketio, deps):
             emit("scan_error", f"Statistics failed: {str(exc)}")
 
     @socketio.on("add_customer")
+    @require_socket_auth()
     def add_customer_event(data):
         try:
             customer_data = {
@@ -161,6 +166,7 @@ def register_customer_handlers(socketio, deps):
             emit("customer_error", f"Failed to add customer: {str(exc)}")
 
     @socketio.on("assign_customer")
+    @require_socket_auth()
     def assign_customer_event(data):
         try:
             customer_id = data.get("customer_id", "").strip()
@@ -204,6 +210,7 @@ def register_customer_handlers(socketio, deps):
             emit("customer_error", f"Failed to assign customer: {str(exc)}")
 
     @socketio.on("get_customers")
+    @require_socket_auth()
     def get_customers_event():
         try:
             customers = customer_fingerprinter.customers + [customer_fingerprinter.unknown_customer]
@@ -214,6 +221,7 @@ def register_customer_handlers(socketio, deps):
             emit("customer_error", f"Failed to get customers: {str(exc)}")
 
     @socketio.on("delete_customer")
+    @require_socket_auth()
     def delete_customer_event(data):
         try:
             customer_id = data.get("customer_id", "").strip()
@@ -244,6 +252,7 @@ def register_customer_handlers(socketio, deps):
             emit("customer_error", f"Failed to delete customer: {str(exc)}")
 
     @socketio.on("assign_report_to_customer")
+    @require_socket_auth()
     def assign_report_to_customer_event(data):
         try:
             report_path = data.get("report_path", "").strip()
@@ -309,6 +318,7 @@ def register_customer_handlers(socketio, deps):
             emit("customer_error", f"Failed to assign report: {str(exc)}")
 
     @socketio.on("get_customer_traceroutes")
+    @require_socket_auth()
     def get_customer_traceroutes_event(data):
         try:
             customer_id = data.get("customer_id", "").strip()
@@ -329,6 +339,7 @@ def register_customer_handlers(socketio, deps):
             emit("customer_error", f"Failed to get traceroutes: {str(exc)}")
 
     @socketio.on("add_labeled_public_ip")
+    @require_socket_auth()
     def add_labeled_public_ip_event(data):
         try:
             customer_id = data.get("customer_id", "").strip()
