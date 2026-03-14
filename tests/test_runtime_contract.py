@@ -86,6 +86,20 @@ def test_template_uses_shared_scan_display_modules():
     assert "window.showScanSummaryBanner = showScanSummaryBanner;" in banner_source
 
 
+def test_template_uses_shared_customer_ui_module():
+    html = (ROOT / "templates" / "index.html").read_text()
+    customer_source = (ROOT / "static" / "js" / "customer_ui.js").read_text()
+
+    assert "initializeCustomerUI(socket);" in html
+    assert "function showCustomerForm()" not in html
+    assert "function addCustomer()" not in html
+    assert "socket.on('customer_added'" not in html
+    assert "socket.on('customer_identified'" not in html
+    assert "window.initializeCustomerUI = initializeCustomerUI;" in customer_source
+    assert "window.addCustomer = () => {" in customer_source
+    assert "window.assignCustomer = () => {" in customer_source
+
+
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 

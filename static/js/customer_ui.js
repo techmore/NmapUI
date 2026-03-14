@@ -141,6 +141,106 @@ function displayCustomerList(customers) {
     showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
 }
 
+function addCustomer(socket) {
+    const customerData = {
+        name: document.getElementById('cust-name').value,
+        id: document.getElementById('cust-id').value,
+        description: document.getElementById('cust-description').value,
+        location: document.getElementById('cust-location').value,
+        connection_type: document.getElementById('cust-connection-type').value,
+        gateway_pattern: document.getElementById('cust-gateway').value,
+        exit_pattern: document.getElementById('cust-exit-pattern').value,
+        hop_count: document.getElementById('cust-hop-count').value,
+        private_ranges: document.getElementById('cust-private-ranges').value,
+        confidence: 0.7,
+    };
+
+    document.getElementById('cust-name').value = '';
+    document.getElementById('cust-id').value = '';
+    document.getElementById('cust-description').value = '';
+    document.getElementById('cust-location').value = '';
+    document.getElementById('cust-gateway').value = '';
+    document.getElementById('cust-exit-pattern').value = '';
+    document.getElementById('cust-hop-count').value = '';
+    document.getElementById('cust-private-ranges').value = '';
+
+    hideCustomerForm();
+    socket.emit('add_customer', customerData);
+}
+
+function assignCustomer(socket) {
+    const dropdown = document.getElementById('current-customer');
+    const selectedId = dropdown.value;
+    const selectedOption = dropdown.options[dropdown.selectedIndex];
+    const selectedName = selectedOption?.textContent || '';
+
+    if (!selectedId) {
+        showCustomerMessage('Please select a customer to assign', 'error');
+        return;
+    }
+
+    socket.emit('assign_customer', {
+        customer_id: selectedId,
+        customer_name: selectedName.split(' (')[0],
+    });
+}
+
+function showCustomerList(socket) {
+    socket.emit('get_customers');
+}
+
+function initializeCustomerUI(socket) {
+    socket.on('customer_added', data => {
+        if (data.success) {
+            showCustomerMessage(data.message, 'success');
+            socket.emit('get_customers');
+        } else {
+            showCustomerMessage('Failed to add customer', 'error');
+        }
+    });
+
+    socket.on('customer_assigned', data => {
+        if (data.success) {
+            showCustomerMessage(data.message, 'success');
+            updateDropdownSelection(data.customer.id, data.customer.name);
+        } else {
+            showCustomerMessage('Failed to assign customer', 'error');
+        }
+    });
+
+    socket.on('customer_identified', data => {
+        console.log('Customer identified:', data);
+        if (data.customer && data.customer.id) {
+            window.currentMatchedCustomerId = String(data.customer.id);
+            updateDropdownSelection(data.customer.id, data.customer.name);
+
+            if (data.customer.confidence !== undefined) {
+                console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
+            }
+
+            if (data.customer.id !== 'unknown') {
+                socket.emit('check_resumable_scan', {
+                    customer_id: data.customer.id,
+                    max_days: 7,
+                });
+            }
+        }
+    });
+
+    socket.on('customer_deleted', data => {
+        if (data.success) {
+            showCustomerMessage(data.message, 'success');
+            socket.emit('get_customers');
+        } else {
+            showCustomerMessage('Failed to delete customer', 'error');
+        }
+    });
+
+    socket.on('customer_error', message => {
+        showCustomerMessage(message, 'error');
+    });
+}
+
 window.showCustomerForm = showCustomerForm;
 window.hideCustomerForm = hideCustomerForm;
 window.showCustomerMessage = showCustomerMessage;
@@ -148,3 +248,19 @@ window.populateCustomerDropdown = populateCustomerDropdown;
 window.updateDropdownSelection = updateDropdownSelection;
 window.updateCustomerSelection = updateCustomerSelection;
 window.displayCustomerList = displayCustomerList;
+window.initializeCustomerUI = initializeCustomerUI;
+window.addCustomer = () => {
+    if (window.socket) {
+        addCustomer(window.socket);
+    }
+};
+window.assignCustomer = () => {
+    if (window.socket) {
+        assignCustomer(window.socket);
+    }
+};
+window.showCustomerList = () => {
+    if (window.socket) {
+        showCustomerList(window.socket);
+    }
+};
