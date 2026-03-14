@@ -23,7 +23,7 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
         else:
             safe_emit(event, data)
 
-    state = get_client_state(sid)
+    state = get_client_state(sid=sid)
     active_network_key = dict(state["network_key"])
     active_customer = dict(state["current_customer"])
 
@@ -99,7 +99,7 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
             logger.warning("Could not detect public IP: %s", exc)
             active_network_key["public_ip"] = None
 
-        set_network_key_state(active_network_key, sid)
+        set_network_key_state(value=active_network_key, sid=sid)
 
         logger.info(
             "Traceroute complete: %s hops, %s private, %s public",
@@ -155,7 +155,7 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
             }
             confidence = active_customer.get("confidence", 1.0)
 
-        set_current_customer_state(active_customer, sid)
+        set_current_customer_state(value=active_customer, sid=sid)
         fingerprinter = get_customer_fingerprinter()
         fingerprinter.save_scan_result(active_network_key, save_customer, confidence)
         fingerprinter.save_traceroute_to_history(
@@ -167,7 +167,7 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
         emit_customer_event(
             "customer_identified",
             {
-                "customer": get_current_customer_state(sid),
+                "customer": get_current_customer_state(sid=sid),
                 "match_method": getattr(
                     fingerprinter, "last_match_method", "unknown"
                 ),
@@ -194,14 +194,14 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
     except subprocess.TimeoutExpired:
         logger.error("Traceroute timed out")
         active_network_key["error"] = "Traceroute timed out"
-        set_network_key_state(active_network_key, sid)
+        set_network_key_state(value=active_network_key, sid=sid)
         emit_customer_event(
             "customer_identification_error", {"error": "Traceroute timed out"}
         )
     except Exception as exc:
         logger.error("Traceroute error: %s", exc)
         active_network_key["error"] = str(exc)
-        set_network_key_state(active_network_key, sid)
+        set_network_key_state(value=active_network_key, sid=sid)
         emit_customer_event("customer_identification_error", {"error": str(exc)})
 
     return active_network_key

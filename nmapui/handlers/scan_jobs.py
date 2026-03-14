@@ -36,7 +36,7 @@ def register_scan_job_handlers(socketio, deps):
             emit_job_status(request.sid, "scan")
             return
 
-        set_last_scan_target_state(target, request.sid)
+        set_last_scan_target_state(value=target, sid=request.sid)
         rate_limiter.record_scan()
         emit_job_status(request.sid, "scan")
         socketio.start_background_task(start_scan_task, request.sid, target)

@@ -284,7 +284,7 @@ def generate_report_task(context, sid, data):
     save_scan_metadata = context["save_scan_metadata"]
     get_client_state = context.get("get_client_state")
     if get_client_state is not None:
-        client_state = get_client_state(sid)
+        client_state = get_client_state(sid=sid)
         network_key = client_state["network_key"]
         current_customer = client_state["current_customer"]
     else:

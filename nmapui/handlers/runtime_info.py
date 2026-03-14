@@ -18,7 +18,7 @@ def register_runtime_info_handlers(socketio, deps):
 
     @socketio.on("get_network_key")
     def get_network_key_event():
-        client_network_key = get_client_state(request.sid)["network_key"]
+        client_network_key = get_client_state(sid=request.sid)["network_key"]
         if client_network_key.get("total_hops", 0) == 0:
             logger.info("Network key empty for %s, running traceroute...", request.sid)
             client_network_key = run_traceroute("1.1.1.1", sid=request.sid)
