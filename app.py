@@ -23,6 +23,12 @@ from nmapui.app_runtime import (
     start_auto_scan_thread as start_auto_scan_thread_runtime,
     startup_checks as startup_checks_runtime,
 )
+from nmapui.app_state_runtime import (
+    get_report_counts as get_report_counts_runtime,
+    load_current_assignment as load_current_assignment_runtime,
+    save_current_assignment as save_current_assignment_runtime,
+    save_customers_config as save_customers_config_runtime,
+)
 from nmapui.events import (
     emit_job_status as nmapui_emit_job_status,
     emit_to_client as nmapui_emit_to_client,
@@ -76,13 +82,7 @@ from nmapui.runtime import (
 )
 from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
-from nmapui.state import (
-    get_report_counts as get_report_counts_impl,
-    load_current_assignment as load_current_assignment_impl,
-    merge_customer_metadata,
-    save_current_assignment as save_current_assignment_impl,
-    save_customers_config as save_customers_config_impl,
-)
+from nmapui.state import merge_customer_metadata
 from nmapui.tooling import ToolVersionRegistry
 from nmapui.runtime_state import (
     get_client_state as get_client_state_impl,
@@ -404,27 +404,27 @@ def run_traceroute(target="1.1.1.1"):
 
 
 def get_report_counts():
-    return get_report_counts_impl(
-        SCANS_DIR,
-        load_json_document,
-        normalize_scan_metadata_document,
+    return get_report_counts_runtime(
+        scans_dir=SCANS_DIR,
+        load_json_document=load_json_document,
+        normalize_scan_metadata_document=normalize_scan_metadata_document,
     )
 
 
 def save_customers_config():
-    save_customers_config_impl(
-        lambda: customer_fingerprinter,
-        save_yaml_document,
-        logger,
+    save_customers_config_runtime(
+        get_customer_fingerprinter=lambda: customer_fingerprinter,
+        save_yaml_document=save_yaml_document,
+        logger=logger,
     )
 
 
 def save_current_assignment(sid=None):
-    save_current_assignment_impl(
-        CURRENT_ASSIGNMENT_FILE,
-        get_current_customer_state,
-        save_json_document,
-        logger,
+    save_current_assignment_runtime(
+        current_assignment_file=CURRENT_ASSIGNMENT_FILE,
+        get_current_customer_state=get_current_customer_state,
+        save_json_document=save_json_document,
+        logger=logger,
         sid=sid,
     )
 
@@ -448,15 +448,15 @@ register_customer_handlers(
 
 def load_current_assignment():
     global current_customer
-    current_customer = load_current_assignment_impl(
-        CURRENT_ASSIGNMENT_FILE,
-        current_customer,
-        normalize_current_assignment_document,
-        load_json_document,
-        lambda: customer_fingerprinter,
-        merge_customer_metadata,
-        client_state_registry,
-        logger,
+    current_customer = load_current_assignment_runtime(
+        current_assignment_file=CURRENT_ASSIGNMENT_FILE,
+        current_customer=current_customer,
+        normalize_current_assignment_document=normalize_current_assignment_document,
+        load_json_document=load_json_document,
+        get_customer_fingerprinter=lambda: customer_fingerprinter,
+        merge_customer_metadata=merge_customer_metadata,
+        client_state_registry=client_state_registry,
+        logger=logger,
     )
 
 

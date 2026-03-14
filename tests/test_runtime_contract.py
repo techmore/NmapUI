@@ -142,16 +142,18 @@ def test_app_runtime_uses_bootstrap_origin_and_server_policy():
 
 def test_app_delegates_state_persistence_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
+    app_state_runtime_source = (ROOT / "nmapui" / "app_state_runtime.py").read_text()
 
-    assert "nmapui.state" in app_source
-    assert "get_report_counts as get_report_counts_impl" in app_source
-    assert "load_current_assignment as load_current_assignment_impl" in app_source
-    assert "save_current_assignment as save_current_assignment_impl" in app_source
-    assert "save_customers_config as save_customers_config_impl" in app_source
-    assert "return get_report_counts_impl(" in app_source
-    assert "save_current_assignment_impl(" in app_source
-    assert "save_customers_config_impl(" in app_source
-    assert "current_customer = load_current_assignment_impl(" in app_source
+    assert "from nmapui.app_state_runtime import (" in app_source
+    assert "get_report_counts as get_report_counts_runtime" in app_source
+    assert "load_current_assignment as load_current_assignment_runtime" in app_source
+    assert "save_current_assignment as save_current_assignment_runtime" in app_source
+    assert "save_customers_config as save_customers_config_runtime" in app_source
+    assert "return get_report_counts_runtime(" in app_source
+    assert "save_current_assignment_runtime(" in app_source
+    assert "save_customers_config_runtime(" in app_source
+    assert "current_customer = load_current_assignment_runtime(" in app_source
+    assert "return get_report_counts_impl(" in app_state_runtime_source
 
 
 def test_app_delegates_runtime_info_events_to_handler_module():
