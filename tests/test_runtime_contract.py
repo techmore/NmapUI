@@ -52,6 +52,18 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
     assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
 
 
+def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
+    pdf_stylesheet = (ROOT / "nmap-pdf-olive-legacy.xsl").read_text()
+    web_stylesheet = (ROOT / "nmap-modern.xsl").read_text()
+
+    assert "cdn.datatables.net" not in pdf_stylesheet
+    assert "code.jquery.com" not in pdf_stylesheet
+    assert "$('#table-services').DataTable" not in pdf_stylesheet
+    assert "@media print" in pdf_stylesheet
+    assert "cdn.datatables.net" in web_stylesheet
+    assert "$('#table-services').DataTable" in web_stylesheet
+
+
 def test_deploy_script_uses_portable_python_timeout_smoke_test():
     deploy_script = (ROOT / "deploy.sh").read_text()
 

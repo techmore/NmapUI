@@ -72,19 +72,6 @@ Updated: 2026
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
         <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
         
-        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css"/>
-        <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css"/>
-        
-        <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs" crossorigin="anonymous"></script>
-        <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
-        <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
-        <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
-        <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.colVis.min.js"></script>
-        <script src="https://cdn.datatables.net/plug-ins/1.13.7/sorting/ip-address.js"></script>
-        
         <script>
           tailwind.config = {
             theme: {
@@ -1325,100 +1312,6 @@ Updated: 2026
         </footer>
 
         <!-- Scripts -->
-        <script>
-          function highlight() {
-            $("#table-services").dataTable().fnDestroy();
-            let keywords = document.getElementById('keyword-input').value.split(',');
-            let content = document.getElementById('table-services').innerHTML;
-            document.getElementById('table-services').innerHTML = transformContent(content, keywords);
-            initServicesTable();
-          }
-
-          function transformContent(content, keywords) {
-            let temp = content;
-            keywords.forEach(keyword => {
-              temp = temp.replace(new RegExp(keyword.trim(), 'ig'), 
-                (match) => `<span class="highlight-keyword">${match}</span>`);
-            });
-            return temp;
-          }
-
-          function toggleCollapse(id) {
-            const content = document.getElementById('content-' + id);
-            const header = document.getElementById('onlinehosts-' + id);
-            const chevron = header.querySelector('.chevron');
-            
-            if (content.style.display === 'none') {
-              content.style.display = 'block';
-              chevron.classList.remove('collapsed');
-            } else {
-              content.style.display = 'none';
-              chevron.classList.add('collapsed');
-            }
-          }
-
-          function initServicesTable() {
-            $('#table-services').DataTable({
-              lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-              order: [[0, 'asc']],
-              columnDefs: [
-                { targets: [1], type: 'ip-address' }
-              ],
-              dom: 'lBfrtip',
-              stateSave: true,
-              buttons: ['copy', 'csv', 'excel', 'pdf']
-            });
-          }
-
-          $(document).ready(function() {
-            // Initialize all tables
-            $('#table-overview').DataTable({
-              lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
-              columnDefs: [{ targets: [1], type: 'ip-address' }]
-            });
-
-            initServicesTable();
-
-            $('#web-services').DataTable({
-              lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-              order: [[0, 'asc']],
-              columnDefs: [{ targets: [1], type: 'ip-address' }],
-              dom: 'lBfrtip',
-              stateSave: true,
-              buttons: ['copy', 'csv', 'excel', 'pdf']
-            });
-
-            $('#table-product-versions').DataTable({
-              lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-              order: [[0, 'asc'], [1, 'asc']],
-              dom: 'lBfrtip',
-              stateSave: true,
-              buttons: ['copy', 'csv', 'excel', 'pdf']
-            });
-
-            if ($('#table-ssh-auth').length) {
-              $('#table-ssh-auth').DataTable({
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-                order: [[0, 'asc'], [2, 'asc']],
-                columnDefs: [{ targets: 1, type: 'ip-address' }],
-                dom: 'lBfrtip',
-                stateSave: true,
-                buttons: ['copy', 'csv', 'excel', 'pdf']
-              });
-            }
-
-            // Smooth scrolling for anchor links
-            $("a[href^='#']").click(function(e) {
-              e.preventDefault();
-              const target = $(this.hash);
-              if (target.length) {
-                $('html, body').animate({
-                  scrollTop: target.offset().top - 80
-                }, 500);
-              }
-            });
-          });
-        </script>
       </body>
     </html>
   </xsl:template>
