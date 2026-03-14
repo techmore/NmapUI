@@ -109,6 +109,7 @@ def normalize_scan_metadata_document(document: Any) -> dict[str, Any]:
     failure_stage = document.get("failure_stage")
     failure_error = document.get("failure_error")
     completed_successfully = document.get("completed_successfully")
+    diff_summary = document.get("diff_summary")
     return {
         "schema_version": int(
             document.get("schema_version", SCAN_METADATA_SCHEMA_VERSION)
@@ -132,6 +133,7 @@ def normalize_scan_metadata_document(document: Any) -> dict[str, Any]:
         "completed_successfully": completed_successfully
         if isinstance(completed_successfully, bool)
         else None,
+        "diff_summary": diff_summary if isinstance(diff_summary, dict) else None,
     }
 
 

@@ -8,10 +8,14 @@ import subprocess
 import xml.etree.ElementTree as ET
 
 from persistence import (
+    get_scan_metadata_index_path,
     iter_scan_metadata_documents,
     load_json_document,
+    load_scan_metadata_index,
     normalize_scan_metadata_document,
+    normalize_scan_metadata_index_document,
     save_json_document,
+    save_scan_metadata_index,
     upsert_scan_metadata_index_entry,
 )
 
@@ -179,6 +183,95 @@ def build_report_diff_summary(current_metadata, current_xml_path, *, scans_dir):
         "baseline_path": previous.get("path"),
         "baseline_timestamp": previous.get("timestamp"),
     }
+
+
+def refresh_persisted_diff_summaries(
+    scans_dir,
+    *,
+    customer_id,
+    target,
+    logger=logger,
+):
+    if not customer_id or not target:
+        return
+
+    index_path = get_scan_metadata_index_path(scans_dir)
+    if not index_path.exists():
+        return
+
+    index_document = load_scan_metadata_index(
+        scans_dir,
+        load_json_document,
+        normalize_scan_metadata_index_document,
+    )
+    entries = index_document.get("entries", [])
+    relevant_entries = [
+        entry
+        for entry in entries
+        if str(entry.get("metadata", {}).get("customer_id", "") or "") == str(customer_id)
+        and str(entry.get("metadata", {}).get("target", "") or "") == str(target)
+    ]
+    relevant_entries.sort(
+        key=lambda item: str(item.get("metadata", {}).get("timestamp", "") or "")
+    )
+
+    previous_entry = None
+    updated_by_path = {}
+    for entry in relevant_entries:
+        metadata = normalize_scan_metadata_document(entry.get("metadata", {}))
+        current_path = str(entry.get("path", "") or "")
+        current_xml_path = scans_dir / current_path / "scan.xml"
+        diff_summary = None
+
+        if (
+            previous_entry is not None
+            and current_xml_path.exists()
+            and (scans_dir / str(previous_entry.get("path", "")) / "scan.xml").exists()
+        ):
+            previous_xml_path = scans_dir / str(previous_entry.get("path", "")) / "scan.xml"
+            try:
+                summary = summarize_asset_differences(
+                    parse_scan_xml_for_assets(current_xml_path),
+                    parse_scan_xml_for_assets(previous_xml_path),
+                )
+                if summary.get("has_changes"):
+                    diff_summary = {
+                        **summary,
+                        "baseline_path": previous_entry.get("path"),
+                        "baseline_timestamp": previous_entry.get("metadata", {}).get("timestamp", ""),
+                    }
+            except Exception as exc:
+                logger.error(
+                    "Error refreshing persisted diff summary for %s: %s",
+                    current_path,
+                    exc,
+                )
+
+        if diff_summary:
+            metadata["diff_summary"] = diff_summary
+        else:
+            metadata["diff_summary"] = None
+
+        metadata_path = scans_dir / current_path / "metadata.json"
+        if metadata_path.exists():
+            save_json_document(metadata_path, normalize_scan_metadata_document(metadata))
+
+        updated_entry = {
+            **entry,
+            "metadata": normalize_scan_metadata_document(metadata),
+        }
+        updated_by_path[current_path] = updated_entry
+        previous_entry = updated_entry
+
+    if not updated_by_path:
+        return
+
+    merged_entries = []
+    for entry in entries:
+        path = str(entry.get("path", "") or "")
+        merged_entries.append(updated_by_path.get(path, entry))
+
+    save_scan_metadata_index(scans_dir, {"entries": merged_entries})
 
 
 def render_report_diff_summary_html(diff_summary):
@@ -561,10 +654,16 @@ def save_scan_metadata(
     save_json_document(
         scan_dir / "metadata.json", normalize_scan_metadata_document(metadata)
     )
+    scans_dir = _get_scans_dir_for_scan(scan_dir)
     upsert_scan_metadata_index_entry(
-        _get_scans_dir_for_scan(scan_dir),
+        scans_dir,
         scan_dir,
         metadata,
+    )
+    refresh_persisted_diff_summaries(
+        scans_dir,
+        customer_id=customer_id,
+        target=target,
     )
 
 
@@ -604,10 +703,16 @@ def mark_scan_failure(
     }
 
     save_json_document(metadata_path, metadata)
+    scans_dir = _get_scans_dir_for_scan(scan_dir)
     upsert_scan_metadata_index_entry(
-        _get_scans_dir_for_scan(scan_dir),
+        scans_dir,
         scan_dir,
         metadata,
+    )
+    refresh_persisted_diff_summaries(
+        scans_dir,
+        customer_id=metadata.get("customer_id"),
+        target=metadata.get("target"),
     )
 
 

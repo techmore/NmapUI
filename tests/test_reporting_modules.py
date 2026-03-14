@@ -123,6 +123,78 @@ def test_save_scan_metadata_persists_customer_id(tmp_path):
     assert index["entries"][0]["metadata"]["customer_id"] == "cust-123"
 
 
+def test_save_scan_metadata_persists_diff_summary_for_followup_scan(tmp_path):
+    scans_root = tmp_path / "data" / "scans"
+    older = scans_root / "Acme" / "2026-03-13" / "scan_010000_target"
+    newer = scans_root / "Acme" / "2026-03-14" / "scan_020000_target"
+    older.mkdir(parents=True)
+    newer.mkdir(parents=True)
+    (older / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.10" addrtype="ipv4"/>
+            <ports>
+              <port portid="80"><state state="open"/><service name="http"/></port>
+            </ports>
+          </host>
+        </nmaprun>
+        """
+    )
+    (newer / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.10" addrtype="ipv4"/>
+            <ports>
+              <port portid="443"><state state="open"/><service name="https"/></port>
+            </ports>
+          </host>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.20" addrtype="ipv4"/>
+          </host>
+        </nmaprun>
+        """
+    )
+
+    save_scan_metadata(
+        older,
+        "Acme Customer",
+        "10.0.0.0/24",
+        {"xml": older / "scan.xml"},
+        network_key={"target": "10.0.0.0/24"},
+        current_customer={"id": "cust-123", "name": "Acme Customer"},
+        start_time=datetime.now() - timedelta(minutes=4),
+        end_time=datetime.now() - timedelta(minutes=3),
+    )
+    save_scan_metadata(
+        newer,
+        "Acme Customer",
+        "10.0.0.0/24",
+        {"xml": newer / "scan.xml"},
+        network_key={"target": "10.0.0.0/24"},
+        current_customer={"id": "cust-123", "name": "Acme Customer"},
+        start_time=datetime.now() - timedelta(minutes=2),
+        end_time=datetime.now(),
+    )
+
+    newer_metadata = json.loads((newer / "metadata.json").read_text())
+    index = json.loads((scans_root / ".scan_metadata_index.json").read_text())
+    newer_entry = next(
+        entry
+        for entry in index["entries"]
+        if entry["path"] == "Acme/2026-03-14/scan_020000_target"
+    )
+
+    assert newer_metadata["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+    assert newer_metadata["diff_summary"]["added_hosts"] == ["10.0.0.20"]
+    assert newer_metadata["diff_summary"]["new_ports"] == ["443 (https)"]
+    assert newer_entry["metadata"]["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+
+
 def test_get_most_recent_scan_xml_prefers_customer_id_over_folder_name(tmp_path):
     scans_dir = tmp_path / "data" / "scans"
     renamed_customer_dir = scans_dir / "Renamed_Customer" / "2026-03-13" / "scan_010000_target"

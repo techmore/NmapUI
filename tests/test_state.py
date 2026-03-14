@@ -142,6 +142,7 @@ def test_iter_scan_metadata_documents_prefers_existing_index(tmp_path):
                 "failure_stage": "",
                 "failure_error": "",
                 "completed_successfully": None,
+                "diff_summary": None,
             },
         )
     ]

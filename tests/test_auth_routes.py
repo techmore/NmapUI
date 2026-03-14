@@ -281,6 +281,74 @@ def test_delete_scan_removes_index_entry(tmp_path, monkeypatch):
     assert __import__("json").loads(index_path.read_text())["entries"] == []
 
 
+def test_delete_scan_refreshes_successor_diff_summary(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    oldest = scans_dir / "Acme" / "2026-03-12" / "scan_000000_target"
+    middle = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    newest = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    oldest.mkdir(parents=True, exist_ok=True)
+    middle.mkdir(parents=True, exist_ok=True)
+    newest.mkdir(parents=True, exist_ok=True)
+
+    (oldest / "metadata.json").write_text(
+        '{"timestamp":"2026-03-12T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24"}'
+    )
+    (middle / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24"}'
+    )
+    (newest / "metadata.json").write_text(
+        '{"timestamp":"2026-03-14T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24","diff_summary":{"has_changes":true,"baseline_path":"Acme/2026-03-13/scan_010000_target","baseline_timestamp":"2026-03-13T01:00:00","added_hosts":["10.0.0.30"],"removed_hosts":[],"changed_hosts":[],"new_ports":[],"removed_ports":[],"new_vulnerabilities":[],"removed_vulnerabilities":[]}}'
+    )
+
+    (oldest / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host><status state="up"/><address addr="10.0.0.10" addrtype="ipv4"/></host>
+        </nmaprun>
+        """
+    )
+    (middle / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host><status state="up"/><address addr="10.0.0.20" addrtype="ipv4"/></host>
+        </nmaprun>
+        """
+    )
+    (newest / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host><status state="up"/><address addr="10.0.0.20" addrtype="ipv4"/></host>
+          <host><status state="up"/><address addr="10.0.0.30" addrtype="ipv4"/></host>
+        </nmaprun>
+        """
+    )
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+        },
+    )
+    client = app.test_client()
+
+    client.get("/api/scans", headers=basic_auth_header())
+    delete_response = client.delete(
+        "/api/scans/Acme/2026-03-13/scan_010000_target",
+        headers=basic_auth_header(),
+    )
+
+    assert delete_response.status_code == 200
+    newest_metadata = __import__("json").loads((newest / "metadata.json").read_text())
+    assert newest_metadata["diff_summary"]["baseline_path"] == "Acme/2026-03-12/scan_000000_target"
+
+
 def test_auto_scan_routes_require_http_basic_auth(monkeypatch):
     configure_auth(monkeypatch)
     app = build_auto_scan_app()

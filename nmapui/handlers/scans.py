@@ -7,6 +7,7 @@ from nmapui.auth import require_auth
 from nmapui.reporting import (
     find_previous_scan_metadata,
     parse_scan_xml_for_assets,
+    refresh_persisted_diff_summaries,
     summarize_asset_differences,
 )
 from persistence import iter_scan_metadata_documents, remove_scan_metadata_index_entry
@@ -47,8 +48,10 @@ def register_scan_routes(app, deps):
             scans.append(data)
 
         scans.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
-
         for scan in scans:
+            if scan.get("diff_summary") is not None:
+                continue
+
             previous = find_previous_scan_metadata(scan, scans)
             if previous is None:
                 continue
@@ -67,11 +70,12 @@ def register_scan_routes(app, deps):
                 logger.error("Error building diff summary for %s: %s", scan["path"], exc)
                 continue
 
-            scan["diff_summary"] = {
-                **diff_summary,
-                "baseline_path": previous["path"],
-                "baseline_timestamp": previous.get("timestamp", ""),
-            }
+            if diff_summary.get("has_changes"):
+                scan["diff_summary"] = {
+                    **diff_summary,
+                    "baseline_path": previous["path"],
+                    "baseline_timestamp": previous.get("timestamp", ""),
+                }
         return jsonify({"scans": scans})
 
     @app.route("/api/scans/<path:path>/html")
@@ -160,8 +164,18 @@ def register_scan_routes(app, deps):
             return jsonify({"success": False, "error": "Invalid path"}), 400
 
         try:
+            metadata_path = scan_dir / "metadata.json"
+            metadata = normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            ) if metadata_path.exists() else {}
             shutil.rmtree(scan_dir)
             remove_scan_metadata_index_entry(scans_dir, scan_dir)
+            refresh_persisted_diff_summaries(
+                scans_dir,
+                customer_id=metadata.get("customer_id"),
+                target=metadata.get("target"),
+                logger=logger,
+            )
             return jsonify({"success": True})
         except Exception as exc:
             return jsonify({"success": False, "error": str(exc)}), 500
