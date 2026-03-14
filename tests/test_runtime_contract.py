@@ -38,6 +38,9 @@ def test_main_template_no_longer_duplicates_extracted_socket_runtime_handlers():
         "socket.on('customer_info', data => {",
         "socket.on('versions', data => {",
         "socket.on('history_counts', data => {",
+        "socket.on('report_complete', function(data) {",
+        "socket.on('report_error', function(data) {",
+        "socket.on('arp_results', data => {",
     ):
         assert duplicated_handler not in html
 
@@ -608,6 +611,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
     assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module
     assert "const saveHostsToStorage = window.saveHostsToStorage || (() => {});" in scan_runtime_module
+    assert "window.showHistoryModal()" in (ROOT / "static" / "js" / "layout_runtime.js").read_text()
 
 
 def test_template_does_not_keep_inline_report_generation_block():

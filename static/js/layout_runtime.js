@@ -187,7 +187,9 @@ function initializeLayoutRuntime() {
     startPreciseClock();
 
     document.getElementById('view-history-btn').addEventListener('click', function() {
-        showHistoryModal();
+        if (typeof window.showHistoryModal === 'function') {
+            window.showHistoryModal();
+        }
     });
 }
 

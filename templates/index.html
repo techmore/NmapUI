@@ -1512,54 +1512,6 @@
             if (!isHistorical) saveHostsToStorage();
         });
         
-        // Report Generation socket listeners
-        socket.on('report_complete', function(data) {
-            showReportStatus('Report generated successfully! Check: ' + data.scan_dir, 'success');
-            
-            // Remove pulsing from the button
-            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
-            document.getElementById('chunked-scan-btn')?.classList.remove('card-pulsing');
-            
-            // Stop the timer
-            stopReportTimer();
-
-            // Refresh history counts to update the real-time badge
-            socket.emit('get_history_counts');
-
-            // Optionally reload history
-            if (!document.getElementById('history-modal').classList.contains('hidden')) {
-                loadScanHistory();
-            }
-        });
-
-        socket.on('report_error', function(data) {
-            showReportStatus('Error: ' + data.error, 'error');
-            
-            // Remove pulsing from the button
-            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
-            document.getElementById('chunked-scan-btn')?.classList.remove('card-pulsing');
-            
-            // Stop the timer
-            stopReportTimer();
-        });
-
-        socket.on('arp_results', data => {
-            const tb = document.querySelector('#discovery-table tbody');
-            for (let row of tb.rows) {
-                const ip = row.cells[1].textContent;
-                if (data[ip]) {
-                    row.cells[2].textContent = data[ip].mac;
-                    row.cells[3].textContent = data[ip].vendor;
-                    if (window.currentHosts[ip]) {
-                        window.currentHosts[ip].mac    = data[ip].mac;
-                        window.currentHosts[ip].vendor = data[ip].vendor;
-                    }
-                }
-            }
-            saveHostsToStorage();
-            if (window.tableSorter) window.tableSorter.resort();
-        });
-
         // Tooltip toggle
         document.getElementById('info-icon').addEventListener('click', () => {
             document.getElementById('tooltip').classList.toggle('hidden');
