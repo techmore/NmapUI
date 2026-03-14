@@ -209,3 +209,29 @@ def test_require_socket_auth_rejects_spoofed_local_host_without_loopback_peer(mo
         for event in received
     )
     assert not any(event["name"] == "protected_ok" for event in received)
+
+
+def test_require_socket_auth_allows_ipv4_mapped_loopback_peer(monkeypatch):
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "true")
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+
+    @socketio.on("protected")
+    @require_socket_auth()
+    def protected_event():
+        emit("protected_ok", {"ok": True})
+
+    flask_client = app.test_client()
+    flask_client.environ_base["REMOTE_ADDR"] = "::ffff:127.0.0.1"
+    client = socketio.test_client(app, flask_test_client=flask_client)
+    client.emit("protected")
+    received = client.get_received()
+
+    assert any(
+        event["name"] == "protected_ok"
+        and event["args"] == [{"ok": True}]
+        for event in received
+    )

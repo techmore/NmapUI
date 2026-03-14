@@ -51,7 +51,12 @@ def request_is_local_ui():
         if value in local_remote_addrs:
             return True
         try:
-            return ipaddress.ip_address(value).is_loopback
+            address = ipaddress.ip_address(value)
+            if address.is_loopback:
+                return True
+            if getattr(address, "ipv4_mapped", None) is not None:
+                return address.ipv4_mapped.is_loopback
+            return False
         except ValueError:
             return False
 
