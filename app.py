@@ -124,6 +124,10 @@ from nmapui.workflows import (
     start_deep_scan as workflow_start_deep_scan,
     start_scan_task as workflow_start_scan_task,
 )
+from nmapui.workflow_context import (
+    build_report_workflow_context,
+    build_scan_workflow_context,
+)
 from persistence import (
     load_json_document,
     normalize_current_assignment_document,
@@ -546,7 +550,8 @@ def get_default_interface_cached():
 
 
 def _scan_workflow_context():
-    return {
+    return build_scan_workflow_context(
+        {
         "get_client_state": get_client_state,
         "ensure_job_not_cancelled": lambda sid, job_type: ensure_job_not_cancelled(
             job_registry, sid, job_type
@@ -596,7 +601,8 @@ def _scan_workflow_context():
             r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
         ),
         "ip_sort_key": ip_sort_key,
-    }
+        }
+    )
 
 
 def start_deep_scan(targets, sid, is_gateway_phase=False):
@@ -662,6 +668,7 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
 def generate_report_task(sid, data):
     """Run report generation in a background task for a single client."""
     workflow_generate_report_task(
+        build_report_workflow_context(
         {
             "job_registry": job_registry,
             "idle_state_manager": idle_state_manager,
@@ -699,7 +706,7 @@ def generate_report_task(sid, data):
             "current_customer": current_customer,
             "extract_scan_statistics": extract_scan_statistics,
             "customer_fingerprinter": get_customer_fingerprinter(),
-        },
+        }),
         sid,
         data,
     )

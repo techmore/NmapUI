@@ -300,6 +300,23 @@ def test_app_uses_extracted_runtime_state_helpers():
     assert 'def set_last_scan_target_state(*, value, sid=None, client_state_registry, set_default_last_scan_target):' in runtime_state_source
 
 
+def test_app_uses_extracted_workflow_context_builders():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    workflow_context_source = (ROOT / "nmapui" / "workflow_context.py").read_text()
+
+    assert "from nmapui.workflow_context import (" in app_source
+    assert "build_scan_workflow_context" in app_source
+    assert "build_report_workflow_context" in app_source
+    assert "return build_scan_workflow_context(" in app_source
+    assert "build_report_workflow_context(" in app_source
+    assert "def build_scan_workflow_context(deps):" in workflow_context_source
+    assert "def build_report_workflow_context(deps):" in workflow_context_source
+
+
 def test_app_uses_extracted_state_helpers():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
