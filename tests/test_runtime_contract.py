@@ -230,6 +230,20 @@ def test_app_uses_extracted_networking_helpers():
     assert "def is_private_ip(ip):" in networking_source
 
 
+def test_app_uses_extracted_auto_scan_execution_helper():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    auto_scan_source = (ROOT / "nmapui" / "auto_scan.py").read_text()
+
+    assert "execute_auto_scan as execute_auto_scan_helper" in app_source
+    assert "return execute_auto_scan_helper(" in app_source
+    assert 'def execute_auto_scan():' in app_source
+    assert 'def execute_auto_scan(deps):' in auto_scan_source
+
+
 def test_app_uses_extracted_state_helpers():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],

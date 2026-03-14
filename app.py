@@ -21,6 +21,7 @@ from customer_fingerprint import CustomerFingerprinter
 from nmapui.auth import check_auth, require_auth, require_socket_auth
 from nmapui.auto_scan import (
     DEFAULT_AUTO_SCAN_CONFIG,
+    execute_auto_scan as execute_auto_scan_helper,
     load_auto_scan_config,
     save_auto_scan_config,
     should_run_auto_scan,
@@ -320,52 +321,19 @@ def set_last_scan_target_state(value, sid: Optional[str] = None):
 
 
 def execute_auto_scan():
-    """Execute automatic scan using current target"""
-    # Use the last scan target or current network
-    target = last_scan_target or network_key.get("cidr", "192.168.1.0/24")
-
-    if not target:
-        logger.warning("No target available for auto scan")
-        safe_emit("auto_scan_error", {"error": "No target configured"})
-        return
-
-    # Validate target before scanning
-    is_valid, error_msg = validate_target(target)
-    if not is_valid:
-        logger.error(f"Auto scan validation failed: {error_msg}")
-        safe_emit("auto_scan_error", {"error": error_msg})
-        return
-
-    # Check rate limit
-    can_scan, rate_msg = rate_limiter.can_scan()
-    if not can_scan:
-        logger.warning(f"Auto scan rate limited: {rate_msg}")
-        safe_emit("auto_scan_error", {"error": rate_msg})
-        return
-
-    customer_name = current_customer.get("name", "Unknown").split(" (")[
-        0
-    ]  # Remove confidence
-
-    logger.info(f"Executing auto scan for target: {target}, customer: {customer_name}")
-
-    try:
-        # Record this scan
-        rate_limiter.record_scan()
-
-        safe_emit(
-            "trigger_generate_report",
-            {"target": target, "customer_name": customer_name, "auto_scan": True},
-        )
-
-        auto_scan_config["last_run"] = datetime.now().isoformat()
-        save_auto_scan_config(auto_scan_config)
-
-        logger.info(f"Auto scan executed for target: {target}")
-
-    except Exception as e:
-        logger.error(f"Auto scan failed: {e}")
-        safe_emit("auto_scan_error", {"error": str(e)})
+    return execute_auto_scan_helper(
+        {
+            "get_last_scan_target": lambda: last_scan_target,
+            "get_network_key": lambda: network_key,
+            "validate_target": validate_target,
+            "rate_limiter": rate_limiter,
+            "get_current_customer": lambda: current_customer,
+            "safe_emit": safe_emit,
+            "auto_scan_config": auto_scan_config,
+            "save_auto_scan_config": save_auto_scan_config,
+            "logger": logger,
+        }
+    )
 
 
 tool_versions = ToolVersionRegistry()
