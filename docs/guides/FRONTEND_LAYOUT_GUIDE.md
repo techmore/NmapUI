@@ -18,6 +18,9 @@ This page has a small set of layout rules. New sections should follow these inst
 - Breakout data sections
   - Use a local band class inside `page-shell` when the content itself needs horizontal scrolling.
   - Keep the band responsible for border, background, and overflow; keep the shell responsible for page alignment.
+- Form controls
+  - Use shared form-control classes for repeated modal/filter inputs.
+  - Keep only exceptional hero controls on bespoke class stacks when they have intentionally different visual weight.
 
 ## Rules
 
@@ -26,6 +29,7 @@ This page has a small set of layout rules. New sections should follow these inst
 - Keep section spacing consistent before adding custom width rules.
 - For oversized tables, keep `page-shell` outside and put `overflow-x-auto` on the inner band.
 - For modals, keep `modal-overlay` and `modal-panel` shared, and only vary width, borders, or scroll behavior per modal.
+- For standard inputs and selects, prefer `form-control` plus a size class instead of repeating border/padding/focus utilities inline.
 - If a section needs a custom width, document why it is not using `page-shell`.
 
 ## Current Standard
@@ -33,4 +37,5 @@ This page has a small set of layout rules. New sections should follow these inst
 - The main page shell in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) is the canonical example.
 - The discovery table section in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) is the canonical breakout-band example.
 - The modal wrappers in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) are the canonical modal-shell example.
+- The customer/history/auto-scan inputs in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) are the canonical shared form-control example.
 - Follow this guide for future layout refactors tied to [#74](https://github.com/techmore/NmapUI/issues/74).

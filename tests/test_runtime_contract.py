@@ -90,14 +90,20 @@ def test_frontend_layout_guide_and_page_shell_exist():
     assert ".results-band {" in template
     assert ".modal-overlay {" in template
     assert ".modal-panel {" in template
+    assert ".form-control {" in template
+    assert ".form-control-md {" in template
+    assert ".form-control-sm {" in template
     assert template.count('class="page-shell"') >= 2
     assert 'class="results-band"' in template
     assert 'class="table-fixed min-w-[2400px]"' in template
     assert template.count("modal-overlay") >= 6
     assert template.count("modal-panel") >= 6
+    assert template.count("form-control form-control-md") >= 10
+    assert template.count("form-control form-control-sm") >= 2
     assert "Do not repeat `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` inline. Use `page-shell`." in guide
     assert "For oversized tables, keep `page-shell` outside and put `overflow-x-auto` on the inner band." in guide
     assert "For modals, keep `modal-overlay` and `modal-panel` shared" in guide
+    assert "For standard inputs and selects, prefer `form-control` plus a size class" in guide
     assert "/Users/techmore/projects/NmapUI/templates/index.html" in guide
 
 

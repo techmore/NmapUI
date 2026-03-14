@@ -310,6 +310,31 @@
         flex-direction: column;
         overflow: hidden;
     }
+
+    .form-control {
+        width: 100%;
+        border: 1px solid oklch(75% 0.040 110);
+        border-radius: 0.5rem;
+        background: white;
+        color: oklch(22% 0.025 110);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: oklch(62% 0.055 110);
+        box-shadow: 0 0 0 3px oklch(62% 0.055 110 / 0.14);
+    }
+
+    .form-control-md {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .form-control-sm {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
     
     /* Custom button press effect */
     .btn-press:active {
@@ -490,23 +515,23 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Customer Name *</label>
-                    <input type="text" id="cust-name" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., TechCorp HQ">
+                    <input type="text" id="cust-name" class="form-control form-control-md" placeholder="e.g., TechCorp HQ">
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Customer ID *</label>
-                    <input type="text" id="cust-id" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., techcorp_hq">
+                    <input type="text" id="cust-id" class="form-control form-control-md" placeholder="e.g., techcorp_hq">
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Description</label>
-                    <input type="text" id="cust-description" class="w-full p-2 border border-olive-300 rounded" placeholder="Brief description">
+                    <input type="text" id="cust-description" class="form-control form-control-md" placeholder="Brief description">
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Location</label>
-                    <input type="text" id="cust-location" class="w-full p-2 border border-olive-300 rounded" placeholder="City, State/Country">
+                    <input type="text" id="cust-location" class="form-control form-control-md" placeholder="City, State/Country">
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Connection Type</label>
-                    <select id="cust-connection-type" class="w-full p-2 border border-olive-300 rounded">
+                    <select id="cust-connection-type" class="form-control form-control-md">
                         <option value="direct">Direct</option>
                         <option value="vpn">VPN</option>
                         <option value="residential">Residential</option>
@@ -515,19 +540,19 @@
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Gateway Pattern</label>
-                    <input type="text" id="cust-gateway" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 192.168.1.1">
+                    <input type="text" id="cust-gateway" class="form-control form-control-md" placeholder="e.g., 192.168.1.1">
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Exit IP Pattern</label>
-                    <input type="text" id="cust-exit-pattern" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 203.0.113.*">
+                    <input type="text" id="cust-exit-pattern" class="form-control form-control-md" placeholder="e.g., 203.0.113.*">
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Hop Count Range</label>
-                    <input type="text" id="cust-hop-count" class="w-full p-2 border border-olive-300 rounded" placeholder="e.g., 2-5">
+                    <input type="text" id="cust-hop-count" class="form-control form-control-md" placeholder="e.g., 2-5">
                 </div>
                 <div>
                     <label class="block text-olive-700 text-sm font-medium mb-1">Private IP Ranges</label>
-                    <input type="text" id="cust-private-ranges" class="w-full p-2 border border-olive-300 rounded" placeholder="192.168.0.0/16,10.0.0.0/8">
+                    <input type="text" id="cust-private-ranges" class="form-control form-control-md" placeholder="192.168.0.0/16,10.0.0.0/8">
                 </div>
             </div>
             
@@ -562,10 +587,10 @@
 
             <div class="p-6 flex-1 overflow-y-auto">
                 <div class="mb-4 flex gap-4">
-                    <select id="history-customer-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                    <select id="history-customer-filter" onchange="loadScanHistory()" class="form-control form-control-sm">
                         <option value="">All Customers</option>
                     </select>
-                    <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="px-4 py-2 border border-olive-300 rounded-lg text-sm">
+                    <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="form-control form-control-sm">
                     <button onclick="loadScanHistory()" class="px-4 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 transition-colors text-sm">
                         Refresh
                     </button>
@@ -2700,11 +2725,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-olive-700 mb-1">Start Time</label>
-                        <input type="time" id="auto-start-time" class="w-full px-3 py-2 border border-olive-300 rounded-lg focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="01:00">
+                        <input type="time" id="auto-start-time" class="form-control form-control-md" value="01:00">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-olive-700 mb-1">End Time</label>
-                        <input type="time" id="auto-end-time" class="w-full px-3 py-2 border border-olive-300 rounded-lg focus:ring-2 focus:ring-olive-500 focus:border-transparent" value="06:00">
+                        <input type="time" id="auto-end-time" class="form-control form-control-md" value="06:00">
                     </div>
                 </div>
 
