@@ -187,6 +187,24 @@ def test_app_exposes_explicit_stack_builder_and_runtime_registration():
     assert "app, socketio = create_application(__name__)" in app_source
 
 
+def test_app_registers_extracted_runtime_info_handlers():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    runtime_info_source = (ROOT / "nmapui" / "handlers" / "runtime_info.py").read_text()
+
+    assert "from nmapui.handlers.runtime_info import register_runtime_info_handlers" in app_source
+    assert "register_runtime_info_handlers(" in app_source
+    assert '@socketio.on("get_local_ip")' not in app_source
+    assert '@socketio.on("get_network_key")' not in app_source
+    assert '@socketio.on("get_history_counts")' not in app_source
+    assert '@socketio.on("get_local_ip")' in runtime_info_source
+    assert '@socketio.on("get_network_key")' in runtime_info_source
+    assert '@socketio.on("get_history_counts")' in runtime_info_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],
