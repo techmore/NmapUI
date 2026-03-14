@@ -293,12 +293,13 @@ def test_app_delegates_core_routes_to_handler_module():
 
 def test_app_delegates_networking_helpers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
     assert "from nmapui.networking import (" in app_source
     assert "calculate_cidr as calculate_cidr_impl" in app_source
     assert "get_default_interface as get_default_interface_impl" in app_source
     assert "DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)" in app_source
-    assert '"calculate_cidr": calculate_cidr_impl' in app_source
+    assert '"calculate_cidr": calculate_cidr' in app_composition_source
     assert "identify_gateway_firewall_targets_for_key(" in app_source
 
 
@@ -421,8 +422,9 @@ def test_app_uses_shared_private_ip_helper():
 
 def test_app_uses_tool_version_registry_accessor_directly():
     app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
-    assert '"get_versions": tool_versions.get_versions' in app_source
+    assert '"get_versions": get_versions' in app_composition_source
     assert "def get_versions(" not in app_source
 
 
@@ -442,6 +444,30 @@ def test_app_uses_shared_startup_dependency_builder():
 
     assert "build_startup_check_deps(" in app_source
     assert "def build_startup_check_deps(" in app_composition_source
+
+
+def test_app_uses_shared_handler_registration_builders():
+    app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
+
+    assert "build_auto_scan_handler_deps(" in app_source
+    assert "build_scan_routes_deps(" in app_source
+    assert "build_history_handler_deps(" in app_source
+    assert "build_update_handler_deps(" in app_source
+    assert "build_connection_handler_deps(" in app_source
+    assert "build_core_routes_deps(" in app_source
+    assert "build_customer_handler_deps(" in app_source
+    assert "build_runtime_info_handler_deps(" in app_source
+    assert "build_scan_job_handler_deps(" in app_source
+    assert "def build_auto_scan_handler_deps(" in app_composition_source
+    assert "def build_scan_routes_deps(" in app_composition_source
+    assert "def build_history_handler_deps(" in app_composition_source
+    assert "def build_update_handler_deps(" in app_composition_source
+    assert "def build_connection_handler_deps(" in app_composition_source
+    assert "def build_core_routes_deps(" in app_composition_source
+    assert "def build_customer_handler_deps(" in app_composition_source
+    assert "def build_runtime_info_handler_deps(" in app_composition_source
+    assert "def build_scan_job_handler_deps(" in app_composition_source
 
 
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():

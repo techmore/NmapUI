@@ -189,3 +189,199 @@ def build_startup_check_deps(
         "auto_scan_config": auto_scan_config,
         "vulners_script": vulners_script,
     }
+
+
+def build_auto_scan_handler_deps(
+    *,
+    auto_scan_config,
+    save_auto_scan_config,
+    validate_auto_scan_config_update,
+    logger,
+):
+    return {
+        "auto_scan_config": auto_scan_config,
+        "save_auto_scan_config": save_auto_scan_config,
+        "validate_auto_scan_config_update": validate_auto_scan_config_update,
+        "logger": logger,
+    }
+
+
+def build_scan_routes_deps(
+    *,
+    scans_dir,
+    resolve_scan_path,
+    load_json_document,
+    normalize_scan_metadata_document,
+    logger,
+):
+    return {
+        "scans_dir": scans_dir,
+        "resolve_scan_path": resolve_scan_path,
+        "load_json_document": load_json_document,
+        "normalize_scan_metadata_document": normalize_scan_metadata_document,
+        "logger": logger,
+    }
+
+
+def build_history_handler_deps(
+    *,
+    get_most_recent_scan_xml,
+    customer_fingerprinter,
+    scans_dir,
+    sanitize_customer_dir_name,
+    parse_scan_xml_for_assets,
+    get_versions,
+    emit_job_status,
+    job_registry,
+    emit_to_client,
+    rate_limiter,
+    broadcaster,
+    release_client_state,
+    logger,
+):
+    return {
+        "get_most_recent_scan_xml": get_most_recent_scan_xml,
+        "customer_fingerprinter": customer_fingerprinter,
+        "scans_dir": scans_dir,
+        "sanitize_customer_dir_name": sanitize_customer_dir_name,
+        "parse_scan_xml_for_assets": parse_scan_xml_for_assets,
+        "get_versions": get_versions,
+        "emit_job_status": emit_job_status,
+        "job_registry": job_registry,
+        "emit_to_client": emit_to_client,
+        "rate_limiter": rate_limiter,
+        "broadcaster": broadcaster,
+        "release_client_state": release_client_state,
+        "logger": logger,
+    }
+
+
+def build_update_handler_deps(*, check_for_updates, idle_state_manager, logger):
+    return {
+        "check_for_updates": check_for_updates,
+        "idle_state_manager": idle_state_manager,
+        "logger": logger,
+    }
+
+
+def build_connection_handler_deps(
+    *,
+    broadcaster,
+    emit_to_client,
+    get_client_state,
+    job_registry,
+    logger,
+    set_current_customer_state,
+    set_last_scan_target_state,
+    set_network_key_state,
+    auto_scan_config,
+):
+    return {
+        "broadcaster": broadcaster,
+        "emit_to_client": emit_to_client,
+        "get_client_state": get_client_state,
+        "job_registry": job_registry,
+        "logger": logger,
+        "set_current_customer_state": set_current_customer_state,
+        "set_last_scan_target_state": set_last_scan_target_state,
+        "set_network_key_state": set_network_key_state,
+        "auto_scan_config": auto_scan_config,
+    }
+
+
+def build_core_routes_deps(
+    *,
+    build_liveness_payload,
+    build_readiness_payload,
+    get_app_version,
+    get_default_interface_cached,
+    get_versions,
+    startup_state,
+    get_auto_scan_thread,
+):
+    return {
+        "build_liveness_payload": build_liveness_payload,
+        "build_readiness_payload": build_readiness_payload,
+        "get_app_version": get_app_version,
+        "get_default_interface_cached": get_default_interface_cached,
+        "get_versions": get_versions,
+        "startup_state": startup_state,
+        "get_auto_scan_thread": get_auto_scan_thread,
+    }
+
+
+def build_customer_handler_deps(
+    *,
+    get_customer_fingerprinter,
+    network_key,
+    get_current_customer,
+    set_current_customer,
+    merge_customer_metadata,
+    save_current_assignment,
+    save_customers_config,
+    normalize_scan_metadata_document,
+    load_json_document,
+    save_json_document,
+    logger,
+):
+    return {
+        "get_customer_fingerprinter": get_customer_fingerprinter,
+        "network_key": network_key,
+        "get_current_customer": get_current_customer,
+        "set_current_customer": set_current_customer,
+        "merge_customer_metadata": merge_customer_metadata,
+        "save_current_assignment": save_current_assignment,
+        "save_customers_config": save_customers_config,
+        "normalize_scan_metadata_document": normalize_scan_metadata_document,
+        "load_json_document": load_json_document,
+        "save_json_document": save_json_document,
+        "logger": logger,
+    }
+
+
+def build_runtime_info_handler_deps(
+    *,
+    calculate_cidr,
+    get_client_state,
+    get_default_interface_cached,
+    get_report_counts,
+    logger,
+    netifaces,
+    requests,
+    run_traceroute,
+):
+    return {
+        "calculate_cidr": calculate_cidr,
+        "get_client_state": get_client_state,
+        "get_default_interface_cached": get_default_interface_cached,
+        "get_report_counts": get_report_counts,
+        "logger": logger,
+        "netifaces": netifaces,
+        "requests": requests,
+        "run_traceroute": run_traceroute,
+    }
+
+
+def build_scan_job_handler_deps(
+    *,
+    validate_target,
+    rate_limiter,
+    job_registry,
+    emit_job_status,
+    set_last_scan_target_state,
+    start_scan_task,
+    generate_report_task,
+    generate_pdf_from_saved_task,
+    broadcaster,
+):
+    return {
+        "validate_target": validate_target,
+        "rate_limiter": rate_limiter,
+        "job_registry": job_registry,
+        "emit_job_status": emit_job_status,
+        "set_last_scan_target_state": set_last_scan_target_state,
+        "start_scan_task": start_scan_task,
+        "generate_report_task": generate_report_task,
+        "generate_pdf_from_saved_task": generate_pdf_from_saved_task,
+        "broadcaster": broadcaster,
+    }
