@@ -99,6 +99,7 @@ from nmapui.state import (
     save_current_assignment as save_current_assignment_state,
     save_customers_config as save_customers_config_state,
 )
+from nmapui.startup import create_startup_state
 from nmapui.tooling import ToolVersionRegistry
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
@@ -626,14 +627,7 @@ def execute_auto_scan():
 
 tool_versions = ToolVersionRegistry()
 
-startup_state = {
-    "startup_complete": False,
-    "dependency_checks_skipped": False,
-    "dependencies_ok": False,
-    "traceroute_initialized": False,
-    "last_started_at": None,
-    "errors": [],
-}
+startup_state = create_startup_state()
 
 
 def is_private_ip(ip):

@@ -261,6 +261,20 @@ def test_app_uses_extracted_tool_version_registry():
     assert "class ToolVersionRegistry:" in tooling_source
 
 
+def test_app_uses_extracted_startup_state_factory():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    startup_source = (ROOT / "nmapui" / "startup.py").read_text()
+
+    assert "from nmapui.startup import create_startup_state" in app_source
+    assert "startup_state = create_startup_state()" in app_source
+    assert 'startup_state = {' not in app_source
+    assert "def create_startup_state():" in startup_source
+
+
 def test_app_registers_extracted_core_routes():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
