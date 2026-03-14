@@ -288,6 +288,16 @@ def test_packaged_smoke_test_exists_and_is_gated():
     assert '/api/health/live' in smoke_source
 
 
+def test_browser_regression_test_exists_and_is_gated():
+    browser_source = (ROOT / "tests" / "test_browser_regressions.py").read_text()
+
+    assert "NMAPUI_RUN_BROWSER_REGRESSION" in browser_source
+    assert "from playwright.sync_api import sync_playwright" in browser_source
+    assert "#tab-reports-btn" in browser_source
+    assert "#history-tab-list" in browser_source
+    assert "test_second_tab_replays_active_report_state" in browser_source
+
+
 def test_release_paths_prefer_dot_venv():
     deploy_script = (ROOT / "deploy.sh").read_text()
     building_guide = (ROOT / "BUILDING.md").read_text()
