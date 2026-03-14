@@ -132,13 +132,23 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
                 logger.info("Auto-detected customer: %s", active_customer["name"])
                 save_customer = customer
             else:
+                generated_customer = fingerprinter.ensure_generated_customer(
+                    active_network_key
+                )
                 active_customer = {
-                    "id": "",
-                    "name": "Unassigned",
-                    "confidence": 0.0,
+                    "id": generated_customer.get("id"),
+                    "name": generated_customer.get("name"),
+                    "confidence": generated_customer.get("confidence", 0.35),
                 }
-                logger.info("No customer match found, setting to Unassigned")
-                save_customer = fingerprinter.unknown_customer or {}
+                active_customer = merge_customer_metadata(
+                    active_customer, generated_customer
+                )
+                logger.info(
+                    "No customer match found, auto-created generated customer: %s",
+                    active_customer["name"],
+                )
+                save_customer = generated_customer
+                confidence = generated_customer.get("confidence", 0.35)
         else:
             logger.info("Preserving manual assignment: %s", active_customer["name"])
             if active_customer.get("id"):

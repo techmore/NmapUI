@@ -4,6 +4,7 @@ import ipaddress
 import json
 import os
 import logging
+import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
@@ -158,6 +159,89 @@ class CustomerFingerprinter:
 
         except Exception as e:
             logger.error(f"Error saving traceroute to history: {e}")
+
+    def _build_generated_customer_id(self, network_key: Dict) -> str:
+        public_ip = str(network_key.get("public_ip") or "").strip()
+        signature = self.create_network_signature(network_key)
+        seed = public_ip or signature or str(network_key.get("exit_ip") or "unknown")
+        digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:12]
+        return f"auto-wan-{digest}"
+
+    def _build_generated_customer_name(self, network_key: Dict) -> str:
+        public_ip = str(network_key.get("public_ip") or "").strip()
+        if public_ip:
+            return f"WAN {public_ip}"
+        exit_ip = str(network_key.get("exit_ip") or "").strip()
+        if exit_ip:
+            return f"WAN Exit {exit_ip}"
+        return "Observed WAN"
+
+    def ensure_generated_customer(self, network_key: Dict) -> Dict:
+        public_ip = str(network_key.get("public_ip") or "").strip()
+        exit_ip = str(network_key.get("exit_ip") or "").strip()
+        signature = self.create_network_signature(network_key)
+        customer_id = self._build_generated_customer_id(network_key)
+
+        existing = self.get_customer_by_id(customer_id)
+        if existing:
+            networks = existing.setdefault("networks", {})
+            public_ips = networks.setdefault("public_ips", [])
+            if public_ip and public_ip not in public_ips:
+                public_ips.append(public_ip)
+            if public_ip and not networks.get("public_ip"):
+                networks["public_ip"] = public_ip
+            exit_ips = networks.get("exit_ips")
+            if not isinstance(exit_ips, list):
+                exit_ips = [] if exit_ip else "dynamic"
+            if isinstance(exit_ips, list) and exit_ip and exit_ip not in exit_ips:
+                exit_ips.append(exit_ip)
+            networks["exit_ips"] = exit_ips
+            metadata = existing.setdefault("metadata", {})
+            metadata["auto_generated"] = True
+            metadata["last_seen"] = datetime.now().isoformat()
+            if signature:
+                metadata["network_signature"] = signature
+            self.customer_traceroutes.setdefault(
+                customer_id,
+                {"name": existing.get("name", customer_id), "traceroutes": []},
+            )["name"] = existing.get("name", customer_id)
+            self.save_customers_config()
+            return existing
+
+        customer = {
+            "id": customer_id,
+            "name": self._build_generated_customer_name(network_key),
+            "description": "Auto-created from an observed public WAN during customer identification.",
+            "confidence": 0.35,
+            "networks": {
+                "public_ip": public_ip or "dynamic",
+                "public_ips": [public_ip] if public_ip else [],
+                "private_ranges": [],
+                "exit_ips": [exit_ip] if exit_ip else "dynamic",
+                "gateway_pattern": "",
+                "labeled_public_ips": {},
+            },
+            "fingerprints": [],
+            "metadata": {
+                "auto_generated": True,
+                "generated_from_public_ip": public_ip or "",
+                "generated_from_exit_ip": exit_ip or "",
+                "network_signature": signature,
+                "created_at": datetime.now().isoformat(),
+                "last_seen": datetime.now().isoformat(),
+            },
+        }
+        self.customers.append(customer)
+        self.customer_traceroutes.setdefault(
+            customer_id, {"name": customer["name"], "traceroutes": []}
+        )
+        self.save_customers_config()
+        logger.info(
+            "Auto-created generated customer '%s' for public IP %s",
+            customer["name"],
+            public_ip or "unknown",
+        )
+        return customer
 
     def match_ip_pattern(self, ip: str, pattern: str) -> bool:
         if pattern == "dynamic":
@@ -418,10 +502,12 @@ class CustomerFingerprinter:
             logger.info(
                 f"Customer identified: {matched_customer['name']} (method: {match_method})"
             )
+            self.last_match_method = match_method or "unknown"
             confidence = 1.0
         else:
             matched_customer = self.unknown_customer
             match_method = "none"
+            self.last_match_method = match_method
             logger.warning(f"No customer match found - using 'Unknown Network'")
             confidence = 0.0
 
