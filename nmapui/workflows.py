@@ -253,6 +253,10 @@ def start_scan_task(context, sid, target):
             emit_job_status(sid, "scan")
         job_registry.clear_if_disconnected(sid, "scan")
         idle_state_manager.end_operation(operation_id)
+        # Tear down the broadcaster slot so new tabs no longer join this job
+        on_job_end = context.get("on_job_end")
+        if on_job_end:
+            on_job_end()
 
 
 def generate_report_task(context, sid, data):

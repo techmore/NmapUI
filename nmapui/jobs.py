@@ -49,6 +49,77 @@ class RateLimiter:
         logger.info("Scan recorded. Total in last hour: %s", len(self.scan_timestamps))
 
 
+class ScanBroadcaster:
+    """
+    Multi-tab delivery for active scan jobs.
+
+    - The 'owner' sid is the tab that started the scan.
+    - Additional tabs subscribe and receive all future events.
+    - A replay buffer lets late-joining tabs catch up instantly.
+    """
+
+    MAX_BUFFER = 500
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        # owner_sid -> frozenset-like mutable set of all subscriber sids
+        self._subscribers: dict[str, set[str]] = {}
+        # owner_sid -> list of (event, data) tuples
+        self._buffer: dict[str, list] = {}
+
+    def start_job(self, owner_sid: str) -> None:
+        """Call when a scan starts — creates the slot."""
+        with self._lock:
+            self._subscribers[owner_sid] = {owner_sid}
+            self._buffer[owner_sid] = []
+
+    def end_job(self, owner_sid: str) -> None:
+        """Call when a scan ends — tears down the slot."""
+        with self._lock:
+            self._subscribers.pop(owner_sid, None)
+            self._buffer.pop(owner_sid, None)
+
+    def record(self, owner_sid: str, event: str, data) -> None:
+        """Store an event in the replay buffer for this job."""
+        with self._lock:
+            buf = self._buffer.get(owner_sid)
+            if buf is not None:
+                buf.append((event, data))
+                if len(buf) > self.MAX_BUFFER:
+                    buf[:] = buf[-self.MAX_BUFFER :]
+
+    def get_subscribers(self, owner_sid: str) -> set[str]:
+        with self._lock:
+            return set(self._subscribers.get(owner_sid, set()))
+
+    def get_replay_buffer(self, owner_sid: str) -> list:
+        with self._lock:
+            return list(self._buffer.get(owner_sid, []))
+
+    def subscribe(self, owner_sid: str, new_sid: str) -> bool:
+        """Add a late-joining tab. Returns False if job no longer active."""
+        with self._lock:
+            if owner_sid not in self._subscribers:
+                return False
+            self._subscribers[owner_sid].add(new_sid)
+            return True
+
+    def unsubscribe(self, sid: str) -> None:
+        """Remove a sid from every subscription set (call on disconnect)."""
+        with self._lock:
+            for subs in self._subscribers.values():
+                subs.discard(sid)
+
+    def find_active_owner(self) -> str | None:
+        """Return any active job's owner sid, or None if no scan running."""
+        with self._lock:
+            return next(iter(self._subscribers), None)
+
+    def is_active(self) -> bool:
+        with self._lock:
+            return bool(self._subscribers)
+
+
 class PerClientRateLimiter:
     """Per-session rate limiter so one client cannot block others."""
 

@@ -16,6 +16,7 @@ def register_history_handlers(socketio, deps):
     emit_to_client = deps["emit_to_client"]
     release_client_state = deps.get("release_client_state")
     rate_limiter = deps.get("rate_limiter")
+    broadcaster = deps.get("broadcaster")
     logger = deps["logger"]
 
     @socketio.on("check_resumable_scan")
@@ -160,5 +161,7 @@ def register_history_handlers(socketio, deps):
         job_registry.mark_disconnected(request.sid)
         if rate_limiter:
             rate_limiter.remove_client(request.sid)
+        if broadcaster:
+            broadcaster.unsubscribe(request.sid)
         if release_client_state:
             release_client_state(request.sid)

@@ -46,6 +46,7 @@ from nmapui.health import build_liveness_payload, build_readiness_payload
 from nmapui.jobs import (
     ClientJobRegistry,
     PerClientRateLimiter,
+    ScanBroadcaster,
     ensure_job_not_cancelled as nmapui_ensure_job_not_cancelled,
     run_cancellable_command as nmapui_run_cancellable_command,
 )
@@ -305,6 +306,7 @@ AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
 
 rate_limiter = PerClientRateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 job_registry = ClientJobRegistry()
+broadcaster = ScanBroadcaster()
 
 
 def safe_emit(event, data=None):
@@ -635,6 +637,7 @@ register_history_handlers(
         "job_registry": job_registry,
         "emit_to_client": emit_to_client,
         "rate_limiter": rate_limiter,
+        "broadcaster": broadcaster,
         "logger": logger,
     },
 )
@@ -1105,12 +1108,23 @@ def identify_gateway_firewall_targets(hosts):
     return regular_hosts, gateway_hosts
 
 
-def _scan_workflow_context():
+def _make_broadcast_emit(owner_sid: str):
+    """Return an emit_to_client that fans out to all subscribers and records events."""
+    def _emit(sid: str, event: str, data=None):
+        # Record in replay buffer (keyed by owner, not subscriber sid)
+        broadcaster.record(owner_sid, event, data)
+        # Emit to every subscribed tab
+        for sub_sid in broadcaster.get_subscribers(owner_sid):
+            emit_to_client(sub_sid, event, data)
+    return _emit
+
+
+def _scan_workflow_context(owner_sid: str):
     return {
         "ensure_job_not_cancelled": ensure_job_not_cancelled,
         "idle_state_manager": idle_state_manager,
         "update_job_progress": update_job_progress,
-        "emit_to_client": emit_to_client,
+        "emit_to_client": _make_broadcast_emit(owner_sid),
         "socketio_sleep": socketio.sleep,
         "run_cancellable_command": run_cancellable_command,
         "run_arp_scan": run_arp_scan,
@@ -1134,16 +1148,44 @@ def _scan_workflow_context():
             r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
         ),
         "ip_sort_key": ipaddress.IPv4Address,
+        "on_job_end": lambda: broadcaster.end_job(owner_sid),
     }
 
 
 def start_deep_scan(targets, sid, is_gateway_phase=False):
-    return workflow_start_deep_scan(_scan_workflow_context(), targets, sid, is_gateway_phase=is_gateway_phase)
+    return workflow_start_deep_scan(_scan_workflow_context(sid), targets, sid, is_gateway_phase=is_gateway_phase)
 
 
 def start_scan_task(sid, target):
     """Run scan workflow in a background task for a single client."""
-    return workflow_start_scan_task(_scan_workflow_context(), sid, target)
+    return workflow_start_scan_task(_scan_workflow_context(sid), sid, target)
+
+
+@socketio.on("connect")
+def on_connect():
+    """Catch up a newly connected tab if a scan is already running."""
+    new_sid = request.sid
+    owner_sid = broadcaster.find_active_owner()
+    if owner_sid is None:
+        return
+
+    job = job_registry.get(owner_sid, "scan")
+    if not job or job.get("status") not in ("running", "cancelling"):
+        broadcaster.end_job(owner_sid)
+        return
+
+    logger.info("New tab %s joining active scan owned by %s — replaying %d events",
+                new_sid, owner_sid, len(broadcaster.get_replay_buffer(owner_sid)))
+
+    # Subscribe before replaying so we don't miss any events during replay
+    broadcaster.subscribe(owner_sid, new_sid)
+
+    # Send current job status so the UI shows the progress bar immediately
+    emit_to_client(new_sid, "job_status", {**job, "job_type": "scan"})
+
+    # Replay the accumulated event log to catch the new tab up
+    for event, data in broadcaster.get_replay_buffer(owner_sid):
+        emit_to_client(new_sid, event, data)
 
 
 @socketio.on("start_scan")
@@ -1171,6 +1213,9 @@ def start_scan(data):
         emit("scan_error", "A scan is already running for this client")
         emit_job_status(request.sid, "scan")
         return
+
+    # Register this tab as the scan owner so other tabs can subscribe
+    broadcaster.start_job(request.sid)
 
     # Record scan start before dispatching background work
     rate_limiter.record_scan(request.sid)
