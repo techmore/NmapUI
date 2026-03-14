@@ -287,6 +287,29 @@
         box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
         overflow-x: auto;
     }
+
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgb(0 0 0 / 0.5);
+        padding: 1rem;
+    }
+
+    .modal-panel {
+        width: 100%;
+        border-radius: 0.5rem;
+        background: white;
+    }
+
+    .modal-panel-scroll {
+        display: flex;
+        max-height: 90vh;
+        flex-direction: column;
+        overflow: hidden;
+    }
     
     /* Custom button press effect */
     .btn-press:active {
@@ -455,8 +478,8 @@
         </div>
     </div>
 
-    <div id="add-customer-form" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+    <div id="add-customer-form" class="hidden modal-overlay z-50">
+        <div class="modal-panel max-w-2xl p-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-medium text-olive-900">Add Customer</h3>
                 <button onclick="hideCustomerForm()" class="text-olive-500 hover:text-olive-700">
@@ -526,8 +549,8 @@
         </div>
     </div>
 
-    <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div id="history-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel modal-panel-scroll max-w-6xl">
             <div class="p-6 border-b border-olive-300 flex justify-between items-center">
                 <h2 class="text-2xl font-display italic text-olive-900">Scan History</h2>
                 <button onclick="hideHistoryModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
@@ -555,8 +578,8 @@
     </div>
 
     <!-- Asset Details Modal -->
-    <div id="asset-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div id="asset-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel modal-panel-scroll max-w-4xl">
             <div class="p-6 border-b border-olive-300 flex justify-between items-center">
                 <h2 id="asset-modal-title" class="text-2xl font-display italic text-olive-900">Asset Details</h2>
                 <button onclick="hideAssetModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
@@ -575,8 +598,8 @@
     </div>
 
     <!-- Update Modal -->
-    <div id="update-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-        <div class="bg-white rounded-lg max-w-2xl w-full flex flex-col shadow-2xl border border-olive-300">
+    <div id="update-modal" class="hidden modal-overlay z-[60]">
+        <div class="modal-panel flex flex-col max-w-2xl shadow-2xl border border-olive-300">
             <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50 rounded-t-lg">
                 <h2 class="text-2xl font-display italic text-olive-900">Application Update</h2>
                 <button onclick="hideUpdateModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
@@ -636,8 +659,8 @@
     </div>
 
     <!-- Asset Details Modal -->
-    <div id="asset-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-olive-300">
+    <div id="asset-details-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel modal-panel-scroll max-w-4xl shadow-2xl border border-olive-300">
             <!-- Modal Header -->
             <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50">
                 <div>
@@ -2666,8 +2689,8 @@
     </script>
 
     <!-- Auto Scan Time Modal -->
-    <div id="auto-scan-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-lg max-w-md w-full p-6">
+    <div id="auto-scan-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel max-w-md p-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-display italic text-olive-900">Set Auto Scan Times</h3>
                 <button onclick="hideAutoScanTimeModal()" class="text-olive-500 hover:text-olive-700 text-xl">&times;</button>

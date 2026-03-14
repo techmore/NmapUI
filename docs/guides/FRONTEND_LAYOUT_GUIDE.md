@@ -11,6 +11,7 @@ This page has a small set of layout rules. New sections should follow these inst
 - Modal shells
   - Keep modal width local to the modal component.
   - Use one width rule per modal (`max-w-md`, `max-w-2xl`, `max-w-4xl`, `max-w-6xl`) instead of nesting another page-width wrapper inside the modal body.
+  - Share overlay and base panel structure through common modal classes instead of repeating the full fixed/flex/background shell inline.
 - Full-width bands
   - Keep them inside `page-shell` unless the section is intentionally edge-to-edge.
   - Prefer section-level spacing and borders over adding another max-width wrapper.
@@ -24,10 +25,12 @@ This page has a small set of layout rules. New sections should follow these inst
 - Do not nest multiple page-width wrappers inside one another.
 - Keep section spacing consistent before adding custom width rules.
 - For oversized tables, keep `page-shell` outside and put `overflow-x-auto` on the inner band.
+- For modals, keep `modal-overlay` and `modal-panel` shared, and only vary width, borders, or scroll behavior per modal.
 - If a section needs a custom width, document why it is not using `page-shell`.
 
 ## Current Standard
 
 - The main page shell in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) is the canonical example.
 - The discovery table section in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) is the canonical breakout-band example.
+- The modal wrappers in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) are the canonical modal-shell example.
 - Follow this guide for future layout refactors tied to [#74](https://github.com/techmore/NmapUI/issues/74).
