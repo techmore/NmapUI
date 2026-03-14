@@ -1195,12 +1195,27 @@ def run_arp_scan(target, interface=None, sid=None):
         if result.returncode == 0:
             output = result.stdout
         else:
-            output = run_cancellable_command(
-                ["sudo", "arp-scan", target, "--interface", interface],
-                sid=sid,
-                job_type="scan" if sid else None,
-                timeout=30,
-            ).stdout
+            combined_output = " ".join(
+                str(part or "")
+                for part in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
+            ).lower()
+            if any(
+                token in combined_output
+                for token in (
+                    "permission denied",
+                    "operation not permitted",
+                    "not permitted",
+                    "requires root",
+                )
+            ):
+                message = "arp-scan requires elevated privileges; skipping MAC/vendor detection"
+                logger.warning(message)
+                if sid:
+                    emit_to_client(sid, "scan_feedback", message)
+                else:
+                    socketio.emit("scan_feedback", message)
+                return {}
+            output = result.stdout
 
         arp_data = {}
         arp_pattern = re.compile(r"^(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F:]{17})\s+(.*)$")

@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 import nmapui.scanning as scanning
 from nmapui.scanning import create_scan_folder
@@ -26,3 +27,37 @@ def test_get_nmap_scan_technique_uses_connect_scan_without_root(monkeypatch):
 def test_get_nmap_scan_technique_uses_syn_scan_as_root(monkeypatch):
     monkeypatch.setattr(scanning.os, "geteuid", lambda: 0, raising=False)
     assert scanning.get_nmap_scan_technique() == "-sS"
+
+
+def test_run_arp_scan_does_not_retry_with_sudo_on_permission_error():
+    calls = []
+    emitted = []
+
+    def run_cancellable_command(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=1,
+            stdout="",
+            stderr="arp-scan: Permission denied",
+        )
+
+    result = scanning.run_arp_scan(
+        "192.168.1.0/24",
+        interface="en0",
+        sid="sid-1",
+        get_default_interface_cached=lambda: "en0",
+        which=lambda name: "/usr/local/bin/arp-scan",
+        emit_to_client=lambda sid, event, data: emitted.append((sid, event, data)),
+        socketio_emit=lambda event, data: emitted.append((None, event, data)),
+        socketio_sleep=lambda value: None,
+        run_cancellable_command=run_cancellable_command,
+    )
+
+    assert result == {}
+    assert calls == [["arp-scan", "192.168.1.0/24", "--interface", "en0"]]
+    assert emitted[-1] == (
+        "sid-1",
+        "scan_feedback",
+        "arp-scan requires elevated privileges; skipping MAC/vendor detection",
+    )
