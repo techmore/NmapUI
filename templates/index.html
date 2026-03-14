@@ -737,10 +737,16 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                         </svg>
                     </button>
-                    <button id="generate-report-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Generate comprehensive PDF report">
+                    <button id="generate-report-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Generate PDF from the latest saved scan">
                         <span>Generate PDF</span>
                         <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </button>
+                    <button id="chunked-scan-btn" class="w-full md:w-auto h-[52px] px-8 bg-amber-700 text-white font-bold rounded-xl hover:bg-amber-800 active:scale-95 transition-all shadow-lg shadow-amber-700/20 flex items-center justify-center gap-3 group" aria-label="Run chunked deep scan and generate a new PDF">
+                        <span>Chunked Scan + PDF</span>
+                        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h5l2 3h11M5 7v10a2 2 0 002 2h10a2 2 0 002-2v-7M9 17h6" />
                         </svg>
                     </button>
                 </div>
@@ -1733,6 +1739,7 @@
             
             // Remove pulsing from the button
             document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            document.getElementById('chunked-scan-btn')?.classList.remove('card-pulsing');
             
             // Stop the timer
             stopReportTimer();
@@ -1751,6 +1758,7 @@
             
             // Remove pulsing from the button
             document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            document.getElementById('chunked-scan-btn')?.classList.remove('card-pulsing');
             
             // Stop the timer
             stopReportTimer();
@@ -2377,14 +2385,38 @@
             let customerName = 'Unknown';
             
             if (customerOption) {
-                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
                 customerName = customerOption.text.split(' (')[0];
             }
 
-            // Add pulsing to the button
             this.classList.add('card-pulsing');
+            startReportTimer();
+
+            socket.emit('generate_pdf_from_saved', {
+                target: target,
+                customer_name: customerName,
+                max_days: 30
+            });
+        });
+
+        document.getElementById('chunked-scan-btn').addEventListener('click', function() {
+            if (clientJobs.report.status === 'running') {
+                return;
+            }
+            const target = document.getElementById('scan-target').value || lastScanTarget;
+
+            if (!target) {
+                showReportStatus('Please enter a target or run a scan first', 'error');
+                return;
+            }
+
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Unknown';
             
-            // Start the incrementing timer
+            if (customerOption) {
+                customerName = customerOption.text.split(' (')[0];
+            }
+
+            this.classList.add('card-pulsing');
             startReportTimer();
 
             socket.emit('generate_report', {
