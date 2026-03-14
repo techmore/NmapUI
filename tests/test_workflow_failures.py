@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from nmapui.jobs import ClientJobRegistry
+from nmapui.workflow_context import build_report_workflow_context
 from nmapui.workflows import generate_report_task
 
 
@@ -23,7 +24,8 @@ def test_generate_report_failure_marks_scan_directory(tmp_path):
         return scan_dir
 
     generate_report_task(
-        {
+        build_report_workflow_context(
+            {
             "job_registry": registry,
             "idle_state_manager": idle_state,
             "emit_job_status": lambda sid, job_type: None,
@@ -42,6 +44,10 @@ def test_generate_report_failure_marks_scan_directory(tmp_path):
             "stylesheet": Path("nmap-modern.xsl"),
             "get_app_version": lambda: "v1.0.0",
             "save_scan_metadata": lambda *args, **kwargs: None,
+            "get_client_state": lambda sid=None: {
+                "network_key": {},
+                "current_customer": {"id": "cust-123", "name": "Acme Customer"},
+            },
             "network_key": {},
             "current_customer": {"id": "cust-123", "name": "Acme Customer"},
             "extract_scan_statistics": lambda path: {},
@@ -53,7 +59,8 @@ def test_generate_report_failure_marks_scan_directory(tmp_path):
                     "update_last_scan_duration": lambda self, customer_id, duration: None,
                 },
             )(),
-        },
+            }
+        ),
         "sid-1",
         {
             "target": "192.168.1.0/24",
@@ -96,7 +103,8 @@ def test_generate_report_promotes_unknown_customer_to_generated_wan(tmp_path):
             return None
 
     generate_report_task(
-        {
+        build_report_workflow_context(
+            {
             "job_registry": registry,
             "idle_state_manager": idle_state,
             "emit_job_status": lambda sid, job_type: None,
@@ -115,11 +123,16 @@ def test_generate_report_promotes_unknown_customer_to_generated_wan(tmp_path):
             "stylesheet": Path("nmap-modern.xsl"),
             "get_app_version": lambda: "v1.0.0",
             "save_scan_metadata": lambda *args, **kwargs: None,
+            "get_client_state": lambda sid=None: {
+                "network_key": {"public_ip": "203.0.113.10", "exit_ip": "1.1.1.1"},
+                "current_customer": {"id": "unknown", "name": "Unassigned"},
+            },
             "network_key": {"public_ip": "203.0.113.10", "exit_ip": "1.1.1.1"},
             "current_customer": {"id": "unknown", "name": "Unassigned"},
             "extract_scan_statistics": lambda path: {},
             "customer_fingerprinter": FingerprinterStub(),
-        },
+            }
+        ),
         "sid-1",
         {
             "target": "192.168.1.0/24",

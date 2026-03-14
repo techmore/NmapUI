@@ -1,4 +1,5 @@
 from nmapui.client_state import ClientStateRegistry
+from nmapui.workflow_context import build_report_workflow_context
 from nmapui.workflows import generate_report_task
 
 
@@ -72,7 +73,8 @@ def test_generate_report_task_prefers_per_client_state_snapshot(tmp_path):
         captured["current_customer"] = current_customer
 
     generate_report_task(
-        {
+        build_report_workflow_context(
+            {
             "job_registry": registry,
             "idle_state_manager": IdleStateStub(),
             "emit_job_status": lambda sid, job_type: None,
@@ -106,7 +108,8 @@ def test_generate_report_task_prefers_per_client_state_snapshot(tmp_path):
                     "update_last_scan_duration": lambda self, customer_id, duration: None,
                 },
             )(),
-        },
+            }
+        ),
         "sid-1",
         {
             "target": "192.168.1.0/24",
@@ -141,7 +144,8 @@ def test_generate_report_task_uses_distinct_web_and_pdf_stylesheets(tmp_path):
         return True
 
     generate_report_task(
-        {
+        build_report_workflow_context(
+            {
             "job_registry": registry,
             "idle_state_manager": IdleStateStub(),
             "emit_job_status": lambda sid, job_type: None,
@@ -157,10 +161,15 @@ def test_generate_report_task_uses_distinct_web_and_pdf_stylesheets(tmp_path):
             "socketio_sleep": lambda value: None,
             "convert_xml_to_html": convert_xml_to_html_stub,
             "convert_html_to_pdf": lambda *args, **kwargs: True,
+            "stylesheet": "web.xsl",
             "web_stylesheet": "web.xsl",
             "pdf_stylesheet": "pdf.xsl",
             "get_app_version": lambda: "v1.0.0",
             "save_scan_metadata": lambda *args, **kwargs: None,
+            "get_client_state": lambda sid=None: {
+                "network_key": {"target": "shared"},
+                "current_customer": {"id": "cust-123", "name": "Acme Customer"},
+            },
             "network_key": {"target": "shared"},
             "current_customer": {"id": "cust-123", "name": "Acme Customer"},
             "extract_scan_statistics": lambda path: {},
@@ -172,7 +181,8 @@ def test_generate_report_task_uses_distinct_web_and_pdf_stylesheets(tmp_path):
                     "update_last_scan_duration": lambda self, customer_id, duration: None,
                 },
             )(),
-        },
+            }
+        ),
         "sid-1",
         {
             "target": "192.168.1.0/24",

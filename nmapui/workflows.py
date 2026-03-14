@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 def start_deep_scan(context, targets, sid, is_gateway_phase=False):
-    emit_to_client = context["emit_to_client"]
-    socketio_sleep = context["socketio_sleep"]
-    ensure_job_not_cancelled = context["ensure_job_not_cancelled"]
-    run_cancellable_command = context["run_cancellable_command"]
-    vulners_script = context["vulners_script"]
+    emit_to_client = context.emit_to_client
+    socketio_sleep = context.socketio_sleep
+    ensure_job_not_cancelled = context.ensure_job_not_cancelled
+    run_cancellable_command = context.run_cancellable_command
+    vulners_script = context.vulners_script
 
     try:
         ensure_job_not_cancelled(sid, "scan")
@@ -38,14 +38,14 @@ def start_deep_scan(context, targets, sid, is_gateway_phase=False):
             # resolves a hostname: "Nmap scan report for host (1.2.3.4)"
             current_host = {"ip": target, "ports": [], "cves": []}
             parsed_data = [current_host]
-            cve_pattern = context["cve_pattern"]
+            cve_pattern = context.cve_pattern
 
             # Emit raw nmap output to the client log for auditing
             emit_to_client(sid, "scan_raw_output", {"target": target, "output": output})
 
             for line in output.splitlines():
                 if "/tcp" in line:
-                    port_info = context["port_info_regex"].search(line)
+                    port_info = context.port_info_regex.search(line)
                     if port_info:
                         # Normalize internal whitespace that nmap uses for column alignment
                         service_raw = re.sub(r"\s+", " ", port_info.group(3)).strip()
@@ -91,23 +91,23 @@ def start_deep_scan(context, targets, sid, is_gateway_phase=False):
 
 def start_scan_task(context, sid, target):
     """Run scan workflow in a background task for a single client."""
-    ensure_job_not_cancelled = context["ensure_job_not_cancelled"]
-    idle_state_manager = context["idle_state_manager"]
-    update_job_progress = context["update_job_progress"]
-    emit_to_client = context["emit_to_client"]
-    socketio_sleep = context["socketio_sleep"]
-    run_cancellable_command = context["run_cancellable_command"]
-    run_arp_scan = context["run_arp_scan"]
-    identify_gateway_firewall_targets = context["identify_gateway_firewall_targets"]
-    start_deep_scan_fn = context["start_deep_scan"]
-    job_registry = context["job_registry"]
-    emit_job_status = context["emit_job_status"]
-    logger = context["logger"]
-    ip_regex = context["ip_regex"]
-    hostname_regex = context["hostname_regex"]
-    host_status_regex = context["host_status_regex"]
-    open_port_regex = context["open_port_regex"]
-    ip_sort_key = context["ip_sort_key"]
+    ensure_job_not_cancelled = context.ensure_job_not_cancelled
+    idle_state_manager = context.idle_state_manager
+    update_job_progress = context.update_job_progress
+    emit_to_client = context.emit_to_client
+    socketio_sleep = context.socketio_sleep
+    run_cancellable_command = context.run_cancellable_command
+    run_arp_scan = context.run_arp_scan
+    identify_gateway_firewall_targets = context.identify_gateway_firewall_targets
+    start_deep_scan_fn = context.start_deep_scan
+    job_registry = context.job_registry
+    emit_job_status = context.emit_job_status
+    logger = context.logger
+    ip_regex = context.ip_regex
+    hostname_regex = context.hostname_regex
+    host_status_regex = context.host_status_regex
+    open_port_regex = context.open_port_regex
+    ip_sort_key = context.ip_sort_key
 
     operation_id = f"quick_scan:{sid}"
     try:
@@ -142,7 +142,7 @@ def start_scan_task(context, sid, target):
                 current_host = {"ip": ip_addr, "hostname": hostname, "status": None, "ports": []}
                 hosts.append(current_host)
             elif "Nmap done:" in line:
-                match = context["nmap_done_regex"].search(line)
+                match = context.nmap_done_regex.search(line)
                 if match:
                     total_ips = int(match.group(1))
                     hosts_up = int(match.group(2))
@@ -254,42 +254,42 @@ def start_scan_task(context, sid, target):
         job_registry.clear_if_disconnected(sid, "scan")
         idle_state_manager.end_operation(operation_id)
         # Tear down the broadcaster slot so new tabs no longer join this job
-        on_job_end = context.get("on_job_end")
+        on_job_end = context.on_job_end
         if on_job_end:
             on_job_end()
 
 
 def generate_report_task(context, sid, data):
     """Run report generation in a background task for a single client."""
-    job_registry = context["job_registry"]
-    idle_state_manager = context["idle_state_manager"]
-    emit_job_status = context["emit_job_status"]
-    emit_to_client = context["emit_to_client"]
-    update_job_progress = context["update_job_progress"]
-    validate_target = context["validate_target"]
-    split_subnet_into_chunks = context["split_subnet_into_chunks"]
-    create_scan_folder = context["create_scan_folder"]
-    scans_dir = context["scans_dir"]
-    sanitize_customer_dir_name = context["sanitize_customer_dir_name"]
-    run_nmap_with_xml_output = context["run_nmap_with_xml_output"]
-    merge_nmap_xml_files = context["merge_nmap_xml_files"]
-    socketio_sleep = context["socketio_sleep"]
-    convert_xml_to_html = context["convert_xml_to_html"]
-    convert_html_to_pdf = context["convert_html_to_pdf"]
-    web_stylesheet = context.get("web_stylesheet") or context.get("stylesheet")
-    pdf_stylesheet = context.get("pdf_stylesheet") or web_stylesheet
-    get_app_version = context["get_app_version"]
-    save_scan_metadata = context["save_scan_metadata"]
-    get_client_state = context.get("get_client_state")
+    job_registry = context.job_registry
+    idle_state_manager = context.idle_state_manager
+    emit_job_status = context.emit_job_status
+    emit_to_client = context.emit_to_client
+    update_job_progress = context.update_job_progress
+    validate_target = context.validate_target
+    split_subnet_into_chunks = context.split_subnet_into_chunks
+    create_scan_folder = context.create_scan_folder
+    scans_dir = context.scans_dir
+    sanitize_customer_dir_name = context.sanitize_customer_dir_name
+    run_nmap_with_xml_output = context.run_nmap_with_xml_output
+    merge_nmap_xml_files = context.merge_nmap_xml_files
+    socketio_sleep = context.socketio_sleep
+    convert_xml_to_html = context.convert_xml_to_html
+    convert_html_to_pdf = context.convert_html_to_pdf
+    web_stylesheet = context.web_stylesheet or context.stylesheet
+    pdf_stylesheet = context.pdf_stylesheet or web_stylesheet
+    get_app_version = context.get_app_version
+    save_scan_metadata = context.save_scan_metadata
+    get_client_state = context.get_client_state
     if get_client_state is not None:
         client_state = get_client_state(sid=sid)
         network_key = client_state["network_key"]
         current_customer = client_state["current_customer"]
     else:
-        network_key = context["network_key"]
-        current_customer = context["current_customer"]
-    extract_scan_statistics = context["extract_scan_statistics"]
-    customer_fingerprinter = context["customer_fingerprinter"]
+        network_key = context.network_key
+        current_customer = context.current_customer
+    extract_scan_statistics = context.extract_scan_statistics
+    customer_fingerprinter = context.customer_fingerprinter
 
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)

@@ -230,12 +230,15 @@ def test_app_uses_shared_xml_merge_helper():
 
 def test_app_uses_shared_workflow_context_builders():
     app_source = (ROOT / "app.py").read_text()
+    workflow_context_source = (ROOT / "nmapui" / "workflow_context.py").read_text()
 
     assert "from nmapui.workflow_context import (" in app_source
     assert "build_report_workflow_context" in app_source
     assert "build_scan_workflow_context" in app_source
     assert "return build_scan_workflow_context(" in app_source
     assert "build_report_workflow_context(" in app_source
+    assert "class ScanWorkflowContext" in workflow_context_source
+    assert "class ReportWorkflowContext" in workflow_context_source
     assert "def identify_gateway_firewall_targets(" not in app_source
     assert "def start_deep_scan(" not in app_source
     assert '"cve_pattern":' not in app_source
