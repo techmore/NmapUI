@@ -319,3 +319,19 @@ def test_template_loads_external_update_modal_module():
     assert "initializeUpdateModal(socket);" in template
     assert "window.showUpdateModal = showUpdateModal;" in update_module
     assert "window.startAppUpdate = () => {" in update_module
+
+
+def test_template_loads_external_report_status_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    report_module = (ROOT / "static" / "js" / "report_status.js").read_text()
+
+    assert '<script src="/static/js/report_status.js"></script>' in template
+    assert "function createReportProgressCard(message)" not in template
+    assert "function updateReportProgress(message)" not in template
+    assert "function showReportStatus(message, type)" not in template
+    assert "window.updateReportProgress = updateReportProgress;" in report_module
+    assert "window.showReportStatus = showReportStatus;" in report_module
