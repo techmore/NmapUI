@@ -1,26 +1,17 @@
-from flask import Flask, render_template, jsonify, request
-from flask_socketio import SocketIO, emit
+from flask import Flask, request
+from flask_socketio import SocketIO
 from flask_cors import CORS
 from typing import Optional
-import subprocess
 import sys
 import requests
 import re
-import json
 import ipaddress
-import socket
-import threading
 import netifaces as ni
-import os
 import shutil
-import yaml
 import logging
-import tempfile
-import glob as file_glob
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from customer_fingerprint import CustomerFingerprinter
-from nmapui.auth import check_auth, log_auth_posture, require_auth, require_socket_auth
+from nmapui.auth import log_auth_posture
 from nmapui.auto_scan import (
     DEFAULT_AUTO_SCAN_CONFIG,
     load_auto_scan_config,
@@ -78,9 +69,7 @@ from nmapui.paths import (
 )
 from nmapui.runtime import (
     check_for_updates,
-    env_flag,
     get_app_version,
-    restart_application,
 )
 from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
@@ -109,7 +98,6 @@ from nmapui.reporting import (
     get_most_recent_scan_xml,
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
-    parse_vulners_script,
     save_scan_metadata,
 )
 from nmapui.scanning import (
@@ -119,11 +107,10 @@ from nmapui.scanning import (
     create_scan_folder,
     run_arp_scan as run_arp_scan_impl,
     run_nmap_with_xml_output as run_nmap_with_xml_output_impl,
-    run_quick_auto_scan,
     split_subnet_into_chunks,
 )
 from nmapui.traceroute import run_traceroute as run_traceroute_for_state
-from nmapui.validation import sanitize_input, validate_target
+from nmapui.validation import validate_target
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
     start_deep_scan as workflow_start_deep_scan,
@@ -134,7 +121,6 @@ from nmapui.workflow_context import (
     build_scan_workflow_context,
 )
 from persistence import (
-    iter_scan_metadata_documents,
     load_json_document,
     normalize_current_assignment_document,
     normalize_scan_metadata_document,

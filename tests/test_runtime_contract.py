@@ -241,9 +241,8 @@ def test_app_uses_shared_workflow_context_builders():
 def test_app_uses_shared_validation_helpers():
     app_source = (ROOT / "app.py").read_text()
 
-    assert "from nmapui.validation import sanitize_input, validate_target" in app_source
+    assert "from nmapui.validation import validate_target" in app_source
     assert "def validate_target(" not in app_source
-    assert "def sanitize_input(" not in app_source
 
 
 def test_app_uses_shared_saved_pdf_helpers():
