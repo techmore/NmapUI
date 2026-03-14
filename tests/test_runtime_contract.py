@@ -353,3 +353,20 @@ def test_template_loads_external_asset_details_module():
     assert "function closeAssetDetailsModal()" not in template
     assert "window.showAssetDetailsModal = showAssetDetailsModal;" in asset_module
     assert "window.closeAssetDetailsModal = closeAssetDetailsModal;" in asset_module
+
+
+def test_template_loads_external_scan_banners_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    banner_module = (ROOT / "static" / "js" / "scan_banners.js").read_text()
+
+    assert '<script src="/static/js/scan_banners.js"></script>' in template
+    assert "function showHistoricalDataBanner(data)" not in template
+    assert "function hideHistoricalDataBanner()" not in template
+    assert "function showScanSummaryBanner(data)" not in template
+    assert "function hideScanSummaryBanner()" not in template
+    assert "window.showHistoricalDataBanner = showHistoricalDataBanner;" in banner_module
+    assert "window.hideScanSummaryBanner = hideScanSummaryBanner;" in banner_module
