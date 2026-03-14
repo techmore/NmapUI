@@ -316,6 +316,33 @@ def test_customer_fingerprinter_uses_extracted_store_services():
     assert "def match_customer(" in matcher_source
 
 
+def test_socket_event_docs_match_current_runtime_contract():
+    docs = (ROOT / "docs" / "socket-events.md").read_text()
+    runtime_info = (ROOT / "nmapui" / "handlers" / "runtime_info.py").read_text()
+    history = (ROOT / "nmapui" / "handlers" / "history.py").read_text()
+    updates = (ROOT / "nmapui" / "handlers" / "updates.py").read_text()
+    connections = (ROOT / "nmapui" / "handlers" / "connections.py").read_text()
+    scan_jobs = (ROOT / "nmapui" / "handlers" / "scan_jobs.py").read_text()
+
+    assert "It is pinned by regression tests" in docs
+    assert "`local_ip` | `S -> C` | `{ local_ip, subnet_mask, public_ip, cidr, interface }`" in docs
+    assert "`history_counts` | `S -> C` | direct count document" in docs
+    assert "`resumable_scan_check` `S -> C` with either `{ available: false }`" in docs
+    assert "`customers_list` | `S -> C` | `Customer[]`" in docs
+    assert "`generate_pdf_from_saved` | `C -> S` | saved-report PDF request payload" in docs
+    assert "`update_error` | `S -> C` | `{ message }`" in docs
+    assert "`client_state_snapshot` | `S -> C` | `{ last_scan_target?: string }`" in docs
+    assert "`update_complete` | `S -> C` | `{ message }`" in docs
+    assert "`scan_results` is intentionally overloaded" in docs
+
+    assert '"local_ip": local_ip' in runtime_info
+    assert 'emit("history_counts", get_report_counts())' in runtime_info
+    assert 'emit("resumable_scan_check", {"available": False})' in history
+    assert 'emit("update_error", {"message":' in updates
+    assert '"client_state_snapshot"' in connections
+    assert '@socketio.on("generate_pdf_from_saved")' in scan_jobs
+
+
 def test_release_paths_prefer_dot_venv():
     deploy_script = (ROOT / "deploy.sh").read_text()
     building_guide = (ROOT / "BUILDING.md").read_text()
