@@ -2,7 +2,7 @@ import re
 
 
 def build_scan_workflow_context(deps):
-    return {
+    context = {
         "get_client_state": deps["get_client_state"],
         "ensure_job_not_cancelled": deps["ensure_job_not_cancelled"],
         "idle_state_manager": deps["idle_state_manager"],
@@ -32,10 +32,14 @@ def build_scan_workflow_context(deps):
         ),
         "ip_sort_key": deps["ip_sort_key"],
     }
+    on_job_end = deps.get("on_job_end")
+    if on_job_end is not None:
+        context["on_job_end"] = on_job_end
+    return context
 
 
 def build_report_workflow_context(deps):
-    return {
+    context = {
         "job_registry": deps["job_registry"],
         "idle_state_manager": deps["idle_state_manager"],
         "emit_job_status": deps["emit_job_status"],
@@ -60,3 +64,10 @@ def build_report_workflow_context(deps):
         "extract_scan_statistics": deps["extract_scan_statistics"],
         "customer_fingerprinter": deps["customer_fingerprinter"],
     }
+    web_stylesheet = deps.get("web_stylesheet")
+    if web_stylesheet is not None:
+        context["web_stylesheet"] = web_stylesheet
+    pdf_stylesheet = deps.get("pdf_stylesheet")
+    if pdf_stylesheet is not None:
+        context["pdf_stylesheet"] = pdf_stylesheet
+    return context

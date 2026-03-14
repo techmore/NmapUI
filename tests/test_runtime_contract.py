@@ -227,6 +227,16 @@ def test_app_uses_shared_xml_merge_helper():
     assert "def merge_nmap_xml_files(" not in app_source
 
 
+def test_app_uses_shared_workflow_context_builders():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.workflow_context import (" in app_source
+    assert "build_report_workflow_context" in app_source
+    assert "build_scan_workflow_context" in app_source
+    assert "return build_scan_workflow_context(" in app_source
+    assert "build_report_workflow_context(" in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

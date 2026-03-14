@@ -124,6 +124,10 @@ from nmapui.workflows import (
     start_deep_scan as workflow_start_deep_scan,
     start_scan_task as workflow_start_scan_task,
 )
+from nmapui.workflow_context import (
+    build_report_workflow_context,
+    build_scan_workflow_context,
+)
 from persistence import (
     iter_scan_metadata_documents,
     load_json_document,
@@ -723,7 +727,8 @@ def _make_broadcast_emit(owner_sid: str):
 
 
 def _scan_workflow_context(owner_sid: str):
-    return {
+    return build_scan_workflow_context(
+        {
         "get_client_state": get_client_state,
         "ensure_job_not_cancelled": ensure_job_not_cancelled,
         "idle_state_manager": idle_state_manager,
@@ -756,6 +761,7 @@ def _scan_workflow_context(owner_sid: str):
         "ip_sort_key": ipaddress.IPv4Address,
         "on_job_end": lambda: broadcaster.end_job(owner_sid),
     }
+    )
 
 
 def start_deep_scan(targets, sid, is_gateway_phase=False):
@@ -800,7 +806,8 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
 def generate_report_task(sid, data):
     """Run report generation in a background task for a single client."""
     workflow_generate_report_task(
-        {
+        build_report_workflow_context(
+            {
             "job_registry": job_registry,
             "idle_state_manager": idle_state_manager,
             "emit_job_status": emit_job_status,
@@ -818,6 +825,7 @@ def generate_report_task(sid, data):
             "convert_html_to_pdf": convert_html_to_pdf,
             "web_stylesheet": XSL_STYLESHEET,
             "pdf_stylesheet": XSL_STYLESHEET,
+            "stylesheet": XSL_STYLESHEET,
             "get_app_version": get_app_version,
             "save_scan_metadata": save_scan_metadata,
             "get_client_state": get_client_state,
@@ -825,7 +833,8 @@ def generate_report_task(sid, data):
             "current_customer": current_customer,
             "extract_scan_statistics": extract_scan_statistics,
             "customer_fingerprinter": customer_fingerprinter,
-        },
+        }
+        ),
         sid,
         data,
     )
