@@ -1,9 +1,12 @@
 import json
+import shutil
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from nmapui.reporting import (
     build_report_diff_summary,
+    convert_xml_to_html,
     extract_scan_statistics,
     find_latest_saved_scan_for_pdf,
     find_previous_scan_metadata,
@@ -18,6 +21,8 @@ from nmapui.reporting import (
     save_scan_metadata,
     summarize_asset_differences,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_parse_vulners_script_extracts_vulnerability_fields():
@@ -585,3 +590,80 @@ def test_inject_diff_summary_into_report_html_adds_summary_section(tmp_path):
 def test_render_report_diff_summary_html_returns_empty_string_without_changes():
     assert render_report_diff_summary_html(None) == ""
     assert render_report_diff_summary_html({"has_changes": False}) == ""
+
+
+def test_representative_report_fixture_renders_shared_landmarks_for_web_and_pdf(tmp_path):
+    if shutil.which("xsltproc") is None:
+        raise AssertionError("xsltproc is required for report stylesheet regression coverage")
+
+    xml_path = tmp_path / "scan.xml"
+    web_html_path = tmp_path / "scan_web.html"
+    pdf_html_path = tmp_path / "scan_pdf.html"
+
+    xml_path.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun scanner="nmap" startstr="Sat Mar 14 12:00:00 2026" version="7.94" xmloutputversion="1.05">
+  <scaninfo type="syn" protocol="tcp" numservices="1000" services="1-1000"/>
+  <verbose level="0"/>
+  <debugging level="0"/>
+  <host>
+    <status state="up" reason="syn-ack"/>
+    <address addr="192.168.1.10" addrtype="ipv4"/>
+    <hostnames><hostname name="router.local" type="PTR"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack"/>
+        <service name="ssh" product="OpenSSH" version="9.0"/>
+      </port>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="nginx" version="1.25.0"/>
+        <script id="http-title">
+          <elem key="title">nginx/1.25.0</elem>
+        </script>
+      </port>
+    </ports>
+  </host>
+  <runstats>
+    <finished time="0" timestr="Sat Mar 14 12:01:00 2026" summary="Nmap done"/>
+    <hosts up="1" down="0" total="1"/>
+  </runstats>
+</nmaprun>
+""",
+        encoding="utf-8",
+    )
+
+    assert convert_xml_to_html(
+        xml_path,
+        web_html_path,
+        stylesheet=ROOT / "nmap-modern.xsl",
+        get_app_version=lambda: "test-version",
+    )
+    assert convert_xml_to_html(
+        xml_path,
+        pdf_html_path,
+        stylesheet=ROOT / "nmap-pdf-olive-legacy.xsl",
+        get_app_version=lambda: "test-version",
+    )
+
+    web_html = web_html_path.read_text(encoding="utf-8")
+    pdf_html = pdf_html_path.read_text(encoding="utf-8")
+
+    for landmark in (
+        'id="scannedhosts"',
+        'id="openservices"',
+        'id="onlinehosts"',
+        "Scanned Hosts",
+        "Open Services",
+        "Online Hosts",
+        "Instrument Serif",
+        "router.local",
+        "192.168.1.10",
+    ):
+        assert landmark in web_html
+        assert landmark in pdf_html
+
+    assert "cdn.datatables.net" in web_html
+    assert "code.jquery.com" in web_html
+    assert "cdn.datatables.net" not in pdf_html
+    assert "code.jquery.com" not in pdf_html

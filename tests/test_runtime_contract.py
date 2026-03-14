@@ -190,6 +190,7 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
     pdf_stylesheet = (ROOT / "nmap-pdf-olive-legacy.xsl").read_text()
     web_stylesheet = (ROOT / "nmap-modern.xsl").read_text()
+    strategy = (ROOT / "docs" / "guides" / "REPORT_STYLESHEET_STRATEGY.md").read_text()
 
     assert "cdn.datatables.net" not in pdf_stylesheet
     assert "code.jquery.com" not in pdf_stylesheet
@@ -197,6 +198,13 @@ def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive
     assert "@media print" in pdf_stylesheet
     assert "cdn.datatables.net" in web_stylesheet
     assert "$('#table-services').DataTable" in web_stylesheet
+    assert "nmap-modern.xsl" in strategy
+    assert "nmap-pdf-olive-legacy.xsl" in strategy
+    assert "#scannedhosts" in strategy
+    assert "#openservices" in strategy
+    assert "#onlinehosts" in strategy
+    assert "DataTables CSS and JS" in strategy
+    assert "Playwright PDF rendering under `print` media" in strategy
 
 
 def test_deploy_script_uses_portable_python_timeout_smoke_test():
