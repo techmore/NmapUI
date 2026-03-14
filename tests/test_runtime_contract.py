@@ -87,8 +87,12 @@ def test_frontend_layout_guide_and_page_shell_exist():
     guide = (ROOT / "docs" / "guides" / "FRONTEND_LAYOUT_GUIDE.md").read_text()
 
     assert ".page-shell {" in template
+    assert ".results-band {" in template
     assert template.count('class="page-shell"') >= 2
+    assert 'class="results-band"' in template
+    assert 'class="table-fixed min-w-[2400px]"' in template
     assert "Do not repeat `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` inline. Use `page-shell`." in guide
+    assert "For oversized tables, keep `page-shell` outside and put `overflow-x-auto` on the inner band." in guide
     assert "/Users/techmore/projects/NmapUI/templates/index.html" in guide
 
 

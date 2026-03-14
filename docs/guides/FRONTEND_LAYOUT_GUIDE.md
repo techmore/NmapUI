@@ -14,15 +14,20 @@ This page has a small set of layout rules. New sections should follow these inst
 - Full-width bands
   - Keep them inside `page-shell` unless the section is intentionally edge-to-edge.
   - Prefer section-level spacing and borders over adding another max-width wrapper.
+- Breakout data sections
+  - Use a local band class inside `page-shell` when the content itself needs horizontal scrolling.
+  - Keep the band responsible for border, background, and overflow; keep the shell responsible for page alignment.
 
 ## Rules
 
 - Do not repeat `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` inline. Use `page-shell`.
 - Do not nest multiple page-width wrappers inside one another.
 - Keep section spacing consistent before adding custom width rules.
+- For oversized tables, keep `page-shell` outside and put `overflow-x-auto` on the inner band.
 - If a section needs a custom width, document why it is not using `page-shell`.
 
 ## Current Standard
 
 - The main page shell in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) is the canonical example.
+- The discovery table section in [`/Users/techmore/projects/NmapUI/templates/index.html`](/Users/techmore/projects/NmapUI/templates/index.html) is the canonical breakout-band example.
 - Follow this guide for future layout refactors tied to [#74](https://github.com/techmore/NmapUI/issues/74).

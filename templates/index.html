@@ -277,6 +277,16 @@
             padding-inline: 2rem;
         }
     }
+
+    .results-band {
+        margin-top: 2rem;
+        border-radius: 0.75rem;
+        border: 1px solid oklch(75% 0.040 110);
+        background-color: oklch(96% 0.015 110);
+        padding-block: 2rem;
+        box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+        overflow-x: auto;
+    }
     
     /* Custom button press effect */
     .btn-press:active {
@@ -952,9 +962,10 @@
     </div>
 
     </div>
-    <!-- Results Table - Wider breakout section (2400px) -->
-    <div class="w-full mt-8 px-4 sm:px-6 lg:px-8 py-8 bg-olive-50 rounded-xl shadow-sm border border-olive-300 overflow-x-auto">
-        <table id="discovery-table" class="table-fixed" style="width: 2400px">
+    <!-- Results Table -->
+    <section class="page-shell">
+        <div class="results-band">
+        <table id="discovery-table" class="table-fixed min-w-[2400px]">
                         <thead>
                             <tr>
                                 <th class="w-12 px-4 py-3 text-left"></th>
@@ -1056,7 +1067,7 @@
             <tbody class="text-sm"></tbody>
         </table>
         </div>
-    </div>
+    </section>
     <div class="page-shell">
 
     <script>
