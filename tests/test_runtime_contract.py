@@ -361,6 +361,29 @@ def test_update_runtime_uses_manual_download_contract():
     assert "is available to download" in auto_update_source
 
 
+def test_runtime_status_route_and_menu_bar_indicator_contract():
+    routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
+    jobs_source = (ROOT / "nmapui" / "jobs.py").read_text()
+    composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
+    app_source = (ROOT / "app.py").read_text()
+    launcher_source = (
+        ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift"
+    ).read_text()
+
+    assert '@app.route("/api/runtime/status")' in routes_source
+    assert '"active_job_types": sorted(' in routes_source
+    assert "def snapshot(self):" in jobs_source
+    assert '"has_active_jobs": bool(active_jobs)' in jobs_source
+    assert '"job_registry": job_registry' in composition_source
+    assert "job_registry=job_registry," in app_source
+    assert 'let runtimeStatusURL = URL(string: "http://127.0.0.1:9000/api/runtime/status")!' in launcher_source
+    assert "startStatusPolling()" in launcher_source
+    assert "pollRuntimeStatus()" in launcher_source
+    assert "Recent scan or report completed" in launcher_source
+    assert 'symbolName = "dot.radiowaves.left.and.right"' in launcher_source
+    assert 'symbolName = "checkmark.circle.fill"' in launcher_source
+
+
 def test_release_paths_prefer_dot_venv():
     deploy_script = (ROOT / "deploy.sh").read_text()
     building_guide = (ROOT / "BUILDING.md").read_text()

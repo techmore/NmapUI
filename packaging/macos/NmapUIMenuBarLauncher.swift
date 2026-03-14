@@ -2,8 +2,12 @@ import Cocoa
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let appURL = URL(string: "http://127.0.0.1:9000")!
+    let runtimeStatusURL = URL(string: "http://127.0.0.1:9000/api/runtime/status")!
     var statusItem: NSStatusItem!
     var pythonProcess: Process?
+    var statusPollTimer: Timer?
+    var hadActiveJob = false
+    var completedIndicatorUntil: Date?
 
     // Menu items that need dynamic state updates
     var openItem: NSMenuItem!
@@ -22,9 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "network", accessibilityDescription: "NmapUI")
-        }
+        updateStatusIcon(state: .starting, detail: "Starting NmapUI")
 
         let menu = NSMenu()
         menu.delegate = self
@@ -91,15 +93,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             try process.run()
             pythonProcess = process
+            startStatusPolling()
+            updateStatusIcon(state: .starting, detail: "Starting NmapUI")
             print("NmapUI started with PID: \(process.processIdentifier)")
         } catch {
             print("Failed to start NmapUI: \(error)")
+            updateStatusIcon(state: .error, detail: "Failed to start NmapUI")
         }
     }
 
     // Kill the tracked process and any stray app.py processes (e.g. from a
     // previous run or if pythonProcess is stale after a crash/restart).
     func stopFlask(wait: Bool = true) {
+        stopStatusPolling()
         if let process = pythonProcess, process.isRunning {
             process.terminate()
             if wait { process.waitUntilExit() }
@@ -114,6 +120,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if wait { pkill.waitUntilExit() }
 
         print("NmapUI stopped")
+        updateStatusIcon(state: .idle, detail: "NmapUI stopped")
     }
 
     // Poll localhost:9000 until Flask responds (or timeout), then open browser
@@ -181,6 +188,141 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         stopFlask(wait: false)
         statusItem = nil
+    }
+
+    enum ActivityIndicatorState {
+        case idle
+        case starting
+        case active(jobTypes: [String])
+        case completed
+        case error
+    }
+
+    struct RuntimeStatus: Decodable {
+        struct ActiveJob: Decodable {
+            let sid: String?
+            let job_type: String?
+            let status: String?
+            let details: [String: String]?
+        }
+
+        let has_active_jobs: Bool
+        let active_job_types: [String]
+        let active_jobs: [ActiveJob]
+    }
+
+    func startStatusPolling() {
+        stopStatusPolling()
+        statusPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.pollRuntimeStatus()
+        }
+        if let timer = statusPollTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
+        pollRuntimeStatus()
+    }
+
+    func stopStatusPolling() {
+        statusPollTimer?.invalidate()
+        statusPollTimer = nil
+        hadActiveJob = false
+        completedIndicatorUntil = nil
+    }
+
+    func pollRuntimeStatus() {
+        guard isFlaskRunning else {
+            updateStatusIcon(state: .idle, detail: "NmapUI stopped")
+            return
+        }
+
+        var request = URLRequest(url: runtimeStatusURL)
+        request.timeoutInterval = 1.5
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                if let _ = error {
+                    self.updateStatusIcon(state: .starting, detail: "Waiting for local server")
+                    return
+                }
+
+                guard
+                    let http = response as? HTTPURLResponse,
+                    http.statusCode == 200,
+                    let data = data,
+                    let runtimeStatus = try? JSONDecoder().decode(RuntimeStatus.self, from: data)
+                else {
+                    self.updateStatusIcon(state: .error, detail: "Unable to read runtime status")
+                    return
+                }
+
+                let now = Date()
+                if runtimeStatus.has_active_jobs {
+                    self.hadActiveJob = true
+                    self.completedIndicatorUntil = nil
+                    self.updateStatusIcon(
+                        state: .active(jobTypes: runtimeStatus.active_job_types),
+                        detail: self.activityDetail(from: runtimeStatus)
+                    )
+                    return
+                }
+
+                if self.hadActiveJob {
+                    self.hadActiveJob = false
+                    self.completedIndicatorUntil = now.addingTimeInterval(20)
+                }
+
+                if let completedUntil = self.completedIndicatorUntil, completedUntil > now {
+                    self.updateStatusIcon(state: .completed, detail: "Recent scan or report completed")
+                } else {
+                    self.completedIndicatorUntil = nil
+                    self.updateStatusIcon(state: .idle, detail: "NmapUI idle")
+                }
+            }
+        }.resume()
+    }
+
+    func activityDetail(from runtimeStatus: RuntimeStatus) -> String {
+        if let job = runtimeStatus.active_jobs.first,
+           let message = job.details?["message"],
+           !message.isEmpty {
+            return message
+        }
+
+        if runtimeStatus.active_job_types.isEmpty {
+            return "Active work in progress"
+        }
+
+        return runtimeStatus.active_job_types
+            .map { $0.capitalized }
+            .joined(separator: " + ") + " in progress"
+    }
+
+    func updateStatusIcon(state: ActivityIndicatorState, detail: String) {
+        guard let button = statusItem.button else { return }
+
+        let symbolName: String
+        let accessibility: String
+
+        switch state {
+        case .idle:
+            symbolName = "network"
+            accessibility = "NmapUI idle"
+        case .starting:
+            symbolName = "hourglass"
+            accessibility = "NmapUI starting"
+        case .active(let jobTypes):
+            symbolName = "dot.radiowaves.left.and.right"
+            accessibility = "NmapUI active: " + (jobTypes.isEmpty ? "job running" : jobTypes.joined(separator: ", "))
+        case .completed:
+            symbolName = "checkmark.circle.fill"
+            accessibility = "NmapUI recent activity completed"
+        case .error:
+            symbolName = "exclamationmark.triangle.fill"
+            accessibility = "NmapUI status unavailable"
+        }
+
+        button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: accessibility)
+        button.toolTip = detail
     }
 }
 

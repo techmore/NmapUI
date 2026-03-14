@@ -7,6 +7,7 @@ def register_core_routes(app, deps):
     get_app_version = deps["get_app_version"]
     get_default_interface_cached = deps["get_default_interface_cached"]
     get_versions = deps["get_versions"]
+    job_registry = deps["job_registry"]
     startup_state = deps["startup_state"]
     get_auto_scan_thread = deps["get_auto_scan_thread"]
 
@@ -43,3 +44,17 @@ def register_core_routes(app, deps):
             tool_versions=get_versions(),
         )
         return jsonify(payload), status_code
+
+    @app.route("/api/runtime/status")
+    def runtime_status():
+        snapshot = job_registry.snapshot()
+        active_jobs = snapshot["active_jobs"]
+        return jsonify(
+            {
+                "has_active_jobs": snapshot["has_active_jobs"],
+                "active_job_types": sorted(
+                    {job.get("job_type") for job in active_jobs if job.get("job_type")}
+                ),
+                "active_jobs": active_jobs,
+            }
+        )

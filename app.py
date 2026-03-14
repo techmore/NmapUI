@@ -363,6 +363,7 @@ register_shared_handlers(
         get_app_version=get_app_version,
         get_default_interface_cached=lambda: DEFAULT_INTERFACE,
         get_versions=tool_versions.get_versions,
+        job_registry=job_registry,
         startup_state=startup_state,
         get_auto_scan_thread=lambda: auto_scan_thread,
     ),

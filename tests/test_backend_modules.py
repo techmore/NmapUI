@@ -17,6 +17,7 @@ from nmapui.handlers.auto_scan import (
     register_auto_scan_handlers,
     start_auto_scan_thread,
 )
+from nmapui.jobs import ClientJobRegistry
 from nmapui.paths import AUTO_SCAN_SCHEDULER_LOCK_FILE, resolve_scan_path
 from nmapui.runtime import env_flag
 
@@ -167,6 +168,24 @@ def test_env_flag_parses_truthy_values(monkeypatch):
     monkeypatch.setenv("NMAPUI_TEST_FLAG", "yes")
 
     assert env_flag("NMAPUI_TEST_FLAG", default=False) is True
+
+
+def test_client_job_registry_snapshot_reports_active_jobs():
+    registry = ClientJobRegistry()
+    registry.start("sid-1", "scan", {"message": "Scanning"})
+    registry.complete("sid-2", "report", status="completed", details={"message": "Done"})
+
+    snapshot = registry.snapshot()
+
+    assert snapshot["has_active_jobs"] is True
+    assert len(snapshot["active_jobs"]) == 1
+    assert snapshot["active_jobs"][0]["sid"] == "sid-1"
+    assert snapshot["active_jobs"][0]["job_type"] == "scan"
+    assert snapshot["active_jobs"][0]["status"] == "running"
+    assert snapshot["active_jobs"][0]["details"] == {"message": "Scanning"}
+    assert snapshot["active_jobs"][0]["cancel_requested"] is False
+    assert snapshot["active_jobs"][0]["disconnected"] is False
+    assert {job["job_type"] for job in snapshot["jobs"]} == {"scan", "report"}
 
 
 def test_acquire_auto_scan_scheduler_lock_uses_configured_lock_file(tmp_path):

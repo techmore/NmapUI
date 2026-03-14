@@ -233,6 +233,32 @@ class ClientJobRegistry:
             job = self._jobs.get((sid, job_type))
             return dict(job) if job else None
 
+    def snapshot(self):
+        with self._lock:
+            jobs = []
+            for (sid, job_type), job in self._jobs.items():
+                jobs.append(
+                    {
+                        "sid": sid,
+                        "job_type": job_type,
+                        "status": job.get("status"),
+                        "started_at": job.get("started_at"),
+                        "finished_at": job.get("finished_at"),
+                        "details": dict(job.get("details", {})),
+                        "cancel_requested": bool(job.get("cancel_requested")),
+                        "disconnected": bool(job.get("disconnected")),
+                    }
+                )
+
+            active_jobs = [
+                job for job in jobs if job.get("status") in {"running", "cancelling"}
+            ]
+            return {
+                "has_active_jobs": bool(active_jobs),
+                "active_jobs": active_jobs,
+                "jobs": jobs,
+            }
+
     def mark_disconnected(self, sid: str):
         with self._lock:
             for key, job in list(self._jobs.items()):

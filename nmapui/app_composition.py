@@ -311,6 +311,7 @@ def build_core_routes_deps(
     get_app_version,
     get_default_interface_cached,
     get_versions,
+    job_registry,
     startup_state,
     get_auto_scan_thread,
 ):
@@ -320,6 +321,7 @@ def build_core_routes_deps(
         "get_app_version": get_app_version,
         "get_default_interface_cached": get_default_interface_cached,
         "get_versions": get_versions,
+        "job_registry": job_registry,
         "startup_state": startup_state,
         "get_auto_scan_thread": get_auto_scan_thread,
     }
