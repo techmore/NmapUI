@@ -8,7 +8,7 @@ from nmapui.auth import require_socket_auth
 
 
 def register_customer_handlers(socketio, deps):
-    customer_fingerprinter = deps["customer_fingerprinter"]
+    get_customer_fingerprinter = deps["get_customer_fingerprinter"]
     network_key = deps["network_key"]
     get_current_customer = deps["get_current_customer"]
     set_current_customer = deps["set_current_customer"]
@@ -23,6 +23,7 @@ def register_customer_handlers(socketio, deps):
     @socketio.on("get_customer_info")
     @require_socket_auth()
     def get_customer_info_event():
+        customer_fingerprinter = get_customer_fingerprinter()
         current_customer = get_current_customer()
         if not current_customer.get("id") and not current_customer.get("manual_assignment"):
             customer, confidence = customer_fingerprinter.match_customer(network_key)
@@ -42,6 +43,7 @@ def register_customer_handlers(socketio, deps):
     @socketio.on("search_scan_history")
     @require_socket_auth()
     def search_scan_history_event(data):
+        customer_fingerprinter = get_customer_fingerprinter()
         customer_id = data.get("customer_id")
         limit = data.get("limit", 50)
         try:
@@ -54,6 +56,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def get_network_statistics_event():
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             history = customer_fingerprinter.get_scan_history(limit=1000)
             stats = {
                 "total_scans": len(history),
@@ -95,6 +98,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def add_customer_event(data):
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             customer_data = {
                 "name": data.get("name", "").strip(),
                 "id": data.get("id", "").strip(),
@@ -169,6 +173,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def assign_customer_event(data):
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             customer_id = data.get("customer_id", "").strip()
             customer_name = data.get("customer_name", "").strip()
             if not customer_id:
@@ -213,6 +218,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def get_customers_event():
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             customers = customer_fingerprinter.customers + [customer_fingerprinter.unknown_customer]
             logger.info("Sending %s customers to client", len(customers))
             emit("customers_list", customers)
@@ -224,6 +230,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def delete_customer_event(data):
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             customer_id = data.get("customer_id", "").strip()
             if not customer_id:
                 emit("customer_error", "Customer ID is required")
@@ -255,6 +262,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def assign_report_to_customer_event(data):
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             report_path = data.get("report_path", "").strip()
             customer_id = data.get("customer_id", "").strip()
             label = data.get("label", "").strip()
@@ -321,6 +329,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def get_customer_traceroutes_event(data):
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             customer_id = data.get("customer_id", "").strip()
             if not customer_id:
                 emit("customer_error", "Customer ID is required")
@@ -342,6 +351,7 @@ def register_customer_handlers(socketio, deps):
     @require_socket_auth()
     def add_labeled_public_ip_event(data):
         try:
+            customer_fingerprinter = get_customer_fingerprinter()
             customer_id = data.get("customer_id", "").strip()
             label = data.get("label", "").strip()
             ip_address = data.get("ip_address", "").strip()

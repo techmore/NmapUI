@@ -102,6 +102,34 @@ def test_app_exposes_explicit_run_server_entrypoint():
     assert 'if __name__ == "__main__":\n    run_server()' in app_source
 
 
+def test_app_defers_fingerprinter_and_default_interface_side_effects():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    history_source = subprocess.check_output(
+        ["git", "show", ":nmapui/handlers/history.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    customer_source = subprocess.check_output(
+        ["git", "show", ":nmapui/handlers/customers.py"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "customer_fingerprinter = CustomerFingerprinter()" not in app_source
+    assert "DEFAULT_INTERFACE = get_default_interface()" not in app_source
+    assert "def get_customer_fingerprinter():" in app_source
+    assert "def get_default_interface_cached():" in app_source
+    assert '"get_customer_fingerprinter": get_customer_fingerprinter' in app_source
+    assert 'customer_fingerprinter = deps["customer_fingerprinter"]' not in history_source
+    assert 'customer_fingerprinter = deps["customer_fingerprinter"]' not in customer_source
+    assert 'get_customer_fingerprinter = deps["get_customer_fingerprinter"]' in history_source
+    assert 'get_customer_fingerprinter = deps["get_customer_fingerprinter"]' in customer_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

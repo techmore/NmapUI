@@ -25,7 +25,12 @@ from nmapui.auto_scan import (
     save_auto_scan_config,
     should_run_auto_scan,
 )
-from nmapui.bootstrap import begin_startup_state, build_runtime_options, complete_startup_state
+from nmapui.bootstrap import (
+    begin_startup_state,
+    build_runtime_options,
+    complete_startup_state,
+    create_web_app,
+)
 from nmapui.client_state import ClientStateRegistry
 from nmapui.events import (
     emit_job_status as nmapui_emit_job_status,
@@ -261,7 +266,7 @@ network_key = {
 idle_state_manager = IdleStateManager()
 
 # Global customer fingerprinter
-customer_fingerprinter = CustomerFingerprinter()
+customer_fingerprinter = None
 current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
 
 # Global scan target tracking
@@ -295,6 +300,13 @@ def get_client_state(sid: Optional[str] = None):
         "network_key": network_key,
         "last_scan_target": last_scan_target,
     }
+
+
+def get_customer_fingerprinter():
+    global customer_fingerprinter
+    if customer_fingerprinter is None:
+        customer_fingerprinter = CustomerFingerprinter()
+    return customer_fingerprinter
 
 
 def get_current_customer_state(sid: Optional[str] = None):
@@ -621,7 +633,7 @@ register_history_handlers(
     socketio,
     {
         "get_most_recent_scan_xml": get_most_recent_scan_xml,
-        "customer_fingerprinter": customer_fingerprinter,
+        "get_customer_fingerprinter": get_customer_fingerprinter,
         "scans_dir": SCANS_DIR,
         "sanitize_customer_dir_name": sanitize_customer_dir_name,
         "parse_scan_xml_for_assets": parse_scan_xml_for_assets,
@@ -782,7 +794,8 @@ def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
         socketio.sleep(0)
 
         if not active_customer.get("manual_assignment"):
-            customer, confidence = customer_fingerprinter.match_customer(active_network_key)
+            fingerprinter = get_customer_fingerprinter()
+            customer, confidence = fingerprinter.match_customer(active_network_key)
             if confidence > 0 and customer and customer.get("id") != "unknown":
                 active_customer = {
                     "id": customer.get("id"),
@@ -799,11 +812,11 @@ def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
                     "confidence": 0.0,
                 }
                 logger.info("No customer match found, setting to Unassigned")
-                save_customer = customer_fingerprinter.unknown_customer or {}
+                save_customer = fingerprinter.unknown_customer or {}
         else:
             logger.info(f"Preserving manual assignment: {active_customer['name']}")
             if active_customer.get("id"):
-                saved_customer = customer_fingerprinter.get_customer_by_id(
+                saved_customer = get_customer_fingerprinter().get_customer_by_id(
                     active_customer["id"]
                 )
                 if saved_customer:
@@ -817,8 +830,9 @@ def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
             confidence = active_customer.get("confidence", 1.0)
 
         set_current_customer_state(active_customer, sid)
-        customer_fingerprinter.save_scan_result(active_network_key, save_customer, confidence)
-        customer_fingerprinter.save_traceroute_to_history(
+        fingerprinter = get_customer_fingerprinter()
+        fingerprinter.save_scan_result(active_network_key, save_customer, confidence)
+        fingerprinter.save_traceroute_to_history(
             active_customer["id"],
             active_network_key,
             f"WAN: {active_network_key.get('public_ip', 'unknown')}",
@@ -829,7 +843,7 @@ def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
             {
                 "customer": get_current_customer_state(sid),
                 "match_method": getattr(
-                    customer_fingerprinter, "last_match_method", "unknown"
+                    fingerprinter, "last_match_method", "unknown"
                 ),
                 "public_ip": active_network_key.get("public_ip"),
                 "exit_ip": active_network_key.get("exit_ip"),
@@ -934,6 +948,7 @@ def get_network_key_event():
 
 def save_customers_config():
     try:
+        customer_fingerprinter = get_customer_fingerprinter()
         config = customer_fingerprinter.config or {}
         config_data = {
             "version": config.get("version", "1.0"),
@@ -984,7 +999,7 @@ def merge_customer_metadata(customer_dict, saved_customer):
 register_customer_handlers(
     socketio,
     {
-        "customer_fingerprinter": customer_fingerprinter,
+        "get_customer_fingerprinter": get_customer_fingerprinter,
         "network_key": network_key,
         "get_current_customer": lambda: get_current_customer_state(request.sid),
         "set_current_customer": lambda value: set_current_customer_state(value, request.sid),
@@ -1011,7 +1026,7 @@ def load_current_assignment():
 
             # Merge metadata from saved customer configuration
             if current_customer.get("id"):
-                saved_customer = customer_fingerprinter.get_customer_by_id(
+                saved_customer = get_customer_fingerprinter().get_customer_by_id(
                     current_customer["id"]
                 )
                 if saved_customer:
@@ -1068,13 +1083,20 @@ def get_default_interface():
     return "en0"
 
 
-DEFAULT_INTERFACE = get_default_interface()
+DEFAULT_INTERFACE = None
+
+
+def get_default_interface_cached():
+    global DEFAULT_INTERFACE
+    if DEFAULT_INTERFACE is None:
+        DEFAULT_INTERFACE = get_default_interface()
+    return DEFAULT_INTERFACE
 
 
 @socketio.on("get_local_ip")
 def get_local_ip():
     try:
-        interface = DEFAULT_INTERFACE
+        interface = get_default_interface_cached()
         local_ip, subnet_mask = (
             ni.ifaddresses(interface)[ni.AF_INET][0]["addr"],
             ni.ifaddresses(interface)[ni.AF_INET][0]["netmask"],
@@ -1208,7 +1230,7 @@ def start_scan(data):
 
 def run_arp_scan(target, interface=None, sid=None):
     if interface is None:
-        interface = DEFAULT_INTERFACE
+        interface = get_default_interface_cached()
 
     if not shutil.which("arp-scan"):
         logger.warning("arp-scan not found, skipping MAC/vendor detection")
@@ -1459,7 +1481,7 @@ def generate_report_task(sid, data):
             "network_key": network_key,
             "current_customer": current_customer,
             "extract_scan_statistics": extract_scan_statistics,
-            "customer_fingerprinter": customer_fingerprinter,
+            "customer_fingerprinter": get_customer_fingerprinter(),
         },
         sid,
         data,
@@ -1499,7 +1521,8 @@ def startup_checks(quick=False):
     system_platform = platform.system()
     platform_release = platform.release()
     logger.info(f"Platform detected: {system_platform} ({platform_release})")
-    logger.info(f"Default Network Interface: {DEFAULT_INTERFACE}")
+    default_interface = get_default_interface_cached()
+    logger.info(f"Default Network Interface: {default_interface}")
 
     if quick:
         logger.info("Quick mode: skipping dependency checks")
@@ -1580,7 +1603,7 @@ def health_check():
     return jsonify(
         build_liveness_payload(
             app_version=get_app_version(),
-            default_interface=DEFAULT_INTERFACE,
+            default_interface=get_default_interface_cached(),
             auto_scan_thread_alive=bool(
                 auto_scan_thread and auto_scan_thread.is_alive()
             ),
@@ -1601,7 +1624,7 @@ def health_ready():
     payload, status_code = build_readiness_payload(
         startup_state=startup_state,
         app_version=get_app_version(),
-        default_interface=DEFAULT_INTERFACE,
+        default_interface=get_default_interface_cached(),
         auto_scan_thread_alive=bool(auto_scan_thread and auto_scan_thread.is_alive()),
         tool_versions=get_versions(),
     )
