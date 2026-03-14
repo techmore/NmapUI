@@ -47,12 +47,12 @@ def test_pyinstaller_spec_includes_runtime_assets():
 
 def test_runtime_uses_separate_web_and_pdf_stylesheets():
     paths_source = (ROOT / "nmapui" / "paths.py").read_text()
-    app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
     assert 'XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"' in paths_source
     assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
-    assert '"web_stylesheet": XSL_STYLESHEET' in app_source
-    assert '"pdf_stylesheet": XSL_STYLESHEET_PDF' in app_source
+    assert '"web_stylesheet": web_stylesheet' in app_composition_source
+    assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
 
 
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
@@ -363,15 +363,23 @@ def test_app_uses_shared_workflow_context_builders():
     workflow_context_source = (ROOT / "nmapui" / "workflow_context.py").read_text()
     scan_runtime_source = (ROOT / "nmapui" / "scan_runtime.py").read_text()
     report_runtime_source = (ROOT / "nmapui" / "report_runtime.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
     assert "from nmapui.report_runtime import (" in app_source
+    assert "from nmapui.app_composition import (" in app_source
     assert "generate_report_task as generate_report_task_runtime" in app_source
     assert "generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime" in app_source
+    assert "build_scan_task_deps(" in app_source
+    assert "build_report_task_deps(" in app_source
+    assert "build_saved_pdf_task_deps(" in app_source
     assert "build_report_workflow_context(" in report_runtime_source
     assert "class ScanWorkflowContext" in workflow_context_source
     assert "class ReportWorkflowContext" in workflow_context_source
     assert "context = build_scan_workflow_context(" in scan_runtime_source
     assert "workflow_generate_report_task(build_report_workflow_context(deps), sid, data)" in report_runtime_source
+    assert "def build_scan_task_deps(" in app_composition_source
+    assert "def build_report_task_deps(" in app_composition_source
+    assert "def build_saved_pdf_task_deps(" in app_composition_source
     assert "def identify_gateway_firewall_targets(" not in app_source
     assert "def start_deep_scan(" not in app_source
     assert '"cve_pattern":' not in app_source
@@ -426,6 +434,14 @@ def test_app_uses_single_traceroute_dependency_bundle():
     assert "return build_traceroute_deps(" in app_source
     assert "run_traceroute as run_traceroute_runtime" in app_source
     assert "run_traceroute_for_state(target, sid=sid, deps=deps)" in traceroute_runtime_source
+
+
+def test_app_uses_shared_startup_dependency_builder():
+    app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
+
+    assert "build_startup_check_deps(" in app_source
+    assert "def build_startup_check_deps(" in app_composition_source
 
 
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():

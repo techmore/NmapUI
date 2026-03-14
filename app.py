@@ -44,6 +44,13 @@ from nmapui.app_client_state_runtime import (
     set_last_scan_target_state as set_last_scan_target_state_runtime,
     set_network_key_state as set_network_key_state_runtime,
 )
+from nmapui.app_composition import (
+    build_execute_auto_scan_deps,
+    build_report_task_deps,
+    build_saved_pdf_task_deps,
+    build_scan_task_deps,
+    build_startup_check_deps,
+)
 from nmapui.app_state_runtime import (
     get_report_counts as get_report_counts_runtime,
     load_current_assignment as load_current_assignment_runtime,
@@ -322,17 +329,17 @@ client_state_registry = runtime_services["client_state_registry"]
 
 def execute_auto_scan():
     return execute_auto_scan_runtime(
-        deps={
-            "auto_scan_config": auto_scan_config,
-            "current_customer": current_customer,
-            "get_last_scan_target": lambda: last_scan_target,
-            "logger": logger,
-            "network_key": network_key,
-            "rate_limiter": rate_limiter,
-            "safe_emit": safe_emit,
-            "save_auto_scan_config": save_auto_scan_config,
-            "validate_target": validate_target,
-        }
+        deps=build_execute_auto_scan_deps(
+            auto_scan_config=auto_scan_config,
+            current_customer=current_customer,
+            get_last_scan_target=lambda: last_scan_target,
+            logger=logger,
+            network_key=network_key,
+            rate_limiter=rate_limiter,
+            safe_emit=safe_emit,
+            save_auto_scan_config=save_auto_scan_config,
+            validate_target=validate_target,
+        )
     )
 
 
@@ -538,22 +545,24 @@ def start_scan_task(sid, target):
     return start_scan_task_runtime(
         sid=sid,
         target=target,
-        broadcaster=broadcaster,
-        emit_to_client=emit_to_client,
-        get_client_state=get_client_state,
-        ensure_job_not_cancelled=ensure_job_not_cancelled,
-        idle_state_manager=idle_state_manager,
-        update_job_progress=update_job_progress,
-        socketio_sleep=socketio.sleep,
-        run_cancellable_command=run_cancellable_command,
-        run_arp_scan=run_arp_scan,
-        identify_gateway_firewall_targets=lambda hosts: identify_gateway_firewall_targets_for_key(
-            hosts, get_client_state(sid=sid)["network_key"]
+        **build_scan_task_deps(
+            broadcaster=broadcaster,
+            emit_to_client=emit_to_client,
+            get_client_state=get_client_state,
+            ensure_job_not_cancelled=ensure_job_not_cancelled,
+            idle_state_manager=idle_state_manager,
+            update_job_progress=update_job_progress,
+            socketio_sleep=socketio.sleep,
+            run_cancellable_command=run_cancellable_command,
+            run_arp_scan=run_arp_scan,
+            identify_gateway_firewall_targets=lambda hosts: identify_gateway_firewall_targets_for_key(
+                hosts, get_client_state(sid=sid)["network_key"]
+            ),
+            job_registry=job_registry,
+            emit_job_status=emit_job_status,
+            logger=logger,
+            vulners_script=VULNERS_SCRIPT,
         ),
-        job_registry=job_registry,
-        emit_job_status=emit_job_status,
-        logger=logger,
-        vulners_script=VULNERS_SCRIPT,
     )
 
 
@@ -592,85 +601,85 @@ def generate_report_task(sid, data):
     return generate_report_task_runtime(
         sid=sid,
         data=data,
-        deps={
-            "job_registry": job_registry,
-            "idle_state_manager": idle_state_manager,
-            "emit_job_status": emit_job_status,
-            "emit_to_client": emit_to_client,
-            "update_job_progress": update_job_progress,
-            "validate_target": validate_target,
-            "split_subnet_into_chunks": split_subnet_into_chunks,
-            "create_scan_folder": create_scan_folder,
-            "scans_dir": SCANS_DIR,
-            "sanitize_customer_dir_name": sanitize_customer_dir_name,
-            "run_nmap_with_xml_output": run_nmap_with_xml_output,
-            "merge_nmap_xml_files": merge_nmap_xml_files,
-            "socketio_sleep": socketio.sleep,
-            "convert_xml_to_html": convert_xml_to_html,
-            "convert_html_to_pdf": convert_html_to_pdf,
-            "web_stylesheet": XSL_STYLESHEET,
-            "pdf_stylesheet": XSL_STYLESHEET_PDF,
-            "stylesheet": XSL_STYLESHEET,
-            "get_app_version": get_app_version,
-            "save_scan_metadata": save_scan_metadata,
-            "get_client_state": get_client_state,
-            "network_key": network_key,
-            "current_customer": current_customer,
-            "extract_scan_statistics": extract_scan_statistics,
-            "customer_fingerprinter": customer_fingerprinter,
-        },
+        deps=build_report_task_deps(
+            job_registry=job_registry,
+            idle_state_manager=idle_state_manager,
+            emit_job_status=emit_job_status,
+            emit_to_client=emit_to_client,
+            update_job_progress=update_job_progress,
+            validate_target=validate_target,
+            split_subnet_into_chunks=split_subnet_into_chunks,
+            create_scan_folder=create_scan_folder,
+            scans_dir=SCANS_DIR,
+            sanitize_customer_dir_name=sanitize_customer_dir_name,
+            run_nmap_with_xml_output=run_nmap_with_xml_output,
+            merge_nmap_xml_files=merge_nmap_xml_files,
+            socketio_sleep=socketio.sleep,
+            convert_xml_to_html=convert_xml_to_html,
+            convert_html_to_pdf=convert_html_to_pdf,
+            web_stylesheet=XSL_STYLESHEET,
+            pdf_stylesheet=XSL_STYLESHEET_PDF,
+            stylesheet=XSL_STYLESHEET,
+            get_app_version=get_app_version,
+            save_scan_metadata=save_scan_metadata,
+            get_client_state=get_client_state,
+            network_key=network_key,
+            current_customer=current_customer,
+            extract_scan_statistics=extract_scan_statistics,
+            customer_fingerprinter=customer_fingerprinter,
+        ),
     )
 
 def generate_pdf_from_saved_task(sid, data):
     return generate_pdf_from_saved_task_runtime(
         sid=sid,
         data=data,
-        deps={
-            "job_registry": job_registry,
-            "emit_job_status": emit_job_status,
-            "emit_to_client": emit_to_client,
-            "get_client_state": get_client_state,
-            "find_latest_saved_scan_for_pdf": lambda target, **kwargs: find_latest_saved_scan_for_pdf(
+        deps=build_saved_pdf_task_deps(
+            job_registry=job_registry,
+            emit_job_status=emit_job_status,
+            emit_to_client=emit_to_client,
+            get_client_state=get_client_state,
+            find_latest_saved_scan_for_pdf=lambda target, **kwargs: find_latest_saved_scan_for_pdf(
                 target,
                 scans_dir=SCANS_DIR,
                 load_json_document=load_json_document,
                 normalize_scan_metadata_document=normalize_scan_metadata_document,
                 **kwargs,
             ),
-            "convert_xml_to_html": convert_xml_to_html,
-            "convert_html_to_pdf": convert_html_to_pdf,
-            "get_app_version": get_app_version,
-            "logger": logger,
-            "scans_dir": SCANS_DIR,
-            "socketio_sleep": socketio.sleep,
-            "web_stylesheet": XSL_STYLESHEET,
-            "pdf_stylesheet": XSL_STYLESHEET_PDF,
-        },
+            convert_xml_to_html=convert_xml_to_html,
+            convert_html_to_pdf=convert_html_to_pdf,
+            get_app_version=get_app_version,
+            logger=logger,
+            scans_dir=SCANS_DIR,
+            socketio_sleep=socketio.sleep,
+            web_stylesheet=XSL_STYLESHEET,
+            pdf_stylesheet=XSL_STYLESHEET_PDF,
+        ),
     )
 
 
 def startup_checks(quick=False):
     startup_checks_runtime(
-        deps={
-            "begin_startup_state": begin_startup_state,
-            "check_arp_scan": check_arp_scan,
-            "check_nmap": check_nmap,
-            "check_vulners": check_vulners,
-            "complete_startup_state": complete_startup_state,
-            "get_app_version": get_app_version,
-            "get_default_interface_cached": lambda: DEFAULT_INTERFACE,
-            "get_versions": tool_versions.get_versions,
-            "load_auto_scan_config": load_auto_scan_config,
-            "load_current_assignment": load_current_assignment,
-            "logger": logger,
-            "network_key": network_key,
-            "run_traceroute": run_traceroute,
-            "safe_emit": safe_emit,
-            "startup_state": startup_state,
-            "tool_versions": tool_versions,
-            "auto_scan_config": auto_scan_config,
-            "vulners_script": VULNERS_SCRIPT,
-        },
+        deps=build_startup_check_deps(
+            begin_startup_state=begin_startup_state,
+            check_arp_scan=check_arp_scan,
+            check_nmap=check_nmap,
+            check_vulners=check_vulners,
+            complete_startup_state=complete_startup_state,
+            get_app_version=get_app_version,
+            get_default_interface_cached=lambda: DEFAULT_INTERFACE,
+            get_versions=tool_versions.get_versions,
+            load_auto_scan_config=load_auto_scan_config,
+            load_current_assignment=load_current_assignment,
+            logger=logger,
+            network_key=network_key,
+            run_traceroute=run_traceroute,
+            safe_emit=safe_emit,
+            startup_state=startup_state,
+            tool_versions=tool_versions,
+            auto_scan_config=auto_scan_config,
+            vulners_script=VULNERS_SCRIPT,
+        ),
         quick=quick,
     )
 
