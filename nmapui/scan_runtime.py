@@ -7,11 +7,19 @@ from nmapui.workflows import (
 )
 
 
-def make_broadcast_emit(*, owner_sid, broadcaster, emit_to_client, job_type="scan"):
+def make_broadcast_emit(*, owner_sid, broadcaster, emit_to_client, job_type="scan", runtime_store=None):
     """Fan events out to all subscribed tabs while recording replay state."""
 
     def _emit(sid, event, data=None):
         broadcaster.record(owner_sid, event, data, job_type=job_type)
+        if runtime_store is not None:
+            runtime_store.append_job_event(
+                job_id=f"{owner_sid}:{job_type}",
+                owner_sid=owner_sid,
+                job_type=job_type,
+                event_name=event,
+                payload=data,
+            )
         for sub_sid in broadcaster.get_subscribers(owner_sid, job_type=job_type):
             emit_to_client(sub_sid, event, data)
 
@@ -37,6 +45,7 @@ def start_scan_task(
     logger,
     settings_state,
     vulners_script,
+    runtime_store=None,
 ):
     context = build_scan_workflow_context(
         {
@@ -49,6 +58,7 @@ def start_scan_task(
                 broadcaster=broadcaster,
                 emit_to_client=emit_to_client,
                 job_type="scan",
+                runtime_store=runtime_store,
             ),
             "socketio_sleep": socketio_sleep,
             "run_cancellable_command": run_cancellable_command,

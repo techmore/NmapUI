@@ -46,6 +46,21 @@ SCHEMA_STATEMENTS = (
     ON jobs(job_type, status)
     """,
     """
+    CREATE TABLE IF NOT EXISTS job_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT NOT NULL,
+        owner_sid TEXT,
+        job_type TEXT NOT NULL,
+        event_name TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_job_events_job_created
+    ON job_events(job_id, id DESC)
+    """,
+    """
     CREATE TABLE IF NOT EXISTS report_artifacts (
         scan_path TEXT PRIMARY KEY,
         customer_id TEXT,
@@ -295,6 +310,70 @@ class RuntimeStateStore:
                 (category, level, message, _json_dumps(payload), now),
             )
             return int(cursor.lastrowid)
+
+    def append_job_event(
+        self,
+        *,
+        job_id: str,
+        owner_sid: str | None,
+        job_type: str,
+        event_name: str,
+        payload: Any = None,
+        max_events: int = 200,
+    ) -> int:
+        now = utcnow_iso()
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO job_events(job_id, owner_sid, job_type, event_name, payload_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (job_id, owner_sid, job_type, event_name, _json_dumps(payload), now),
+            )
+            conn.execute(
+                """
+                DELETE FROM job_events
+                WHERE job_id = ?
+                  AND id NOT IN (
+                    SELECT id FROM job_events
+                    WHERE job_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                  )
+                """,
+                (job_id, job_id, max_events),
+            )
+            return int(cursor.lastrowid)
+
+    def list_job_events(
+        self,
+        *,
+        job_id: str,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, job_id, owner_sid, job_type, event_name, payload_json, created_at
+                FROM job_events
+                WHERE job_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (job_id, limit),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "job_id": row["job_id"],
+                "owner_sid": row["owner_sid"],
+                "job_type": row["job_type"],
+                "event_name": row["event_name"],
+                "payload": _json_loads(row["payload_json"]),
+                "created_at": row["created_at"],
+            }
+            for row in reversed(rows)
+        ]
 
     def get_recent_logs(
         self,

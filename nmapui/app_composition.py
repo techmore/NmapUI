@@ -52,6 +52,7 @@ def build_scan_task_deps(
     socketio_sleep,
     update_job_progress,
     vulners_script,
+    runtime_store,
 ):
     return {
         "broadcaster": broadcaster,
@@ -67,6 +68,7 @@ def build_scan_task_deps(
         "job_registry": job_registry,
         "emit_job_status": emit_job_status,
         "logger": logger,
+        "runtime_store": runtime_store,
         "settings_state": settings_state,
         "vulners_script": vulners_script,
     }

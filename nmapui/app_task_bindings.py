@@ -113,6 +113,7 @@ def build_task_bindings(
                 logger=logger,
                 settings_state=settings_state,
                 vulners_script=vulners_script,
+                runtime_store=runtime_store,
             ),
         )
 

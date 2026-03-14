@@ -37,6 +37,7 @@ def _load_persisted_active_job(runtime_store):
     payload = dict(job.get("payload", {}))
     details = dict(payload.get("details", {}))
     return {
+        "job_id": job["job_id"],
         "job_type": job["job_type"],
         "status": job["status"],
         "details": details,
@@ -45,6 +46,12 @@ def _load_persisted_active_job(runtime_store):
         "finished_at": payload.get("finished_at"),
         "disconnected": bool(payload.get("disconnected")),
     }
+
+
+def _load_persisted_job_events(runtime_store, job_id):
+    if runtime_store is None or not hasattr(runtime_store, "list_job_events"):
+        return []
+    return runtime_store.list_job_events(job_id=job_id, limit=200)
 
 
 def register_connection_handlers(socketio, deps):
@@ -95,7 +102,11 @@ def register_connection_handlers(socketio, deps):
         if owner_sid is None:
             persisted_job = _load_persisted_active_job(runtime_store)
             if persisted_job is not None:
+                persisted_job_id = persisted_job.pop("job_id", None)
                 emit_to_client(new_sid, "job_status", persisted_job)
+                if persisted_job_id:
+                    for event in _load_persisted_job_events(runtime_store, persisted_job_id):
+                        emit_to_client(new_sid, event["event_name"], event["payload"])
             return
 
         job = job_registry.get(owner_sid, active_job_type)

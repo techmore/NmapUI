@@ -549,6 +549,19 @@ def test_connect_emits_persisted_active_job_status_without_active_owner():
                 }
             ]
 
+        def list_job_events(self, job_id, limit=200):
+            return [
+                {
+                    "id": 1,
+                    "job_id": job_id,
+                    "owner_sid": "owner-sid",
+                    "job_type": "report",
+                    "event_name": "scan_feedback",
+                    "payload": {"message": "Generating report...", "target": "10.10.10.0/24"},
+                    "created_at": "2026-03-14T12:01:00",
+                }
+            ]
+
     app, socketio = build_connection_app(
         {
             "auto_scan_config": {"enabled": False},
@@ -563,10 +576,15 @@ def test_connect_emits_persisted_active_job_status_without_active_owner():
     client = socketio.test_client(app)
 
     assert client.is_connected()
-    assert emitted[-1][1] == "job_status"
-    assert emitted[-1][2]["job_type"] == "report"
-    assert emitted[-1][2]["status"] == "running"
-    assert emitted[-1][2]["details"]["target"] == "10.10.10.0/24"
+    assert emitted[-2][1] == "job_status"
+    assert emitted[-2][2]["job_type"] == "report"
+    assert emitted[-2][2]["status"] == "running"
+    assert emitted[-2][2]["details"]["target"] == "10.10.10.0/24"
+    assert emitted[-1] == (
+        emitted[-1][0],
+        "scan_feedback",
+        {"message": "Generating report...", "target": "10.10.10.0/24"},
+    )
 
 
 def test_connect_clears_stale_broadcast_slot_when_no_scan_job():

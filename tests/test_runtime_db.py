@@ -42,9 +42,17 @@ def test_runtime_state_store_tracks_jobs_reports_and_logs(tmp_path: Path):
         message="Hydrated network topology",
         payload={"target": "192.168.1.0/24"},
     )
+    event_id = store.append_job_event(
+        job_id="job-1",
+        owner_sid="sid-1",
+        job_type="report",
+        event_name="scan_feedback",
+        payload={"message": "Generating report"},
+    )
 
     job = store.get_job("job-1")
     active_jobs = store.list_jobs(statuses=("running",), limit=10)
+    events = store.list_job_events(job_id="job-1", limit=10)
     reports = store.list_report_artifacts(customer_id="cust-1")
     logs = store.get_recent_logs(category="runtime", limit=10)
 
@@ -52,6 +60,9 @@ def test_runtime_state_store_tracks_jobs_reports_and_logs(tmp_path: Path):
     assert job["job_type"] == "report"
     assert job["payload"]["target"] == "192.168.1.0/24"
     assert active_jobs[0]["job_id"] == "job-1"
+    assert events[0]["id"] == event_id
+    assert events[0]["event_name"] == "scan_feedback"
+    assert events[0]["payload"]["message"] == "Generating report"
     assert reports[0]["pdf_path"] == "scan_report.pdf"
     assert reports[0]["payload"]["status"] == "completed"
     assert logs[0]["id"] == log_id

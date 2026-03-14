@@ -14,6 +14,7 @@ def generate_report_task(*, sid, data, deps):
                 broadcaster=broadcaster,
                 emit_to_client=deps["emit_to_client"],
                 job_type="report",
+                runtime_store=deps.get("runtime_store"),
             ),
             "on_job_end": lambda: broadcaster.end_job(sid, job_type="report"),
         }
@@ -30,6 +31,7 @@ def generate_pdf_from_saved_task(*, sid, data, deps):
                 broadcaster=broadcaster,
                 emit_to_client=deps["emit_to_client"],
                 job_type="report",
+                runtime_store=deps.get("runtime_store"),
             ),
         }
     return generate_pdf_from_saved_task_impl(deps, sid, data)
