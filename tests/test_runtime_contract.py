@@ -174,6 +174,17 @@ def test_app_delegates_core_routes_to_handler_module():
     assert '@app.route("/api/health/ready")' not in app_source
 
 
+def test_app_delegates_networking_helpers_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.networking import (" in app_source
+    assert "calculate_cidr as calculate_cidr_impl" in app_source
+    assert "get_default_interface as get_default_interface_impl" in app_source
+    assert "return get_default_interface_impl(ni, logger)" in app_source
+    assert "return calculate_cidr_impl(ip, subnet_mask)" in app_source
+    assert "return identify_gateway_firewall_targets_for_key(hosts, network_key)" in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],
