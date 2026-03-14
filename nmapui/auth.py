@@ -6,13 +6,42 @@ from flask import jsonify, request
 from flask_socketio import emit
 
 
-AUTH_USERNAME = os.environ.get("NMAPUI_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("NMAPUI_PASSWORD", "nmapui123")
+DEFAULT_AUTH_USERNAME = "admin"
+DEFAULT_AUTH_PASSWORD = "nmapui123"
+
+
+def get_auth_credentials():
+    return (
+        os.environ.get("NMAPUI_USERNAME", DEFAULT_AUTH_USERNAME),
+        os.environ.get("NMAPUI_PASSWORD", DEFAULT_AUTH_PASSWORD),
+    )
+
+
+def default_credentials_allowed():
+    return os.environ.get("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def auth_uses_insecure_defaults():
+    username, password = get_auth_credentials()
+    return (
+        username == DEFAULT_AUTH_USERNAME
+        and password == DEFAULT_AUTH_PASSWORD
+        and not default_credentials_allowed()
+    )
 
 
 def check_auth(username, password):
     """Validate credentials."""
-    return username == AUTH_USERNAME and password == AUTH_PASSWORD
+    if auth_uses_insecure_defaults():
+        return False
+
+    expected_username, expected_password = get_auth_credentials()
+    return username == expected_username and password == expected_password
 
 
 def require_auth(f):
@@ -22,6 +51,8 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         auth = request.authorization
         if not auth or not check_auth(auth.username, auth.password):
+            if auth_uses_insecure_defaults():
+                return jsonify({"error": "Authentication is not configured securely"}), 503
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)
 
@@ -45,10 +76,16 @@ def require_socket_auth():
                             return f(*args, **kwargs)
                     except Exception:
                         pass
+                if auth_uses_insecure_defaults():
+                    emit("auth_error", {"error": "Authentication is not configured securely"})
+                    return None
                 emit("auth_error", {"error": "Unauthorized"})
                 return None
 
             if not check_auth(auth.username, auth.password):
+                if auth_uses_insecure_defaults():
+                    emit("auth_error", {"error": "Authentication is not configured securely"})
+                    return None
                 emit("auth_error", {"error": "Unauthorized"})
                 return None
             return f(*args, **kwargs)

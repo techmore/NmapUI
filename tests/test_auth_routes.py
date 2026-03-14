@@ -7,9 +7,18 @@ from nmapui.handlers.auto_scan import register_auto_scan_handlers
 from nmapui.handlers.scans import register_scan_routes
 
 
-def basic_auth_header(username="admin", password="nmapui123"):
+def basic_auth_header(username="scanner", password="secret-pass"):
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
     return {"Authorization": f"Basic {token}"}
+
+
+def configure_auth(monkeypatch, username="scanner", password="secret-pass", allow_defaults=False):
+    monkeypatch.setenv("NMAPUI_USERNAME", username)
+    monkeypatch.setenv("NMAPUI_PASSWORD", password)
+    if allow_defaults:
+        monkeypatch.setenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", "true")
+    else:
+        monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
 
 
 def build_scan_app(tmp_path):
@@ -66,7 +75,8 @@ def build_auto_scan_app():
     return app
 
 
-def test_scan_routes_require_http_basic_auth(tmp_path):
+def test_scan_routes_require_http_basic_auth(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
     app = build_scan_app(tmp_path)
     client = app.test_client()
 
@@ -76,7 +86,8 @@ def test_scan_routes_require_http_basic_auth(tmp_path):
     assert response.get_json() == {"error": "Unauthorized"}
 
 
-def test_scan_routes_allow_authorized_access(tmp_path):
+def test_scan_routes_allow_authorized_access(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
     app = build_scan_app(tmp_path)
     client = app.test_client()
 
@@ -87,7 +98,8 @@ def test_scan_routes_allow_authorized_access(tmp_path):
     assert payload["scans"][0]["customer_name"] == "Acme"
 
 
-def test_auto_scan_routes_require_http_basic_auth():
+def test_auto_scan_routes_require_http_basic_auth(monkeypatch):
+    configure_auth(monkeypatch)
     app = build_auto_scan_app()
     client = app.test_client()
 
@@ -97,7 +109,8 @@ def test_auto_scan_routes_require_http_basic_auth():
     assert response.get_json() == {"error": "Unauthorized"}
 
 
-def test_auto_scan_routes_allow_authorized_access():
+def test_auto_scan_routes_allow_authorized_access(monkeypatch):
+    configure_auth(monkeypatch)
     app = build_auto_scan_app()
     client = app.test_client()
 
@@ -105,3 +118,19 @@ def test_auto_scan_routes_allow_authorized_access():
 
     assert response.status_code == 200
     assert response.get_json()["enabled"] is False
+
+
+def test_http_auth_rejects_builtin_default_credentials_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("NMAPUI_USERNAME", raising=False)
+    monkeypatch.delenv("NMAPUI_PASSWORD", raising=False)
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+    app = build_scan_app(tmp_path)
+    client = app.test_client()
+
+    response = client.get(
+        "/api/scans",
+        headers=basic_auth_header(username="admin", password="nmapui123"),
+    )
+
+    assert response.status_code == 503
+    assert response.get_json() == {"error": "Authentication is not configured securely"}

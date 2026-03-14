@@ -15,12 +15,22 @@ def build_customer_app(deps):
     return app, socketio
 
 
-def basic_auth_header(username="admin", password="nmapui123"):
+def basic_auth_header(username="scanner", password="secret-pass"):
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
     return {"Authorization": f"Basic {token}"}
 
 
-def test_assign_customer_updates_current_customer_and_persists_assignment():
+def configure_auth(monkeypatch, username="scanner", password="secret-pass", allow_defaults=False):
+    monkeypatch.setenv("NMAPUI_USERNAME", username)
+    monkeypatch.setenv("NMAPUI_PASSWORD", password)
+    if allow_defaults:
+        monkeypatch.setenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", "true")
+    else:
+        monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+
+def test_assign_customer_updates_current_customer_and_persists_assignment(monkeypatch):
+    configure_auth(monkeypatch)
     state = {"current_customer": {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}}
     saved = {"called": False}
     logger = Flask(__name__).logger
@@ -37,7 +47,7 @@ def test_assign_customer_updates_current_customer_and_persists_assignment():
 
     app, socketio = build_customer_app(
         {
-            "customer_fingerprinter": customer_fingerprinter,
+            "get_customer_fingerprinter": lambda: customer_fingerprinter,
             "network_key": {},
             "get_current_customer": lambda: state["current_customer"],
             "set_current_customer": lambda value: state.__setitem__("current_customer", value),
@@ -65,7 +75,8 @@ def test_assign_customer_updates_current_customer_and_persists_assignment():
     assert any(event["name"] == "customer_assigned" for event in received)
 
 
-def test_get_customer_info_auto_detects_when_session_is_unassigned():
+def test_get_customer_info_auto_detects_when_session_is_unassigned(monkeypatch):
+    configure_auth(monkeypatch)
     state = {"current_customer": {"id": "", "name": "Unknown Network", "confidence": 0.0}}
     logger = Flask(__name__).logger
     customer_fingerprinter = type(
@@ -84,7 +95,7 @@ def test_get_customer_info_auto_detects_when_session_is_unassigned():
 
     app, socketio = build_customer_app(
         {
-            "customer_fingerprinter": customer_fingerprinter,
+            "get_customer_fingerprinter": lambda: customer_fingerprinter,
             "network_key": {"public_ip": "203.0.113.10"},
             "get_current_customer": lambda: state["current_customer"],
             "set_current_customer": lambda value: state.__setitem__("current_customer", value),
@@ -115,7 +126,8 @@ def test_get_customer_info_auto_detects_when_session_is_unassigned():
     )
 
 
-def test_customer_handlers_reject_unauthorized_socket_client():
+def test_customer_handlers_reject_unauthorized_socket_client(monkeypatch):
+    configure_auth(monkeypatch)
     state = {"current_customer": {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}}
     logger = Flask(__name__).logger
     customer_fingerprinter = type(
@@ -130,7 +142,7 @@ def test_customer_handlers_reject_unauthorized_socket_client():
 
     app, socketio = build_customer_app(
         {
-            "customer_fingerprinter": customer_fingerprinter,
+            "get_customer_fingerprinter": lambda: customer_fingerprinter,
             "network_key": {},
             "get_current_customer": lambda: state["current_customer"],
             "set_current_customer": lambda value: state.__setitem__("current_customer", value),

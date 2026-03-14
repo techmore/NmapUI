@@ -19,9 +19,18 @@ from nmapui.paths import AUTO_SCAN_SCHEDULER_LOCK_FILE, resolve_scan_path
 from nmapui.runtime import env_flag
 
 
-def basic_auth_header(username="admin", password="nmapui123"):
+def basic_auth_header(username="scanner", password="secret-pass"):
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
     return {"Authorization": f"Basic {token}"}
+
+
+def configure_auth(monkeypatch, username="scanner", password="secret-pass", allow_defaults=False):
+    monkeypatch.setenv("NMAPUI_USERNAME", username)
+    monkeypatch.setenv("NMAPUI_PASSWORD", password)
+    if allow_defaults:
+        monkeypatch.setenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", "true")
+    else:
+        monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
 
 
 def test_should_run_auto_scan_allows_same_day_window():
@@ -80,7 +89,8 @@ def test_validate_auto_scan_config_rejects_invalid_socket_payload():
     assert config == original
 
 
-def test_http_auto_scan_update_rejects_invalid_payload():
+def test_http_auto_scan_update_rejects_invalid_payload(monkeypatch):
+    configure_auth(monkeypatch)
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
     config = dict(DEFAULT_AUTO_SCAN_CONFIG)
@@ -111,7 +121,8 @@ def test_http_auto_scan_update_rejects_invalid_payload():
     assert config == DEFAULT_AUTO_SCAN_CONFIG
 
 
-def test_socket_auto_scan_update_rejects_invalid_payload():
+def test_socket_auto_scan_update_rejects_invalid_payload(monkeypatch):
+    configure_auth(monkeypatch)
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
     config = dict(DEFAULT_AUTO_SCAN_CONFIG)
