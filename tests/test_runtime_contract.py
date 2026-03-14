@@ -130,6 +130,9 @@ def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 
     assert 'PACKAGING_DIR="$ROOT_DIR/packaging/macos"' in build_script
+    assert "ROOT_RUNTIME_PY=(" in build_script
+    assert "customer_fingerprint_matcher.py" in build_script
+    assert "customer_fingerprint_store.py" in build_script
     assert 'SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"' in build_script
     assert not (ROOT / "NmapUIMenuBar.swift").exists()
     assert not (ROOT / "NmapUIMenuBarSimple.swift").exists()

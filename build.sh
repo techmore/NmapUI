@@ -87,8 +87,15 @@ else
 fi
 
 echo "Copying NmapUI Python application and resources from the current workspace..."
+ROOT_RUNTIME_PY=(
+  app.py
+  customer_fingerprint.py
+  customer_fingerprint_matcher.py
+  customer_fingerprint_store.py
+  persistence.py
+)
 tar -cf - \
-  app.py \
+  "${ROOT_RUNTIME_PY[@]}" \
   nmapui \
   templates \
   static \
@@ -98,8 +105,6 @@ tar -cf - \
   requirements.txt \
   VERSION \
   AGENTS.md \
-  customer_fingerprint.py \
-  persistence.py \
   nmap-modern.xsl \
   nmap-pdf-olive-legacy.xsl | tar -xf - -C "$APP_NAME/Contents/Resources"
 
