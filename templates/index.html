@@ -335,6 +335,20 @@
         font-size: 0.875rem;
         line-height: 1.25rem;
     }
+
+    .icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        color: oklch(50% 0.065 110);
+        transition: color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .icon-button:hover {
+        color: oklch(22% 0.025 110);
+        background-color: oklch(91% 0.020 110);
+    }
     
     /* Custom button press effect */
     .btn-press:active {
@@ -507,7 +521,7 @@
         <div class="modal-panel max-w-2xl p-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-medium text-olive-900">Add Customer</h3>
-                <button onclick="hideCustomerForm()" class="text-olive-500 hover:text-olive-700">
+                <button onclick="hideCustomerForm()" class="icon-button size-8" aria-label="Close add customer dialog">
                     ✕
                 </button>
             </div>
@@ -578,7 +592,7 @@
         <div class="modal-panel modal-panel-scroll max-w-6xl">
             <div class="p-6 border-b border-olive-300 flex justify-between items-center">
                 <h2 class="text-2xl font-display italic text-olive-900">Scan History</h2>
-                <button onclick="hideHistoryModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                <button onclick="hideHistoryModal()" class="icon-button size-10" aria-label="Close scan history dialog">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -607,7 +621,7 @@
         <div class="modal-panel modal-panel-scroll max-w-4xl">
             <div class="p-6 border-b border-olive-300 flex justify-between items-center">
                 <h2 id="asset-modal-title" class="text-2xl font-display italic text-olive-900">Asset Details</h2>
-                <button onclick="hideAssetModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                <button onclick="hideAssetModal()" class="icon-button size-10" aria-label="Close asset details dialog">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -627,7 +641,7 @@
         <div class="modal-panel flex flex-col max-w-2xl shadow-2xl border border-olive-300">
             <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50 rounded-t-lg">
                 <h2 class="text-2xl font-display italic text-olive-900">Application Update</h2>
-                <button onclick="hideUpdateModal()" class="text-olive-600 hover:text-olive-900 transition-colors">
+                <button onclick="hideUpdateModal()" class="icon-button size-10" aria-label="Close update dialog">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -695,7 +709,7 @@
                         <span id="asset-detail-hostname" class="ml-2"></span>
                     </p>
                 </div>
-                <button onclick="closeAssetDetailsModal()" class="text-olive-400 hover:text-olive-900 transition-colors">
+                <button onclick="closeAssetDetailsModal()" class="icon-button size-10" aria-label="Close asset details panel">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -2718,7 +2732,7 @@
         <div class="modal-panel max-w-md p-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-display italic text-olive-900">Set Auto Scan Times</h3>
-                <button onclick="hideAutoScanTimeModal()" class="text-olive-500 hover:text-olive-700 text-xl">&times;</button>
+                <button onclick="hideAutoScanTimeModal()" class="icon-button size-8 text-xl" aria-label="Close auto scan schedule dialog">&times;</button>
             </div>
 
             <div class="space-y-4">

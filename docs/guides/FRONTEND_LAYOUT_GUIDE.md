@@ -21,6 +21,9 @@ This page has a small set of layout rules. New sections should follow these inst
 - Form controls
   - Use shared form-control classes for repeated modal/filter inputs.
   - Keep only exceptional hero controls on bespoke class stacks when they have intentionally different visual weight.
+- Header actions
+  - Reuse a shared icon-button class for modal close actions and similar header affordances.
+  - Keep per-button sizing local with utility classes such as `size-8` or `size-10`.
 
 ## Rules
 
@@ -30,6 +33,7 @@ This page has a small set of layout rules. New sections should follow these inst
 - For oversized tables, keep `page-shell` outside and put `overflow-x-auto` on the inner band.
 - For modals, keep `modal-overlay` and `modal-panel` shared, and only vary width, borders, or scroll behavior per modal.
 - For standard inputs and selects, prefer `form-control` plus a size class instead of repeating border/padding/focus utilities inline.
+- For modal close buttons, use `icon-button` instead of repeating text-color hover stacks.
 - If a section needs a custom width, document why it is not using `page-shell`.
 
 ## Current Standard
