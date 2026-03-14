@@ -33,10 +33,10 @@ from nmapui.bootstrap import (
 )
 from nmapui.client_state import ClientStateRegistry
 from nmapui.events import (
-    emit_job_status as nmapui_emit_job_status,
-    emit_to_client as nmapui_emit_to_client,
-    safe_emit as nmapui_safe_emit,
-    update_job_progress as nmapui_update_job_progress,
+    emit_job_status,
+    emit_to_client,
+    safe_emit,
+    update_job_progress,
 )
 from nmapui.handlers.auto_scan import (
     register_auto_scan_handlers,
@@ -52,8 +52,8 @@ from nmapui.handlers.updates import register_update_handlers
 from nmapui.jobs import (
     ClientJobRegistry,
     RateLimiter,
-    ensure_job_not_cancelled as nmapui_ensure_job_not_cancelled,
-    run_cancellable_command as nmapui_run_cancellable_command,
+    ensure_job_not_cancelled,
+    run_cancellable_command,
 )
 from nmapui.networking import (
     DefaultInterfaceCache,
@@ -316,57 +316,6 @@ def set_last_scan_target_state(value, sid: Optional[str] = None):
     last_scan_target = value
 
 
-def safe_emit(event, data=None):
-    return nmapui_safe_emit(event, data)
-
-
-def emit_to_client(sid: str, event: str, data=None):
-    return nmapui_emit_to_client(socketio, sid, event, data)
-
-
-def emit_job_status(sid: str, job_type: str):
-    return nmapui_emit_job_status(socketio, job_registry, sid, job_type)
-
-
-def update_job_progress(
-    sid: str,
-    job_type: str,
-    phase: str,
-    message: Optional[str] = None,
-    progress: Optional[int] = None,
-    details=None,
-):
-    return nmapui_update_job_progress(
-        socketio,
-        job_registry,
-        sid,
-        job_type,
-        phase,
-        message=message,
-        progress=progress,
-        details=details,
-    )
-
-
-def ensure_job_not_cancelled(sid: str, job_type: str):
-    return nmapui_ensure_job_not_cancelled(job_registry, sid, job_type)
-
-
-def run_cancellable_command(
-    cmd,
-    sid: Optional[str] = None,
-    job_type: Optional[str] = None,
-    timeout: Optional[int] = None,
-):
-    return nmapui_run_cancellable_command(
-        job_registry,
-        cmd,
-        sid=sid,
-        job_type=job_type,
-        timeout=timeout,
-    )
-
-
 def split_subnet_into_chunks(target):
     """Split large subnets into /29 chunks (~8 hosts each) for manageable scanning"""
     import ipaddress
@@ -611,7 +560,7 @@ def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
 
     def emit_customer_event(event, data=None):
         if sid:
-            emit_to_client(sid, event, data)
+            emit_to_client(socketio, sid, event, data)
         else:
             safe_emit(event, data)
 
@@ -855,9 +804,13 @@ def register_runtime_modules(app, socketio):
             "sanitize_customer_dir_name": sanitize_customer_dir_name,
             "parse_scan_xml_for_assets": parse_scan_xml_for_assets,
             "get_versions": get_versions,
-            "emit_job_status": emit_job_status,
+            "emit_job_status": lambda sid, job_type: emit_job_status(
+                socketio, job_registry, sid, job_type
+            ),
             "job_registry": job_registry,
-            "emit_to_client": emit_to_client,
+            "emit_to_client": lambda sid, event, data=None: emit_to_client(
+                socketio, sid, event, data
+            ),
             "release_client_state": client_state_registry.release,
             "logger": logger,
         },
@@ -944,17 +897,38 @@ def get_default_interface_cached():
 def _scan_workflow_context():
     return {
         "get_client_state": get_client_state,
-        "ensure_job_not_cancelled": ensure_job_not_cancelled,
+        "ensure_job_not_cancelled": lambda sid, job_type: ensure_job_not_cancelled(
+            job_registry, sid, job_type
+        ),
         "idle_state_manager": idle_state_manager,
-        "update_job_progress": update_job_progress,
-        "emit_to_client": emit_to_client,
+        "update_job_progress": lambda sid, job_type, phase, message=None, progress=None, details=None: update_job_progress(
+            socketio,
+            job_registry,
+            sid,
+            job_type,
+            phase,
+            message=message,
+            progress=progress,
+            details=details,
+        ),
+        "emit_to_client": lambda sid, event, data=None: emit_to_client(
+            socketio, sid, event, data
+        ),
         "socketio_sleep": socketio.sleep,
-        "run_cancellable_command": run_cancellable_command,
+        "run_cancellable_command": lambda cmd, sid=None, job_type=None, timeout=None: run_cancellable_command(
+            job_registry,
+            cmd,
+            sid=sid,
+            job_type=job_type,
+            timeout=timeout,
+        ),
         "run_arp_scan": run_arp_scan,
         "identify_gateway_firewall_targets": lambda hosts: identify_gateway_firewall_targets(hosts, network_key),
         "start_deep_scan": workflow_start_deep_scan,
         "job_registry": job_registry,
-        "emit_job_status": emit_job_status,
+        "emit_job_status": lambda sid, job_type: emit_job_status(
+            socketio, job_registry, sid, job_type
+        ),
         "logger": logger,
         "vulners_script": VULNERS_SCRIPT,
         "cve_pattern": re.compile(
@@ -1007,13 +981,13 @@ def start_scan(data):
 
     if not job_registry.start(request.sid, "scan", {"target": target}):
         emit("scan_error", "A scan is already running for this client")
-        emit_job_status(request.sid, "scan")
+        emit_job_status(socketio, job_registry, request.sid, "scan")
         return
 
     set_last_scan_target_state(target, request.sid)
     # Record scan start before dispatching background work
     rate_limiter.record_scan()
-    emit_job_status(request.sid, "scan")
+    emit_job_status(socketio, job_registry, request.sid, "scan")
     socketio.start_background_task(start_scan_task, request.sid, target)
 
 
@@ -1024,10 +998,18 @@ def run_arp_scan(target, interface=None, sid=None):
         sid=sid,
         get_default_interface_cached=get_default_interface_cached,
         which=shutil.which,
-        emit_to_client=emit_to_client,
+        emit_to_client=lambda sid, event, data=None: emit_to_client(
+            socketio, sid, event, data
+        ),
         socketio_emit=socketio.emit,
         socketio_sleep=socketio.sleep,
-        run_cancellable_command=run_cancellable_command,
+        run_cancellable_command=lambda cmd, sid=None, job_type=None, timeout=None: run_cancellable_command(
+            job_registry,
+            cmd,
+            sid=sid,
+            job_type=job_type,
+            timeout=timeout,
+        ),
     )
 
 
@@ -1044,10 +1026,18 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
         sid=sid,
         vulners_script=VULNERS_SCRIPT,
         stylesheet_pdf=XSL_STYLESHEET_PDF,
-        emit_to_client=emit_to_client,
+        emit_to_client=lambda sid, event, data=None: emit_to_client(
+            socketio, sid, event, data
+        ),
         socketio_emit=socketio.emit,
         socketio_sleep=socketio.sleep,
-        run_cancellable_command=run_cancellable_command,
+        run_cancellable_command=lambda cmd, sid=None, job_type=None, timeout=None: run_cancellable_command(
+            job_registry,
+            cmd,
+            sid=sid,
+            job_type=job_type,
+            timeout=timeout,
+        ),
     )
 
 
@@ -1058,9 +1048,22 @@ def generate_report_task(sid, data):
         {
             "job_registry": job_registry,
             "idle_state_manager": idle_state_manager,
-            "emit_job_status": emit_job_status,
-            "emit_to_client": emit_to_client,
-            "update_job_progress": update_job_progress,
+            "emit_job_status": lambda sid, job_type: emit_job_status(
+                socketio, job_registry, sid, job_type
+            ),
+            "emit_to_client": lambda sid, event, data=None: emit_to_client(
+                socketio, sid, event, data
+            ),
+            "update_job_progress": lambda sid, job_type, phase, message=None, progress=None, details=None: update_job_progress(
+                socketio,
+                job_registry,
+                sid,
+                job_type,
+                phase,
+                message=message,
+                progress=progress,
+                details=details,
+            ),
             "validate_target": validate_target,
             "split_subnet_into_chunks": split_subnet_into_chunks,
             "create_scan_folder": create_scan_folder,
@@ -1099,10 +1102,10 @@ def generate_report_event(data):
         {"target": data.get("target"), "customer_name": data.get("customer_name")},
     ):
         emit("report_error", {"error": "A report job is already running for this client"})
-        emit_job_status(request.sid, "report")
+        emit_job_status(socketio, job_registry, request.sid, "report")
         return
 
-    emit_job_status(request.sid, "report")
+    emit_job_status(socketio, job_registry, request.sid, "report")
     socketio.start_background_task(generate_report_task, request.sid, data)
 
 

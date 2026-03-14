@@ -286,6 +286,29 @@ def test_app_uses_extracted_scan_execution_helpers():
     assert "def run_nmap_with_xml_output(" in scanning_source
 
 
+def test_app_uses_extracted_event_and_job_helpers_directly():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "from nmapui.events import (" in app_source
+    assert "from nmapui.jobs import (" in app_source
+    assert "emit_job_status as nmapui_emit_job_status" not in app_source
+    assert "emit_to_client as nmapui_emit_to_client" not in app_source
+    assert "safe_emit as nmapui_safe_emit" not in app_source
+    assert "update_job_progress as nmapui_update_job_progress" not in app_source
+    assert "ensure_job_not_cancelled as nmapui_ensure_job_not_cancelled" not in app_source
+    assert "run_cancellable_command as nmapui_run_cancellable_command" not in app_source
+    assert "def safe_emit(event, data=None):" not in app_source
+    assert "def emit_to_client(sid: str, event: str, data=None):" not in app_source
+    assert "def emit_job_status(sid: str, job_type: str):" not in app_source
+    assert "def update_job_progress(" not in app_source
+    assert "def ensure_job_not_cancelled(sid: str, job_type: str):" not in app_source
+    assert "def run_cancellable_command(" not in app_source
+
+
 def test_app_uses_extracted_tool_version_registry():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
