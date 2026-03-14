@@ -124,7 +124,7 @@ def test_create_web_app_initializes_flask_and_socketio():
     }
 
 
-def test_run_socketio_server_uses_normalized_runtime_options():
+def test_run_socketio_server_allows_loopback_wrapper_launches():
     calls = {}
 
     class SocketIOStub:
@@ -147,6 +147,35 @@ def test_run_socketio_server_uses_normalized_runtime_options():
     assert calls == {
         "app": app,
         "host": "127.0.0.1",
+        "port": 9000,
+        "debug": False,
+        "allow_unsafe_werkzeug": True,
+    }
+
+
+def test_run_socketio_server_requires_debug_for_non_loopback_hosts():
+    calls = {}
+
+    class SocketIOStub:
+        def run(self, app, host, port, debug, allow_unsafe_werkzeug):
+            calls["app"] = app
+            calls["host"] = host
+            calls["port"] = port
+            calls["debug"] = debug
+            calls["allow_unsafe_werkzeug"] = allow_unsafe_werkzeug
+
+    app = object()
+    runtime_options = {
+        "host": "0.0.0.0",
+        "port": 9000,
+        "debug": False,
+    }
+
+    run_socketio_server(SocketIOStub(), app, runtime_options)
+
+    assert calls == {
+        "app": app,
+        "host": "0.0.0.0",
         "port": 9000,
         "debug": False,
         "allow_unsafe_werkzeug": False,

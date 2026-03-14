@@ -58,10 +58,14 @@ def complete_startup_state(startup_state, *, traceroute_initialized):
 
 def run_socketio_server(socketio, app, runtime_options):
     """Run the Socket.IO server using the normalized runtime options."""
+    allow_unsafe_werkzeug = runtime_options["debug"] or runtime_options["host"] in {
+        "127.0.0.1",
+        "localhost",
+    }
     socketio.run(
         app,
         host=runtime_options["host"],
         port=runtime_options["port"],
         debug=runtime_options["debug"],
-        allow_unsafe_werkzeug=runtime_options["debug"],
+        allow_unsafe_werkzeug=allow_unsafe_werkzeug,
     )
