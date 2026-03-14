@@ -127,6 +127,12 @@ def test_pyinstaller_spec_includes_runtime_assets():
     assert "VERSION" in spec
     assert "nmap-modern.xsl" in spec
     assert "nmap-pdf-olive-legacy.xsl" in spec
+    assert "'playwright.async_api'" in spec
+    assert "'eventlet'" not in spec
+    assert "'gevent'" not in spec
+    assert "'geventwebsocket'" not in spec
+    assert "'weasyprint'" not in spec
+    assert "'LSMinimumSystemVersion': '13.0'" in spec
 
 
 def test_runtime_uses_separate_web_and_pdf_stylesheets():
