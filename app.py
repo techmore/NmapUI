@@ -103,6 +103,7 @@ from nmapui.state import (
 from nmapui.startup import create_startup_state
 from nmapui.startup_checks import run_startup_checks
 from nmapui.tooling import ToolVersionRegistry
+from nmapui.validation import sanitize_input, validate_target
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
     start_deep_scan as workflow_start_deep_scan,
@@ -225,50 +226,6 @@ class IdleStateManager:
 def create_app_stack(import_name):
     """Build the Flask and Socket.IO objects for this module."""
     return create_web_app(import_name)
-
-# ============================================================================
-# SECURITY: Input Validation
-# ============================================================================
-
-
-def validate_target(target: str) -> tuple[bool, str]:
-    """
-    Validate scan target IP or CIDR.
-    Returns (is_valid, error_message)
-    """
-    if not target or not target.strip():
-        return False, "Target cannot be empty"
-
-    target = target.strip()
-
-    # Allow single IPs, CIDR ranges, and comma-separated lists
-    targets = [t.strip() for t in target.split(",")]
-
-    for t in targets:
-        try:
-            # Try as IP address
-            ipaddress.ip_address(t)
-        except ValueError:
-            try:
-                # Try as CIDR
-                net = ipaddress.ip_network(t, strict=False)
-                # Warn if scanning entire internet
-                if net == ipaddress.ip_network("0.0.0.0/0"):
-                    return False, "Cannot scan 0.0.0.0/0 (entire internet)"
-            except ValueError:
-                return False, f"Invalid target: {t}"
-
-    return True, None
-
-
-def sanitize_input(value: str) -> str:
-    """Sanitize string input to prevent injection attacks"""
-    if not value:
-        return ""
-    # Remove potentially dangerous characters
-    sanitized = re.sub(r"[;&|`${}()<>]", "", value)
-    return sanitized.strip()
-
 
 # Global network key - populated at startup
 network_key = {

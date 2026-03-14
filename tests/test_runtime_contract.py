@@ -252,6 +252,21 @@ def test_app_uses_extracted_state_helpers():
     assert 'def load_current_assignment(' in state_source
 
 
+def test_app_uses_extracted_validation_helpers():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    validation_source = (ROOT / "nmapui" / "validation.py").read_text()
+
+    assert "from nmapui.validation import sanitize_input, validate_target" in app_source
+    assert "def validate_target(target: str)" not in app_source
+    assert "def sanitize_input(value: str)" not in app_source
+    assert "def validate_target(target: str)" in validation_source
+    assert "def sanitize_input(value: str)" in validation_source
+
+
 def test_app_uses_extracted_tool_version_registry():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
