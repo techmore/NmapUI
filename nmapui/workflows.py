@@ -276,7 +276,8 @@ def generate_report_task(context, sid, data):
     socketio_sleep = context["socketio_sleep"]
     convert_xml_to_html = context["convert_xml_to_html"]
     convert_html_to_pdf = context["convert_html_to_pdf"]
-    stylesheet = context["stylesheet"]
+    web_stylesheet = context.get("web_stylesheet") or context.get("stylesheet")
+    pdf_stylesheet = context.get("pdf_stylesheet") or web_stylesheet
     get_app_version = context["get_app_version"]
     save_scan_metadata = context["save_scan_metadata"]
     get_client_state = context.get("get_client_state")
@@ -451,7 +452,7 @@ def generate_report_task(context, sid, data):
         emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (web view)...")
         update_job_progress(sid, "report", phase="html_web", message="Generating web HTML report", progress=70)
         socketio_sleep(0)
-        if convert_xml_to_html(xml_path, web_html_path, stylesheet=stylesheet, get_app_version=get_app_version, feedback=feedback):
+        if convert_xml_to_html(xml_path, web_html_path, stylesheet=web_stylesheet, get_app_version=get_app_version, feedback=feedback):
             file_size = web_html_path.stat().st_size if web_html_path.exists() else 0
             logger.info("✓ Web HTML created: %s (%s bytes)", web_html_path, file_size)
             emit_to_client(sid, "scan_feedback", f"✓ Web HTML: {file_size} bytes")
@@ -462,7 +463,7 @@ def generate_report_task(context, sid, data):
         emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (PDF view)...")
         update_job_progress(sid, "report", phase="html_pdf", message="Generating PDF HTML report", progress=78)
         socketio_sleep(0)
-        if convert_xml_to_html(xml_path, pdf_html_path, stylesheet=stylesheet, get_app_version=get_app_version, feedback=feedback):
+        if convert_xml_to_html(xml_path, pdf_html_path, stylesheet=pdf_stylesheet, get_app_version=get_app_version, feedback=feedback):
             file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
             logger.info("✓ PDF HTML created: %s (%s bytes)", pdf_html_path, file_size)
             emit_to_client(sid, "scan_feedback", f"✓ PDF HTML: {file_size} bytes")

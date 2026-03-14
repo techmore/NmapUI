@@ -25,7 +25,8 @@ Then visit: http://127.0.0.1:9000
 **Optional (but recommended):**
 - arp-scan (for MAC/vendor detection)
 - xsltproc (for XML to HTML conversion)
-- wkhtmltopdf or weasyprint/playwright (for PDF generation)
+- wkhtmltopdf (fallback PDF generation)
+- Playwright Chromium (preferred PDF generation fidelity)
 
 ### 2. Install Commands
 
@@ -67,6 +68,9 @@ pip install --upgrade pip
 
 # Install Python dependencies
 pip install -r requirements.txt
+
+# Install the Playwright Chromium runtime used for high-fidelity PDF rendering
+python -m playwright install chromium
 ```
 
 ### 4. Verify Installation
@@ -88,7 +92,7 @@ python -c "import flask, socketio, requests, netifaces; print('Core dependencies
 - **Flask** - Web framework
 - **Flask-SocketIO** - Real-time communication
 - **Flask-CORS** - Cross-origin resource sharing
-- **playwright** - Chromium-based PDF fallback
+- **playwright** - Preferred browser-quality PDF rendering
 - **netifaces** - Network interface discovery
 - **requests** - HTTP client
 - **PyYAML** - YAML parsing utilities
@@ -98,7 +102,7 @@ python -c "import flask, socketio, requests, netifaces; print('Core dependencies
 - **arp-scan** - ARP scanning for MAC/vendor detection
 - **git** - For vulners script management
 - **xsltproc** - XML to HTML report conversion
-- **wkhtmltopdf** - Primary HTML to PDF conversion
+- **wkhtmltopdf** - HTML to PDF fallback when browser rendering is unavailable
 
 ### Optional Components
 - **nmap-vulners** script - Automatically cloned from GitHub
@@ -126,9 +130,10 @@ The app writes local scheduler state to `auto_scan_config.json` in the repositor
    - arp-scan may require sudo: `sudo arp-scan --localnet`
 
 2. **PDF generation issues**
-   - Install `wkhtmltopdf` or `xsltproc`
+   - Install `xsltproc`
+   - Preferred renderer: `python -m playwright install chromium`
+   - Fallback renderer: install `wkhtmltopdf`
    - Optional fallback: `pip install weasyprint`
-   - Optional fallback: `playwright install chromium`
 
 3. **nmap not found**
    - Ensure nmap is installed and in PATH

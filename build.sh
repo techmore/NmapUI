@@ -71,8 +71,8 @@ else
     echo "Warning: icon.jpg not found, using default icon"
 fi
 
-echo "Copying NmapUI Python application and resources from HEAD..."
-git archive --format=tar HEAD \
+echo "Copying NmapUI Python application and resources from the current workspace..."
+tar -cf - \
   app.py \
   nmapui \
   templates \
@@ -94,7 +94,7 @@ source "$BUNDLE_VENV/bin/activate"
 python -m pip install --upgrade pip
 PIP_DISABLE_PIP_VERSION_CHECK=1 python -m pip install -r "$APP_NAME/Contents/Resources/requirements.txt"
 deactivate
-echo "Bundled virtual environment created from HEAD requirements.txt."
+echo "Bundled virtual environment created from current workspace requirements.txt."
 
 # Create a run script that activates the bundled venv and runs the app.
 # Dependencies must already be installed in the venv — runtime pip installs

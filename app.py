@@ -1465,7 +1465,8 @@ def generate_report_task(sid, data):
             "socketio_sleep": socketio.sleep,
             "convert_xml_to_html": convert_xml_to_html,
             "convert_html_to_pdf": convert_html_to_pdf,
-            "stylesheet": XSL_STYLESHEET_PDF,
+            "web_stylesheet": XSL_STYLESHEET,
+            "pdf_stylesheet": XSL_STYLESHEET,
             "get_app_version": get_app_version,
             "save_scan_metadata": save_scan_metadata,
             "network_key": network_key,
@@ -1556,10 +1557,10 @@ def generate_pdf_from_saved_task(sid, data):
         feedback = lambda message: (emit_to_client(sid, "scan_feedback", message), socketio.sleep(0))
 
         emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (web view)...")
-        convert_xml_to_html(xml_path, web_html_path, stylesheet=XSL_STYLESHEET_PDF, get_app_version=get_app_version, feedback=feedback)
+        convert_xml_to_html(xml_path, web_html_path, stylesheet=XSL_STYLESHEET, get_app_version=get_app_version, feedback=feedback)
 
         emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (PDF view)...")
-        convert_xml_to_html(xml_path, pdf_html_path, stylesheet=XSL_STYLESHEET_PDF, get_app_version=get_app_version, feedback=feedback)
+        convert_xml_to_html(xml_path, pdf_html_path, stylesheet=XSL_STYLESHEET, get_app_version=get_app_version, feedback=feedback)
 
         emit_to_client(sid, "scan_feedback", "📑 Generating PDF report...")
         if not convert_html_to_pdf(pdf_html_path, pdf_path, feedback=feedback):

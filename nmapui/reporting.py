@@ -64,12 +64,21 @@ def convert_html_to_pdf(html_path, pdf_path, *, feedback=None):
                 browser = await playwright.chromium.launch(
                     headless=True, args=["--no-sandbox"]
                 )
-                page = await browser.new_page()
-                await page.goto(f"file://{html_path.resolve()}")
+                page = await browser.new_page(
+                    viewport={"width": 1440, "height": 2160}
+                )
+                await page.emulate_media(media="screen")
+                await page.goto(
+                    f"file://{html_path.resolve()}",
+                    wait_until="networkidle",
+                )
+                # Give hosted fonts and CSS a brief moment to settle before capture.
+                await page.wait_for_timeout(1200)
                 await page.pdf(
                     path=str(pdf_path),
-                    format="A4",
+                    format="Letter",
                     print_background=True,
+                    prefer_css_page_size=True,
                     margin={
                         "top": "8mm",
                         "right": "8mm",
@@ -91,8 +100,15 @@ def convert_html_to_pdf(html_path, pdf_path, *, feedback=None):
             "--enable-local-file-access",
             "--encoding",
             "utf-8",
-            "--print-media-type",
             "--background",
+            "--javascript-delay",
+            "1500",
+            "--load-error-handling",
+            "ignore",
+            "--load-media-error-handling",
+            "ignore",
+            "--viewport-size",
+            "1440x2160",
             "--margin-top",
             "8mm",
             "--margin-right",

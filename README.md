@@ -28,7 +28,8 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 - Nmap installed and available in PATH
 - arp-scan (optional, for MAC/vendor detection)
 - xsltproc (for XML to HTML conversion)
-- wkhtmltopdf or weasyprint (for HTML to PDF conversion)
+- Playwright Chromium (preferred HTML-to-PDF rendering)
+- wkhtmltopdf or weasyprint (fallback HTML-to-PDF rendering)
 - Chrome/Chromium (for headless screenshot functionality)
 
 ## Installation & Quick Start (macOS)
@@ -58,6 +59,7 @@ To run the Python server directly (after `install.sh` has been run):
 Or manually:
 ```bash
 source .venv/bin/activate
+python -m playwright install chromium
 python app.py
 ```
 

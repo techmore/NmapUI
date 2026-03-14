@@ -1640,6 +1640,12 @@
 
         // Event listeners for banner buttons
         document.addEventListener('DOMContentLoaded', () => {
+            if (typeof initializeReportGenerationUI === 'function') {
+                initializeReportGenerationUI(socket, {
+                    getClientJobs: () => clientJobs
+                });
+            }
+
             document.getElementById('update-now-btn')?.addEventListener('click', () => {
                 performAutoUpdate();
             });
@@ -3084,6 +3090,8 @@
         </div>
     </div>
     </div>
+
+    <script src="/static/js/report_generation_ui.js"></script>
 
     <!-- ── Audit Log Panel ─────────────────────────────────────────────── -->
     <div id="log-panel" class="hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col" style="height:320px;">
