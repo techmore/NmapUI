@@ -3,15 +3,18 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
 from nmapui.reporting import (
+    build_report_diff_summary,
     extract_scan_statistics,
     find_latest_saved_scan_for_pdf,
     find_previous_scan_metadata,
     generate_pdf_from_saved_task,
     get_most_recent_scan_xml,
+    inject_diff_summary_into_report_html,
     mark_scan_failure,
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
     parse_vulners_script,
+    render_report_diff_summary_html,
     save_scan_metadata,
     summarize_asset_differences,
 )
@@ -280,10 +283,40 @@ def test_find_latest_saved_scan_for_pdf_prefers_latest_matching_customer(tmp_pat
 
 
 def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
-    scan_dir = tmp_path / "data" / "scans" / "Acme" / "2026-03-14" / "scan_020000_target"
+    scans_dir = tmp_path / "data" / "scans"
+    previous_dir = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    scan_dir = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    previous_dir.mkdir(parents=True)
     scan_dir.mkdir(parents=True)
+    (previous_dir / "metadata.json").write_text(
+        '{"path":"Acme/2026-03-13/scan_010000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-13T01:00:00"}'
+    )
+    (previous_dir / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="192.168.1.10" addrtype="ipv4"/>
+            <ports><port portid="80"><state state="open"/><service name="http"/></port></ports>
+          </host>
+        </nmaprun>
+        """
+    )
     xml_path = scan_dir / "scan.xml"
-    xml_path.write_text("<nmaprun/>")
+    xml_path.write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="192.168.1.10" addrtype="ipv4"/>
+            <ports><port portid="443"><state state="open"/><service name="https"/></port></ports>
+          </host>
+        </nmaprun>
+        """
+    )
+    (scan_dir / "metadata.json").write_text(
+        '{"path":"Acme/2026-03-14/scan_020000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-14T02:00:00"}'
+    )
     observed = {"events": []}
 
     class JobRegistryStub:
@@ -304,11 +337,14 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
             "emit_to_client": lambda sid, event, data=None: observed["events"].append((sid, event, data)),
             "get_client_state": lambda sid=None: {"current_customer": {"id": "cust-123"}},
             "find_latest_saved_scan_for_pdf": lambda target, **kwargs: (scan_dir, xml_path),
-            "convert_xml_to_html": lambda *args, **kwargs: True,
+            "convert_xml_to_html": lambda xml_path, html_path, **kwargs: html_path.write_text(
+                "<html><body><h1>Report</h1></body></html>",
+                encoding="utf-8",
+            ) or True,
             "convert_html_to_pdf": lambda *args, **kwargs: True,
             "get_app_version": lambda: "v1.0.0",
             "logger": type("LoggerStub", (), {"exception": lambda self, *args, **kwargs: None})(),
-            "scans_dir": tmp_path / "data" / "scans",
+            "scans_dir": scans_dir,
             "socketio_sleep": lambda value: None,
             "web_stylesheet": "web.xsl",
             "pdf_stylesheet": "pdf.xsl",
@@ -322,6 +358,8 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
     assert observed["completed"][3]["mode"] == "pdf_only"
     assert observed["cleared"] == ("sid-1", "report")
     assert any(event[1] == "report_complete" for event in observed["events"])
+    assert 'id="scan-diff-summary"' in (scan_dir / "scan_web.html").read_text(encoding="utf-8")
+    assert 'id="scan-diff-summary"' in (scan_dir / "scan_pdf.html").read_text(encoding="utf-8")
 
 
 def test_find_previous_scan_metadata_matches_customer_and_target():
@@ -392,3 +430,85 @@ def test_summarize_asset_differences_reports_added_removed_and_changed_hosts():
     assert diff["new_vulnerabilities"] == ["CVE-2026-0002"]
     assert diff["removed_vulnerabilities"] == ["CVE-2026-0001"]
     assert diff["changed_hosts"][0]["host"] == "192.168.1.10"
+
+
+def test_build_report_diff_summary_uses_previous_matching_scan(tmp_path):
+    scans_dir = tmp_path / "data" / "scans"
+    previous_dir = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    current_dir = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    previous_dir.mkdir(parents=True)
+    current_dir.mkdir(parents=True)
+
+    (previous_dir / "metadata.json").write_text(
+        '{"path":"Acme/2026-03-13/scan_010000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-13T01:00:00"}'
+    )
+    (current_dir / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="192.168.1.10" addrtype="ipv4"/>
+            <ports><port portid="443"><state state="open"/><service name="https"/></port></ports>
+          </host>
+        </nmaprun>
+        """
+    )
+    (previous_dir / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="192.168.1.10" addrtype="ipv4"/>
+            <ports><port portid="80"><state state="open"/><service name="http"/></port></ports>
+          </host>
+        </nmaprun>
+        """
+    )
+
+    diff_summary = build_report_diff_summary(
+        {
+            "path": "Acme/2026-03-14/scan_020000_target",
+            "customer_id": "cust-123",
+            "target": "192.168.1.0/24",
+            "timestamp": "2026-03-14T02:00:00",
+        },
+        current_dir / "scan.xml",
+        scans_dir=scans_dir,
+    )
+
+    assert diff_summary["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+    assert diff_summary["removed_ports"] == ["80 (http)"]
+    assert diff_summary["new_ports"] == ["443 (https)"]
+
+
+def test_inject_diff_summary_into_report_html_adds_summary_section(tmp_path):
+    html_path = tmp_path / "scan_web.html"
+    html_path.write_text("<html><body><h1>Report</h1></body></html>", encoding="utf-8")
+
+    inject_diff_summary_into_report_html(
+        html_path,
+        {
+            "has_changes": True,
+            "baseline_timestamp": "2026-03-13T01:00:00",
+            "added_hosts": ["192.168.1.20"],
+            "removed_hosts": [],
+            "changed_hosts": [{"host": "192.168.1.10"}],
+            "new_ports": ["443 (https)"],
+            "removed_ports": ["80 (http)"],
+            "new_vulnerabilities": ["CVE-2026-0002"],
+            "removed_vulnerabilities": [],
+        },
+    )
+
+    html = html_path.read_text(encoding="utf-8")
+
+    assert 'id="scan-diff-summary"' in html
+    assert "Changes Since Previous Scan" in html
+    assert "1 new host(s)" in html
+    assert "1 changed host(s)" in html
+    assert "1 new vulnerabilit" in html
+
+
+def test_render_report_diff_summary_html_returns_empty_string_without_changes():
+    assert render_report_diff_summary_html(None) == ""
+    assert render_report_diff_summary_html({"has_changes": False}) == ""

@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
+from html import escape
 import io
 import logging
+import re
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
@@ -139,6 +141,121 @@ def find_previous_scan_metadata(current_metadata, scan_entries):
             continue
         return entry
     return None
+
+
+def build_report_diff_summary(current_metadata, current_xml_path, *, scans_dir):
+    scan_entries = []
+    for metadata_path, metadata in iter_scan_metadata_documents(
+        scans_dir,
+        load_json_document,
+        normalize_scan_metadata_document,
+        logger=logger,
+    ):
+        scan_entries.append(
+            {
+                **metadata,
+                "path": str(metadata_path.parent.relative_to(scans_dir)),
+            }
+        )
+
+    scan_entries.sort(key=lambda item: str(item.get("timestamp", "") or ""), reverse=True)
+    previous = find_previous_scan_metadata(current_metadata, scan_entries)
+    if not previous:
+        return None
+
+    previous_xml_path = scans_dir / str(previous.get("path", "")) / "scan.xml"
+    if not previous_xml_path.exists() or not current_xml_path.exists():
+        return None
+
+    diff_summary = summarize_asset_differences(
+        parse_scan_xml_for_assets(current_xml_path),
+        parse_scan_xml_for_assets(previous_xml_path),
+    )
+    if not diff_summary.get("has_changes"):
+        return None
+
+    return {
+        **diff_summary,
+        "baseline_path": previous.get("path"),
+        "baseline_timestamp": previous.get("timestamp"),
+    }
+
+
+def render_report_diff_summary_html(diff_summary):
+    if not diff_summary or not diff_summary.get("has_changes"):
+        return ""
+
+    facts = []
+    if diff_summary.get("added_hosts"):
+        facts.append(f"{len(diff_summary['added_hosts'])} new host(s)")
+    if diff_summary.get("removed_hosts"):
+        facts.append(f"{len(diff_summary['removed_hosts'])} removed host(s)")
+    if diff_summary.get("changed_hosts"):
+        facts.append(f"{len(diff_summary['changed_hosts'])} changed host(s)")
+    if diff_summary.get("new_ports"):
+        facts.append(f"{len(diff_summary['new_ports'])} new port(s)")
+    if diff_summary.get("removed_ports"):
+        facts.append(f"{len(diff_summary['removed_ports'])} removed port(s)")
+    if diff_summary.get("new_vulnerabilities"):
+        count = len(diff_summary["new_vulnerabilities"])
+        facts.append(f"{count} new vulnerabilit{'y' if count == 1 else 'ies'}")
+    if diff_summary.get("removed_vulnerabilities"):
+        count = len(diff_summary["removed_vulnerabilities"])
+        facts.append(f"{count} resolved vulnerabilit{'y' if count == 1 else 'ies'}")
+
+    baseline_timestamp = str(diff_summary.get("baseline_timestamp", "") or "").strip()
+    baseline_value = baseline_timestamp
+    if baseline_timestamp:
+        try:
+            baseline_value = datetime.fromisoformat(baseline_timestamp).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            baseline_value = baseline_timestamp
+
+    facts_markup = "".join(
+        f'<li style="margin:0 0 6px;">{escape(item)}</li>' for item in facts
+    )
+
+    return (
+        '<section id="scan-diff-summary" '
+        'style="margin:24px 0;padding:18px 20px;border:1px solid #d8c98f;'
+        'border-radius:14px;background:#f7f0d4;color:#4c3f1f;">'
+        '<h2 style="margin:0 0 8px;font-size:1.2rem;">Changes Since Previous Scan</h2>'
+        f'<p style="margin:0 0 12px;font-size:0.92rem;color:#6a5a2a;">Baseline: {escape(baseline_value)}</p>'
+        '<ul style="margin:0;padding-left:20px;">'
+        f"{facts_markup}"
+        "</ul>"
+        "</section>"
+    )
+
+
+def inject_diff_summary_into_report_html(html_path, diff_summary):
+    if not diff_summary or not diff_summary.get("has_changes") or not html_path.exists():
+        return False
+
+    html_text = html_path.read_text(encoding="utf-8")
+    summary_html = render_report_diff_summary_html(diff_summary)
+    if not summary_html:
+        return False
+
+    html_text = re.sub(
+        r'<section id="scan-diff-summary".*?</section>',
+        "",
+        html_text,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+    body_match = re.search(r"<body[^>]*>", html_text, flags=re.IGNORECASE)
+    if body_match:
+        insert_at = body_match.end()
+        updated = html_text[:insert_at] + summary_html + html_text[insert_at:]
+    elif "</body>" in html_text:
+        updated = html_text.replace("</body>", f"{summary_html}</body>", 1)
+    else:
+        updated = html_text + summary_html
+
+    html_path.write_text(updated, encoding="utf-8")
+    return True
 
 
 def merge_nmap_xml_files(xml_files, output_path):
@@ -880,6 +997,16 @@ def generate_pdf_from_saved_task(context, sid, data):
         pdf_html_path = scan_dir / "scan_pdf.html"
         pdf_path = scan_dir / "scan_report.pdf"
         feedback = lambda message: (emit_to_client(sid, "scan_feedback", message), socketio_sleep(0))
+        metadata_path = scan_dir / "metadata.json"
+        current_metadata = normalize_scan_metadata_document(
+            load_json_document(metadata_path, {})
+        )
+        current_metadata["path"] = str(scan_dir.relative_to(scans_dir))
+        diff_summary = build_report_diff_summary(
+            current_metadata,
+            xml_path,
+            scans_dir=scans_dir,
+        )
 
         emit_to_client(sid, "scan_feedback", "Converting XML to HTML (web view)...")
         convert_xml_to_html(
@@ -889,6 +1016,7 @@ def generate_pdf_from_saved_task(context, sid, data):
             get_app_version=get_app_version,
             feedback=feedback,
         )
+        inject_diff_summary_into_report_html(web_html_path, diff_summary)
 
         emit_to_client(sid, "scan_feedback", "Converting XML to HTML (PDF view)...")
         convert_xml_to_html(
@@ -898,6 +1026,7 @@ def generate_pdf_from_saved_task(context, sid, data):
             get_app_version=get_app_version,
             feedback=feedback,
         )
+        inject_diff_summary_into_report_html(pdf_html_path, diff_summary)
 
         emit_to_client(sid, "scan_feedback", "Generating PDF report...")
         if not convert_html_to_pdf(pdf_html_path, pdf_path, feedback=feedback):

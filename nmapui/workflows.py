@@ -2,7 +2,11 @@ from datetime import datetime
 import logging
 import re
 
-from nmapui.reporting import mark_scan_failure
+from nmapui.reporting import (
+    build_report_diff_summary,
+    inject_diff_summary_into_report_html,
+    mark_scan_failure,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -446,6 +450,17 @@ def generate_report_task(context, sid, data):
         web_html_path = scan_dir / "scan_web.html"
         pdf_html_path = scan_dir / "scan_pdf.html"
         pdf_path = scan_dir / "scan_report.pdf"
+        current_metadata = {
+            "path": str(scan_dir.relative_to(scans_dir)),
+            "timestamp": datetime.now().isoformat(),
+            "customer_id": str(current_customer.get("id", "") or ""),
+            "target": target,
+        }
+        diff_summary = build_report_diff_summary(
+            current_metadata,
+            xml_path,
+            scans_dir=scans_dir,
+        )
 
         feedback = lambda message: (emit_to_client(sid, "scan_feedback", message), socketio_sleep(0))
 
@@ -453,6 +468,7 @@ def generate_report_task(context, sid, data):
         update_job_progress(sid, "report", phase="html_web", message="Generating web HTML report", progress=70)
         socketio_sleep(0)
         if convert_xml_to_html(xml_path, web_html_path, stylesheet=web_stylesheet, get_app_version=get_app_version, feedback=feedback):
+            inject_diff_summary_into_report_html(web_html_path, diff_summary)
             file_size = web_html_path.stat().st_size if web_html_path.exists() else 0
             logger.info("✓ Web HTML created: %s (%s bytes)", web_html_path, file_size)
             emit_to_client(sid, "scan_feedback", f"✓ Web HTML: {file_size} bytes")
@@ -464,6 +480,7 @@ def generate_report_task(context, sid, data):
         update_job_progress(sid, "report", phase="html_pdf", message="Generating PDF HTML report", progress=78)
         socketio_sleep(0)
         if convert_xml_to_html(xml_path, pdf_html_path, stylesheet=pdf_stylesheet, get_app_version=get_app_version, feedback=feedback):
+            inject_diff_summary_into_report_html(pdf_html_path, diff_summary)
             file_size = pdf_html_path.stat().st_size if pdf_html_path.exists() else 0
             logger.info("✓ PDF HTML created: %s (%s bytes)", pdf_html_path, file_size)
             emit_to_client(sid, "scan_feedback", f"✓ PDF HTML: {file_size} bytes")
