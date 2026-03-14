@@ -1147,16 +1147,26 @@
             });
         });
 
+        function normalizeFeedbackMessage(msg) {
+            if (typeof msg === 'string') return msg;
+            if (msg && typeof msg.message === 'string') return msg.message;
+            return '';
+        }
+
         socket.on('scan_feedback', msg => {
+            const message = normalizeFeedbackMessage(msg);
+            if (!message) return;
             // Hide feedback container for standard info messages if they are from recovery
-            if (msg.includes('Loaded') && msg.includes('assets from scan')) {
+            if (message.includes('Loaded') && message.includes('assets from scan')) {
                 console.log('Suppressed recovery feedback in container');
                 return;
             }
             const container = document.getElementById('feedback-container');
             // Ensure the container is visible when feedback starts
             container.parentElement.classList.remove('hidden');
-            container.innerHTML += `<p>${msg}</p>`;
+            const paragraph = document.createElement('p');
+            paragraph.textContent = message;
+            container.appendChild(paragraph);
         });
 
         socket.on('local_ip', data => {
@@ -1200,6 +1210,7 @@
 
         socket.on('deep_scan_results', data => {
             data.forEach(updateRowWithResults);
+            lastScanResults.deepScan = data;
             if (window.tableSorter) window.tableSorter.resort();
         });
 
@@ -1647,6 +1658,7 @@
             }
 
             populateTableWithResults(hosts);
+            lastScanResults.quickScan = data;
             if (window.tableSorter) window.tableSorter.resort();
         });
         
@@ -1689,6 +1701,7 @@
                     row.cells[3].textContent = data[ip].vendor; // Vendor is now column 3
                 }
             }
+            lastScanResults.arpScan = data;
             if (window.tableSorter) window.tableSorter.resort();
         });
 
@@ -2268,17 +2281,6 @@
         }
 
         // Store scan results globally for report generation
-        socket.on('scan_results', function(data) {
-            lastScanResults.quickScan = data;
-        });
-
-        socket.on('deep_scan_results', function(data) {
-            lastScanResults.deepScan = data;
-        });
-
-        socket.on('arp_results', function(data) {
-            lastScanResults.arpScan = data;
-        });
 
         document.getElementById('generate-report-btn').addEventListener('click', function() {
             if (clientJobs.report.status === 'running') {

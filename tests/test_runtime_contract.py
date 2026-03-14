@@ -100,3 +100,17 @@ def test_app_exposes_explicit_run_server_entrypoint():
 
     assert "def run_server(argv=None):" in app_source
     assert 'if __name__ == "__main__":\n    run_server()' in app_source
+
+
+def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert template.count("socket.on('scan_results'") == 1
+    assert template.count("socket.on('deep_scan_results'") == 1
+    assert template.count("socket.on('arp_results'") == 1
+    assert "function normalizeFeedbackMessage(msg)" in template
+    assert "const message = normalizeFeedbackMessage(msg);" in template
