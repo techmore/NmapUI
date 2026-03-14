@@ -25,6 +25,7 @@ from nmapui.auto_scan import (
     save_auto_scan_config,
     should_run_auto_scan,
 )
+from nmapui.bootstrap import begin_startup_state, build_runtime_options, complete_startup_state
 from nmapui.client_state import ClientStateRegistry
 from nmapui.events import (
     emit_job_status as nmapui_emit_job_status,
@@ -1489,12 +1490,7 @@ def generate_report_event(data):
 def startup_checks(quick=False):
     import platform
 
-    startup_state["startup_complete"] = False
-    startup_state["dependency_checks_skipped"] = bool(quick)
-    startup_state["dependencies_ok"] = False
-    startup_state["traceroute_initialized"] = False
-    startup_state["last_started_at"] = datetime.now().isoformat()
-    startup_state["errors"] = []
+    begin_startup_state(startup_state, quick=quick)
 
     logger.info("\n" + "=" * 50)
     logger.info("NmapUI Startup Checks")
@@ -1559,7 +1555,10 @@ def startup_checks(quick=False):
 
     logger.info("\nInitializing network key...")
     run_traceroute("1.1.1.1")
-    startup_state["traceroute_initialized"] = not bool(network_key.get("error"))
+    complete_startup_state(
+        startup_state,
+        traceroute_initialized=not bool(network_key.get("error")),
+    )
     logger.info(f"Network key initialized with {network_key.get('total_hops', 0)} hops")
 
     logger.info("\n" + "=" * 50)
@@ -1574,7 +1573,6 @@ def startup_checks(quick=False):
 
     # Send initial auto scan status
     safe_emit("auto_scan_status", auto_scan_config)
-    startup_state["startup_complete"] = True
 
 @app.route("/api/health")
 def health_check():
