@@ -208,6 +208,22 @@ def test_app_registers_extracted_runtime_info_handlers():
     assert '@socketio.on("get_history_counts")' in runtime_info_source
 
 
+def test_app_registers_extracted_scan_job_handlers():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    handlers_source = (ROOT / "nmapui" / "handlers" / "scan_jobs.py").read_text()
+
+    assert "from nmapui.handlers.scan_jobs import register_scan_job_handlers" in app_source
+    assert "register_scan_job_handlers(" in app_source
+    assert '@socketio.on("start_scan")' not in app_source
+    assert '@socketio.on("generate_report")' not in app_source
+    assert '@socketio.on("start_scan")' in handlers_source
+    assert '@socketio.on("generate_report")' in handlers_source
+
+
 def test_app_uses_extracted_networking_helpers():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],

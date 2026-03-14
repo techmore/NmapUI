@@ -46,6 +46,7 @@ from nmapui.handlers.auto_scan import (
 from nmapui.handlers.customers import register_customer_handlers
 from nmapui.handlers.history import register_history_handlers
 from nmapui.handlers.routes import register_core_routes
+from nmapui.handlers.scan_jobs import register_scan_job_handlers
 from nmapui.handlers.runtime_info import register_runtime_info_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.health import build_liveness_payload, build_readiness_payload
@@ -449,6 +450,20 @@ def register_runtime_modules(app, socketio):
             "run_traceroute": run_traceroute,
         },
     )
+    register_scan_job_handlers(
+        socketio,
+        {
+            "validate_target": validate_target,
+            "rate_limiter": rate_limiter,
+            "job_registry": job_registry,
+            "emit_job_status": lambda sid, job_type: emit_job_status(
+                socketio, job_registry, sid, job_type
+            ),
+            "set_last_scan_target_state": set_last_scan_target_state,
+            "start_scan_task": start_scan_task,
+            "generate_report_task": generate_report_task,
+        },
+    )
     register_update_handlers(
         socketio,
         {
@@ -578,40 +593,6 @@ def start_scan_task(sid, target):
     return workflow_start_scan_task(_scan_workflow_context(), sid, target)
 
 
-@socketio.on("start_scan")
-@require_socket_auth()
-def start_scan(data):
-    """Handle scan start request with validation."""
-    # Extract target from data (handles both old format (target) and new format {target: ...})
-    if isinstance(data, dict):
-        target = data.get("target", "")
-    else:
-        target = str(data) if data else ""
-
-    # Validate target
-    is_valid, error_msg = validate_target(target)
-    if not is_valid:
-        emit("scan_error", f"Invalid target: {error_msg}")
-        return
-
-    # Check rate limit
-    can_scan, rate_msg = rate_limiter.can_scan()
-    if not can_scan:
-        emit("scan_error", rate_msg)
-        return
-
-    if not job_registry.start(request.sid, "scan", {"target": target}):
-        emit("scan_error", "A scan is already running for this client")
-        emit_job_status(socketio, job_registry, request.sid, "scan")
-        return
-
-    set_last_scan_target_state(target, request.sid)
-    # Record scan start before dispatching background work
-    rate_limiter.record_scan()
-    emit_job_status(socketio, job_registry, request.sid, "scan")
-    socketio.start_background_task(start_scan_task, request.sid, target)
-
-
 def run_arp_scan(target, interface=None, sid=None):
     return run_arp_scan_helper(
         target,
@@ -707,27 +688,6 @@ def generate_report_task(sid, data):
         sid,
         data,
     )
-
-
-@socketio.on("generate_report")
-@require_socket_auth()
-def generate_report_event(data):
-    """Handle report generation request via SocketIO."""
-    if not isinstance(data, dict):
-        emit("report_error", {"error": "Invalid report request"})
-        return
-
-    if not job_registry.start(
-        request.sid,
-        "report",
-        {"target": data.get("target"), "customer_name": data.get("customer_name")},
-    ):
-        emit("report_error", {"error": "A report job is already running for this client"})
-        emit_job_status(socketio, job_registry, request.sid, "report")
-        return
-
-    emit_job_status(socketio, job_registry, request.sid, "report")
-    socketio.start_background_task(generate_report_task, request.sid, data)
 
 
 def startup_checks(quick=False):
