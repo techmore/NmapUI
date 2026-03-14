@@ -5,6 +5,7 @@ from nmapui.auth import require_socket_auth
 
 
 def register_scan_job_handlers(socketio, deps):
+    broadcaster = deps.get("broadcaster")
     validate_target = deps["validate_target"]
     rate_limiter = deps["rate_limiter"]
     job_registry = deps["job_registry"]
@@ -26,7 +27,10 @@ def register_scan_job_handlers(socketio, deps):
             emit("scan_error", f"Invalid target: {error_msg}")
             return
 
-        can_scan, rate_msg = rate_limiter.can_scan()
+        try:
+            can_scan, rate_msg = rate_limiter.can_scan(request.sid)
+        except TypeError:
+            can_scan, rate_msg = rate_limiter.can_scan()
         if not can_scan:
             emit("scan_error", rate_msg)
             return
@@ -37,7 +41,12 @@ def register_scan_job_handlers(socketio, deps):
             return
 
         set_last_scan_target_state(value=target, sid=request.sid)
-        rate_limiter.record_scan()
+        if broadcaster is not None:
+            broadcaster.start_job(request.sid)
+        try:
+            rate_limiter.record_scan(request.sid)
+        except TypeError:
+            rate_limiter.record_scan()
         emit_job_status(request.sid, "scan")
         socketio.start_background_task(start_scan_task, request.sid, target)
 

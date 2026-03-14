@@ -185,6 +185,15 @@ def test_app_delegates_networking_helpers_to_shared_module():
     assert "return identify_gateway_firewall_targets_for_key(hosts, network_key)" in app_source
 
 
+def test_app_delegates_scan_job_handlers_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.handlers.scan_jobs import register_scan_job_handlers" in app_source
+    assert "register_scan_job_handlers(" in app_source
+    assert '@socketio.on("start_scan")' not in app_source
+    assert '@socketio.on("generate_report")' not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

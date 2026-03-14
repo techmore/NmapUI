@@ -42,6 +42,7 @@ from nmapui.handlers.customers import register_customer_handlers
 from nmapui.handlers.history import register_history_handlers
 from nmapui.handlers.routes import register_core_routes
 from nmapui.handlers.runtime_info import register_runtime_info_handlers
+from nmapui.handlers.scan_jobs import register_scan_job_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.handlers.updates import register_update_handlers
 from nmapui.health import build_liveness_payload, build_readiness_payload
@@ -867,6 +868,22 @@ register_runtime_info_handlers(
         ),
     },
 )
+register_scan_job_handlers(
+    socketio,
+    {
+        "validate_target": validate_target,
+        "rate_limiter": rate_limiter,
+        "job_registry": job_registry,
+        "emit_job_status": emit_job_status,
+        "set_last_scan_target_state": lambda *, value, sid=None: set_last_scan_target_state(
+            value,
+            sid,
+        ),
+        "start_scan_task": start_scan_task,
+        "generate_report_task": generate_report_task,
+        "broadcaster": broadcaster,
+    },
+)
 
 
 def identify_gateway_firewall_targets(hosts):
@@ -954,44 +971,6 @@ def on_connect():
     # Replay the accumulated event log to catch the new tab up
     for event, data in broadcaster.get_replay_buffer(owner_sid):
         emit_to_client(new_sid, event, data)
-
-
-@socketio.on("start_scan")
-@require_socket_auth()
-def start_scan(data):
-    """Handle scan start request with validation."""
-    # Extract target from data (handles both old format (target) and new format {target: ...})
-    if isinstance(data, dict):
-        target = data.get("target", "")
-    else:
-        target = str(data) if data else ""
-
-    # Validate target
-    is_valid, error_msg = validate_target(target)
-    if not is_valid:
-        emit("scan_error", f"Invalid target: {error_msg}")
-        return
-
-    # Check rate limit (per client session)
-    can_scan, rate_msg = rate_limiter.can_scan(request.sid)
-    if not can_scan:
-        emit("scan_error", rate_msg)
-        return
-
-    if not job_registry.start(request.sid, "scan", {"target": target}):
-        emit("scan_error", "A scan is already running for this client")
-        emit_job_status(request.sid, "scan")
-        return
-
-    set_last_scan_target_state(target, request.sid)
-
-    # Register this tab as the scan owner so other tabs can subscribe
-    broadcaster.start_job(request.sid)
-
-    # Record scan start before dispatching background work
-    rate_limiter.record_scan(request.sid)
-    emit_job_status(request.sid, "scan")
-    socketio.start_background_task(start_scan_task, request.sid, target)
 
 
 def run_arp_scan(target, interface=None, sid=None):
@@ -1381,27 +1360,6 @@ def generate_pdf_from_saved_task(sid, data):
         emit_to_client(sid, "report_error", {"error": str(exc)})
     finally:
         job_registry.clear_if_disconnected(sid, "report")
-
-
-@socketio.on("generate_report")
-@require_socket_auth()
-def generate_report_event(data):
-    """Handle report generation request via SocketIO."""
-    if not isinstance(data, dict):
-        emit("report_error", {"error": "Invalid report request"})
-        return
-
-    if not job_registry.start(
-        request.sid,
-        "report",
-        {"target": data.get("target"), "customer_name": data.get("customer_name")},
-    ):
-        emit("report_error", {"error": "A report job is already running for this client"})
-        emit_job_status(request.sid, "report")
-        return
-
-    emit_job_status(request.sid, "report")
-    socketio.start_background_task(generate_report_task, request.sid, data)
 
 
 @socketio.on("generate_pdf_from_saved")

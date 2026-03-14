@@ -107,6 +107,48 @@ def test_start_scan_persists_last_target_with_keyword_state_setter(monkeypatch):
     assert observed["rate_recorded"] is True
 
 
+def test_start_scan_uses_sid_scoped_rate_limit_and_broadcaster(monkeypatch):
+    configure_auth(monkeypatch)
+    observed = {}
+
+    class RateLimiterStub:
+        def can_scan(self, sid):
+            observed["can_scan_sid"] = sid
+            return True, None
+
+        def record_scan(self, sid):
+            observed["record_scan_sid"] = sid
+
+    class JobRegistryStub:
+        def start(self, sid, job_type, details):
+            observed["job_start"] = (sid, job_type, details)
+            return True
+
+    class BroadcasterStub:
+        def start_job(self, sid):
+            observed["broadcaster_sid"] = sid
+
+    app, socketio = build_scan_jobs_app(
+        {
+            "validate_target": lambda target: (True, None),
+            "rate_limiter": RateLimiterStub(),
+            "job_registry": JobRegistryStub(),
+            "emit_job_status": lambda sid, job_type: observed.setdefault("job_status", []).append((sid, job_type)),
+            "set_last_scan_target_state": lambda *, value, sid=None: observed.setdefault("last_target", (sid, value)),
+            "start_scan_task": lambda sid, target: None,
+            "generate_report_task": lambda sid, data: None,
+            "broadcaster": BroadcasterStub(),
+        }
+    )
+
+    client = socketio.test_client(app, headers=basic_auth_header())
+    client.emit("start_scan", "192.168.1.0/24")
+
+    assert observed["can_scan_sid"]
+    assert observed["record_scan_sid"] == observed["can_scan_sid"]
+    assert observed["broadcaster_sid"] == observed["can_scan_sid"]
+
+
 def test_runtime_info_handlers_reject_unauthenticated_socket_events(monkeypatch):
     configure_auth(monkeypatch)
     app, socketio = build_runtime_info_app(
