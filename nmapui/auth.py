@@ -44,9 +44,14 @@ def request_is_local_ui():
     origin = (request.headers.get("Origin") or "").lower()
 
     allowed_hosts = {"127.0.0.1", "localhost"}
+    local_remote_addrs = {"", "127.0.0.1", "::1", "localhost"}
     origin_is_local = any(token in origin for token in ("127.0.0.1", "localhost"))
 
-    return host in allowed_hosts and (remote_addr in {"", "127.0.0.1", "::1", "localhost"} or origin_is_local)
+    return (
+        host in allowed_hosts
+        or remote_addr in local_remote_addrs
+        or origin_is_local
+    )
 
 
 def auth_uses_insecure_defaults():
