@@ -344,7 +344,7 @@ function initializeDiscoveryUI(socket) {
     });
 
     socket.on('report_complete', function(data) {
-        showReportStatus('Report generated successfully! Check: ' + data.scan_dir, 'success');
+        showReportStatus(formatReportCompleteMessage(data), 'success');
         document.getElementById('generate-report-btn').classList.remove('card-pulsing');
         stopReportTimer();
         socket.emit('get_history_counts');
@@ -386,8 +386,37 @@ function initializeDiscoveryUI(socket) {
     });
 }
 
+function formatReportCompleteMessage(data) {
+    const scanDir = data?.scan_dir || 'saved scan folder';
+    const diffSummary = data?.diff_summary;
+    if (!diffSummary || !diffSummary.has_changes) {
+        return 'Report generated successfully. Check: ' + scanDir;
+    }
+
+    const facts = [];
+    if (diffSummary.added_hosts?.length) {
+        facts.push(`${diffSummary.added_hosts.length} new host(s)`);
+    }
+    if (diffSummary.removed_hosts?.length) {
+        facts.push(`${diffSummary.removed_hosts.length} removed host(s)`);
+    }
+    if (diffSummary.changed_hosts?.length) {
+        facts.push(`${diffSummary.changed_hosts.length} changed host(s)`);
+    }
+    if (diffSummary.new_ports?.length) {
+        facts.push(`${diffSummary.new_ports.length} new port(s)`);
+    }
+    if (diffSummary.new_vulnerabilities?.length) {
+        facts.push(`${diffSummary.new_vulnerabilities.length} new vulnerabilit${diffSummary.new_vulnerabilities.length === 1 ? 'y' : 'ies'}`);
+    }
+
+    const summaryText = facts.length ? ` Changes detected: ${facts.join(', ')}.` : ' Changes detected.';
+    return `Report generated successfully. Check: ${scanDir}.${summaryText}`;
+}
+
 window.setSafeExternalLink = setSafeExternalLink;
 window.renderDelimitedCell = renderDelimitedCell;
+window.formatReportCompleteMessage = formatReportCompleteMessage;
 window.renderCveArrayCell = renderCveArrayCell;
 window.appendServiceInfoLine = appendServiceInfoLine;
 window.renderRoutePath = renderRoutePath;

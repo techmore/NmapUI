@@ -357,7 +357,8 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
     assert observed["completed"][2] == "completed"
     assert observed["completed"][3]["mode"] == "pdf_only"
     assert observed["cleared"] == ("sid-1", "report")
-    assert any(event[1] == "report_complete" for event in observed["events"])
+    report_complete = next(event for event in observed["events"] if event[1] == "report_complete")
+    assert report_complete[2]["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
     assert 'id="scan-diff-summary"' in (scan_dir / "scan_web.html").read_text(encoding="utf-8")
     assert 'id="scan-diff-summary"' in (scan_dir / "scan_pdf.html").read_text(encoding="utf-8")
 

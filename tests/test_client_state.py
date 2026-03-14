@@ -249,13 +249,15 @@ def test_generate_report_task_injects_diff_summary_into_generated_html(tmp_path)
         html_path.write_text("<html><body><h1>Report</h1></body></html>", encoding="utf-8")
         return True
 
+    observed_events = []
+
     generate_report_task(
         build_report_workflow_context(
             {
             "job_registry": registry,
             "idle_state_manager": IdleStateStub(),
             "emit_job_status": lambda sid, job_type: None,
-            "emit_to_client": lambda sid, event, data=None: None,
+            "emit_to_client": lambda sid, event, data=None: observed_events.append((event, data)),
             "update_job_progress": lambda *args, **kwargs: None,
             "validate_target": lambda target: (True, None),
             "split_subnet_into_chunks": lambda target: [target],
@@ -298,3 +300,5 @@ def test_generate_report_task_injects_diff_summary_into_generated_html(tmp_path)
 
     assert 'id="scan-diff-summary"' in (scan_dir / "scan_web.html").read_text(encoding="utf-8")
     assert 'id="scan-diff-summary"' in (scan_dir / "scan_pdf.html").read_text(encoding="utf-8")
+    report_complete = next(payload for event, payload in observed_events if event == "report_complete")
+    assert report_complete["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"

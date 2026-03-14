@@ -507,13 +507,15 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],
         cwd=ROOT,
-        text=True,
+    text=True,
     )
     discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
 
     assert "function renderCveArrayCell(cell, cveArray)" in discovery_module
     assert "function appendServiceInfoLine(cell, line)" in discovery_module
     assert "function renderDelimitedCell(cell, items, options = {})" in discovery_module
+    assert "function formatReportCompleteMessage(data)" in discovery_module
+    assert "showReportStatus(formatReportCompleteMessage(data), 'success');" in discovery_module
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template

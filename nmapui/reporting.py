@@ -1040,7 +1040,12 @@ def generate_pdf_from_saved_task(context, sid, data):
         emit_to_client(
             sid,
             "report_complete",
-            {"status": "success", "path": relative_path, "scan_dir": str(scan_dir)},
+            {
+                "status": "success",
+                "path": relative_path,
+                "scan_dir": str(scan_dir),
+                "diff_summary": diff_summary,
+            },
         )
         job_registry.complete(
             sid,
