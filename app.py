@@ -1762,8 +1762,9 @@ def start_auto_scan_thread():
     )
     auto_scan_thread = thread_ref["thread"]
 
-if __name__ == "__main__":
-    quick_mode = "--quick" in sys.argv or "-q" in sys.argv
+def run_server(argv=None):
+    argv = argv or sys.argv
+    quick_mode = "--quick" in argv or "-q" in argv
     host = os.environ.get("NMAPUI_HOST", "127.0.0.1")
     port = int(os.environ.get("NMAPUI_PORT", "9000"))
     debug = env_flag("NMAPUI_DEBUG", default=False)
@@ -1778,3 +1779,7 @@ if __name__ == "__main__":
         debug=debug,
         allow_unsafe_werkzeug=True,
     )
+
+
+if __name__ == "__main__":
+    run_server()
