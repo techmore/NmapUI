@@ -28,20 +28,13 @@ from nmapui.app_runtime_bindings import (
     build_state_bindings,
     build_traceroute_bindings,
 )
+from nmapui.app_task_bindings import build_task_bindings
 from nmapui.app_bindings import build_client_state_helpers, build_event_helpers
 from nmapui.app_events_runtime import (
     safe_emit as safe_emit_runtime,
 )
-from nmapui.app_scan_runtime import (
-    run_arp_scan as run_arp_scan_runtime,
-    run_nmap_with_xml_output as run_nmap_with_xml_output_runtime,
-    start_scan_task as start_scan_task_runtime,
-)
 from nmapui.app_composition import (
     build_execute_auto_scan_deps,
-    build_report_task_deps,
-    build_saved_pdf_task_deps,
-    build_scan_task_deps,
     build_startup_check_deps,
 )
 from nmapui.app_handler_registration import register_app_handlers
@@ -93,10 +86,6 @@ from nmapui.reporting import (
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
     save_scan_metadata,
-)
-from nmapui.report_runtime import (
-    generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime,
-    generate_report_task as generate_report_task_runtime,
 )
 from nmapui.scanning import (
     check_arp_scan,
@@ -322,136 +311,52 @@ register_app_handlers(
     ),
     logger=logger,
 )
-
-def start_scan_task(sid, target):
-    """Run scan workflow in a background task for a single client."""
-    return start_scan_task_runtime(
-        sid=sid,
-        target=target,
-        **build_scan_task_deps(
-            broadcaster=broadcaster,
-            emit_to_client=emit_to_client,
-            get_client_state=get_client_state,
-            ensure_job_not_cancelled=ensure_job_not_cancelled,
-            idle_state_manager=idle_state_manager,
-            update_job_progress=update_job_progress,
-            socketio_sleep=socketio.sleep,
-            run_cancellable_command=run_cancellable_command,
-            run_arp_scan=run_arp_scan,
-            identify_gateway_firewall_targets=lambda hosts: identify_gateway_firewall_targets_for_key(
-                hosts, get_client_state(sid=sid)["network_key"]
-            ),
-            job_registry=job_registry,
-            emit_job_status=emit_job_status,
-            logger=logger,
-            settings_state=settings_state,
-            vulners_script=VULNERS_SCRIPT,
-        ),
-    )
-
-
-def run_arp_scan(target, interface=None, sid=None):
-    return run_arp_scan_runtime(
-        target=target,
-        interface=interface,
-        sid=sid,
-        get_default_interface_cached=lambda: DEFAULT_INTERFACE,
-        which=shutil.which,
-        emit_to_client=emit_to_client,
-        socketio_emit=socketio.emit,
-        socketio_sleep=socketio.sleep,
-        run_cancellable_command=run_cancellable_command,
-    )
-
-
-def run_nmap_with_xml_output(
-    target,
-    output_base,
-    scan_type="comprehensive",
-    sid=None,
-    excluded_targets=None,
-    scan_only_mode=False,
-):
-    return run_nmap_with_xml_output_runtime(
-        target=target,
-        output_base=output_base,
-        scan_type=scan_type,
-        sid=sid,
-        excluded_targets=excluded_targets,
-        scan_only_mode=scan_only_mode,
-        vulners_script=VULNERS_SCRIPT,
-        stylesheet_pdf=XSL_STYLESHEET_PDF,
-        emit_to_client=emit_to_client,
-        socketio_emit=socketio.emit,
-        socketio_sleep=socketio.sleep,
-        run_cancellable_command=run_cancellable_command,
-    )
-
-
-
-def generate_report_task(sid, data):
-    """Run report generation in a background task for a single client."""
-    return generate_report_task_runtime(
-        sid=sid,
-        data=data,
-        deps=build_report_task_deps(
-            broadcaster=broadcaster,
-            job_registry=job_registry,
-            idle_state_manager=idle_state_manager,
-            emit_job_status=emit_job_status,
-            emit_to_client=emit_to_client,
-            update_job_progress=update_job_progress,
-            validate_target=validate_target,
-            split_subnet_into_chunks=split_subnet_into_chunks,
-            create_scan_folder=create_scan_folder,
-            scans_dir=SCANS_DIR,
-            settings_state=settings_state,
-            sanitize_customer_dir_name=sanitize_customer_dir_name,
-            run_nmap_with_xml_output=run_nmap_with_xml_output,
-            merge_nmap_xml_files=merge_nmap_xml_files,
-            socketio_sleep=socketio.sleep,
-            convert_xml_to_html=convert_xml_to_html,
-            convert_html_to_pdf=convert_html_to_pdf,
-            web_stylesheet=XSL_STYLESHEET,
-            pdf_stylesheet=XSL_STYLESHEET_PDF,
-            stylesheet=XSL_STYLESHEET,
-            get_app_version=get_app_version,
-            save_scan_metadata=save_scan_metadata,
-            get_client_state=get_client_state,
-            network_key=network_key,
-            current_customer=current_customer,
-            extract_scan_statistics=extract_scan_statistics,
-            customer_fingerprinter=customer_fingerprinter,
-        ),
-    )
-
-def generate_pdf_from_saved_task(sid, data):
-    return generate_pdf_from_saved_task_runtime(
-        sid=sid,
-        data=data,
-        deps=build_saved_pdf_task_deps(
-            broadcaster=broadcaster,
-            job_registry=job_registry,
-            emit_job_status=emit_job_status,
-            emit_to_client=emit_to_client,
-            get_client_state=get_client_state,
-            find_latest_saved_scan_for_pdf=lambda target, **kwargs: find_latest_saved_scan_for_pdf(
-                target,
-                scans_dir=SCANS_DIR,
-                load_json_document=load_json_document,
-                normalize_scan_metadata_document=normalize_scan_metadata_document,
-                **kwargs,
-            ),
-            convert_xml_to_html=convert_xml_to_html,
-            convert_html_to_pdf=convert_html_to_pdf,
-            get_app_version=get_app_version,
-            logger=logger,
-            scans_dir=SCANS_DIR,
-            socketio_sleep=socketio.sleep,
-            web_stylesheet=XSL_STYLESHEET,
-            pdf_stylesheet=XSL_STYLESHEET_PDF,
-        ),
-    )
+task_bindings = build_task_bindings(
+    broadcaster=broadcaster,
+    emit_to_client=emit_to_client,
+    get_client_state=get_client_state,
+    ensure_job_not_cancelled=ensure_job_not_cancelled,
+    idle_state_manager=idle_state_manager,
+    update_job_progress=update_job_progress,
+    socketio=socketio,
+    run_cancellable_command=run_cancellable_command,
+    identify_gateway_firewall_targets=lambda hosts, sid=None: identify_gateway_firewall_targets_for_key(
+        hosts,
+        get_client_state(sid=sid)["network_key"],
+    ),
+    job_registry=job_registry,
+    emit_job_status=emit_job_status,
+    logger=logger,
+    settings_state=settings_state,
+    vulners_script=VULNERS_SCRIPT,
+    default_interface=DEFAULT_INTERFACE,
+    which=shutil.which,
+    stylesheet_pdf=XSL_STYLESHEET_PDF,
+    validate_target=validate_target,
+    split_subnet_into_chunks=split_subnet_into_chunks,
+    create_scan_folder=create_scan_folder,
+    scans_dir=SCANS_DIR,
+    sanitize_customer_dir_name=sanitize_customer_dir_name,
+    merge_nmap_xml_files=merge_nmap_xml_files,
+    convert_xml_to_html=convert_xml_to_html,
+    convert_html_to_pdf=convert_html_to_pdf,
+    web_stylesheet=XSL_STYLESHEET,
+    stylesheet=XSL_STYLESHEET,
+    get_app_version=get_app_version,
+    save_scan_metadata=save_scan_metadata,
+    network_key=network_key,
+    current_customer=current_customer,
+    extract_scan_statistics=extract_scan_statistics,
+    customer_fingerprinter=customer_fingerprinter,
+    find_latest_saved_scan_for_pdf=find_latest_saved_scan_for_pdf,
+    load_json_document=load_json_document,
+    normalize_scan_metadata_document=normalize_scan_metadata_document,
+)
+start_scan_task = task_bindings["start_scan_task"]
+run_arp_scan = task_bindings["run_arp_scan"]
+run_nmap_with_xml_output = task_bindings["run_nmap_with_xml_output"]
+generate_report_task = task_bindings["generate_report_task"]
+generate_pdf_from_saved_task = task_bindings["generate_pdf_from_saved_task"]
 
 
 def startup_checks(quick=False):

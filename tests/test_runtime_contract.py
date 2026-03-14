@@ -598,20 +598,25 @@ def test_app_delegates_scan_job_handlers_to_shared_module():
     app_scan_runtime_source = (ROOT / "nmapui" / "app_scan_runtime.py").read_text()
     app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
     app_handler_registration_source = (ROOT / "nmapui" / "app_handler_registration.py").read_text()
+    app_task_bindings_source = (ROOT / "nmapui" / "app_task_bindings.py").read_text()
 
     assert "register_app_handlers(" in app_source
     assert "from nmapui.handlers.scan_jobs import register_scan_job_handlers" in app_composition_source
     assert "build_scan_job_handler_deps(" in app_handler_registration_source
-    assert "from nmapui.app_scan_runtime import (" in app_source
-    assert "start_scan_task as start_scan_task_runtime" in app_source
-    assert "run_arp_scan as run_arp_scan_runtime" in app_source
-    assert "run_nmap_with_xml_output as run_nmap_with_xml_output_runtime" in app_source
+    assert "from nmapui.app_task_bindings import build_task_bindings" in app_source
+    assert "task_bindings = build_task_bindings(" in app_source
+    assert 'start_scan_task = task_bindings["start_scan_task"]' in app_source
+    assert 'generate_report_task = task_bindings["generate_report_task"]' in app_source
+    assert 'generate_pdf_from_saved_task = task_bindings["generate_pdf_from_saved_task"]' in app_source
+    assert 'run_arp_scan = task_bindings["run_arp_scan"]' in app_source
+    assert 'run_nmap_with_xml_output = task_bindings["run_nmap_with_xml_output"]' in app_source
     assert "register_scan_job_handlers(socketio, scan_job_handler_deps)" in app_composition_source
     assert '@socketio.on("start_scan")' not in app_source
     assert '@socketio.on("generate_report")' not in app_source
     assert '@socketio.on("generate_pdf_from_saved")' not in app_source
     assert "def _make_broadcast_emit(" not in app_source
     assert "def _scan_workflow_context(" not in app_source
+    assert "def build_task_bindings(" in app_task_bindings_source
     assert "def make_broadcast_emit(" in scan_runtime_source
     assert "return start_scan_task_impl(" in app_scan_runtime_source
 
@@ -631,11 +636,12 @@ def test_app_delegates_connection_handlers_to_shared_module():
 def test_app_delegates_scanning_helpers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
     app_scan_runtime_source = (ROOT / "nmapui" / "app_scan_runtime.py").read_text()
+    app_task_bindings_source = (ROOT / "nmapui" / "app_task_bindings.py").read_text()
 
-    assert "run_arp_scan as run_arp_scan_runtime" in app_source
-    assert "run_nmap_with_xml_output as run_nmap_with_xml_output_runtime" in app_source
-    assert "return run_arp_scan_runtime(" in app_source
-    assert "return run_nmap_with_xml_output_runtime(" in app_source
+    assert 'run_arp_scan = task_bindings["run_arp_scan"]' in app_source
+    assert 'run_nmap_with_xml_output = task_bindings["run_nmap_with_xml_output"]' in app_source
+    assert "return run_arp_scan_runtime(" in app_task_bindings_source
+    assert "return run_nmap_with_xml_output_runtime(" in app_task_bindings_source
     assert "return run_arp_scan_impl(" in app_scan_runtime_source
     assert "return run_nmap_with_xml_output_impl(" in app_scan_runtime_source
 
@@ -662,14 +668,12 @@ def test_app_uses_shared_workflow_context_builders():
     scan_runtime_source = (ROOT / "nmapui" / "scan_runtime.py").read_text()
     report_runtime_source = (ROOT / "nmapui" / "report_runtime.py").read_text()
     app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
+    app_task_bindings_source = (ROOT / "nmapui" / "app_task_bindings.py").read_text()
 
-    assert "from nmapui.report_runtime import (" in app_source
-    assert "from nmapui.app_composition import (" in app_source
-    assert "generate_report_task as generate_report_task_runtime" in app_source
-    assert "generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime" in app_source
-    assert "build_scan_task_deps(" in app_source
-    assert "build_report_task_deps(" in app_source
-    assert "build_saved_pdf_task_deps(" in app_source
+    assert "from nmapui.app_task_bindings import build_task_bindings" in app_source
+    assert "build_scan_task_deps(" not in app_source
+    assert "build_report_task_deps(" not in app_source
+    assert "build_saved_pdf_task_deps(" not in app_source
     assert "build_report_workflow_context(" in report_runtime_source
     assert "class ScanWorkflowContext" in workflow_context_source
     assert "class ReportWorkflowContext" in workflow_context_source
@@ -680,6 +684,13 @@ def test_app_uses_shared_workflow_context_builders():
     assert "def build_scan_task_deps(" in app_composition_source
     assert "def build_report_task_deps(" in app_composition_source
     assert "def build_saved_pdf_task_deps(" in app_composition_source
+    assert "def build_task_bindings(" in app_task_bindings_source
+    assert "build_scan_task_deps(" in app_task_bindings_source
+    assert "build_report_task_deps(" in app_task_bindings_source
+    assert "build_saved_pdf_task_deps(" in app_task_bindings_source
+    assert "start_scan_task_runtime(" in app_task_bindings_source
+    assert "generate_report_task_runtime(" in app_task_bindings_source
+    assert "generate_pdf_from_saved_task_runtime(" in app_task_bindings_source
     assert "def identify_gateway_firewall_targets(" not in app_source
     assert "def start_deep_scan(" not in app_source
     assert '"cve_pattern":' not in app_source
@@ -697,10 +708,11 @@ def test_app_uses_shared_validation_helpers():
 def test_app_uses_shared_saved_pdf_helpers():
     app_source = (ROOT / "app.py").read_text()
     report_runtime_source = (ROOT / "nmapui" / "report_runtime.py").read_text()
+    app_task_bindings_source = (ROOT / "nmapui" / "app_task_bindings.py").read_text()
 
     assert "find_latest_saved_scan_for_pdf," in app_source
-    assert "generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime" in app_source
-    assert "return generate_pdf_from_saved_task_runtime(" in app_source
+    assert 'generate_pdf_from_saved_task = task_bindings["generate_pdf_from_saved_task"]' in app_source
+    assert "return generate_pdf_from_saved_task_runtime(" in app_task_bindings_source
     assert "return generate_pdf_from_saved_task_impl(deps, sid, data)" in report_runtime_source
     assert "def find_latest_saved_scan_for_pdf(" not in app_source
 
