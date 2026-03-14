@@ -121,9 +121,11 @@ def test_app_defers_fingerprinter_and_default_interface_side_effects():
 
     assert "customer_fingerprinter = CustomerFingerprinter()" not in app_source
     assert "DEFAULT_INTERFACE = get_default_interface()" not in app_source
+    assert "# Load auto scan config on startup\nload_auto_scan_config(auto_scan_config)" not in app_source
     assert "def get_customer_fingerprinter():" in app_source
     assert "def get_default_interface_cached():" in app_source
     assert '"get_customer_fingerprinter": get_customer_fingerprinter' in app_source
+    assert "begin_startup_state(startup_state, quick=quick)\n    load_auto_scan_config(auto_scan_config)" in app_source
     assert 'customer_fingerprinter = deps["customer_fingerprinter"]' not in history_source
     assert 'customer_fingerprinter = deps["customer_fingerprinter"]' not in customer_source
     assert 'get_customer_fingerprinter = deps["get_customer_fingerprinter"]' in history_source

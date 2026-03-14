@@ -608,8 +608,6 @@ def execute_auto_scan():
         safe_emit("auto_scan_error", {"error": str(e)})
 
 
-# Load auto scan config on startup
-load_auto_scan_config(auto_scan_config)
 register_auto_scan_handlers(
     app,
     socketio,
@@ -1513,6 +1511,7 @@ def startup_checks(quick=False):
     import platform
 
     begin_startup_state(startup_state, quick=quick)
+    load_auto_scan_config(auto_scan_config)
 
     logger.info("\n" + "=" * 50)
     logger.info("NmapUI Startup Checks")
