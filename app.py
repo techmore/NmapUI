@@ -102,6 +102,7 @@ from nmapui.workflows import (
     start_scan_task as workflow_start_scan_task,
 )
 from persistence import (
+    iter_scan_metadata_documents,
     load_json_document,
     normalize_current_assignment_document,
     normalize_scan_metadata_document,
@@ -755,45 +756,36 @@ def run_traceroute(target="1.1.1.1"):
 def get_report_counts():
     """Count reports and find last scan date per customer name"""
     counts = {"total": 0, "last_scans": {}}
-    if not SCANS_DIR.exists():
-        return counts
+    for _, data in iter_scan_metadata_documents(
+        SCANS_DIR,
+        load_json_document,
+        normalize_scan_metadata_document,
+    ):
+        # Use normalized customer name as the key
+        name = data.get("customer_name")
+        if not name:
+            customer_info = data.get("customer_info", {})
+            name = customer_info.get("name")
+        if not name:
+            name = data.get("customer", "Unassigned")
 
-    for metadata_path in SCANS_DIR.glob("**/metadata.json"):
-        try:
-            data = normalize_scan_metadata_document(
-                load_json_document(metadata_path, {})
-            )
+        # Normalize: remove confidence score if present
+        name = name.split(" (")[0]
+        key = name if name else "Unassigned"
 
-            # Use normalized customer name as the key
-            name = data.get("customer_name")
-            if not name:
-                customer_info = data.get("customer_info", {})
-                name = customer_info.get("name")
-            if not name:
-                name = data.get("customer", "Unassigned")
+        counts[key] = counts.get(key, 0) + 1
+        counts["total"] = counts.get("total", 0) + 1
 
-            # Normalize: remove confidence score if present
-            name = name.split(" (")[0]
-            key = name if name else "Unassigned"
-
-            counts[key] = counts.get(key, 0) + 1
-            counts["total"] = counts.get("total", 0) + 1
-
-            # Track last scan timestamp
-            timestamp = data.get("timestamp")
-            if timestamp:
-                if (
-                    key not in counts["last_scans"]
-                    or timestamp > counts["last_scans"][key]
-                ):
-                    counts["last_scans"][key] = timestamp
-                if (
-                    "total" not in counts["last_scans"]
-                    or timestamp > counts["last_scans"]["total"]
-                ):
-                    counts["last_scans"]["total"] = timestamp
-        except Exception:
-            continue
+        # Track last scan timestamp
+        timestamp = data.get("timestamp")
+        if timestamp:
+            if key not in counts["last_scans"] or timestamp > counts["last_scans"][key]:
+                counts["last_scans"][key] = timestamp
+            if (
+                "total" not in counts["last_scans"]
+                or timestamp > counts["last_scans"]["total"]
+            ):
+                counts["last_scans"]["total"] = timestamp
 
     return counts
 

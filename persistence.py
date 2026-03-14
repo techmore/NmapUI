@@ -169,6 +169,26 @@ def normalize_scan_history_document(document: Any) -> dict[str, Any]:
     }
 
 
+def iter_scan_metadata_documents(
+    scans_dir: Path,
+    load_json_document,
+    normalize_scan_metadata_document,
+    *,
+    logger=None,
+):
+    if not scans_dir.exists():
+        return
+
+    for metadata_path in scans_dir.glob("**/metadata.json"):
+        try:
+            yield metadata_path, normalize_scan_metadata_document(
+                load_json_document(metadata_path, {})
+            )
+        except Exception as exc:
+            if logger is not None:
+                logger.error("Error reading metadata at %s: %s", metadata_path, exc)
+
+
 def normalize_traceroute_history_document(document: Any) -> dict[str, Any]:
     if isinstance(document, dict) and "customers" in document:
         customers = document.get("customers", {})

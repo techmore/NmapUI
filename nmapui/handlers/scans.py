@@ -4,6 +4,7 @@ import shutil
 
 from flask import jsonify, send_file
 from nmapui.auth import require_auth
+from persistence import iter_scan_metadata_documents
 
 
 def register_scan_routes(app, deps):
@@ -17,33 +18,28 @@ def register_scan_routes(app, deps):
     @require_auth
     def list_scans():
         scans = []
-        if not scans_dir.exists():
-            return jsonify({"scans": []})
-
-        for metadata_path in scans_dir.glob("**/metadata.json"):
-            try:
-                data = normalize_scan_metadata_document(
-                    load_json_document(metadata_path, {})
+        for metadata_path, data in iter_scan_metadata_documents(
+            scans_dir,
+            load_json_document,
+            normalize_scan_metadata_document,
+            logger=logger,
+        ):
+            if "customer_name" not in data:
+                data["customer_name"] = data.get(
+                    "customer", data.get("customer_id", "Unknown")
                 )
 
-                if "customer_name" not in data:
-                    data["customer_name"] = data.get(
-                        "customer", data.get("customer_id", "Unknown")
-                    )
+            if data["customer_name"]:
+                data["customer_name"] = data["customer_name"].split(" (")[0]
 
-                if data["customer_name"]:
-                    data["customer_name"] = data["customer_name"].split(" (")[0]
-
-                rel_path = metadata_path.parent.relative_to(scans_dir)
-                data["path"] = str(rel_path)
-                data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
-                    metadata_path.parent / "scan.html"
-                ).exists()
-                data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
-                data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
-                scans.append(data)
-            except Exception as exc:
-                logger.error("Error reading metadata at %s: %s", metadata_path, exc)
+            rel_path = metadata_path.parent.relative_to(scans_dir)
+            data["path"] = str(rel_path)
+            data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
+                metadata_path.parent / "scan.html"
+            ).exists()
+            data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
+            data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
+            scans.append(data)
 
         scans.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
         return jsonify({"scans": scans})
