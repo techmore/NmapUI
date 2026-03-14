@@ -99,6 +99,7 @@ from nmapui.state import (
     save_current_assignment as save_current_assignment_state,
     save_customers_config as save_customers_config_state,
 )
+from nmapui.tooling import ToolVersionRegistry
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
     start_deep_scan as workflow_start_deep_scan,
@@ -623,12 +624,7 @@ def execute_auto_scan():
         safe_emit("auto_scan_error", {"error": str(e)})
 
 
-# Global version information - populated at startup
-versions: Dict[str, Optional[str]] = {
-    "nmap": None,
-    "vulners": None,
-    "arp_scan": None,
-}
+tool_versions = ToolVersionRegistry()
 
 startup_state = {
     "startup_complete": False,
@@ -1176,7 +1172,7 @@ def run_arp_scan(target, interface=None, sid=None):
 
 def get_versions():
     """Get version information for all tools"""
-    return versions
+    return tool_versions.get_versions()
 
 
 def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
@@ -1405,7 +1401,7 @@ def startup_checks(quick=False):
         startup_state["dependencies_ok"] = True
     else:
         logger.info("\nChecking nmap...")
-        versions["nmap"] = check_nmap()
+        tool_versions.set_version("nmap", check_nmap())
 
         logger.info("\nChecking vulners script...")
         check_vulners(VULNERS_SCRIPT)
@@ -1426,11 +1422,11 @@ def startup_checks(quick=False):
                     text=True,
                 )
                 if version_result.returncode == 0:
-                    versions["vulners"] = version_result.stdout.strip()
+                    tool_versions.set_version("vulners", version_result.stdout.strip())
                 else:
-                    versions["vulners"] = "Unknown"
+                    tool_versions.set_version("vulners", "Unknown")
             except Exception:
-                versions["vulners"] = "Unknown"
+                tool_versions.set_version("vulners", "Unknown")
 
         logger.info("\nChecking arp-scan...")
         if check_arp_scan():
@@ -1442,11 +1438,11 @@ def startup_checks(quick=False):
                     .decode()
                     .split("\n")[0]
                 )
-                versions["arp_scan"] = version
+                tool_versions.set_version("arp_scan", version)
             except Exception:
-                versions["arp_scan"] = "arp-scan (version unknown)"
+                tool_versions.set_version("arp_scan", "arp-scan (version unknown)")
         else:
-            versions["arp_scan"] = "Not installed"
+            tool_versions.set_version("arp_scan", "Not installed")
         startup_state["dependencies_ok"] = True
 
     logger.info("\nLoading previous customer assignment...")
@@ -1465,7 +1461,7 @@ def startup_checks(quick=False):
     logger.info("=" * 50 + "\n")
 
     # Add app version to versions dict
-    versions["app"] = get_app_version()
+    tool_versions.set_version("app", get_app_version())
 
     # Send initial versions to any connected clients
     safe_emit("versions", get_versions())

@@ -245,6 +245,22 @@ def test_app_uses_extracted_state_helpers():
     assert 'def load_current_assignment(' in state_source
 
 
+def test_app_uses_extracted_tool_version_registry():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    tooling_source = (ROOT / "nmapui" / "tooling.py").read_text()
+
+    assert "from nmapui.tooling import ToolVersionRegistry" in app_source
+    assert "tool_versions = ToolVersionRegistry()" in app_source
+    assert "versions: Dict[str, Optional[str]] = {" not in app_source
+    assert "def get_versions():" in app_source
+    assert "return tool_versions.get_versions()" in app_source
+    assert "class ToolVersionRegistry:" in tooling_source
+
+
 def test_app_registers_extracted_core_routes():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
