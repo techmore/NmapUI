@@ -275,6 +275,20 @@ def test_app_uses_extracted_startup_state_factory():
     assert "def create_startup_state():" in startup_source
 
 
+def test_app_uses_extracted_startup_checks_runner():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    startup_checks_source = (ROOT / "nmapui" / "startup_checks.py").read_text()
+
+    assert "from nmapui.startup_checks import run_startup_checks" in app_source
+    assert "run_startup_checks(" in app_source
+    assert "def startup_checks(quick=False):" in app_source
+    assert "def run_startup_checks(deps, quick=False):" in startup_checks_source
+
+
 def test_app_registers_extracted_core_routes():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],

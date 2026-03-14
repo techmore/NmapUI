@@ -100,6 +100,7 @@ from nmapui.state import (
     save_customers_config as save_customers_config_state,
 )
 from nmapui.startup import create_startup_state
+from nmapui.startup_checks import run_startup_checks
 from nmapui.tooling import ToolVersionRegistry
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
@@ -1375,93 +1376,29 @@ def generate_report_event(data):
 
 
 def startup_checks(quick=False):
-    import platform
-
-    begin_startup_state(startup_state, quick=quick)
-    load_auto_scan_config(auto_scan_config)
-
-    logger.info("\n" + "=" * 50)
-    logger.info("NmapUI Startup Checks")
-    logger.info("=" * 50)
-
-    system_platform = platform.system()
-    platform_release = platform.release()
-    logger.info(f"Platform detected: {system_platform} ({platform_release})")
-    default_interface = get_default_interface_cached()
-    logger.info(f"Default Network Interface: {default_interface}")
-
-    if quick:
-        logger.info("Quick mode: skipping dependency checks")
-        startup_state["dependencies_ok"] = True
-    else:
-        logger.info("\nChecking nmap...")
-        tool_versions.set_version("nmap", check_nmap())
-
-        logger.info("\nChecking vulners script...")
-        check_vulners(VULNERS_SCRIPT)
-        vulners_dir = VULNERS_SCRIPT.parent
-        if vulners_dir.exists():
-            try:
-                version_result = subprocess.run(
-                    [
-                        "git",
-                        "log",
-                        "-1",
-                        "--oneline",
-                        "--date=short",
-                        "--pretty=format:%h %ad %s",
-                    ],
-                    cwd=vulners_dir,
-                    capture_output=True,
-                    text=True,
-                )
-                if version_result.returncode == 0:
-                    tool_versions.set_version("vulners", version_result.stdout.strip())
-                else:
-                    tool_versions.set_version("vulners", "Unknown")
-            except Exception:
-                tool_versions.set_version("vulners", "Unknown")
-
-        logger.info("\nChecking arp-scan...")
-        if check_arp_scan():
-            try:
-                version = (
-                    subprocess.check_output(
-                        ["arp-scan", "--version"], stderr=subprocess.STDOUT
-                    )
-                    .decode()
-                    .split("\n")[0]
-                )
-                tool_versions.set_version("arp_scan", version)
-            except Exception:
-                tool_versions.set_version("arp_scan", "arp-scan (version unknown)")
-        else:
-            tool_versions.set_version("arp_scan", "Not installed")
-        startup_state["dependencies_ok"] = True
-
-    logger.info("\nLoading previous customer assignment...")
-    load_current_assignment()
-
-    logger.info("\nInitializing network key...")
-    run_traceroute("1.1.1.1")
-    complete_startup_state(
-        startup_state,
-        traceroute_initialized=not bool(network_key.get("error")),
+    run_startup_checks(
+        {
+            "begin_startup_state": begin_startup_state,
+            "check_arp_scan": check_arp_scan,
+            "check_nmap": check_nmap,
+            "check_vulners": check_vulners,
+            "complete_startup_state": complete_startup_state,
+            "get_app_version": get_app_version,
+            "get_default_interface_cached": get_default_interface_cached,
+            "get_versions": get_versions,
+            "load_auto_scan_config": load_auto_scan_config,
+            "load_current_assignment": load_current_assignment,
+            "logger": logger,
+            "network_key": network_key,
+            "run_traceroute": run_traceroute,
+            "safe_emit": safe_emit,
+            "startup_state": startup_state,
+            "tool_versions": tool_versions,
+            "auto_scan_config": auto_scan_config,
+            "vulners_script": VULNERS_SCRIPT,
+        },
+        quick=quick,
     )
-    logger.info(f"Network key initialized with {network_key.get('total_hops', 0)} hops")
-
-    logger.info("\n" + "=" * 50)
-    logger.info("All checks passed. Starting server...")
-    logger.info("=" * 50 + "\n")
-
-    # Add app version to versions dict
-    tool_versions.set_version("app", get_app_version())
-
-    # Send initial versions to any connected clients
-    safe_emit("versions", get_versions())
-
-    # Send initial auto scan status
-    safe_emit("auto_scan_status", auto_scan_config)
 
 def start_auto_scan_thread():
     """Start the auto-scan worker once per process."""
