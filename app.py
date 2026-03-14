@@ -59,6 +59,7 @@ from nmapui.app_composition import (
     build_scan_task_deps,
     build_startup_check_deps,
     build_update_handler_deps,
+    register_shared_handlers,
 )
 from nmapui.app_state_runtime import (
     get_report_counts as get_report_counts_runtime,
@@ -66,17 +67,6 @@ from nmapui.app_state_runtime import (
     save_current_assignment as save_current_assignment_runtime,
     save_customers_config as save_customers_config_runtime,
 )
-from nmapui.handlers.auto_scan import (
-    register_auto_scan_handlers,
-)
-from nmapui.handlers.connections import register_connection_handlers
-from nmapui.handlers.customers import register_customer_handlers
-from nmapui.handlers.history import register_history_handlers
-from nmapui.handlers.routes import register_core_routes
-from nmapui.handlers.runtime_info import register_runtime_info_handlers
-from nmapui.handlers.scan_jobs import register_scan_job_handlers
-from nmapui.handlers.scans import register_scan_routes
-from nmapui.handlers.updates import register_update_handlers
 from nmapui.health import build_liveness_payload, build_readiness_payload
 from nmapui.idle_state import IdleStateManager
 from nmapui.jobs import (
@@ -354,83 +344,9 @@ def execute_auto_scan():
 
 # Load auto scan config on startup
 load_auto_scan_config(auto_scan_config)
-register_auto_scan_handlers(
-    app,
-    socketio,
-    build_auto_scan_handler_deps(
-        auto_scan_config=auto_scan_config,
-        save_auto_scan_config=save_auto_scan_config,
-        validate_auto_scan_config_update=validate_auto_scan_config_update,
-        logger=logger,
-    ),
-)
-register_scan_routes(
-    app,
-    build_scan_routes_deps(
-        scans_dir=SCANS_DIR,
-        resolve_scan_path=resolve_scan_path,
-        load_json_document=load_json_document,
-        normalize_scan_metadata_document=normalize_scan_metadata_document,
-        logger=logger,
-    ),
-)
 # Global version information — populated by startup_checks().
 tool_versions = runtime_services["tool_versions"]
 startup_state = runtime_services["startup_state"]
-
-
-register_history_handlers(
-    socketio,
-    build_history_handler_deps(
-        get_most_recent_scan_xml=get_most_recent_scan_xml,
-        customer_fingerprinter=customer_fingerprinter,
-        scans_dir=SCANS_DIR,
-        sanitize_customer_dir_name=sanitize_customer_dir_name,
-        parse_scan_xml_for_assets=parse_scan_xml_for_assets,
-        get_versions=tool_versions.get_versions,
-        emit_job_status=emit_job_status,
-        job_registry=job_registry,
-        emit_to_client=emit_to_client,
-        rate_limiter=rate_limiter,
-        broadcaster=broadcaster,
-        release_client_state=release_client_state,
-        logger=logger,
-    ),
-)
-register_update_handlers(
-    socketio,
-    build_update_handler_deps(
-        check_for_updates=check_for_updates,
-        idle_state_manager=idle_state_manager,
-        logger=logger,
-    ),
-)
-register_connection_handlers(
-    socketio,
-    build_connection_handler_deps(
-        broadcaster=broadcaster,
-        emit_to_client=emit_to_client,
-        get_client_state=get_client_state,
-        job_registry=job_registry,
-        logger=logger,
-        set_current_customer_state=set_current_customer_state,
-        set_last_scan_target_state=set_last_scan_target_state,
-        set_network_key_state=set_network_key_state,
-        auto_scan_config=auto_scan_config,
-    ),
-)
-register_core_routes(
-    app,
-    build_core_routes_deps(
-        build_liveness_payload=build_liveness_payload,
-        build_readiness_payload=build_readiness_payload,
-        get_app_version=get_app_version,
-        get_default_interface_cached=lambda: DEFAULT_INTERFACE,
-        get_versions=tool_versions.get_versions,
-        startup_state=startup_state,
-        get_auto_scan_thread=lambda: auto_scan_thread,
-    ),
-)
 
 
 def run_traceroute(target="1.1.1.1"):
@@ -462,23 +378,6 @@ def save_current_assignment(sid=None):
         sid=sid,
     )
 
-
-register_customer_handlers(
-    socketio,
-    build_customer_handler_deps(
-        get_customer_fingerprinter=lambda: customer_fingerprinter,
-        network_key=lambda sid=None: get_client_state(sid=sid)["network_key"],
-        get_current_customer=lambda: get_current_customer_state(request.sid),
-        set_current_customer=lambda value: set_current_customer_state(value, request.sid),
-        merge_customer_metadata=merge_customer_metadata,
-        save_current_assignment=lambda: save_current_assignment(request.sid),
-        save_customers_config=save_customers_config,
-        normalize_scan_metadata_document=normalize_scan_metadata_document,
-        load_json_document=load_json_document,
-        save_json_document=save_json_document,
-        logger=logger,
-    ),
-)
 
 def load_current_assignment():
     global current_customer
@@ -514,9 +413,76 @@ def _traceroute_deps():
     )
 
 
-register_runtime_info_handlers(
-    socketio,
-    build_runtime_info_handler_deps(
+register_shared_handlers(
+    app=app,
+    socketio=socketio,
+    auto_scan_handler_deps=build_auto_scan_handler_deps(
+        auto_scan_config=auto_scan_config,
+        save_auto_scan_config=save_auto_scan_config,
+        validate_auto_scan_config_update=validate_auto_scan_config_update,
+        logger=logger,
+    ),
+    scan_routes_deps=build_scan_routes_deps(
+        scans_dir=SCANS_DIR,
+        resolve_scan_path=resolve_scan_path,
+        load_json_document=load_json_document,
+        normalize_scan_metadata_document=normalize_scan_metadata_document,
+        logger=logger,
+    ),
+    history_handler_deps=build_history_handler_deps(
+        get_most_recent_scan_xml=get_most_recent_scan_xml,
+        customer_fingerprinter=customer_fingerprinter,
+        scans_dir=SCANS_DIR,
+        sanitize_customer_dir_name=sanitize_customer_dir_name,
+        parse_scan_xml_for_assets=parse_scan_xml_for_assets,
+        get_versions=tool_versions.get_versions,
+        emit_job_status=emit_job_status,
+        job_registry=job_registry,
+        emit_to_client=emit_to_client,
+        rate_limiter=rate_limiter,
+        broadcaster=broadcaster,
+        release_client_state=release_client_state,
+        logger=logger,
+    ),
+    update_handler_deps=build_update_handler_deps(
+        check_for_updates=check_for_updates,
+        idle_state_manager=idle_state_manager,
+        logger=logger,
+    ),
+    connection_handler_deps=build_connection_handler_deps(
+        broadcaster=broadcaster,
+        emit_to_client=emit_to_client,
+        get_client_state=get_client_state,
+        job_registry=job_registry,
+        logger=logger,
+        set_current_customer_state=set_current_customer_state,
+        set_last_scan_target_state=set_last_scan_target_state,
+        set_network_key_state=set_network_key_state,
+        auto_scan_config=auto_scan_config,
+    ),
+    core_routes_deps=build_core_routes_deps(
+        build_liveness_payload=build_liveness_payload,
+        build_readiness_payload=build_readiness_payload,
+        get_app_version=get_app_version,
+        get_default_interface_cached=lambda: DEFAULT_INTERFACE,
+        get_versions=tool_versions.get_versions,
+        startup_state=startup_state,
+        get_auto_scan_thread=lambda: auto_scan_thread,
+    ),
+    customer_handler_deps=build_customer_handler_deps(
+        get_customer_fingerprinter=lambda: customer_fingerprinter,
+        network_key=lambda sid=None: get_client_state(sid=sid)["network_key"],
+        get_current_customer=lambda: get_current_customer_state(request.sid),
+        set_current_customer=lambda value: set_current_customer_state(value, request.sid),
+        merge_customer_metadata=merge_customer_metadata,
+        save_current_assignment=lambda: save_current_assignment(request.sid),
+        save_customers_config=save_customers_config,
+        normalize_scan_metadata_document=normalize_scan_metadata_document,
+        load_json_document=load_json_document,
+        save_json_document=save_json_document,
+        logger=logger,
+    ),
+    runtime_info_handler_deps=build_runtime_info_handler_deps(
         calculate_cidr=calculate_cidr_impl,
         get_client_state=get_client_state,
         get_default_interface_cached=lambda: DEFAULT_INTERFACE,
@@ -530,10 +496,7 @@ register_runtime_info_handlers(
             deps=_traceroute_deps(),
         ),
     ),
-)
-register_scan_job_handlers(
-    socketio,
-    build_scan_job_handler_deps(
+    scan_job_handler_deps=build_scan_job_handler_deps(
         validate_target=validate_target,
         rate_limiter=rate_limiter,
         job_registry=job_registry,

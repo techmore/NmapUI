@@ -1,3 +1,14 @@
+from nmapui.handlers.auto_scan import register_auto_scan_handlers
+from nmapui.handlers.connections import register_connection_handlers
+from nmapui.handlers.customers import register_customer_handlers
+from nmapui.handlers.history import register_history_handlers
+from nmapui.handlers.routes import register_core_routes
+from nmapui.handlers.runtime_info import register_runtime_info_handlers
+from nmapui.handlers.scan_jobs import register_scan_job_handlers
+from nmapui.handlers.scans import register_scan_routes
+from nmapui.handlers.updates import register_update_handlers
+
+
 def build_execute_auto_scan_deps(
     *,
     auto_scan_config,
@@ -385,3 +396,28 @@ def build_scan_job_handler_deps(
         "generate_pdf_from_saved_task": generate_pdf_from_saved_task,
         "broadcaster": broadcaster,
     }
+
+
+def register_shared_handlers(
+    *,
+    app,
+    socketio,
+    auto_scan_handler_deps,
+    scan_routes_deps,
+    history_handler_deps,
+    update_handler_deps,
+    connection_handler_deps,
+    core_routes_deps,
+    customer_handler_deps,
+    runtime_info_handler_deps,
+    scan_job_handler_deps,
+):
+    register_auto_scan_handlers(app, socketio, auto_scan_handler_deps)
+    register_scan_routes(app, scan_routes_deps)
+    register_history_handlers(socketio, history_handler_deps)
+    register_update_handlers(socketio, update_handler_deps)
+    register_connection_handlers(socketio, connection_handler_deps)
+    register_core_routes(app, core_routes_deps)
+    register_customer_handlers(socketio, customer_handler_deps)
+    register_runtime_info_handlers(socketio, runtime_info_handler_deps)
+    register_scan_job_handlers(socketio, scan_job_handler_deps)

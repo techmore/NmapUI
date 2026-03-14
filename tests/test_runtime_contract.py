@@ -238,9 +238,11 @@ def test_app_delegates_event_and_job_wrappers_to_shared_module():
 
 def test_app_delegates_runtime_info_events_to_handler_module():
     app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
-    assert "from nmapui.handlers.runtime_info import register_runtime_info_handlers" in app_source
-    assert "register_runtime_info_handlers(" in app_source
+    assert "register_shared_handlers(" in app_source
+    assert "from nmapui.handlers.runtime_info import register_runtime_info_handlers" in app_composition_source
+    assert "register_runtime_info_handlers(socketio, runtime_info_handler_deps)" in app_composition_source
     assert '@socketio.on("get_history_counts")' not in app_source
     assert '@socketio.on("get_network_key")' not in app_source
     assert '@socketio.on("get_local_ip")' not in app_source
@@ -282,9 +284,11 @@ def test_app_delegates_idle_state_manager_to_shared_module():
 
 def test_app_delegates_core_routes_to_handler_module():
     app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
-    assert "from nmapui.handlers.routes import register_core_routes" in app_source
-    assert "register_core_routes(" in app_source
+    assert "register_shared_handlers(" in app_source
+    assert "from nmapui.handlers.routes import register_core_routes" in app_composition_source
+    assert "register_core_routes(app, core_routes_deps)" in app_composition_source
     assert '@app.route("/")' not in app_source
     assert '@app.route("/api/health")' not in app_source
     assert '@app.route("/api/health/live")' not in app_source
@@ -307,13 +311,15 @@ def test_app_delegates_scan_job_handlers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
     scan_runtime_source = (ROOT / "nmapui" / "scan_runtime.py").read_text()
     app_scan_runtime_source = (ROOT / "nmapui" / "app_scan_runtime.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
-    assert "from nmapui.handlers.scan_jobs import register_scan_job_handlers" in app_source
+    assert "register_shared_handlers(" in app_source
+    assert "from nmapui.handlers.scan_jobs import register_scan_job_handlers" in app_composition_source
     assert "from nmapui.app_scan_runtime import (" in app_source
     assert "start_scan_task as start_scan_task_runtime" in app_source
     assert "run_arp_scan as run_arp_scan_runtime" in app_source
     assert "run_nmap_with_xml_output as run_nmap_with_xml_output_runtime" in app_source
-    assert "register_scan_job_handlers(" in app_source
+    assert "register_scan_job_handlers(socketio, scan_job_handler_deps)" in app_composition_source
     assert '@socketio.on("start_scan")' not in app_source
     assert '@socketio.on("generate_report")' not in app_source
     assert '@socketio.on("generate_pdf_from_saved")' not in app_source
@@ -325,9 +331,11 @@ def test_app_delegates_scan_job_handlers_to_shared_module():
 
 def test_app_delegates_connection_handlers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
-    assert "from nmapui.handlers.connections import register_connection_handlers" in app_source
-    assert "register_connection_handlers(" in app_source
+    assert "register_shared_handlers(" in app_source
+    assert "from nmapui.handlers.connections import register_connection_handlers" in app_composition_source
+    assert "register_connection_handlers(socketio, connection_handler_deps)" in app_composition_source
     assert '@socketio.on("connect")' not in app_source
 
 
@@ -450,6 +458,7 @@ def test_app_uses_shared_handler_registration_builders():
     app_source = (ROOT / "app.py").read_text()
     app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
 
+    assert "register_shared_handlers(" in app_source
     assert "build_auto_scan_handler_deps(" in app_source
     assert "build_scan_routes_deps(" in app_source
     assert "build_history_handler_deps(" in app_source
@@ -459,6 +468,7 @@ def test_app_uses_shared_handler_registration_builders():
     assert "build_customer_handler_deps(" in app_source
     assert "build_runtime_info_handler_deps(" in app_source
     assert "build_scan_job_handler_deps(" in app_source
+    assert "def register_shared_handlers(" in app_composition_source
     assert "def build_auto_scan_handler_deps(" in app_composition_source
     assert "def build_scan_routes_deps(" in app_composition_source
     assert "def build_history_handler_deps(" in app_composition_source
@@ -468,6 +478,15 @@ def test_app_uses_shared_handler_registration_builders():
     assert "def build_customer_handler_deps(" in app_composition_source
     assert "def build_runtime_info_handler_deps(" in app_composition_source
     assert "def build_scan_job_handler_deps(" in app_composition_source
+    assert "register_auto_scan_handlers(" not in app_source
+    assert "register_scan_routes(" not in app_source
+    assert "register_history_handlers(" not in app_source
+    assert "register_update_handlers(" not in app_source
+    assert "register_connection_handlers(" not in app_source
+    assert "register_core_routes(" not in app_source
+    assert "register_customer_handlers(" not in app_source
+    assert "register_runtime_info_handlers(" not in app_source
+    assert "register_scan_job_handlers(" not in app_source
 
 
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
