@@ -215,6 +215,54 @@ def test_runtime_info_handlers_reject_unauthenticated_socket_events(monkeypatch)
     assert not any(event["name"] == "network_key" for event in received)
 
 
+def test_get_local_ip_still_emits_cidr_when_public_ip_lookup_fails(monkeypatch):
+    configure_auth(monkeypatch)
+
+    class NetifacesStub:
+        AF_INET = object()
+
+        @staticmethod
+        def ifaddresses(interface):
+            return {
+                NetifacesStub.AF_INET: [
+                    {
+                        "addr": "192.168.1.42",
+                        "netmask": "255.255.255.0",
+                    }
+                ]
+            }
+
+    class RequestsStub:
+        @staticmethod
+        def get(url, timeout=None):
+            raise RuntimeError("ipify unavailable")
+
+    app, socketio = build_runtime_info_app(
+        {
+            "calculate_cidr": lambda ip, mask: "192.168.1.0/24",
+            "get_client_state": lambda *, sid=None: {"network_key": {}},
+            "get_default_interface_cached": lambda: "en0",
+            "get_report_counts": lambda: {},
+            "logger": Flask(__name__).logger,
+            "netifaces": NetifacesStub,
+            "requests": RequestsStub,
+            "run_traceroute": lambda target, sid=None: {},
+        }
+    )
+
+    client = socketio.test_client(app, headers=basic_auth_header())
+    client.emit("get_local_ip")
+    received = client.get_received()
+
+    local_ip_event = next(event for event in received if event["name"] == "local_ip")
+    payload = local_ip_event["args"][0]
+
+    assert payload["local_ip"] == "192.168.1.42"
+    assert payload["subnet_mask"] == "255.255.255.0"
+    assert payload["cidr"] == "192.168.1.0/24"
+    assert payload["public_ip"] == ""
+
+
 def test_generate_pdf_from_saved_rejects_invalid_payload(monkeypatch):
     configure_auth(monkeypatch)
     observed = {}

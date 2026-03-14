@@ -37,14 +37,14 @@ def register_runtime_info_handlers(socketio, deps):
     def get_local_ip():
         try:
             interface = get_default_interface_cached()
-            local_ip, subnet_mask = (
-                netifaces.ifaddresses(interface)[netifaces.AF_INET][0]["addr"],
-                netifaces.ifaddresses(interface)[netifaces.AF_INET][0]["netmask"],
-            )
-            public_ip, cidr = (
-                requests.get("https://api.ipify.org").text,
-                calculate_cidr(local_ip, subnet_mask),
-            )
+            local_ip = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]["addr"]
+            subnet_mask = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]["netmask"]
+            cidr = calculate_cidr(local_ip, subnet_mask)
+            public_ip = ""
+            try:
+                public_ip = requests.get("https://api.ipify.org", timeout=3).text
+            except Exception as exc:
+                logger.warning("Failed to resolve public IP: %s", exc)
             emit(
                 "local_ip",
                 {
