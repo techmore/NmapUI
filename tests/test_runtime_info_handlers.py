@@ -37,7 +37,36 @@ def build_scan_jobs_app(deps):
 def build_connection_app(deps):
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
-    register_connection_handlers(socketio, deps)
+    register_connection_handlers(
+        socketio,
+        {
+            "auto_scan_config": deps.get("auto_scan_config"),
+            "broadcaster": deps["broadcaster"],
+            "emit_to_client": deps["emit_to_client"],
+            "get_client_state": deps.get(
+                "get_client_state",
+                lambda sid=None: {
+                    "current_customer": {"id": "unknown", "name": "Unknown Network", "confidence": 0.0},
+                    "network_key": {"target": "1.1.1.1", "total_hops": 0, "private_hops": [], "public_hops": [], "exit_ip": None},
+                    "last_scan_target": None,
+                },
+            ),
+            "job_registry": deps["job_registry"],
+            "logger": deps["logger"],
+            "set_current_customer_state": deps.get(
+                "set_current_customer_state",
+                lambda value, sid=None: None,
+            ),
+            "set_last_scan_target_state": deps.get(
+                "set_last_scan_target_state",
+                lambda value, sid=None: None,
+            ),
+            "set_network_key_state": deps.get(
+                "set_network_key_state",
+                lambda value, sid=None: None,
+            ),
+        },
+    )
     return app, socketio
 
 
@@ -241,10 +270,19 @@ def test_connect_replays_active_scan_events_to_new_tab():
     emitted = []
     app, socketio = build_connection_app(
         {
+            "auto_scan_config": {"enabled": True, "start_time": "01:00", "end_time": "03:00"},
             "broadcaster": BroadcasterStub(),
             "emit_to_client": lambda sid, event, data=None: emitted.append((sid, event, data)),
+            "get_client_state": lambda sid=None: {
+                "current_customer": {"id": "cust-123", "name": "Acme", "confidence": 0.9},
+                "network_key": {"target": "10.0.0.0/24", "total_hops": 2, "private_hops": [], "public_hops": [], "exit_ip": "1.1.1.1"},
+                "last_scan_target": "10.0.0.0/24",
+            },
             "job_registry": JobRegistryStub(),
             "logger": Flask(__name__).logger,
+            "set_current_customer_state": lambda value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
+            "set_network_key_state": lambda value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
+            "set_last_scan_target_state": lambda value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
         }
     )
 
@@ -254,11 +292,60 @@ def test_connect_replays_active_scan_events_to_new_tab():
     assert observed["job_lookup"] == ("owner-sid", "scan")
     assert observed["buffer_owner"] == "owner-sid"
     assert observed["subscribe"][0] == "owner-sid"
-    assert emitted[0][1] == "job_status"
-    assert emitted[0][2]["job_type"] == "scan"
-    assert emitted[1:] == [
+    assert observed["customer_state"][0][1]["id"] == "cust-123"
+    assert observed["network_state"][0][1]["target"] == "10.0.0.0/24"
+    assert observed["target_state"][0][1] == "10.0.0.0/24"
+    assert [event for _, event, _ in emitted[:4]] == [
+        "customer_info",
+        "network_key",
+        "client_state_snapshot",
+        "auto_scan_status",
+    ]
+    assert emitted[4][1] == "job_status"
+    assert emitted[4][2]["job_type"] == "scan"
+    assert emitted[5:] == [
         (observed["subscribe"][1], "scan_feedback", "Scanning..."),
         (observed["subscribe"][1], "scan_progress", {"pct": 50}),
+    ]
+
+
+def test_connect_hydrates_new_tab_from_shared_snapshot_without_active_scan():
+    observed = {}
+    emitted = []
+
+    class BroadcasterStub:
+        def find_active_owner(self):
+            return None
+
+    app, socketio = build_connection_app(
+        {
+            "auto_scan_config": {"enabled": False},
+            "broadcaster": BroadcasterStub(),
+            "emit_to_client": lambda sid, event, data=None: emitted.append((sid, event, data)),
+            "get_client_state": lambda sid=None: {
+                "current_customer": {"id": "cust-999", "name": "Shared Customer", "confidence": 1.0},
+                "network_key": {"target": "192.168.1.0/24", "total_hops": 3, "private_hops": [], "public_hops": [], "exit_ip": "8.8.8.8"},
+                "last_scan_target": "192.168.1.0/24",
+            },
+            "job_registry": type("JobRegistryStub", (), {})(),
+            "logger": Flask(__name__).logger,
+            "set_current_customer_state": lambda value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
+            "set_network_key_state": lambda value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
+            "set_last_scan_target_state": lambda value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
+        }
+    )
+
+    client = socketio.test_client(app)
+
+    assert client.is_connected()
+    assert observed["customer_state"][0][1]["id"] == "cust-999"
+    assert observed["network_state"][0][1]["target"] == "192.168.1.0/24"
+    assert observed["target_state"][0][1] == "192.168.1.0/24"
+    assert [event for _, event, _ in emitted] == [
+        "customer_info",
+        "network_key",
+        "client_state_snapshot",
+        "auto_scan_status",
     ]
 
 

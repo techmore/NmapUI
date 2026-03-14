@@ -337,6 +337,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "const showReportStatus =" in update_modal_module
     assert "reportSocket.emit('generate_pdf_from_saved'" in report_generation_module
     assert "reportSocket.emit('generate_report'" in report_generation_module
+    assert "socket.on('client_state_snapshot'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert "socket.on('scan_results'" in report_generation_module
 

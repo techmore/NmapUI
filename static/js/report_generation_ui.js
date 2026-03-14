@@ -78,6 +78,18 @@ function initializeReportGenerationUI(socket, deps) {
         updateLastScanResults('arpScan', data);
     });
 
+    socket.on('client_state_snapshot', function(data) {
+        const target = data?.last_scan_target;
+        if (!target) {
+            return;
+        }
+        setLastScanTarget(target);
+        const targetInput = document.getElementById('scan-target');
+        if (targetInput && !targetInput.value) {
+            targetInput.value = target;
+        }
+    });
+
     document.getElementById('generate-report-btn').addEventListener('click', function() {
         if (reportGetClientJobs().report.status === 'running') {
             return;

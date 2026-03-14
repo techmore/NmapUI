@@ -21,15 +21,9 @@ class ClientStateRegistry:
     def __init__(self, default_customer=None, default_network_key=None):
         self._default_customer = deepcopy(default_customer or DEFAULT_CUSTOMER)
         self._default_network_key = deepcopy(default_network_key or DEFAULT_NETWORK_KEY)
+        self._default_last_scan_target = None
         self._states = {}
         self._lock = threading.Lock()
-
-    def _build_state(self):
-        return {
-            "current_customer": deepcopy(self._default_customer),
-            "network_key": deepcopy(self._default_network_key),
-            "last_scan_target": None,
-        }
 
     def get_state(self, sid):
         with self._lock:
@@ -54,6 +48,21 @@ class ClientStateRegistry:
     def set_default_customer(self, customer):
         with self._lock:
             self._default_customer = deepcopy(customer)
+
+    def set_default_network_key(self, network_key):
+        with self._lock:
+            self._default_network_key = deepcopy(network_key)
+
+    def set_default_last_scan_target(self, target):
+        with self._lock:
+            self._default_last_scan_target = target
+
+    def _build_state(self):
+        return {
+            "current_customer": deepcopy(self._default_customer),
+            "network_key": deepcopy(self._default_network_key),
+            "last_scan_target": getattr(self, "_default_last_scan_target", None),
+        }
 
     def release(self, sid):
         with self._lock:

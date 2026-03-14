@@ -28,6 +28,19 @@ def test_client_state_registry_returns_copies():
     assert registry.get_state("sid-a")["current_customer"]["name"] == "Unknown Network"
 
 
+def test_client_state_registry_defaults_seed_future_tabs():
+    registry = ClientStateRegistry()
+    registry.set_default_customer({"id": "cust-1", "name": "Acme", "confidence": 1.0})
+    registry.set_default_network_key({"target": "10.0.0.0/24", "total_hops": 2})
+    registry.set_default_last_scan_target("10.0.0.0/24")
+
+    state_b = registry.get_state("sid-b")
+
+    assert state_b["current_customer"]["id"] == "cust-1"
+    assert state_b["network_key"]["target"] == "10.0.0.0/24"
+    assert state_b["last_scan_target"] == "10.0.0.0/24"
+
+
 class IdleStateStub:
     def start_operation(self, operation_id: str):
         self.operation_id = operation_id

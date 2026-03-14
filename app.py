@@ -341,30 +341,42 @@ def get_current_customer_state(sid=None):
 
 
 def set_current_customer_state(value, sid=None):
-    return set_current_customer_state_impl(
+    result = set_current_customer_state_impl(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_customer=lambda customer: globals().__setitem__("current_customer", customer),
     )
+    if sid is not None:
+        globals()["current_customer"] = value
+        client_state_registry.set_default_customer(value)
+    return result
 
 
 def set_network_key_state(value, sid=None):
-    return set_network_key_state_impl(
+    result = set_network_key_state_impl(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_network_key=lambda key: globals().__setitem__("network_key", key),
     )
+    if sid is not None:
+        globals()["network_key"] = value
+        client_state_registry.set_default_network_key(value)
+    return result
 
 
 def set_last_scan_target_state(value, sid=None):
-    return set_last_scan_target_state_impl(
+    result = set_last_scan_target_state_impl(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_last_scan_target=lambda target: globals().__setitem__("last_scan_target", target),
     )
+    if sid is not None:
+        globals()["last_scan_target"] = value
+        client_state_registry.set_default_last_scan_target(value)
+    return result
 
 
 def release_client_state(sid):
@@ -460,8 +472,13 @@ register_connection_handlers(
     {
         "broadcaster": broadcaster,
         "emit_to_client": emit_to_client,
+        "get_client_state": get_client_state,
         "job_registry": job_registry,
         "logger": logger,
+        "set_current_customer_state": set_current_customer_state,
+        "set_last_scan_target_state": set_last_scan_target_state,
+        "set_network_key_state": set_network_key_state,
+        "auto_scan_config": auto_scan_config,
     },
 )
 register_core_routes(
