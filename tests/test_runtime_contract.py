@@ -387,3 +387,22 @@ def test_template_loads_external_auto_update_banner_module():
     assert "function performAutoUpdate()" not in template
     assert "initializeAutoUpdateBanner(socket);" in template
     assert "window.initializeAutoUpdateBanner = initializeAutoUpdateBanner;" in auto_update_module
+
+
+def test_template_loads_external_customer_ui_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    customer_module = (ROOT / "static" / "js" / "customer_ui.js").read_text()
+
+    assert '<script src="/static/js/customer_ui.js"></script>' in template
+    assert "function showCustomerForm()" not in template
+    assert "function hideCustomerForm()" not in template
+    assert "function showCustomerMessage(message, type = 'info')" not in template
+    assert "function populateCustomerDropdown(customers)" not in template
+    assert "function updateDropdownSelection(customerId, customerName)" not in template
+    assert "function updateCustomerSelection(customer)" not in template
+    assert "window.showCustomerForm = showCustomerForm;" in customer_module
+    assert "window.populateCustomerDropdown = populateCustomerDropdown;" in customer_module

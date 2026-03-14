@@ -1038,6 +1038,7 @@
     <script src="/static/js/asset_details_modal.js"></script>
     <script src="/static/js/scan_banners.js"></script>
     <script src="/static/js/auto_update_banner.js"></script>
+    <script src="/static/js/customer_ui.js"></script>
     <script>
         // Set current date and time
         function updateDateTime() {
@@ -1807,14 +1808,6 @@
         });
 
         // Customer Management Functions
-        function showCustomerForm() {
-            document.getElementById('add-customer-form').classList.remove('hidden');
-        }
-
-        function hideCustomerForm() {
-            document.getElementById('add-customer-form').classList.add('hidden');
-        }
-
         function addCustomer() {
             const customerData = {
                 name: document.getElementById('cust-name').value,
@@ -1924,146 +1917,6 @@
 
         function showCustomerList() {
             socket.emit('get_customers');
-        }
-
-        function showCustomerMessage(message, type = 'info') {
-            const messagesDiv = document.getElementById('customer-messages');
-            const messageSpan = document.getElementById('customer-message');
-            
-            messagesDiv.classList.remove('hidden');
-            messageSpan.textContent = message;
-            
-            // Update styling based on type
-            messagesDiv.firstElementChild.className = `p-3 border rounded-lg text-sm ${
-                type === 'error' ? 'bg-red-100 border-red-300 text-red-800' :
-                type === 'success' ? 'bg-green-100 border-green-300 text-green-800' :
-                'bg-yellow-100 border-yellow-300 text-yellow-800'
-            }`;
-
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                messagesDiv.classList.add('hidden');
-            }, 5000);
-        }
-
-        function populateCustomerDropdown(customers) {
-            console.log('Populating customer dropdowns with', customers.length, 'customers');
-
-            const mainDropdown = document.getElementById('current-customer');
-            const quickAddDropdown = document.getElementById('customer-quick-add');
-
-            if (!quickAddDropdown) return;
-
-            // Clear and add Unassigned
-            quickAddDropdown.innerHTML = '<option value="">Unassigned</option>';
-            if (mainDropdown) mainDropdown.innerHTML = '<option value="">Unassigned</option>';
-
-            customers.forEach(customer => {
-                const customerId = String(customer.id);
-                const customerName = customer.name;
-
-                if (!customerId || !customerName) return;
-
-                // Add to main dropdown if it exists
-                if (mainDropdown) {
-                    const mainOption = document.createElement('option');
-                    mainOption.value = customerId;
-                    mainOption.textContent = customerName;
-                    if (customerId === 'unknown') mainOption.classList.add('hidden');
-                    mainDropdown.appendChild(mainOption);
-                }
-
-                // Add to quick-add dropdown
-                const quickOption = document.createElement('option');
-                quickOption.value = customerId;
-                quickOption.textContent = customerName;
-                if (customerId === 'unknown') quickOption.classList.add('hidden');
-                quickAddDropdown.appendChild(quickOption);
-            });
-
-            // Target ID to select: preference is global matched ID, then current value
-            const targetId = window.currentMatchedCustomerId || '';
-            
-            if (targetId) {
-                console.log('Applying target customer selection:', targetId);
-                if (quickAddDropdown) quickAddDropdown.value = targetId;
-                if (mainDropdown) mainDropdown.value = targetId;
-                updateHistoryBadge(targetId);
-            } else {
-                updateHistoryBadge('');
-            }
-        }
-
-        function updateDropdownSelection(customerId, customerName) {
-            const idToSelect = customerId ? String(customerId) : '';
-            // Update the quick-add dropdown to show the selected customer
-            const quickAddDropdown = document.getElementById('customer-quick-add');
-            if (quickAddDropdown) {
-                quickAddDropdown.value = idToSelect;
-                console.log(`Dropdown updated to customer ID: ${idToSelect}, Name: ${customerName}`);
-                // Update history badge when selection changes via detection
-                updateHistoryBadge(customerName);
-            }
-
-            // Also update main dropdown if it exists
-            const mainDropdown = document.getElementById('current-customer');
-            if (mainDropdown) {
-                mainDropdown.value = idToSelect;
-            }
-        }
-
-        function updateCustomerSelection(customer) {
-            const dropdown = document.getElementById('current-customer');
-
-            // If dropdown doesn't exist, skip update
-            if (!dropdown) {
-                console.log('current-customer dropdown not found, skipping update');
-                return;
-            }
-
-            if (customer.id && customer.name) {
-                // Update TLL display
-                const tllDiv = document.getElementById('last-scan-duration');
-                if (tllDiv) {
-                    if (customer.metadata && customer.metadata.last_scan_duration) {
-                        tllDiv.textContent = 'TLL: ' + customer.metadata.last_scan_duration;
-                        tllDiv.classList.remove('hidden');
-                    } else {
-                        tllDiv.classList.add('hidden');
-                    }
-                }
-
-                // Update dropdown to show selected customer
-                let customerExists = false;
-                for (let option of dropdown.options) {
-                    if (option.value === customer.id) {
-                        option.textContent = `${customer.name} (${customer.confidence.toFixed(2)} confidence)`;
-                        customerExists = true;
-                        break;
-                    }
-                }
-                
-                if (!customerExists) {
-                    // Add temporary option for current customer
-                    const option = document.createElement('option');
-                    option.value = customer.id;
-                    option.textContent = `${customer.name} (Manual Assignment)`;
-                    dropdown.appendChild(option);
-                }
-                
-                dropdown.value = customer.id;
-            } else {
-                dropdown.value = '';
-            }
-        }
-
-        function displayCustomerList(customers) {
-            // Create a simple modal or alert to show customers
-            const customerList = customers.map(c =>
-                `${c.name || c.get?.('name')} (ID: ${c.id || c.get?.('id')})`
-            ).join('\n');
-
-            showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
         }
 
         // Report Generation Functions
