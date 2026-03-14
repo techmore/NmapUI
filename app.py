@@ -675,14 +675,25 @@ def is_private_ip(ip):
 
 
 
-def run_traceroute(target="1.1.1.1"):
-    global current_customer
+def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):
+    global current_customer, network_key
+
+    def emit_customer_event(event, data=None):
+        if sid:
+            emit_to_client(sid, event, data)
+        else:
+            safe_emit(event, data)
+
+    state = get_client_state(sid)
+    active_network_key = dict(state["network_key"])
+    active_customer = dict(state["current_customer"])
+
     try:
-        safe_emit("customer_identification_start")
+        emit_customer_event("customer_identification_start")
         socketio.sleep(0)
 
         logger.info(f"Running traceroute to {target}...")
-        safe_emit(
+        emit_customer_event(
             "customer_identification_progress",
             {"message": f"Running traceroute to {target}..."},
         )
@@ -702,11 +713,12 @@ def run_traceroute(target="1.1.1.1"):
             traceroute_cmd, stderr=subprocess.STDOUT, timeout=60
         ).decode("utf-8")
 
-        network_key["raw"] = output
-        network_key["target"] = target
-        network_key["hops"] = []
-        network_key["private_hops"] = []
-        network_key["public_hops"] = []
+        active_network_key["raw"] = output
+        active_network_key["target"] = target
+        active_network_key["hops"] = []
+        active_network_key["private_hops"] = []
+        active_network_key["public_hops"] = []
+        active_network_key.pop("error", None)
 
         hop_pattern = re.compile(r"^\s*(\d+)\s+(\S+)\s+(.+)$", re.MULTILINE)
 
@@ -732,60 +744,57 @@ def run_traceroute(target="1.1.1.1"):
                 "is_private": is_private_ip(ip_or_star),
             }
 
-            network_key["hops"].append(hop_data)
+            active_network_key["hops"].append(hop_data)
 
             if hop_data["is_private"]:
-                network_key["private_hops"].append(hop_data)
+                active_network_key["private_hops"].append(hop_data)
             else:
-                network_key["public_hops"].append(hop_data)
+                active_network_key["public_hops"].append(hop_data)
 
-        network_key["total_hops"] = len(network_key["hops"])
+        active_network_key["total_hops"] = len(active_network_key["hops"])
 
-        if network_key["hops"]:
-            network_key["exit_ip"] = network_key["hops"][-1]["ip"]
+        if active_network_key["hops"]:
+            active_network_key["exit_ip"] = active_network_key["hops"][-1]["ip"]
 
-        # Get actual public IP (WAN IP) from external service
         try:
-            import requests
-
-            network_key["public_ip"] = requests.get(
+            active_network_key["public_ip"] = requests.get(
                 "https://api.ipify.org", timeout=5
             ).text
-            logger.info(f"Detected public IP: {network_key['public_ip']}")
+            logger.info(f"Detected public IP: {active_network_key['public_ip']}")
         except Exception as e:
             logger.warning(f"Could not detect public IP: {e}")
-            network_key["public_ip"] = None
+            active_network_key["public_ip"] = None
+
+        set_network_key_state(active_network_key, sid)
 
         logger.info(
-            f"Traceroute complete: {network_key['total_hops']} hops, {len(network_key['private_hops'])} private, {len(network_key['public_hops'])} public"
+            f"Traceroute complete: {active_network_key['total_hops']} hops, {len(active_network_key['private_hops'])} private, {len(active_network_key['public_hops'])} public"
         )
-        safe_emit(
+        emit_customer_event(
             "customer_identification_progress",
-            {"message": f"Traceroute complete ({network_key['total_hops']} hops)"},
+            {"message": f"Traceroute complete ({active_network_key['total_hops']} hops)"},
         )
         socketio.sleep(0)
 
         logger.info("Running customer identification...")
-        safe_emit(
+        emit_customer_event(
             "customer_identification_progress", {"message": "Identifying customer..."}
         )
         socketio.sleep(0)
 
-        # Only auto-detect if no manual assignment exists
-        if not current_customer.get("manual_assignment"):
-            customer, confidence = customer_fingerprinter.match_customer(network_key)
+        if not active_customer.get("manual_assignment"):
+            customer, confidence = customer_fingerprinter.match_customer(active_network_key)
             if confidence > 0 and customer and customer.get("id") != "unknown":
-                current_customer = {
+                active_customer = {
                     "id": customer.get("id"),
                     "name": customer.get("name"),
                     "confidence": confidence,
                 }
-                # Merge metadata from saved customer configuration
-                current_customer = merge_customer_metadata(current_customer, customer)
-                logger.info(f"Auto-detected customer: {current_customer['name']}")
+                active_customer = merge_customer_metadata(active_customer, customer)
+                logger.info(f"Auto-detected customer: {active_customer['name']}")
                 save_customer = customer
             else:
-                current_customer = {
+                active_customer = {
                     "id": "",
                     "name": "Unassigned",
                     "confidence": 0.0,
@@ -793,62 +802,64 @@ def run_traceroute(target="1.1.1.1"):
                 logger.info("No customer match found, setting to Unassigned")
                 save_customer = customer_fingerprinter.unknown_customer or {}
         else:
-            logger.info(f"Preserving manual assignment: {current_customer['name']}")
-            # For manual assignments, also merge metadata if customer exists
-            if current_customer.get("id"):
+            logger.info(f"Preserving manual assignment: {active_customer['name']}")
+            if active_customer.get("id"):
                 saved_customer = customer_fingerprinter.get_customer_by_id(
-                    current_customer["id"]
+                    active_customer["id"]
                 )
                 if saved_customer:
-                    current_customer = merge_customer_metadata(
-                        current_customer, saved_customer
+                    active_customer = merge_customer_metadata(
+                        active_customer, saved_customer
                     )
             save_customer = {
-                "id": current_customer["id"],
-                "name": current_customer["name"],
+                "id": active_customer["id"],
+                "name": active_customer["name"],
             }
-            confidence = current_customer.get("confidence", 1.0)
+            confidence = active_customer.get("confidence", 1.0)
 
-        customer_fingerprinter.save_scan_result(network_key, save_customer, confidence)
+        set_current_customer_state(active_customer, sid)
+        customer_fingerprinter.save_scan_result(active_network_key, save_customer, confidence)
         customer_fingerprinter.save_traceroute_to_history(
-            current_customer["id"],
-            network_key,
-            f"WAN: {network_key.get('public_ip', 'unknown')}",
+            active_customer["id"],
+            active_network_key,
+            f"WAN: {active_network_key.get('public_ip', 'unknown')}",
         )
 
-        safe_emit(
+        emit_customer_event(
             "customer_identified",
             {
                 "customer": get_current_customer_state(sid),
                 "match_method": getattr(
                     customer_fingerprinter, "last_match_method", "unknown"
                 ),
-                "public_ip": network_key.get("public_ip"),
-                "exit_ip": network_key.get("exit_ip"),
-                "hop_count": network_key["total_hops"],
+                "public_ip": active_network_key.get("public_ip"),
+                "exit_ip": active_network_key.get("exit_ip"),
+                "hop_count": active_network_key["total_hops"],
             },
         )
 
-        safe_emit("file_updated", {"file": "data/scan_history.json", "action": "saved"})
-        safe_emit(
+        emit_customer_event("file_updated", {"file": "data/scan_history.json", "action": "saved"})
+        emit_customer_event(
             "file_updated",
             {"file": "data/customer_traceroutes.json", "action": "saved"},
         )
 
         logger.info(
-            f"Customer identified: {current_customer['name']} (confidence: {confidence:.2f})"
+            f"Customer identified: {active_customer['name']} (confidence: {confidence:.2f})"
         )
 
     except subprocess.TimeoutExpired:
         logger.error("Traceroute timed out")
-        network_key["error"] = "Traceroute timed out"
-        safe_emit("customer_identification_error", {"error": "Traceroute timed out"})
+        active_network_key["error"] = "Traceroute timed out"
+        set_network_key_state(active_network_key, sid)
+        emit_customer_event("customer_identification_error", {"error": "Traceroute timed out"})
     except Exception as e:
         logger.error(f"Traceroute error: {e}")
-        network_key["error"] = str(e)
-        safe_emit("customer_identification_error", {"error": str(e)})
+        active_network_key["error"] = str(e)
+        set_network_key_state(active_network_key, sid)
+        emit_customer_event("customer_identification_error", {"error": str(e)})
 
-    return network_key
+    return active_network_key
 
 
 def get_report_counts():
@@ -911,16 +922,15 @@ def index():
 @socketio.on("get_network_key")
 def get_network_key_event():
     """Send the network key to the client"""
-    # If network_key is empty (no hops), run traceroute to populate it
-    if network_key.get("total_hops", 0) == 0:
-        logger.info("Network key empty, running traceroute...")
-        run_traceroute("1.1.1.1")
+    client_network_key = get_client_state(request.sid)["network_key"]
+    if client_network_key.get("total_hops", 0) == 0:
+        logger.info("Network key empty for %s, running traceroute...", request.sid)
+        client_network_key = run_traceroute("1.1.1.1", sid=request.sid)
 
-    set_network_key_state(network_key, request.sid)
     logger.info(
-        f"Sending network_key to client: {network_key.get('total_hops', 0)} hops"
+        f"Sending network_key to client: {client_network_key.get('total_hops', 0)} hops"
     )
-    emit("network_key", get_client_state(request.sid)["network_key"])
+    emit("network_key", client_network_key)
 
 
 def save_customers_config():
