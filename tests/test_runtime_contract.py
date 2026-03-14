@@ -184,7 +184,7 @@ def test_app_delegates_networking_helpers_to_shared_module():
     assert "get_default_interface as get_default_interface_impl" in app_source
     assert "DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)" in app_source
     assert '"calculate_cidr": calculate_cidr_impl' in app_source
-    assert "return identify_gateway_firewall_targets_for_key(hosts, network_key)" in app_source
+    assert "identify_gateway_firewall_targets_for_key(" in app_source
 
 
 def test_app_delegates_scan_job_handlers_to_shared_module():
@@ -236,6 +236,7 @@ def test_app_uses_shared_workflow_context_builders():
     assert "build_scan_workflow_context" in app_source
     assert "return build_scan_workflow_context(" in app_source
     assert "build_report_workflow_context(" in app_source
+    assert "def identify_gateway_firewall_targets(" not in app_source
 
 
 def test_app_uses_shared_validation_helpers():

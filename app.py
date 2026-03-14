@@ -597,11 +597,6 @@ register_scan_job_handlers(
     },
 )
 
-
-def identify_gateway_firewall_targets(hosts):
-    return identify_gateway_firewall_targets_for_key(hosts, network_key)
-
-
 def _make_broadcast_emit(owner_sid: str):
     """Return an emit_to_client that fans out to all subscribers and records events."""
     def _emit(sid: str, event: str, data=None):
@@ -616,38 +611,25 @@ def _make_broadcast_emit(owner_sid: str):
 def _scan_workflow_context(owner_sid: str):
     return build_scan_workflow_context(
         {
-        "get_client_state": get_client_state,
-        "ensure_job_not_cancelled": ensure_job_not_cancelled,
-        "idle_state_manager": idle_state_manager,
-        "update_job_progress": update_job_progress,
-        "emit_to_client": _make_broadcast_emit(owner_sid),
-        "socketio_sleep": socketio.sleep,
-        "run_cancellable_command": run_cancellable_command,
-        "run_arp_scan": run_arp_scan,
-        "identify_gateway_firewall_targets": lambda hosts: identify_gateway_firewall_targets_for_key(
-            hosts, get_client_state(sid=owner_sid)["network_key"]
-        ),
-        "start_deep_scan": workflow_start_deep_scan,
-        "job_registry": job_registry,
-        "emit_job_status": emit_job_status,
-        "logger": logger,
-        "vulners_script": VULNERS_SCRIPT,
-        "cve_pattern": re.compile(
-            r"CVE-\d{4}-\d+\s+(\d+\.\d+)\s+(https://vulners\.com/cve/CVE-\d{4}-\d+)"
-        ),
-        "port_info_regex": re.compile(r"(\d+)/tcp\s+(\S+)\s+(.*)"),
-        "ip_regex": re.compile(r"Nmap scan report for .*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"),
-        "hostname_regex": re.compile(
-            r"Nmap scan report for ([^ ]+) \((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)"
-        ),
-        "host_status_regex": re.compile(r"Host is (up|down) \(([\d.]+s latency\))"),
-        "open_port_regex": re.compile(r"(\d+)\/tcp\s+(\w+)\s+(\w+)"),
-        "nmap_done_regex": re.compile(
-            r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
-        ),
-        "ip_sort_key": ipaddress.IPv4Address,
-        "on_job_end": lambda: broadcaster.end_job(owner_sid),
-    }
+            "get_client_state": get_client_state,
+            "ensure_job_not_cancelled": ensure_job_not_cancelled,
+            "idle_state_manager": idle_state_manager,
+            "update_job_progress": update_job_progress,
+            "emit_to_client": _make_broadcast_emit(owner_sid),
+            "socketio_sleep": socketio.sleep,
+            "run_cancellable_command": run_cancellable_command,
+            "run_arp_scan": run_arp_scan,
+            "identify_gateway_firewall_targets": lambda hosts: identify_gateway_firewall_targets_for_key(
+                hosts, get_client_state(sid=owner_sid)["network_key"]
+            ),
+            "start_deep_scan": workflow_start_deep_scan,
+            "job_registry": job_registry,
+            "emit_job_status": emit_job_status,
+            "logger": logger,
+            "vulners_script": VULNERS_SCRIPT,
+            "ip_sort_key": ipaddress.IPv4Address,
+            "on_job_end": lambda: broadcaster.end_job(owner_sid),
+        }
     )
 
 
