@@ -174,6 +174,26 @@ def test_app_delegates_client_state_wrappers_to_shared_module():
     assert "client_state_registry.release(sid)" in app_client_state_runtime_source
 
 
+def test_app_delegates_event_and_job_wrappers_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+    app_events_runtime_source = (ROOT / "nmapui" / "app_events_runtime.py").read_text()
+
+    assert "from nmapui.app_events_runtime import (" in app_source
+    assert "emit_to_client as emit_to_client_runtime" in app_source
+    assert "emit_job_status as emit_job_status_runtime" in app_source
+    assert "update_job_progress as update_job_progress_runtime" in app_source
+    assert "ensure_job_not_cancelled as ensure_job_not_cancelled_runtime" in app_source
+    assert "run_cancellable_command as run_cancellable_command_runtime" in app_source
+    assert "safe_emit as safe_emit_runtime" in app_source
+    assert "return emit_to_client_runtime(" in app_source
+    assert "return emit_job_status_runtime(" in app_source
+    assert "return update_job_progress_runtime(" in app_source
+    assert "return run_cancellable_command_runtime(" in app_source
+    assert "return nmapui_emit_to_client(" not in app_source
+    assert "return nmapui_run_cancellable_command(" not in app_source
+    assert "return nmapui_emit_to_client(socketio, sid, event, data)" in app_events_runtime_source
+
+
 def test_app_delegates_runtime_info_events_to_handler_module():
     app_source = (ROOT / "app.py").read_text()
 

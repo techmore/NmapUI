@@ -23,6 +23,14 @@ from nmapui.app_runtime import (
     start_auto_scan_thread as start_auto_scan_thread_runtime,
     startup_checks as startup_checks_runtime,
 )
+from nmapui.app_events_runtime import (
+    emit_job_status as emit_job_status_runtime,
+    emit_to_client as emit_to_client_runtime,
+    ensure_job_not_cancelled as ensure_job_not_cancelled_runtime,
+    run_cancellable_command as run_cancellable_command_runtime,
+    safe_emit as safe_emit_runtime,
+    update_job_progress as update_job_progress_runtime,
+)
 from nmapui.app_client_state_runtime import (
     get_client_state as get_client_state_runtime,
     get_current_customer_state as get_current_customer_state_runtime,
@@ -36,12 +44,6 @@ from nmapui.app_state_runtime import (
     load_current_assignment as load_current_assignment_runtime,
     save_current_assignment as save_current_assignment_runtime,
     save_customers_config as save_customers_config_runtime,
-)
-from nmapui.events import (
-    emit_job_status as nmapui_emit_job_status,
-    emit_to_client as nmapui_emit_to_client,
-    safe_emit as nmapui_safe_emit,
-    update_job_progress as nmapui_update_job_progress,
 )
 from nmapui.handlers.auto_scan import (
     register_auto_scan_handlers,
@@ -60,8 +62,6 @@ from nmapui.jobs import (
     ClientJobRegistry,
     PerClientRateLimiter,
     ScanBroadcaster,
-    ensure_job_not_cancelled as nmapui_ensure_job_not_cancelled,
-    run_cancellable_command as nmapui_run_cancellable_command,
 )
 from nmapui.client_state import ClientStateRegistry
 from nmapui.bootstrap import (
@@ -164,15 +164,20 @@ socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
 def safe_emit(event, data=None):
-    return nmapui_safe_emit(event, data)
+    return safe_emit_runtime(event, data)
 
 
 def emit_to_client(sid: str, event: str, data=None):
-    return nmapui_emit_to_client(socketio, sid, event, data)
+    return emit_to_client_runtime(socketio=socketio, sid=sid, event=event, data=data)
 
 
 def emit_job_status(sid: str, job_type: str):
-    return nmapui_emit_job_status(socketio, job_registry, sid, job_type)
+    return emit_job_status_runtime(
+        socketio=socketio,
+        job_registry=job_registry,
+        sid=sid,
+        job_type=job_type,
+    )
 
 
 def update_job_progress(
@@ -183,12 +188,12 @@ def update_job_progress(
     progress: Optional[int] = None,
     details=None,
 ):
-    return nmapui_update_job_progress(
-        socketio,
-        job_registry,
-        sid,
-        job_type,
-        phase,
+    return update_job_progress_runtime(
+        socketio=socketio,
+        job_registry=job_registry,
+        sid=sid,
+        job_type=job_type,
+        phase=phase,
         message=message,
         progress=progress,
         details=details,
@@ -196,7 +201,11 @@ def update_job_progress(
 
 
 def ensure_job_not_cancelled(sid: str, job_type: str):
-    return nmapui_ensure_job_not_cancelled(job_registry, sid, job_type)
+    return ensure_job_not_cancelled_runtime(
+        job_registry=job_registry,
+        sid=sid,
+        job_type=job_type,
+    )
 
 
 def get_client_state(*, sid=None):
@@ -268,9 +277,9 @@ def run_cancellable_command(
     job_type: Optional[str] = None,
     timeout: Optional[int] = None,
 ):
-    return nmapui_run_cancellable_command(
-        job_registry,
-        cmd,
+    return run_cancellable_command_runtime(
+        job_registry=job_registry,
+        cmd=cmd,
         sid=sid,
         job_type=job_type,
         timeout=timeout,
