@@ -2,6 +2,7 @@ let countdownInterval = null;
 let remainingSeconds = 30;
 let bannerVisible = false;
 let autoUpdateSocket = null;
+let autoUpdateBannerInitialized = false;
 
 function showAutoUpdateBanner(updateInfo) {
     if (bannerVisible) return;
@@ -58,7 +59,23 @@ function performAutoUpdate() {
     hideAutoUpdateBanner();
 }
 
+function bindAutoUpdateButtons() {
+    document.getElementById('update-now-btn')?.addEventListener('click', () => {
+        performAutoUpdate();
+    });
+
+    document.getElementById('cancel-update-btn')?.addEventListener('click', () => {
+        autoUpdateSocket.emit('cancel_auto_update');
+        hideAutoUpdateBanner();
+    });
+}
+
 function initializeAutoUpdateBanner(socket) {
+    if (autoUpdateBannerInitialized) {
+        return;
+    }
+
+    autoUpdateBannerInitialized = true;
     autoUpdateSocket = socket;
 
     socket.on('idle_state_changed', data => {
@@ -75,16 +92,7 @@ function initializeAutoUpdateBanner(socket) {
         hideAutoUpdateBanner();
     });
 
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('update-now-btn')?.addEventListener('click', () => {
-            performAutoUpdate();
-        });
-
-        document.getElementById('cancel-update-btn')?.addEventListener('click', () => {
-            autoUpdateSocket.emit('cancel_auto_update');
-            hideAutoUpdateBanner();
-        });
-    });
+    bindAutoUpdateButtons();
 }
 
 window.showAutoUpdateBanner = showAutoUpdateBanner;

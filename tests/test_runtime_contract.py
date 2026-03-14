@@ -112,6 +112,20 @@ def test_template_uses_shared_report_status_module():
     assert "window.removeReportProgressCard = removeReportProgressCard;" in report_status_source
 
 
+def test_template_uses_shared_auto_update_banner_module():
+    html = (ROOT / "templates" / "index.html").read_text()
+    auto_update_source = (ROOT / "static" / "js" / "auto_update_banner.js").read_text()
+
+    assert '<script src="/static/js/auto_update_banner.js"></script>' in html
+    assert "initializeAutoUpdateBanner(socket);" in html
+    assert "let countdownInterval = null;" not in html
+    assert "function showAutoUpdateBanner(updateInfo)" not in html
+    assert "function performAutoUpdate()" not in html
+    assert "function bindAutoUpdateButtons()" in auto_update_source
+    assert "let autoUpdateBannerInitialized = false;" in auto_update_source
+    assert "bindAutoUpdateButtons();" in auto_update_source
+
+
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 
