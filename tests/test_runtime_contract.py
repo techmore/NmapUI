@@ -19,6 +19,20 @@ def test_main_template_no_longer_uses_legacy_socket_events():
         assert legacy_event not in html
 
 
+def test_main_template_no_longer_duplicates_extracted_socket_runtime_handlers():
+    html = (ROOT / "templates" / "index.html").read_text()
+
+    for duplicated_handler in (
+        "socket.on('local_ip', data => {",
+        "socket.on('network_key', data => {",
+        "socket.on('customers_list', data => {",
+        "socket.on('customer_info', data => {",
+        "socket.on('versions', data => {",
+        "socket.on('history_counts', data => {",
+    ):
+        assert duplicated_handler not in html
+
+
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 
@@ -29,6 +43,7 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert not (ROOT / "NmapUIMenuBarWithServer.swift").exists()
     assert (ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift").exists()
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
+    assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
 
 
 def test_wrapper_docs_reference_current_local_port():

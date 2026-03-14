@@ -1351,16 +1351,6 @@
             container.innerHTML += `<p>${msg}</p>`;
         });
 
-        socket.on('local_ip', data => {
-            ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
-            document.getElementById('cidr-value').textContent = data.cidr || '';
-            document.getElementById('scan-target').value = data.cidr;
-
-            // Store CIDR then try to restore last table state from localStorage
-            window.currentCIDR = data.cidr;
-            loadHostsFromStorage();
-        });
-
         socket.on('quickscan_results', data => {
             console.log("Received quick_scan_results:", data);
             document.getElementById('quick-time').textContent = data.time_taken + 's';
@@ -1398,113 +1388,7 @@
             saveHostsToStorage();
         }
 
-        // Customer quick add dropdown handler
-        document.getElementById('customer-quick-add').addEventListener('change', function() {
-            const selectedId = this.value;
-            const selectedOption = this.options[this.selectedIndex];
-            const selectedName = selectedOption?.textContent || '';
-
-            // Update history badge for selected customer
-            updateHistoryBadge(selectedName);
-
-            if (selectedId) {
-                // Assign the selected customer to this network
-                socket.emit('assign_customer', {
-                    customer_id: selectedId,
-                    customer_name: selectedName
-                });
-            }
-        });
-
-        socket.on('network_key', data => {
-            console.log('Network key received:', data);
-            document.getElementById('total-hops').textContent = data.total_hops;
-            document.getElementById('private-hops').textContent = data.private_hops.length;
-            document.getElementById('public-hops').textContent = data.public_hops.length;
-            document.getElementById('exit-ip').textContent = data.exit_ip || '--';
-            
-            const routePath = document.getElementById('route-path');
-            if (data.hops && data.hops.length > 0) {
-                // Reverse the hops so it reads: internet -> ... -> local
-                const reversedHops = [...data.hops].reverse();
-                routePath.innerHTML = reversedHops.map((hop, i) => {
-                    const typeColor = hop.is_private ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                    const isLast = i === reversedHops.length - 1;
-                    const arrow = !isLast ? '<svg class="w-3 h-3 text-olive-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>' : '';
-                    return `<div class="flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-mono font-bold ${typeColor} shadow-sm transition-all hover:scale-105">
-                                <span class="opacity-40 text-[9px]">${reversedHops.length - i}</span>
-                                <span>${hop.ip}</span>
-                            </div>${arrow}`;
-                }).join('');
-            } else if (data.error) {
-                routePath.innerHTML = `<span class="text-red-700 font-medium">${data.error}</span>`;
-            } else {
-                routePath.innerHTML = '<span class="text-olive-500 italic">No route data available</span>';
-            }
-        });
-
-        socket.on('customers_list', data => {
-            console.log('customers_list event received with data:', data);
-            populateCustomerDropdown(data);
-            // Request customer info again after dropdown is populated
-            // to ensure the correct selection is applied to the newly created options
-            socket.emit('get_customer_info');
-        });
-
-        socket.on('customer_info', data => {
-            console.log('Customer info received:', data);
-            // Store globally as a string for consistent matching
-            window.currentMatchedCustomerId = data.id ? String(data.id) : '';
-            updateCustomerSelection(data);
-            updateDropdownSelection(window.currentMatchedCustomerId, data.name);
-
-            // Check for resumable scan data when customer is identified
-            if (data.id && data.id !== 'unknown') {
-                socket.emit('check_resumable_scan', {
-                    customer_id: data.id,
-                    max_days: 7
-                });
-            }
-        });
-
         // Historical data / asset resume socket handlers
-        socket.on('resumable_scan_check', data => {
-            if (data.available && !window.localStorageLoaded) {
-                console.log('Resumable scan available, loading from server:', data);
-                socket.emit('resume_from_last_scan', {
-                    customer_id: window.currentMatchedCustomerId,
-                    max_days: 7
-                });
-            } else if (!data.available && !window.localStorageLoaded) {
-                hideHistoricalDataBanner();
-            }
-            // If localStorageLoaded, keep the already-shown localStorage data
-        });
-
-        socket.on('resume_scan_error', data => {
-            console.error('Resume scan error:', data.error);
-            hideHistoricalDataBanner();
-        });
-
-        socket.on('versions', data => {
-            console.log('Versions received:', data);
-            // Update version displays with formatted strings
-            const nmapVersion = data.nmap || 'Not found';
-            const vulnersVersion = data.vulners || 'Not found';
-            const arpScanVersion = data.arp_scan || 'Not found';
-            const appVersion = data.app || 'v--.--.--.__';
-
-            document.getElementById('app-version').textContent = appVersion;
-            document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
-            document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
-            document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
-
-            // Check for updates whenever version is received
-            socket.emit('check_app_updates');
-        });
-
-
-
         function showUpdateModal() {
             document.getElementById('update-modal').classList.remove('hidden');
             document.getElementById('update-initial').classList.remove('hidden');
@@ -1640,15 +1524,6 @@
                 socket.emit('cancel_auto_update');
                 hideAutoUpdateBanner();
             });
-        });
-
-        socket.on('history_counts', data => {
-            console.log('History counts received:', data);
-            window.historyCounts = data;
-            
-            const dropdown = document.getElementById('customer-quick-add');
-            const currentCustomerName = dropdown.selectedOptions[0]?.text || 'Unassigned';
-            updateHistoryBadge(currentCustomerName);
         });
 
         function updateHistoryBadge(customerName) {

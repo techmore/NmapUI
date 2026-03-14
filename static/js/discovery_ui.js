@@ -238,6 +238,10 @@ function initializeDiscoveryUI(socket) {
         ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
         document.getElementById('cidr-value').textContent = data.cidr || '';
         document.getElementById('scan-target').value = data.cidr;
+        window.currentCIDR = data.cidr || null;
+        if (typeof window.loadHostsFromStorage === 'function') {
+            window.loadHostsFromStorage();
+        }
     });
 
     socket.on('cve_array', data => {
@@ -285,14 +289,16 @@ function initializeDiscoveryUI(socket) {
     });
 
     socket.on('resumable_scan_check', data => {
-        if (data.available) {
+        if (data.available && !window.localStorageLoaded) {
             console.log('Resumable scan available:', data);
             socket.emit('resume_from_last_scan', {
                 customer_id: window.currentMatchedCustomerId,
                 max_days: 7
             });
         } else {
-            hideHistoricalDataBanner();
+            if (!window.localStorageLoaded) {
+                hideHistoricalDataBanner();
+            }
         }
     });
 

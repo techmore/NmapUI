@@ -117,6 +117,7 @@ source "$VENV_ACTIVATE"
 # a separate production WSGI stack, so allow Werkzeug explicitly for this
 # packaged desktop entrypoint.
 export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true
+export NMAPUI_TRUST_LOCAL_UI=true
 
 # Run the NmapUI application
 exec python3 app.py
