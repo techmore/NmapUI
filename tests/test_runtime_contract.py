@@ -45,6 +45,16 @@ def test_main_template_no_longer_duplicates_extracted_socket_runtime_handlers():
         assert duplicated_handler not in html
 
 
+def test_template_uses_shared_table_sorter_module():
+    html = (ROOT / "templates" / "index.html").read_text()
+    sorter_source = (ROOT / "static" / "js" / "table_sorter.js").read_text()
+
+    assert '<script src="/static/js/table_sorter.js"></script>' in html
+    assert "window.tableSorter = new TableSorter('discovery-table');" in html
+    assert "class TableSorter {" not in html
+    assert "window.TableSorter = TableSorter;" in sorter_source
+
+
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 

@@ -1491,6 +1491,9 @@
             if (typeof initializeDiscoveryUI === 'function') {
                 initializeDiscoveryUI(socket);
             }
+            if (typeof TableSorter === 'function') {
+                window.tableSorter = new TableSorter('discovery-table');
+            }
             if (typeof initializeUpdateModal === 'function') {
                 initializeUpdateModal(socket, {
                     showReportStatus
@@ -1981,178 +1984,6 @@
             }
         });
 
-        // TableSorter class for sortable table functionality
-        class TableSorter {
-            constructor(tableId) {
-                this.table = document.getElementById(tableId);
-                this.currentSort = { column: null, direction: 'asc' };
-                this.sortFunctions = {
-                    'ip': this.sortIPAddresses.bind(this),
-                    'mac': this.sortMACAddresses.bind(this),
-                    'text': this.sortText.bind(this),
-                    'number': this.sortNumbers.bind(this),
-                    'ports': this.sortPortCount.bind(this)
-                };
-                this.initializeSorting();
-                this.loadSortState();
-            }
-
-            initializeSorting() {
-                const headers = this.table.querySelectorAll('.sortable');
-                headers.forEach(header => {
-                    header.addEventListener('click', () => this.sortByColumn(header));
-                    header.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            this.sortByColumn(header);
-                        }
-                    });
-                    header.setAttribute('tabindex', '0');
-                });
-            }
-
-            sortByColumn(header) {
-                const column = header.dataset.column;
-                const type = header.dataset.type;
-
-                // Toggle sort direction if same column, otherwise default to ascending
-                if (this.currentSort.column === column) {
-                    this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
-                } else {
-                    this.currentSort.column = column;
-                    this.currentSort.direction = 'asc';
-                }
-
-                this.sortTable(column, type, this.currentSort.direction);
-                this.updateVisualIndicators(header);
-                this.saveSortState();
-            }
-
-            sortTable(column, type, direction) {
-                const tbody = this.table.querySelector('tbody');
-                const rows = Array.from(tbody.querySelectorAll('tr'));
-
-                rows.sort((a, b) => {
-                    const aValue = this.getCellValue(a, column);
-                    const bValue = this.getCellValue(b, column);
-
-                    const sortFn = this.sortFunctions[type] || this.sortFunctions.text;
-                    const result = sortFn(aValue, bValue);
-
-                    return direction === 'asc' ? result : -result;
-                });
-
-                // Reorder DOM elements
-                rows.forEach(row => tbody.appendChild(row));
-            }
-
-            sortIPAddresses(a, b) {
-                // Convert IP addresses to comparable numbers
-                const aParts = a.split('.').map(Number);
-                const bParts = b.split('.').map(Number);
-
-                for (let i = 0; i < 4; i++) {
-                    if (aParts[i] !== bParts[i]) {
-                        return aParts[i] - bParts[i];
-                    }
-                }
-                return 0;
-            }
-
-            sortMACAddresses(a, b) {
-                // Remove colons and compare as hex
-                const aHex = a.replace(/:/g, '');
-                const bHex = b.replace(/:/g, '');
-                return parseInt(aHex, 16) - parseInt(bHex, 16);
-            }
-
-            sortText(a, b) {
-                return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-            }
-
-            sortNumbers(a, b) {
-                return parseFloat(a) - parseFloat(b);
-            }
-
-            sortPortCount(a, b) {
-                // Extract port count from "80/tcp, 443/tcp, 22/tcp" format
-                const aCount = (a || '').split(',').length;
-                const bCount = (b || '').split(',').length;
-                return aCount - bCount;
-            }
-
-            getCellValue(row, column) {
-                const columnIndex = this.getColumnIndex(column);
-                const cell = row.cells[columnIndex];
-                return cell ? cell.textContent.trim() : '';
-            }
-
-            getColumnIndex(column) {
-                // Map column names to table indices
-                const columnMap = {
-                    'status': 0,
-                    'ip': 1,
-                    'mac': 2,
-                    'vendor': 3,
-                    'hostname': 4,
-                    'open_ports': 5,
-                    'version': 6,
-                    'cves': 7
-                };
-                return columnMap[column] || 0;
-            }
-
-            updateVisualIndicators(activeHeader) {
-                // Clear all indicators
-                this.table.querySelectorAll('.sortable').forEach(header => {
-                    header.classList.remove('sorted-asc', 'sorted-desc');
-                });
-
-                // Set active indicator
-                const directionClass = this.currentSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc';
-                activeHeader.classList.add(directionClass);
-            }
-
-            saveSortState() {
-                const state = {
-                    column: this.currentSort.column,
-                    direction: this.currentSort.direction,
-                    timestamp: Date.now()
-                };
-                localStorage.setItem('tableSortState', JSON.stringify(state));
-            }
-
-            loadSortState() {
-                try {
-                    const state = JSON.parse(localStorage.getItem('tableSortState'));
-                    if (state && state.column) {
-                        this.currentSort = state;
-                        // Apply saved sort
-                        const header = this.table.querySelector(`[data-column="${state.column}"]`);
-                        if (header) {
-                            this.sortTable(state.column, header.dataset.type, state.direction);
-                            this.updateVisualIndicators(header);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to load sort state:', e);
-                }
-            }
-
-            resort() {
-                if (this.currentSort.column) {
-                    const header = this.table.querySelector(`[data-column="${this.currentSort.column}"]`);
-                    if (header) {
-                        this.sortTable(this.currentSort.column, header.dataset.type, this.currentSort.direction);
-                    }
-                }
-            }
-        }
-
-        // Initialize table sorter when DOM is ready
-        document.addEventListener('DOMContentLoaded', () => {
-            window.tableSorter = new TableSorter('discovery-table');
-        });
     </script>
     
     <!-- 2026 New Sites JavaScript Functionality -->
@@ -2406,10 +2237,12 @@
     <script src="/static/js/update_modal.js"></script>
     <script src="/static/js/asset_details_modal.js"></script>
     <script src="/static/js/layout_runtime.js"></script>
+    <script src="/static/js/table_sorter.js"></script>
     <script src="/static/js/reports_tab.js"></script>
     <script src="/static/js/auto_scan_ui.js"></script>
     <script src="/static/js/customer_ui.js"></script>
     <script src="/static/js/report_generation_ui.js"></script>
+    <script src="/static/js/audit_log.js"></script>
 
     <!-- ── Audit Log Panel ─────────────────────────────────────────────── -->
     <div id="log-panel" class="hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col" style="height:320px;">
@@ -2428,149 +2261,6 @@
         <div id="log-entries" class="flex-1 overflow-y-auto bg-olive-950 font-mono text-xs px-4 py-2 space-y-0.5"></div>
     </div>
     <!-- ── /Audit Log Panel ─────────────────────────────────────────────── -->
-
-    <script>
-    // ── Audit Log ──────────────────────────────────────────────────────────
-    (function () {
-        let logCount = 0;
-        const LEVEL_STYLES = {
-            log:     'text-olive-300',
-            info:    'text-olive-300',
-            warn:    'text-amber-400',
-            error:   'text-red-400',
-            scan:    'text-emerald-400',
-            raw:     'text-olive-500',
-        };
-
-        function ts() {
-            return new Date().toISOString().replace('T', ' ').slice(0, 23);
-        }
-
-        function appendLog(level, msg) {
-            logCount++;
-            const container = document.getElementById('log-entries');
-            if (!container) return;
-            const div = document.createElement('div');
-            div.className = 'flex gap-2 leading-5 ' + (LEVEL_STYLES[level] || 'text-olive-300');
-            const timeSpan = document.createElement('span');
-            timeSpan.className = 'text-olive-600 flex-shrink-0 select-none';
-            timeSpan.textContent = ts();
-            const levelSpan = document.createElement('span');
-            levelSpan.className = 'uppercase font-bold flex-shrink-0 w-6 select-none ' + (LEVEL_STYLES[level] || '');
-            levelSpan.textContent = level === 'scan' ? 'SCN' : level === 'raw' ? 'RAW' : level.slice(0,3).toUpperCase();
-            const msgSpan = document.createElement('span');
-            msgSpan.className = 'break-all whitespace-pre-wrap';
-            msgSpan.textContent = msg;
-            div.appendChild(timeSpan);
-            div.appendChild(levelSpan);
-            div.appendChild(msgSpan);
-            container.appendChild(div);
-            // Auto-scroll if already near the bottom
-            if (container.scrollHeight - container.scrollTop < container.clientHeight + 80) {
-                container.scrollTop = container.scrollHeight;
-            }
-            // Update counts
-            const countEl = document.getElementById('log-entry-count');
-            if (countEl) countEl.textContent = logCount + ' entr' + (logCount === 1 ? 'y' : 'ies');
-            const badge = document.getElementById('log-count-badge');
-            if (badge) {
-                badge.textContent = logCount > 999 ? '999+' : logCount;
-                badge.classList.remove('hidden');
-            }
-        }
-
-        // Intercept console methods
-        const _origLog   = console.log.bind(console);
-        const _origInfo  = console.info.bind(console);
-        const _origWarn  = console.warn.bind(console);
-        const _origError = console.error.bind(console);
-
-        function toStr(args) {
-            return Array.from(args).map(a => {
-                if (typeof a === 'string') return a;
-                try { return JSON.stringify(a); } catch { return String(a); }
-            }).join(' ');
-        }
-
-        console.log = function (...args) { _origLog(...args);   appendLog('log',   toStr(args)); };
-        console.info = function (...args) { _origInfo(...args); appendLog('info',  toStr(args)); };
-        console.warn = function (...args) { _origWarn(...args); appendLog('warn',  toStr(args)); };
-        console.error = function (...args) { _origError(...args); appendLog('error', toStr(args)); };
-
-        window.addEventListener('error', function (e) {
-            appendLog('error', (e.message || String(e)) + (e.filename ? ' @ ' + e.filename + ':' + e.lineno : ''));
-        });
-
-        // Socket events for scan feedback / raw nmap output
-        document.addEventListener('DOMContentLoaded', function () {
-            if (typeof socket !== 'undefined') {
-                bindLogSocket();
-            } else {
-                // socket may not be defined yet — wait a tick
-                setTimeout(function () {
-                    if (typeof socket !== 'undefined') bindLogSocket();
-                }, 2000);
-            }
-        });
-
-        function bindLogSocket() {
-            socket.on('scan_feedback', function (data) {
-                appendLog('scan', '[' + (data.target || '') + '] ' + (data.message || JSON.stringify(data)));
-            });
-            socket.on('scan_raw_output', function (data) {
-                const lines = (data.output || '').split('\n');
-                lines.forEach(function (line) {
-                    if (line.trim()) appendLog('raw', '[' + (data.target || '') + '] ' + line);
-                });
-            });
-        }
-
-        // Expose helpers to window
-        window._appendLog = appendLog;
-    })();
-
-    window.toggleLogPanel = function () {
-        const panel = document.getElementById('log-panel');
-        if (!panel) return;
-        const isHidden = panel.classList.contains('hidden');
-        panel.classList.toggle('hidden');
-        if (isHidden) {
-            // Scroll to bottom when opened
-            const c = document.getElementById('log-entries');
-            if (c) c.scrollTop = c.scrollHeight;
-            // Reset badge when panel is opened
-            const badge = document.getElementById('log-count-badge');
-            if (badge) badge.classList.add('hidden');
-        }
-    };
-
-    window.clearLog = function () {
-        const c = document.getElementById('log-entries');
-        if (c) c.innerHTML = '';
-        const countEl = document.getElementById('log-entry-count');
-        if (countEl) countEl.textContent = '0 entries';
-    };
-
-    window.copyLog = function () {
-        const c = document.getElementById('log-entries');
-        if (!c) return;
-        const text = Array.from(c.querySelectorAll('div')).map(d => d.textContent).join('\n');
-        navigator.clipboard.writeText(text).then(function () {
-            const btn = event.target;
-            const orig = btn.textContent;
-            btn.textContent = 'Copied!';
-            setTimeout(function () { btn.textContent = orig; }, 1500);
-        }).catch(function () {
-            // fallback
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-        });
-    };
-    </script>
 
 </body>
 </html>
