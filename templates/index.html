@@ -1214,6 +1214,51 @@
             log.scrollTop = log.scrollHeight;
         }
 
+        function renderDelimitedCell(cell, items, options = {}) {
+            cell.replaceChildren();
+            const values = Array.isArray(items) ? items : [];
+            values.forEach(item => {
+                const row = document.createElement('div');
+                row.className = options.className || 'whitespace-nowrap';
+                row.textContent = item;
+                if (typeof options.onClick === 'function') {
+                    row.classList.add('cursor-pointer');
+                    row.addEventListener('click', options.onClick);
+                }
+                cell.appendChild(row);
+            });
+        }
+
+        function renderCveArrayCell(cell, cveArray) {
+            cell.replaceChildren();
+            cveArray.forEach(cve => {
+                const row = document.createElement('div');
+                row.className = 'text-xs py-0.5';
+
+                const score = document.createElement('span');
+                score.className = 'inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1';
+                score.textContent = cve.score;
+                row.appendChild(score);
+
+                const link = document.createElement('a');
+                link.href = cve.url;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.className = 'text-olive-600 hover:text-olive-800 hover:underline';
+                link.textContent = cve.id;
+                row.appendChild(link);
+
+                cell.appendChild(row);
+            });
+        }
+
+        function appendServiceInfoLine(cell, line) {
+            const entry = document.createElement('div');
+            entry.className = 'text-xs text-olive-600';
+            entry.textContent = line;
+            cell.appendChild(entry);
+        }
+
         function renderRoutePath(data) {
             const routePath = document.getElementById('route-path');
             routePath.replaceChildren();
@@ -1270,8 +1315,7 @@
             for (let row of tb.rows) {
                 if (row.cells[1].textContent === data.target) { // IP is now column 1 (status is 0)
                     let cell = row.cells[7]; // CVEs column (index 7 now with status column)
-                    cell.innerHTML = '';
-                    data.cve_array.forEach(cve => cell.innerHTML += `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`);
+                    renderCveArrayCell(cell, data.cve_array || []);
                     break;
                 }
             }
@@ -1282,7 +1326,7 @@
             const tb = document.querySelector('#discovery-table tbody');
             for (let row of tb.rows) {
                 if (row.cells[1].textContent === data.target) { // IP is now column 1
-                    row.cells[4].innerHTML += `<div class="text-xs text-olive-600">${data.line}</div>`; // Hostname column (index 4 now)
+                    appendServiceInfoLine(row.cells[4], data.line); // Hostname column (index 4 now)
                     break;
                 }
             }
@@ -1802,11 +1846,15 @@
 
                         // Make CVEs clickable with purple color
                         if (col === 'cves') {
-                            cell.innerHTML = items.map(item =>
-                                `<div class="whitespace-nowrap text-purple-600 hover:text-purple-800 cursor-pointer underline" onclick="event.stopPropagation(); showAssetDetailsModal(window.assetData['${result.ip}'])">${item}</div>`
-                            ).join('');
+                            renderDelimitedCell(cell, items, {
+                                className: 'whitespace-nowrap text-purple-600 hover:text-purple-800 underline',
+                                onClick: event => {
+                                    event.stopPropagation();
+                                    showAssetDetailsModal(window.assetData[result.ip]);
+                                },
+                            });
                         } else {
-                            cell.innerHTML = items.map(item => `<div class="whitespace-nowrap">${item}</div>`).join('');
+                            renderDelimitedCell(cell, items);
                         }
                     } else {
                         cell.textContent = '';

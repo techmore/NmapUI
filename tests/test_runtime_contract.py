@@ -128,3 +128,18 @@ def test_template_uses_dom_helpers_for_update_and_route_rendering():
     assert "function renderRoutePath(data)" in template
     assert "notesDiv.innerHTML =" not in template
     assert "log.innerHTML +=" not in template
+
+
+def test_template_uses_dom_helpers_for_scan_result_rendering():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "function renderCveArrayCell(cell, cveArray)" in template
+    assert "function appendServiceInfoLine(cell, line)" in template
+    assert "function renderDelimitedCell(cell, items, options = {})" in template
+    assert "cell.innerHTML = items.map" not in template
+    assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
+    assert "row.cells[4].innerHTML +=" not in template
