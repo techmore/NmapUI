@@ -114,3 +114,17 @@ def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     assert template.count("socket.on('arp_results'") == 1
     assert "function normalizeFeedbackMessage(msg)" in template
     assert "const message = normalizeFeedbackMessage(msg);" in template
+
+
+def test_template_uses_dom_helpers_for_update_and_route_rendering():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "function setUpdateReleaseNotes(data)" in template
+    assert "function appendUpdateLogLine(message, isError = false)" in template
+    assert "function renderRoutePath(data)" in template
+    assert "notesDiv.innerHTML =" not in template
+    assert "log.innerHTML +=" not in template

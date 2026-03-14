@@ -1178,6 +1178,93 @@
             document.getElementById('scan-target').value = data.cidr;
         });
 
+        function setUpdateReleaseNotes(data) {
+            const notesDiv = document.getElementById('update-release-notes');
+            notesDiv.replaceChildren();
+
+            const title = document.createElement('strong');
+            title.textContent = 'Release Notes:';
+            notesDiv.appendChild(title);
+            notesDiv.appendChild(document.createElement('br'));
+
+            const lines = data.available
+                ? (data.release_notes
+                    ? String(data.release_notes).split(/
+/)
+                    : [`New version ${data.latest_version} is available.`])
+                : ['You are using the latest version.'];
+
+            lines.forEach((line, index) => {
+                if (index > 0) notesDiv.appendChild(document.createElement('br'));
+                notesDiv.appendChild(document.createTextNode(line));
+            });
+        }
+
+        function appendUpdateLogLine(message, isError = false) {
+            const log = document.getElementById('update-log');
+            const line = document.createElement('div');
+            line.className = isError ? 'py-0.5 text-red-400 font-bold' : 'py-0.5';
+
+            const timestamp = document.createElement('span');
+            timestamp.className = 'text-zinc-500 mr-2';
+            timestamp.textContent = `[${new Date().toLocaleTimeString()}]`;
+            line.appendChild(timestamp);
+            line.appendChild(document.createTextNode(isError ? ` ERROR: ${message}` : ` ${message}`));
+            log.appendChild(line);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function renderRoutePath(data) {
+            const routePath = document.getElementById('route-path');
+            routePath.replaceChildren();
+
+            if (data.hops && data.hops.length > 0) {
+                const reversedHops = [...data.hops].reverse();
+                reversedHops.forEach((hop, i) => {
+                    const typeColor = hop.is_private ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                    const isLast = i === reversedHops.length - 1;
+
+                    const hopDiv = document.createElement('div');
+                    hopDiv.className = `flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-mono font-bold ${typeColor} shadow-sm transition-all hover:scale-105`;
+
+                    const countSpan = document.createElement('span');
+                    countSpan.className = 'opacity-40 text-[9px]';
+                    countSpan.textContent = String(reversedHops.length - i);
+                    hopDiv.appendChild(countSpan);
+
+                    const ipSpan = document.createElement('span');
+                    ipSpan.textContent = hop.ip;
+                    hopDiv.appendChild(ipSpan);
+                    routePath.appendChild(hopDiv);
+
+                    if (!isLast) {
+                        const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                        arrow.setAttribute('class', 'w-3 h-3 text-olive-300');
+                        arrow.setAttribute('fill', 'none');
+                        arrow.setAttribute('stroke', 'currentColor');
+                        arrow.setAttribute('viewBox', '0 0 24 24');
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        path.setAttribute('stroke-linecap', 'round');
+                        path.setAttribute('stroke-linejoin', 'round');
+                        path.setAttribute('stroke-width', '2');
+                        path.setAttribute('d', 'M9 5l7 7-7 7');
+                        arrow.appendChild(path);
+                        routePath.appendChild(arrow);
+                    }
+                });
+            } else {
+                const span = document.createElement('span');
+                if (data.error) {
+                    span.className = 'text-red-700 font-medium';
+                    span.textContent = data.error;
+                } else {
+                    span.className = 'text-olive-500 italic';
+                    span.textContent = 'No route data available';
+                }
+                routePath.appendChild(span);
+            }
+        }
+
         socket.on('cve_array', data => {
             const tb = document.querySelector('#discovery-table tbody');
             for (let row of tb.rows) {
@@ -1329,24 +1416,7 @@
             document.getElementById('public-hops').textContent = data.public_hops.length;
             document.getElementById('exit-ip').textContent = data.exit_ip || '--';
             
-            const routePath = document.getElementById('route-path');
-            if (data.hops && data.hops.length > 0) {
-                // Reverse the hops so it reads: internet -> ... -> local
-                const reversedHops = [...data.hops].reverse();
-                routePath.innerHTML = reversedHops.map((hop, i) => {
-                    const typeColor = hop.is_private ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                    const isLast = i === reversedHops.length - 1;
-                    const arrow = !isLast ? '<svg class="w-3 h-3 text-olive-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>' : '';
-                    return `<div class="flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-mono font-bold ${typeColor} shadow-sm transition-all hover:scale-105">
-                                <span class="opacity-40 text-[9px]">${reversedHops.length - i}</span>
-                                <span>${hop.ip}</span>
-                            </div>${arrow}`;
-                }).join('');
-            } else if (data.error) {
-                routePath.innerHTML = `<span class="text-red-700 font-medium">${data.error}</span>`;
-            } else {
-                routePath.innerHTML = '<span class="text-olive-500 italic">No route data available</span>';
-            }
+            renderRoutePath(data);
         });
 
         socket.on('customers_list', data => {
@@ -1415,30 +1485,22 @@
         socket.on('app_update_available', data => {
             console.log('App update check result:', data);
             const badge = document.getElementById('app-update-badge');
-            const notesDiv = document.getElementById('update-release-notes');
             if (data.available) {
                 badge.classList.remove('hidden');
-                if (data.release_notes) {
-                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>${data.release_notes.replace(/\n/g, '<br>')}`;
-                } else {
-                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>New version ${data.latest_version} is available.`;
-                }
             } else {
                 badge.classList.add('hidden');
-                notesDiv.innerHTML = `<strong>Release Notes:</strong><br>You are using the latest version.`;
             }
+            setUpdateReleaseNotes(data);
         });
 
         socket.on('update_status', data => {
             console.log('Update status:', data.message);
-            const log = document.getElementById('update-log');
             const statusText = document.getElementById('update-current-status');
             const progressBar = document.getElementById('update-progress-bar');
             const percentageText = document.getElementById('update-percentage');
 
             statusText.textContent = data.message;
-            log.innerHTML += `<div class="py-0.5"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ${data.message}</div>`;
-            log.scrollTop = log.scrollHeight;
+            appendUpdateLogLine(data.message);
 
             // Simple progress simulation based on message content
             let progress = 0;
@@ -1463,9 +1525,7 @@
 
         socket.on('update_error', data => {
             console.error('Update error:', data.message);
-            const log = document.getElementById('update-log');
-            log.innerHTML += `<div class="py-0.5 text-red-400 font-bold"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ERROR: ${data.message}</div>`;
-            log.scrollTop = log.scrollHeight;
+            appendUpdateLogLine(data.message, true);
             document.getElementById('update-current-status').textContent = 'Update failed';
             document.getElementById('update-current-status').classList.add('text-red-500');
             document.getElementById('update-progress-bar').classList.add('bg-red-500');
