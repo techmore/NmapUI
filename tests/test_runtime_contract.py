@@ -143,3 +143,19 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template
+
+
+def test_template_uses_dom_helpers_for_asset_modal_and_history_rendering():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "function renderAssetServices(asset)" in template
+    assert "function renderAssetVulnerabilities(asset)" in template
+    assert "function renderHistoryState(message, isError = false)" in template
+    assert "function renderHistoryList(scans)" in template
+    assert "serviceDiv.innerHTML =" not in template
+    assert "cveDiv.innerHTML =" not in template
+    assert "historyList.innerHTML = scans.map" not in template

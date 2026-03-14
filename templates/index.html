@@ -1259,6 +1259,192 @@
             cell.appendChild(entry);
         }
 
+        function renderAssetServices(asset) {
+            const servicesContainer = document.getElementById('asset-detail-services');
+            servicesContainer.replaceChildren();
+
+            if (asset.open_ports && asset.open_ports.trim()) {
+                const ports = asset.open_ports.split(',').map(p => p.trim()).filter(p => p);
+                const versions = asset.version ? asset.version.split(',').map(v => v.trim()).filter(v => v) : [];
+                const versionMap = {};
+                versions.forEach(v => {
+                    const match = v.match(/^(\d+):(.*)/);
+                    if (match) versionMap[match[1]] = match[2];
+                });
+
+                ports.forEach(port => {
+                    const portMatch = port.match(/^(\d+)\s*\(?(.*?)\)?$/);
+                    if (!portMatch) return;
+
+                    const portNum = portMatch[1];
+                    const serviceName = portMatch[2] || 'unknown';
+                    const version = versionMap[portNum] || '';
+
+                    const serviceDiv = document.createElement('div');
+                    serviceDiv.className = 'flex items-start p-3 bg-white rounded border border-olive-200';
+
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'flex-shrink-0 w-20';
+                    const portSpan = document.createElement('span');
+                    portSpan.className = 'font-mono text-sm font-bold text-olive-900';
+                    portSpan.textContent = portNum;
+                    infoDiv.appendChild(portSpan);
+                    const serviceSpan = document.createElement('span');
+                    serviceSpan.className = 'text-xs text-olive-600';
+                    serviceSpan.textContent = `/${serviceName}`;
+                    infoDiv.appendChild(serviceSpan);
+                    serviceDiv.appendChild(infoDiv);
+
+                    const versionDiv = document.createElement('div');
+                    versionDiv.className = 'flex-1';
+                    const versionText = document.createElement('div');
+                    if (version) {
+                        versionText.className = 'text-sm text-olive-700';
+                        versionText.textContent = version;
+                    } else {
+                        versionText.className = 'text-xs text-olive-500 italic';
+                        versionText.textContent = 'No version detected';
+                    }
+                    versionDiv.appendChild(versionText);
+                    serviceDiv.appendChild(versionDiv);
+                    servicesContainer.appendChild(serviceDiv);
+                });
+                return;
+            }
+
+            const empty = document.createElement('p');
+            empty.className = 'text-sm text-olive-500 italic';
+            empty.textContent = 'No open ports detected';
+            servicesContainer.appendChild(empty);
+        }
+
+        function renderAssetVulnerabilities(asset) {
+            const cveContainer = document.getElementById('asset-detail-cves');
+            cveContainer.replaceChildren();
+
+            if (asset.vulnerabilities && asset.vulnerabilities.length > 0) {
+                asset.vulnerabilities.forEach(vuln => {
+                    const cveDiv = document.createElement('div');
+                    cveDiv.className = 'p-3 bg-white rounded border border-olive-200';
+
+                    const header = document.createElement('div');
+                    header.className = 'flex items-start justify-between mb-2';
+                    const left = document.createElement('div');
+                    const title = document.createElement('span');
+                    title.className = 'font-mono text-sm font-bold text-red-700';
+                    title.textContent = vuln.id || 'Unknown CVE';
+                    left.appendChild(title);
+                    const meta = document.createElement('div');
+                    meta.className = 'text-xs text-olive-600 mt-1';
+                    meta.textContent = `Port ${vuln.port || 'N/A'} (${vuln.service || 'unknown'})`;
+                    left.appendChild(meta);
+                    header.appendChild(left);
+
+                    const score = document.createElement('span');
+                    score.className = 'inline-block px-2 py-1 rounded bg-red-100 text-red-700 font-medium text-xs';
+                    score.textContent = vuln.score || 'N/A';
+                    header.appendChild(score);
+                    cveDiv.appendChild(header);
+
+                    if (vuln.url) {
+                        const link = document.createElement('a');
+                        link.href = vuln.url;
+                        link.target = '_blank';
+                        link.rel = 'noopener noreferrer';
+                        link.className = 'text-sm text-olive-600 hover:text-olive-800 hover:underline';
+                        link.textContent = 'View Details';
+                        cveDiv.appendChild(link);
+                    }
+                    cveContainer.appendChild(cveDiv);
+                });
+                return;
+            }
+
+            const empty = document.createElement('p');
+            empty.className = 'text-sm text-olive-500 italic';
+            empty.textContent = 'No vulnerabilities detected';
+            cveContainer.appendChild(empty);
+        }
+
+        function renderHistoryState(message, isError = false) {
+            const historyList = document.getElementById('history-list');
+            historyList.replaceChildren();
+            const paragraph = document.createElement('p');
+            paragraph.className = isError ? 'text-red-600' : 'text-olive-600';
+            paragraph.textContent = message;
+            historyList.appendChild(paragraph);
+        }
+
+        function renderHistoryList(scans) {
+            const historyList = document.getElementById('history-list');
+            historyList.replaceChildren();
+
+            scans.forEach(scan => {
+                const card = document.createElement('div');
+                card.className = 'bg-olive-50 p-4 rounded-lg border border-olive-300';
+
+                const header = document.createElement('div');
+                header.className = 'flex justify-between items-start mb-2';
+                const details = document.createElement('div');
+                details.className = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
+
+                const title = document.createElement('h3');
+                title.className = 'font-display text-lg text-olive-900';
+                title.textContent = scan.customer_name || 'Unknown';
+                details.appendChild(title);
+
+                const dateText = document.createElement('p');
+                dateText.className = 'text-sm text-olive-600';
+                dateText.textContent = new Date(scan.timestamp).toLocaleString();
+                details.appendChild(dateText);
+
+                const targetText = document.createElement('p');
+                targetText.className = 'text-sm text-olive-700 mt-1';
+                targetText.appendChild(document.createTextNode('Target: '));
+                const targetSpan = document.createElement('span');
+                targetSpan.className = 'font-mono';
+                targetSpan.textContent = scan.target;
+                targetText.appendChild(targetSpan);
+                details.appendChild(targetText);
+                header.appendChild(details);
+
+                const actions = document.createElement('div');
+                actions.className = 'flex gap-2';
+
+                const buildLink = (href, label, className, newTab = false) => {
+                    const link = document.createElement('a');
+                    link.href = href;
+                    if (newTab) {
+                        link.target = '_blank';
+                        link.rel = 'noopener noreferrer';
+                    }
+                    link.className = className;
+                    link.textContent = label;
+                    actions.appendChild(link);
+                };
+
+                if (scan.has_html) {
+                    buildLink(`/api/scans/${scan.path}/html`, 'View HTML', 'px-3 py-1 bg-olive-600 text-white rounded text-sm hover:bg-olive-700', true);
+                }
+                if (scan.has_pdf) {
+                    buildLink(`/api/scans/${scan.path}/pdf`, 'Download PDF', 'px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800');
+                }
+                if (scan.has_xml) {
+                    buildLink(`/api/scans/${scan.path}/xml`, 'Download XML', 'px-3 py-1 bg-olive-500 text-white rounded text-sm hover:bg-olive-600');
+                }
+
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700';
+                deleteButton.textContent = 'Delete';
+                deleteButton.addEventListener('click', () => deleteScan(scan.path));
+                actions.appendChild(deleteButton);
+
+                header.appendChild(actions);
+                card.appendChild(header);
+                historyList.appendChild(card);
+            });
+        }
+
         function renderRoutePath(data) {
             const routePath = document.getElementById('route-path');
             routePath.replaceChildren();
@@ -1911,89 +2097,19 @@
             }
 
             // Populate services
-            const servicesContainer = document.getElementById('asset-detail-services');
-            servicesContainer.innerHTML = '';
-
-            if (asset.open_ports && asset.open_ports.trim()) {
-                const ports = asset.open_ports.split(',').map(p => p.trim()).filter(p => p);
-                const versions = asset.version ? asset.version.split(',').map(v => v.trim()).filter(v => v) : [];
-
-                // Create a map of port to version
-                const versionMap = {};
-                versions.forEach(v => {
-                    const match = v.match(/^(\d+):(.*)/);
-                    if (match) {
-                        versionMap[match[1]] = match[2];
-                    }
-                });
-
-                ports.forEach(port => {
-                    const portMatch = port.match(/^(\d+)\s*\(?(.*?)\)?$/);
-                    if (portMatch) {
-                        const portNum = portMatch[1];
-                        const serviceName = portMatch[2] || 'unknown';
-                        const version = versionMap[portNum] || '';
-
-                        const serviceDiv = document.createElement('div');
-                        serviceDiv.className = 'flex items-start p-3 bg-white rounded border border-olive-200';
-                        serviceDiv.innerHTML = `
-                            <div class="flex-shrink-0 w-20">
-                                <span class="font-mono text-sm font-bold text-olive-900">${portNum}</span>
-                                <span class="text-xs text-olive-600">/${serviceName}</span>
-                            </div>
-                            <div class="flex-1">
-                                ${version ? `<div class="text-sm text-olive-700">${version}</div>` : '<div class="text-xs text-olive-500 italic">No version detected</div>'}
-                            </div>
-                        `;
-                        servicesContainer.appendChild(serviceDiv);
-                    }
-                });
-            } else {
-                servicesContainer.innerHTML = '<p class="text-sm text-olive-500 italic">No open ports detected</p>';
-            }
+            renderAssetServices(asset);
 
             // Populate CVEs
             const cveSection = document.getElementById('asset-cve-section');
-            const cveContainer = document.getElementById('asset-detail-cves');
             const cveCount = document.getElementById('asset-cve-count');
-
-            cveContainer.innerHTML = '';
 
             if (asset.vulnerabilities && asset.vulnerabilities.length > 0) {
                 cveCount.textContent = asset.vulnerabilities.length;
                 cveSection.classList.remove('hidden');
-
-                asset.vulnerabilities.forEach(vuln => {
-                    const cveDiv = document.createElement('div');
-                    cveDiv.className = 'flex items-start justify-between p-3 bg-white rounded border border-amber-200';
-
-                    const isExploit = vuln.is_exploit || false;
-                    const cvss = vuln.cvss || 'N/A';
-
-                    cveDiv.innerHTML = `
-                        <div class="flex-1">
-                            <div class="flex items-center gap-2">
-                                <span class="font-mono text-sm font-bold text-amber-900">${vuln.cve_id || 'Unknown'}</span>
-                                ${isExploit ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded">EXPLOIT</span>' : ''}
-                            </div>
-                            <div class="text-xs text-amber-700 mt-1">
-                                Port ${vuln.port || 'N/A'} (${vuln.service || 'unknown'})
-                                ${cvss !== 'N/A' ? `• CVSS: ${cvss}` : ''}
-                            </div>
-                        </div>
-                        ${vuln.url ? `
-                            <a href="${vuln.url}" target="_blank" class="ml-2 text-amber-600 hover:text-amber-800">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                            </a>
-                        ` : ''}
-                    `;
-                    cveContainer.appendChild(cveDiv);
-                });
             } else {
                 cveSection.classList.add('hidden');
             }
+            renderAssetVulnerabilities(asset);
 
             // Show modal
             modal.classList.remove('hidden');
@@ -2544,8 +2660,7 @@
 
             } catch (error) {
                 console.error('Error loading scan history:', error);
-                document.getElementById('history-list').innerHTML =
-                    '<p class="text-red-600">Error loading scan history</p>';
+                renderHistoryState('Error loading scan history', true);
             }
         }
 
@@ -2575,49 +2690,11 @@
             const historyList = document.getElementById('history-list');
 
             if (scans.length === 0) {
-                historyList.innerHTML = '<p class="text-olive-600">No scans found</p>';
+                renderHistoryState('No scans found');
                 return;
             }
 
-            historyList.innerHTML = scans.map(scan => {
-                const date = new Date(scan.timestamp).toLocaleString();
-
-                return `
-                    <div class="bg-olive-50 p-4 rounded-lg border border-olive-300">
-                        <div class="flex justify-between items-start mb-2">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                                <h3 class="font-display text-lg text-olive-900">${scan.customer_name || 'Unknown'}</h3>
-                                <p class="text-sm text-olive-600">${date}</p>
-                                <p class="text-sm text-olive-700 mt-1">Target: <span class="font-mono">${scan.target}</span></p>
-                            </div>
-                            <div class="flex gap-2">
-                                ${scan.has_html ? `
-                                    <a href="/api/scans/${scan.path}/html" target="_blank"
-                                       class="px-3 py-1 bg-olive-600 text-white rounded text-sm hover:bg-olive-700">
-                                        View HTML
-                                    </a>
-                                ` : ''}
-                                ${scan.has_pdf ? `
-                                    <a href="/api/scans/${scan.path}/pdf"
-                                       class="px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800">
-                                        Download PDF
-                                    </a>
-                                ` : ''}
-                                ${scan.has_xml ? `
-                                    <a href="/api/scans/${scan.path}/xml"
-                                       class="px-3 py-1 bg-olive-500 text-white rounded text-sm hover:bg-olive-600">
-                                        Download XML
-                                    </a>
-                                ` : ''}
-                                <button onclick="deleteScan('${scan.path}')"
-                                        class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            renderHistoryList(scans);
         }
 
         async function deleteScan(path) {
