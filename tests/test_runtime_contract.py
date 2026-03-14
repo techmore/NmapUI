@@ -47,9 +47,12 @@ def test_pyinstaller_spec_includes_runtime_assets():
 
 def test_runtime_uses_separate_web_and_pdf_stylesheets():
     paths_source = (ROOT / "nmapui" / "paths.py").read_text()
+    app_source = (ROOT / "app.py").read_text()
 
     assert 'XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"' in paths_source
     assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
+    assert '"web_stylesheet": XSL_STYLESHEET' in app_source
+    assert '"pdf_stylesheet": XSL_STYLESHEET_PDF' in app_source
 
 
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
