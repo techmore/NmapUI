@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 from nmapui.reporting import (
     extract_scan_statistics,
+    find_latest_saved_scan_for_pdf,
+    generate_pdf_from_saved_task,
     get_most_recent_scan_xml,
     mark_scan_failure,
     merge_nmap_xml_files,
@@ -239,3 +241,76 @@ def test_merge_nmap_xml_files_combines_hosts_and_updates_runstats(tmp_path):
     assert hosts_elem.get("up") == "2"
     assert hosts_elem.get("down") == "0"
     assert hosts_elem.get("total") == "2"
+
+
+def test_find_latest_saved_scan_for_pdf_prefers_latest_matching_customer(tmp_path):
+    scans_dir = tmp_path / "data" / "scans"
+    older = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    newer = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    older.mkdir(parents=True)
+    newer.mkdir(parents=True)
+    (older / "scan.xml").write_text("<nmaprun/>")
+    (newer / "scan.xml").write_text("<nmaprun/>")
+    (older / "metadata.json").write_text(
+        '{"target":"192.168.1.0/24","customer_id":"cust-123","timestamp":"2026-03-13T01:00:00"}'
+    )
+    (newer / "metadata.json").write_text(
+        '{"target":"192.168.1.0/24","customer_id":"cust-123","timestamp":"2026-03-14T02:00:00"}'
+    )
+
+    scan_dir, xml_path = find_latest_saved_scan_for_pdf(
+        "192.168.1.0/24",
+        scans_dir=scans_dir,
+        load_json_document=lambda path, default: json.loads(path.read_text()),
+        normalize_scan_metadata_document=lambda value: value,
+        customer_id="cust-123",
+        max_days=30,
+    )
+
+    assert scan_dir == newer
+    assert xml_path == newer / "scan.xml"
+
+
+def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
+    scan_dir = tmp_path / "data" / "scans" / "Acme" / "2026-03-14" / "scan_020000_target"
+    scan_dir.mkdir(parents=True)
+    xml_path = scan_dir / "scan.xml"
+    xml_path.write_text("<nmaprun/>")
+    observed = {"events": []}
+
+    class JobRegistryStub:
+        def start(self, sid, job_type, details):
+            observed["started"] = (sid, job_type, details)
+            return True
+
+        def complete(self, sid, job_type, status="completed", details=None):
+            observed["completed"] = (sid, job_type, status, details)
+
+        def clear_if_disconnected(self, sid, job_type):
+            observed["cleared"] = (sid, job_type)
+
+    generate_pdf_from_saved_task(
+        {
+            "job_registry": JobRegistryStub(),
+            "emit_job_status": lambda sid, job_type: observed.setdefault("status_calls", []).append((sid, job_type)),
+            "emit_to_client": lambda sid, event, data=None: observed["events"].append((sid, event, data)),
+            "get_client_state": lambda sid=None: {"current_customer": {"id": "cust-123"}},
+            "find_latest_saved_scan_for_pdf": lambda target, **kwargs: (scan_dir, xml_path),
+            "convert_xml_to_html": lambda *args, **kwargs: True,
+            "convert_html_to_pdf": lambda *args, **kwargs: True,
+            "get_app_version": lambda: "v1.0.0",
+            "logger": type("LoggerStub", (), {"exception": lambda self, *args, **kwargs: None})(),
+            "scans_dir": tmp_path / "data" / "scans",
+            "socketio_sleep": lambda value: None,
+            "web_stylesheet": "web.xsl",
+            "pdf_stylesheet": "pdf.xsl",
+        },
+        "sid-1",
+        {"target": "192.168.1.0/24", "customer_name": "Acme Customer"},
+    )
+
+    assert observed["started"][1] == "report"
+    assert observed["completed"][2] == "completed"
+    assert observed["completed"][3]["mode"] == "pdf_only"
+    assert observed["cleared"] == ("sid-1", "report")
+    assert any(event[1] == "report_complete" for event in observed["events"])

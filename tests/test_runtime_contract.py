@@ -245,6 +245,15 @@ def test_app_uses_shared_validation_helpers():
     assert "def sanitize_input(" not in app_source
 
 
+def test_app_uses_shared_saved_pdf_helpers():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "find_latest_saved_scan_for_pdf," in app_source
+    assert "generate_pdf_from_saved_task as generate_pdf_from_saved_task_impl" in app_source
+    assert "return generate_pdf_from_saved_task_impl(" in app_source
+    assert "def find_latest_saved_scan_for_pdf(" not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

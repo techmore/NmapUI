@@ -103,6 +103,8 @@ from nmapui.reporting import (
     convert_html_to_pdf,
     convert_xml_to_html,
     extract_scan_statistics,
+    find_latest_saved_scan_for_pdf,
+    generate_pdf_from_saved_task as generate_pdf_from_saved_task_impl,
     get_most_recent_scan_xml,
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
@@ -796,122 +798,32 @@ def generate_report_task(sid, data):
         data,
     )
 
-
-def find_latest_saved_scan_for_pdf(target, customer_id=None, max_days=30):
-    cutoff_date = datetime.now() - timedelta(days=max_days)
-    matches = []
-
-    for metadata_file, metadata in iter_scan_metadata_documents(
-        SCANS_DIR,
-        load_json_document,
-        normalize_scan_metadata_document,
-        logger=logger,
-    ):
-        scan_dir = metadata_file.parent
-        xml_file = scan_dir / "scan.xml"
-        if not xml_file.exists():
-            continue
-
-        timestamp = metadata.get("timestamp")
-        if not timestamp or metadata.get("target") != target:
-            continue
-
-        try:
-            scan_time = datetime.fromisoformat(timestamp)
-        except ValueError:
-            continue
-
-        if scan_time < cutoff_date:
-            continue
-
-        metadata_customer_id = metadata.get("customer_id") or str(
-            metadata.get("customer_info", {}).get("id", "") or ""
-        )
-        if customer_id and metadata_customer_id and metadata_customer_id != customer_id:
-            continue
-
-        matches.append((scan_time, scan_dir, xml_file))
-
-    if not matches:
-        return None, None
-
-    matches.sort(key=lambda item: item[0], reverse=True)
-    _, scan_dir, xml_file = matches[0]
-    return scan_dir, xml_file
-
-
 def generate_pdf_from_saved_task(sid, data):
-    target = data.get("target")
-    max_days = int(data.get("max_days", 30))
-    customer_id = str(get_client_state(sid=sid)["current_customer"].get("id", "") or "")
-
-    if not target:
-        emit_to_client(sid, "report_error", {"error": "No target specified"})
-        return
-
-    if not job_registry.start(
+    return generate_pdf_from_saved_task_impl(
+        {
+            "job_registry": job_registry,
+            "emit_job_status": emit_job_status,
+            "emit_to_client": emit_to_client,
+            "get_client_state": get_client_state,
+            "find_latest_saved_scan_for_pdf": lambda target, **kwargs: find_latest_saved_scan_for_pdf(
+                target,
+                scans_dir=SCANS_DIR,
+                load_json_document=load_json_document,
+                normalize_scan_metadata_document=normalize_scan_metadata_document,
+                **kwargs,
+            ),
+            "convert_xml_to_html": convert_xml_to_html,
+            "convert_html_to_pdf": convert_html_to_pdf,
+            "get_app_version": get_app_version,
+            "logger": logger,
+            "scans_dir": SCANS_DIR,
+            "socketio_sleep": socketio.sleep,
+            "web_stylesheet": XSL_STYLESHEET,
+            "pdf_stylesheet": XSL_STYLESHEET,
+        },
         sid,
-        "report",
-        {"target": target, "customer_name": data.get("customer_name"), "mode": "pdf_only"},
-    ):
-        emit_to_client(sid, "report_error", {"error": "A report job is already running for this client"})
-        emit_job_status(sid, "report")
-        return
-
-    emit_job_status(sid, "report")
-    start_time = datetime.now()
-
-    try:
-        emit_to_client(sid, "scan_feedback", f"📄 Looking for latest saved scan for {target}...")
-        scan_dir, xml_path = find_latest_saved_scan_for_pdf(
-            target,
-            customer_id=customer_id if customer_id and customer_id != "unknown" else None,
-            max_days=max_days,
-        )
-
-        if not scan_dir or not xml_path:
-            raise RuntimeError("No saved scan found for this target. Run a chunked scan first.")
-
-        emit_to_client(sid, "scan_feedback", f"✓ Using saved scan: {scan_dir.name}")
-        web_html_path = scan_dir / "scan_web.html"
-        pdf_html_path = scan_dir / "scan_pdf.html"
-        pdf_path = scan_dir / "scan_report.pdf"
-        feedback = lambda message: (emit_to_client(sid, "scan_feedback", message), socketio.sleep(0))
-
-        emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (web view)...")
-        convert_xml_to_html(xml_path, web_html_path, stylesheet=XSL_STYLESHEET, get_app_version=get_app_version, feedback=feedback)
-
-        emit_to_client(sid, "scan_feedback", "📄 Converting XML to HTML (PDF view)...")
-        convert_xml_to_html(xml_path, pdf_html_path, stylesheet=XSL_STYLESHEET, get_app_version=get_app_version, feedback=feedback)
-
-        emit_to_client(sid, "scan_feedback", "📑 Generating PDF report...")
-        if not convert_html_to_pdf(pdf_html_path, pdf_path, feedback=feedback):
-            raise RuntimeError("PDF generation failed from saved scan")
-
-        duration = datetime.now() - start_time
-        duration_str = f"{int(duration.total_seconds() // 60)}m{int(duration.total_seconds() % 60)}s"
-        relative_path = str(scan_dir.relative_to(SCANS_DIR))
-
-        emit_to_client(sid, "scan_feedback", f"✅ PDF generation completed in {duration_str}")
-        emit_to_client(
-            sid,
-            "report_complete",
-            {"status": "success", "path": relative_path, "scan_dir": str(scan_dir)},
-        )
-        job_registry.complete(
-            sid,
-            "report",
-            status="completed",
-            details={"target": target, "path": relative_path, "mode": "pdf_only"},
-        )
-        emit_job_status(sid, "report")
-    except Exception as exc:
-        logger.exception("PDF generation from saved scan failed")
-        job_registry.complete(sid, "report", status="failed", details={"error": str(exc)})
-        emit_job_status(sid, "report")
-        emit_to_client(sid, "report_error", {"error": str(exc)})
-    finally:
-        job_registry.clear_if_disconnected(sid, "report")
+        data,
+    )
 
 
 @socketio.on("generate_pdf_from_saved")
