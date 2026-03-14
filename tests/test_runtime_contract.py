@@ -243,11 +243,12 @@ def test_template_uses_dom_helpers_for_asset_modal_and_history_rendering():
         text=True,
     )
     asset_module = (ROOT / "static" / "js" / "asset_details_modal.js").read_text()
+    layout_module = (ROOT / "static" / "js" / "layout_runtime.js").read_text()
 
     assert "function renderAssetServices(asset)" in asset_module
     assert "function renderAssetVulnerabilities(asset)" in asset_module
-    assert "function renderHistoryState(message, isError = false)" in template
-    assert "function renderHistoryList(scans)" in template
+    assert "function renderHistoryState(message, isError = false)" in layout_module
+    assert "function renderHistoryList(scans)" in layout_module
     assert "serviceDiv.innerHTML =" not in template
     assert "cveDiv.innerHTML =" not in template
     assert "historyList.innerHTML = scans.map" not in template
@@ -501,3 +502,21 @@ def test_template_loads_external_discovery_ui_module():
     assert "socket.on('report_complete'" not in template
     assert "initializeDiscoveryUI(socket);" in template
     assert "window.initializeDiscoveryUI = initializeDiscoveryUI;" in discovery_module
+
+
+def test_template_loads_external_layout_runtime_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    layout_module = (ROOT / "static" / "js" / "layout_runtime.js").read_text()
+
+    assert '<script src="/static/js/layout_runtime.js"></script>' in template
+    assert "function updateDateTime()" not in template
+    assert "function startPreciseClock()" not in template
+    assert "function renderHistoryState(message, isError = false)" not in template
+    assert "function renderHistoryList(scans)" not in template
+    assert "async function deleteScan(path)" not in template
+    assert "initializeLayoutRuntime();" in template
+    assert "window.initializeLayoutRuntime = initializeLayoutRuntime;" in layout_module
