@@ -373,6 +373,7 @@ def test_pdf_generation_prefers_browser_renderer_before_wkhtml():
     reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
 
     assert 'feedback("Trying browser-quality PDF rendering with Playwright")' in reporting_source
+    assert 'await page.emulate_media(media="print")' in reporting_source
     assert reporting_source.index("from playwright.async_api import async_playwright") < reporting_source.index('wkhtml = shutil.which("wkhtmltopdf")')
 
 

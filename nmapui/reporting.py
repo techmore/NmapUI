@@ -186,7 +186,7 @@ def convert_html_to_pdf(html_path, pdf_path, *, feedback=None):
                 page = await browser.new_page(
                     viewport={"width": 1440, "height": 2160}
                 )
-                await page.emulate_media(media="screen")
+                await page.emulate_media(media="print")
                 await page.goto(
                     f"file://{html_path.resolve()}",
                     wait_until="networkidle",
