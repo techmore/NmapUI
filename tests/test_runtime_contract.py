@@ -274,6 +274,32 @@ def test_app_uses_extracted_traceroute_helper():
     assert 'def run_traceroute(target="1.1.1.1", *, sid=None, deps):' in traceroute_source
 
 
+def test_app_uses_extracted_runtime_state_helpers():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    runtime_state_source = (ROOT / "nmapui" / "runtime_state.py").read_text()
+
+    assert "from nmapui.runtime_state import (" in app_source
+    assert "get_client_state as get_client_state_helper" in app_source
+    assert "get_current_customer_state as get_current_customer_state_helper" in app_source
+    assert "set_current_customer_state as set_current_customer_state_helper" in app_source
+    assert "set_last_scan_target_state as set_last_scan_target_state_helper" in app_source
+    assert "set_network_key_state as set_network_key_state_helper" in app_source
+    assert 'def get_client_state(sid: Optional[str] = None):' in app_source
+    assert 'def get_current_customer_state(sid: Optional[str] = None):' in app_source
+    assert 'def set_current_customer_state(value, sid: Optional[str] = None):' in app_source
+    assert 'def set_network_key_state(value, sid: Optional[str] = None):' in app_source
+    assert 'def set_last_scan_target_state(value, sid: Optional[str] = None):' in app_source
+    assert 'def get_client_state(*, sid=None, client_state_registry, current_customer, network_key, last_scan_target):' in runtime_state_source
+    assert 'def get_current_customer_state(*, sid=None, get_client_state):' in runtime_state_source
+    assert 'def set_current_customer_state(*, value, sid=None, client_state_registry, set_default_customer):' in runtime_state_source
+    assert 'def set_network_key_state(*, value, sid=None, client_state_registry, set_default_network_key):' in runtime_state_source
+    assert 'def set_last_scan_target_state(*, value, sid=None, client_state_registry, set_default_last_scan_target):' in runtime_state_source
+
+
 def test_app_uses_extracted_state_helpers():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],

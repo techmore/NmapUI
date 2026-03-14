@@ -81,6 +81,13 @@ from nmapui.runtime import (
     get_app_version,
     restart_application,
 )
+from nmapui.runtime_state import (
+    get_client_state as get_client_state_helper,
+    get_current_customer_state as get_current_customer_state_helper,
+    set_current_customer_state as set_current_customer_state_helper,
+    set_last_scan_target_state as set_last_scan_target_state_helper,
+    set_network_key_state as set_network_key_state_helper,
+)
 from nmapui.reporting import (
     convert_html_to_pdf,
     convert_xml_to_html,
@@ -277,13 +284,13 @@ client_state_registry = ClientStateRegistry(
 
 
 def get_client_state(sid: Optional[str] = None):
-    if sid:
-        return client_state_registry.get_state(sid)
-    return {
-        "current_customer": current_customer,
-        "network_key": network_key,
-        "last_scan_target": last_scan_target,
-    }
+    return get_client_state_helper(
+        sid=sid,
+        client_state_registry=client_state_registry,
+        current_customer=current_customer,
+        network_key=network_key,
+        last_scan_target=last_scan_target,
+    )
 
 
 def get_customer_fingerprinter():
@@ -294,32 +301,40 @@ def get_customer_fingerprinter():
 
 
 def get_current_customer_state(sid: Optional[str] = None):
-    return get_client_state(sid)["current_customer"]
+    return get_current_customer_state_helper(
+        sid=sid,
+        get_client_state=get_client_state,
+    )
 
 
 def set_current_customer_state(value, sid: Optional[str] = None):
     global current_customer
-    if sid:
-        client_state_registry.set_current_customer(sid, value)
-        return
-    current_customer = value
-    client_state_registry.set_default_customer(value)
+    current_customer = set_current_customer_state_helper(
+        value=value,
+        sid=sid,
+        client_state_registry=client_state_registry,
+        set_default_customer=lambda updated: globals().__setitem__("current_customer", updated),
+    )
 
 
 def set_network_key_state(value, sid: Optional[str] = None):
     global network_key
-    if sid:
-        client_state_registry.set_network_key(sid, value)
-        return
-    network_key = value
+    network_key = set_network_key_state_helper(
+        value=value,
+        sid=sid,
+        client_state_registry=client_state_registry,
+        set_default_network_key=lambda updated: globals().__setitem__("network_key", updated),
+    )
 
 
 def set_last_scan_target_state(value, sid: Optional[str] = None):
     global last_scan_target
-    if sid:
-        client_state_registry.set_last_scan_target(sid, value)
-        return
-    last_scan_target = value
+    last_scan_target = set_last_scan_target_state_helper(
+        value=value,
+        sid=sid,
+        client_state_registry=client_state_registry,
+        set_default_last_scan_target=lambda updated: globals().__setitem__("last_scan_target", updated),
+    )
 
 
 def execute_auto_scan():
