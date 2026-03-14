@@ -206,6 +206,7 @@ def test_app_imports_runtime_dependencies_used_at_server_start():
 
     assert "import sys" in app_source
     assert "import requests" in app_source
+    assert "run_socketio_server" in app_source
     assert "build_runtime_options(argv or sys.argv)" in app_source
     assert '"requests": requests' in app_source
 

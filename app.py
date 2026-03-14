@@ -33,6 +33,7 @@ from nmapui.bootstrap import (
     build_runtime_options,
     complete_startup_state,
     create_web_app,
+    run_socketio_server,
 )
 from nmapui.client_state import ClientStateRegistry
 from nmapui.events import (
