@@ -1037,6 +1037,7 @@
     <script src="/static/js/report_status.js"></script>
     <script src="/static/js/asset_details_modal.js"></script>
     <script src="/static/js/scan_banners.js"></script>
+    <script src="/static/js/auto_update_banner.js"></script>
     <script>
         // Set current date and time
         function updateDateTime() {
@@ -1600,94 +1601,7 @@
 
 
 
-        // Auto-Update Banner Logic
-        let countdownInterval = null;
-        let remainingSeconds = 30;
-        let bannerVisible = false;
-
-        socket.on('idle_state_changed', data => {
-            console.log('Idle state changed:', data);
-        });
-
-        socket.on('show_auto_update_banner', data => {
-            console.log('Showing auto-update banner:', data);
-            showAutoUpdateBanner(data);
-        });
-
-        socket.on('hide_auto_update_banner', () => {
-            console.log('Hiding auto-update banner');
-            hideAutoUpdateBanner();
-        });
-
-        function showAutoUpdateBanner(updateInfo) {
-            if (bannerVisible) return;
-
-            bannerVisible = true;
-            remainingSeconds = 30;
-
-            // Update description
-            const descElement = document.getElementById('update-description');
-            if (updateInfo.latest_version) {
-                descElement.textContent = `NmapUI ${updateInfo.latest_version} is ready to install`;
-            }
-
-            // Show banner with animation
-            const banner = document.getElementById('auto-update-banner');
-            banner.classList.remove('hidden');
-            banner.style.animation = 'slideDown 0.5s ease-out';
-
-            // Start countdown
-            startCountdown();
-        }
-
-        function hideAutoUpdateBanner() {
-            if (!bannerVisible) return;
-
-            bannerVisible = false;
-            clearInterval(countdownInterval);
-
-            const banner = document.getElementById('auto-update-banner');
-            banner.style.animation = 'slideUp 0.3s ease-in';
-            setTimeout(() => {
-                banner.classList.add('hidden');
-                banner.style.animation = '';
-            }, 300);
-        }
-
-        function startCountdown() {
-            const timerElement = document.getElementById('countdown-timer');
-            const progressBar = document.getElementById('progress-bar');
-
-            countdownInterval = setInterval(() => {
-                remainingSeconds--;
-                timerElement.textContent = remainingSeconds;
-
-                const progressPercent = ((30 - remainingSeconds) / 30) * 100;
-                progressBar.style.width = `${progressPercent}%`;
-
-                if (remainingSeconds <= 0) {
-                    performAutoUpdate();
-                }
-            }, 1000);
-        }
-
-        function performAutoUpdate() {
-            clearInterval(countdownInterval);
-            socket.emit('perform_app_update');
-            hideAutoUpdateBanner();
-        }
-
-        // Event listeners for banner buttons
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('update-now-btn')?.addEventListener('click', () => {
-                performAutoUpdate();
-            });
-
-            document.getElementById('cancel-update-btn')?.addEventListener('click', () => {
-                socket.emit('cancel_auto_update');
-                hideAutoUpdateBanner();
-            });
-        });
+        initializeAutoUpdateBanner(socket);
 
         socket.on('history_counts', data => {
             console.log('History counts received:', data);

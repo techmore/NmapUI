@@ -370,3 +370,20 @@ def test_template_loads_external_scan_banners_module():
     assert "function hideScanSummaryBanner()" not in template
     assert "window.showHistoricalDataBanner = showHistoricalDataBanner;" in banner_module
     assert "window.hideScanSummaryBanner = hideScanSummaryBanner;" in banner_module
+
+
+def test_template_loads_external_auto_update_banner_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    auto_update_module = (ROOT / "static" / "js" / "auto_update_banner.js").read_text()
+
+    assert '<script src="/static/js/auto_update_banner.js"></script>' in template
+    assert "let countdownInterval = null;" not in template
+    assert "function showAutoUpdateBanner(updateInfo)" not in template
+    assert "function hideAutoUpdateBanner()" not in template
+    assert "function performAutoUpdate()" not in template
+    assert "initializeAutoUpdateBanner(socket);" in template
+    assert "window.initializeAutoUpdateBanner = initializeAutoUpdateBanner;" in auto_update_module
