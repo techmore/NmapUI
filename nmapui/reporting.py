@@ -499,3 +499,124 @@ def get_most_recent_scan_xml(
     most_recent = recent_scans[0]
     logger.info("Found most recent scan for %s: %s", customer_name, most_recent["xml_path"])
     return most_recent["xml_path"], most_recent["metadata"]
+
+
+def merge_nmap_xml_files(xml_files, output_path):
+    """Merge multiple Nmap XML files into one with updated statistics."""
+    if not xml_files:
+        raise ValueError("No XML files to merge")
+
+    base_tree = ET.parse(xml_files[0])
+    base_root = base_tree.getroot()
+    nmaprun = base_root
+
+    all_hosts = []
+    earliest_start = None
+    latest_end = None
+    total_up = 0
+    total_down = 0
+    total_ips = 0
+
+    for xml_file in xml_files:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        for host in root.findall("host"):
+            all_hosts.append(host)
+            starttime = host.get("starttime")
+            endtime = host.get("endtime")
+            if starttime:
+                start_ts = int(starttime)
+                if earliest_start is None or start_ts < earliest_start:
+                    earliest_start = start_ts
+            if endtime:
+                end_ts = int(endtime)
+                if latest_end is None or end_ts > latest_end:
+                    latest_end = end_ts
+
+        runstats = root.find("runstats")
+        if runstats is not None:
+            hosts_elem = runstats.find("hosts")
+            if hosts_elem is not None:
+                total_up += int(hosts_elem.get("up", "0"))
+                total_down += int(hosts_elem.get("down", "0"))
+                total_ips += int(hosts_elem.get("total", "0"))
+
+    if total_ips == 0:
+        for host in all_hosts:
+            status = host.find("status")
+            if status is not None and status.get("state") == "up":
+                total_up += 1
+            else:
+                total_down += 1
+        total_ips = total_up + total_down
+
+    for host in base_root.findall("host"):
+        base_root.remove(host)
+
+    for host in all_hosts:
+        nmaprun.append(host)
+
+    runstats = base_root.find("runstats")
+    if runstats is not None:
+        finished = runstats.find("finished")
+        if finished is not None:
+            if earliest_start and latest_end:
+                total_elapsed = latest_end - earliest_start
+                elapsed_str = f"{total_elapsed // 60}m{total_elapsed % 60}s"
+            else:
+                elapsed_str = "unknown"
+            finished.set(
+                "summary",
+                f"Nmap done at {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}; {total_ips} IP addresses ({total_up} hosts up) scanned in {elapsed_str}",
+            )
+            finished.set("hosts", f"{total_up} up, {total_down} down, {total_ips} total")
+
+        hosts_elem = runstats.find("hosts")
+        if hosts_elem is not None:
+            hosts_elem.set("up", str(total_up))
+            hosts_elem.set("down", str(total_down))
+            hosts_elem.set("total", str(total_ips))
+
+    scaninfo = base_root.find("scaninfo")
+    if scaninfo is not None:
+        all_targets = []
+        for xml_file in xml_files:
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            args = root.get("args")
+            if args:
+                parts = args.split()
+                if parts:
+                    target = parts[-1]
+                    if target not in all_targets:
+                        all_targets.append(target)
+
+        if all_targets:
+            scaninfo.set("numservices", "1000")
+
+    with open(xml_files[0], "r", encoding="utf-8") as handle:
+        first_content = handle.read()
+
+    header_end = first_content.find("<nmaprun")
+    if header_end != -1:
+        headers = first_content[:header_end]
+    else:
+        headers = '<?xml version="1.0" encoding="UTF-8"?>\n'
+
+    footer_start = first_content.find("</nmaprun>") + len("</nmaprun>")
+    if footer_start > 0:
+        footer = first_content[footer_start:]
+    else:
+        footer = ""
+
+    import io
+
+    xml_string = io.StringIO()
+    base_tree.write(xml_string, encoding="unicode", xml_declaration=False)
+    merged_content = xml_string.getvalue()
+
+    with open(output_path, "w", encoding="utf-8") as handle:
+        handle.write(headers)
+        handle.write(merged_content)
+        handle.write(footer)

@@ -286,6 +286,19 @@ def test_app_uses_extracted_scan_execution_helpers():
     assert "def run_nmap_with_xml_output(" in scanning_source
 
 
+def test_app_uses_extracted_xml_merge_helper():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
+
+    assert "merge_nmap_xml_files" in app_source
+    assert 'def merge_nmap_xml_files(xml_files, output_path):' not in app_source
+    assert 'def merge_nmap_xml_files(xml_files, output_path):' in reporting_source
+
+
 def test_app_uses_extracted_event_and_job_helpers_directly():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
