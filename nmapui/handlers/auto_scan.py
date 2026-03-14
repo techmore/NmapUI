@@ -5,6 +5,12 @@ from flask import jsonify, request
 from flask_socketio import emit
 
 from nmapui.auto_scan import validate_auto_scan_config_update as default_validate_auto_scan_config_update
+from nmapui.paths import AUTO_SCAN_SCHEDULER_LOCK_FILE
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - only used on non-POSIX runtimes
+    fcntl = None
 
 
 def register_auto_scan_handlers(app, socketio, deps):
@@ -76,10 +82,39 @@ def auto_scan_loop(*, socketio, auto_scan_config, should_run_auto_scan, startup_
         socketio.sleep(60)
 
 
-def start_auto_scan_thread(*, thread_ref, socketio, auto_scan_config, should_run_auto_scan, startup_at, startup_grace_seconds, execute_auto_scan, logger):
+def acquire_auto_scan_scheduler_lock(*, lock_file=AUTO_SCAN_SCHEDULER_LOCK_FILE):
+    """Acquire a non-blocking process lock for the scheduler, or return None."""
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_file.open("a+", encoding="utf-8")
+
+    if fcntl is None:
+        return handle
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+
+    handle.seek(0)
+    handle.truncate()
+    handle.write(f"{threading.get_native_id()}\n")
+    handle.flush()
+    return handle
+
+
+def start_auto_scan_thread(*, thread_ref, socketio, auto_scan_config, should_run_auto_scan, startup_at, startup_grace_seconds, execute_auto_scan, logger, acquire_scheduler_lock=acquire_auto_scan_scheduler_lock):
     """Start the auto-scan worker once per process."""
     if thread_ref["thread"] and thread_ref["thread"].is_alive():
         return
+
+    lock_handle = thread_ref.get("lock_handle")
+    if lock_handle is None:
+        lock_handle = acquire_scheduler_lock()
+        if lock_handle is None:
+            logger.info("Skipping auto-scan worker startup; another process owns the scheduler")
+            return
+        thread_ref["lock_handle"] = lock_handle
 
     thread_ref["thread"] = threading.Thread(
         target=auto_scan_loop,

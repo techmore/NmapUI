@@ -9,8 +9,12 @@ from nmapui.auto_scan import (
     should_run_auto_scan,
     validate_auto_scan_config_update,
 )
-from nmapui.handlers.auto_scan import register_auto_scan_handlers
-from nmapui.paths import resolve_scan_path
+from nmapui.handlers.auto_scan import (
+    acquire_auto_scan_scheduler_lock,
+    register_auto_scan_handlers,
+    start_auto_scan_thread,
+)
+from nmapui.paths import AUTO_SCAN_SCHEDULER_LOCK_FILE, resolve_scan_path
 from nmapui.runtime import env_flag
 
 
@@ -140,3 +144,92 @@ def test_env_flag_parses_truthy_values(monkeypatch):
     monkeypatch.setenv("NMAPUI_TEST_FLAG", "yes")
 
     assert env_flag("NMAPUI_TEST_FLAG", default=False) is True
+
+
+def test_acquire_auto_scan_scheduler_lock_uses_configured_lock_file(tmp_path):
+    lock_file = tmp_path / "auto_scan_scheduler.lock"
+
+    handle = acquire_auto_scan_scheduler_lock(lock_file=lock_file)
+
+    try:
+        assert handle is not None
+        assert lock_file.exists()
+        assert lock_file != AUTO_SCAN_SCHEDULER_LOCK_FILE
+    finally:
+        handle.close()
+
+
+def test_start_auto_scan_thread_skips_start_when_lock_unavailable():
+    class LoggerStub:
+        def __init__(self):
+            self.messages = []
+
+        def info(self, message, *args):
+            self.messages.append(message % args if args else message)
+
+    thread_ref = {"thread": None}
+    logger = LoggerStub()
+
+    start_auto_scan_thread(
+        thread_ref=thread_ref,
+        socketio=type("SocketStub", (), {"sleep": lambda self, value: None})(),
+        auto_scan_config=dict(DEFAULT_AUTO_SCAN_CONFIG),
+        should_run_auto_scan=lambda *args, **kwargs: False,
+        startup_at=datetime(2026, 3, 13, 0, 0),
+        startup_grace_seconds=300,
+        execute_auto_scan=lambda: None,
+        logger=logger,
+        acquire_scheduler_lock=lambda: None,
+    )
+
+    assert thread_ref["thread"] is None
+    assert "another process owns the scheduler" in logger.messages[0]
+
+
+def test_start_auto_scan_thread_starts_when_lock_acquired():
+    class ThreadStub:
+        def __init__(self, target, kwargs, daemon):
+            self.target = target
+            self.kwargs = kwargs
+            self.daemon = daemon
+            self.started = False
+
+        def start(self):
+            self.started = True
+
+        def is_alive(self):
+            return self.started
+
+    created = {}
+
+    def thread_factory(target, kwargs, daemon):
+        created["thread"] = ThreadStub(target, kwargs, daemon)
+        return created["thread"]
+
+    app = Flask(__name__)
+    logger = app.logger
+    thread_ref = {"thread": None}
+
+    from nmapui.handlers import auto_scan as auto_scan_handlers
+
+    original_thread = auto_scan_handlers.threading.Thread
+    auto_scan_handlers.threading.Thread = thread_factory
+    try:
+        start_auto_scan_thread(
+            thread_ref=thread_ref,
+            socketio=type("SocketStub", (), {"sleep": lambda self, value: None})(),
+            auto_scan_config=dict(DEFAULT_AUTO_SCAN_CONFIG),
+            should_run_auto_scan=lambda *args, **kwargs: False,
+            startup_at=datetime(2026, 3, 13, 0, 0),
+            startup_grace_seconds=300,
+            execute_auto_scan=lambda: None,
+            logger=logger,
+            acquire_scheduler_lock=lambda: object(),
+        )
+    finally:
+        auto_scan_handlers.threading.Thread = original_thread
+
+    assert thread_ref["thread"] is created["thread"]
+    assert thread_ref["lock_handle"] is not None
+    assert created["thread"].daemon is True
+    assert created["thread"].started is True
