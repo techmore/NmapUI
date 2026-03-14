@@ -22,6 +22,7 @@ def start_scan_task(
     job_registry,
     emit_job_status,
     logger,
+    settings_state,
     vulners_script,
 ):
     return start_scan_task_impl(
@@ -40,6 +41,7 @@ def start_scan_task(
         job_registry=job_registry,
         emit_job_status=emit_job_status,
         logger=logger,
+        settings_state=settings_state,
         vulners_script=vulners_script,
     )
 
@@ -75,6 +77,8 @@ def run_nmap_with_xml_output(
     output_base,
     scan_type="comprehensive",
     sid=None,
+    excluded_targets=None,
+    scan_only_mode=False,
     vulners_script,
     stylesheet_pdf,
     emit_to_client,
@@ -87,6 +91,8 @@ def run_nmap_with_xml_output(
         output_base,
         scan_type=scan_type,
         sid=sid,
+        excluded_targets=excluded_targets,
+        scan_only_mode=scan_only_mode,
         vulners_script=vulners_script,
         stylesheet_pdf=stylesheet_pdf,
         emit_to_client=emit_to_client,

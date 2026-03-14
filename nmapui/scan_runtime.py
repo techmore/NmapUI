@@ -35,6 +35,7 @@ def start_scan_task(
     job_registry,
     emit_job_status,
     logger,
+    settings_state,
     vulners_script,
 ):
     context = build_scan_workflow_context(
@@ -57,6 +58,7 @@ def start_scan_task(
             "job_registry": job_registry,
             "emit_job_status": emit_job_status,
             "logger": logger,
+            "settings_state": settings_state,
             "vulners_script": vulners_script,
             "ip_sort_key": ipaddress.IPv4Address,
             "on_job_end": lambda: broadcaster.end_job(sid, job_type="scan"),

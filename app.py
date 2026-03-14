@@ -44,6 +44,7 @@ from nmapui.app_composition import (
     build_scan_job_handler_deps,
     build_scan_routes_deps,
     build_scan_task_deps,
+    build_settings_routes_deps,
     build_startup_check_deps,
     build_update_handler_deps,
     register_shared_handlers,
@@ -79,6 +80,7 @@ from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
     SCANS_DIR,
+    SETTINGS_FILE,
     VULNERS_SCRIPT,
     XSL_STYLESHEET,
     XSL_STYLESHEET_PDF,
@@ -113,6 +115,7 @@ from nmapui.scanning import (
     create_scan_folder,
     split_subnet_into_chunks,
 )
+from nmapui.settings import load_settings_state, save_settings_state
 from nmapui.traceroute_runtime import (
     build_traceroute_deps,
     run_traceroute as run_traceroute_runtime,
@@ -195,6 +198,10 @@ rate_limiter = runtime_services["rate_limiter"]
 job_registry = runtime_services["job_registry"]
 broadcaster = ScanBroadcaster()
 client_state_registry = runtime_services["client_state_registry"]
+settings_state = load_settings_state(
+    settings_path=SETTINGS_FILE,
+    load_json_document=load_json_document,
+)
 
 event_helpers = build_event_helpers(
     socketio=socketio,
@@ -364,6 +371,7 @@ register_shared_handlers(
         get_default_interface_cached=lambda: DEFAULT_INTERFACE,
         get_versions=tool_versions.get_versions,
         job_registry=job_registry,
+        settings_state=settings_state,
         startup_state=startup_state,
         get_auto_scan_thread=lambda: auto_scan_thread,
     ),
@@ -408,6 +416,14 @@ register_shared_handlers(
         generate_pdf_from_saved_task=lambda sid, data: generate_pdf_from_saved_task(sid, data),
         broadcaster=broadcaster,
     ),
+    settings_routes_deps=build_settings_routes_deps(
+        settings_state=settings_state,
+        save_settings=lambda payload: save_settings_state(
+            settings_path=SETTINGS_FILE,
+            save_json_document=save_json_document,
+            settings_state=payload,
+        ),
+    ),
 )
 
 def start_scan_task(sid, target):
@@ -431,6 +447,7 @@ def start_scan_task(sid, target):
             job_registry=job_registry,
             emit_job_status=emit_job_status,
             logger=logger,
+            settings_state=settings_state,
             vulners_script=VULNERS_SCRIPT,
         ),
     )
@@ -450,12 +467,21 @@ def run_arp_scan(target, interface=None, sid=None):
     )
 
 
-def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):
+def run_nmap_with_xml_output(
+    target,
+    output_base,
+    scan_type="comprehensive",
+    sid=None,
+    excluded_targets=None,
+    scan_only_mode=False,
+):
     return run_nmap_with_xml_output_runtime(
         target=target,
         output_base=output_base,
         scan_type=scan_type,
         sid=sid,
+        excluded_targets=excluded_targets,
+        scan_only_mode=scan_only_mode,
         vulners_script=VULNERS_SCRIPT,
         stylesheet_pdf=XSL_STYLESHEET_PDF,
         emit_to_client=emit_to_client,
@@ -482,6 +508,7 @@ def generate_report_task(sid, data):
             split_subnet_into_chunks=split_subnet_into_chunks,
             create_scan_folder=create_scan_folder,
             scans_dir=SCANS_DIR,
+            settings_state=settings_state,
             sanitize_customer_dir_name=sanitize_customer_dir_name,
             run_nmap_with_xml_output=run_nmap_with_xml_output,
             merge_nmap_xml_files=merge_nmap_xml_files,

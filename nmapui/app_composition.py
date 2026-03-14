@@ -6,6 +6,7 @@ from nmapui.handlers.routes import register_core_routes
 from nmapui.handlers.runtime_info import register_runtime_info_handlers
 from nmapui.handlers.scan_jobs import register_scan_job_handlers
 from nmapui.handlers.scans import register_scan_routes
+from nmapui.handlers.settings import register_settings_routes
 from nmapui.handlers.updates import register_update_handlers
 
 
@@ -47,6 +48,7 @@ def build_scan_task_deps(
     logger,
     run_arp_scan,
     run_cancellable_command,
+    settings_state,
     socketio_sleep,
     update_job_progress,
     vulners_script,
@@ -65,6 +67,7 @@ def build_scan_task_deps(
         "job_registry": job_registry,
         "emit_job_status": emit_job_status,
         "logger": logger,
+        "settings_state": settings_state,
         "vulners_script": vulners_script,
     }
 
@@ -88,6 +91,7 @@ def build_report_task_deps(
     sanitize_customer_dir_name,
     save_scan_metadata,
     scans_dir,
+    settings_state,
     socketio_sleep,
     split_subnet_into_chunks,
     stylesheet,
@@ -109,6 +113,7 @@ def build_report_task_deps(
         "split_subnet_into_chunks": split_subnet_into_chunks,
         "create_scan_folder": create_scan_folder,
         "scans_dir": scans_dir,
+        "settings_state": settings_state,
         "sanitize_customer_dir_name": sanitize_customer_dir_name,
         "run_nmap_with_xml_output": run_nmap_with_xml_output,
         "merge_nmap_xml_files": merge_nmap_xml_files,
@@ -312,6 +317,7 @@ def build_core_routes_deps(
     get_default_interface_cached,
     get_versions,
     job_registry,
+    settings_state,
     startup_state,
     get_auto_scan_thread,
 ):
@@ -322,8 +328,16 @@ def build_core_routes_deps(
         "get_default_interface_cached": get_default_interface_cached,
         "get_versions": get_versions,
         "job_registry": job_registry,
+        "settings_state": settings_state,
         "startup_state": startup_state,
         "get_auto_scan_thread": get_auto_scan_thread,
+    }
+
+
+def build_settings_routes_deps(*, settings_state, save_settings):
+    return {
+        "settings_state": settings_state,
+        "save_settings": save_settings,
     }
 
 
@@ -417,6 +431,7 @@ def register_shared_handlers(
     customer_handler_deps,
     runtime_info_handler_deps,
     scan_job_handler_deps,
+    settings_routes_deps,
 ):
     register_auto_scan_handlers(app, socketio, auto_scan_handler_deps)
     register_scan_routes(app, scan_routes_deps)
@@ -427,3 +442,4 @@ def register_shared_handlers(
     register_customer_handlers(socketio, customer_handler_deps)
     register_runtime_info_handlers(socketio, runtime_info_handler_deps)
     register_scan_job_handlers(socketio, scan_job_handler_deps)
+    register_settings_routes(app, settings_routes_deps)

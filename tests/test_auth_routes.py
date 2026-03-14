@@ -5,6 +5,7 @@ from flask_socketio import SocketIO
 
 from nmapui.handlers.auto_scan import register_auto_scan_handlers
 from nmapui.handlers.scans import register_scan_routes
+from nmapui.handlers.settings import register_settings_routes
 from persistence import load_json_document, normalize_scan_metadata_document
 
 
@@ -91,6 +92,26 @@ def build_auto_scan_app():
         },
     )
     return app
+
+
+def build_settings_app():
+    app = Flask(__name__)
+    settings_state = {
+        "target_profiles": [],
+        "scan_rules": {"scan_only_mode": False, "excluded_targets": []},
+        "sync": {
+            "google_drive": {"enabled": False, "folder_id": "", "status": "Not configured"},
+            "remote_sync": {"enabled": False, "endpoint": "", "api_key": "", "status": "Not configured"},
+        },
+    }
+    register_settings_routes(
+        app,
+        {
+            "settings_state": settings_state,
+            "save_settings": lambda payload: payload,
+        },
+    )
+    return app, settings_state
 
 
 def test_scan_routes_require_http_basic_auth(tmp_path, monkeypatch):
@@ -523,6 +544,70 @@ def test_auto_scan_routes_allow_authorized_access(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["enabled"] is False
+
+
+def test_settings_routes_require_http_basic_auth(monkeypatch):
+    configure_auth(monkeypatch)
+    app, _ = build_settings_app()
+    client = app.test_client()
+
+    response = client.get("/api/settings")
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "Unauthorized"}
+
+
+def test_settings_routes_save_normalized_payload(monkeypatch):
+    configure_auth(monkeypatch)
+    app = Flask(__name__)
+    saved = {}
+    register_settings_routes(
+        app,
+        {
+            "settings_state": {},
+            "save_settings": lambda payload: saved.setdefault(
+                "value",
+                {
+                    "schema_version": 1,
+                    "target_profiles": payload["target_profiles"],
+                    "scan_rules": payload["scan_rules"],
+                    "sync": payload["sync"],
+                },
+            ),
+        },
+    )
+
+    response = app.test_client().post(
+        "/api/settings",
+        json={
+            "target_profiles": [
+                {
+                    "name": "HQ",
+                    "target": "192.168.1.0/24",
+                    "customer_id": "cust-123",
+                    "customer_name": "Acme",
+                    "notes": "Primary office",
+                }
+            ],
+            "scan_rules": {
+                "scan_only_mode": True,
+                "excluded_targets": ["192.168.1.10", "192.168.1.11"],
+            },
+            "sync": {
+                "google_drive": {"enabled": True, "folder_id": "folder-123", "status": "Configured"},
+                "remote_sync": {"enabled": True, "endpoint": "https://pilot.example/api", "api_key": "secret", "status": "Configured"},
+            },
+        },
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["settings"]["target_profiles"][0]["name"] == "HQ"
+    assert payload["settings"]["scan_rules"]["scan_only_mode"] is True
+    assert payload["settings"]["scan_rules"]["excluded_targets"] == ["192.168.1.10", "192.168.1.11"]
+    assert payload["settings"]["sync"]["remote_sync"]["api_key"] == "secret"
 
 
 def test_http_auth_rejects_builtin_default_credentials_by_default(tmp_path, monkeypatch):

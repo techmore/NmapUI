@@ -871,8 +871,16 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="logs-tab-entries"' in template
     assert 'id="logs-export-btn"' in template
     assert 'id="logs-clear-btn"' in template
+    assert 'id="save-settings-btn"' in template
+    assert 'id="settings-profile-list"' in template
+    assert 'id="settings-scan-only-mode"' in template
+    assert 'id="settings-excluded-targets"' in template
+    assert 'id="settings-google-drive-enabled"' in template
+    assert 'id="settings-remote-sync-enabled"' in template
     assert '<script src="/static/js/reports_tab.js"></script>' in template
+    assert '<script src="/static/js/settings_tab.js"></script>' in template
     assert "initializeAuditLog();" in template
+    assert "initializeSettingsTab();" in template
 
 
 def test_pdf_generation_prefers_browser_renderer_before_wkhtml():
@@ -892,6 +900,7 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
     report_status_module = (ROOT / "static" / "js" / "report_status.js").read_text()
     reports_tab_module = (ROOT / "static" / "js" / "reports_tab.js").read_text()
+    settings_tab_module = (ROOT / "static" / "js" / "settings_tab.js").read_text()
 
     assert "function renderCveArrayCell(cell, cveArray)" in discovery_module
     assert "function appendServiceInfoLine(cell, line)" in discovery_module
@@ -916,10 +925,17 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "const panels = {" in reports_tab_module
     assert "function loadReportsTab(force = false)" in reports_tab_module
     assert "function loadHistoryTab(force = false)" in reports_tab_module
+    assert "window.loadSettingsTab()" in reports_tab_module
     assert "window.addEventListener('report-complete-refresh'" in reports_tab_module
     assert "createScanActionLink(`/api/scans/${scan.path}/html`, 'View Report', true)" in reports_tab_module
     assert "Select Base" in reports_tab_module
     assert "Compare to Base" in reports_tab_module
+    assert "async function loadSettingsTab(force = false)" in settings_tab_module
+    assert "async function saveSettingsTab()" in settings_tab_module
+    assert "function addTargetProfile()" in settings_tab_module
+    assert "function applyProfileToDashboard(profile)" in settings_tab_module
+    assert "window.initializeSettingsTab = initializeSettingsTab;" in settings_tab_module
+    assert "window.loadSettingsTab = loadSettingsTab;" in settings_tab_module
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template

@@ -393,6 +393,8 @@ function switchAppTab(tabName) {
         loadHistoryTab();
     } else if (tabName === 'reports') {
         loadReportsTab();
+    } else if (tabName === 'settings' && typeof window.loadSettingsTab === 'function') {
+        window.loadSettingsTab();
     }
 }
 

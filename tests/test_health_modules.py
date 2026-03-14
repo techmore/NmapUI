@@ -30,6 +30,7 @@ def test_runtime_status_route_reports_active_jobs():
             "get_default_interface_cached": lambda: "en0",
             "get_versions": lambda: {"app": "v1"},
             "job_registry": JobRegistryStub(),
+            "settings_state": {"target_profiles": [], "scan_rules": {"scan_only_mode": False, "excluded_targets": []}, "sync": {}},
             "startup_state": {"startup_complete": True},
             "get_auto_scan_thread": lambda: None,
         },
@@ -49,4 +50,41 @@ def test_runtime_status_route_reports_active_jobs():
                 "details": {"message": "Generating report"},
             }
         ],
+    }
+
+
+def test_runtime_settings_summary_reports_settings_state():
+    app = Flask(__name__)
+
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"ok": True},
+            "build_readiness_payload": lambda **kwargs: ({"ok": True}, 200),
+            "get_app_version": lambda: "v1",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "settings_state": {
+                "target_profiles": [{"id": "1", "name": "HQ", "target": "192.168.1.0/24"}],
+                "scan_rules": {"scan_only_mode": True, "excluded_targets": ["192.168.1.10"]},
+                "sync": {
+                    "google_drive": {"enabled": True},
+                    "remote_sync": {"enabled": False},
+                },
+            },
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    response = app.test_client().get("/api/runtime/settings-summary")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "scan_only_mode": True,
+        "excluded_targets_count": 1,
+        "target_profiles_count": 1,
+        "google_drive_enabled": True,
+        "remote_sync_enabled": False,
     }

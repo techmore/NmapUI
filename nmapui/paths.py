@@ -12,6 +12,7 @@ CURRENT_ASSIGNMENT_FILE = BASE_DIR / "data" / "current_assignment.json"
 AUTO_SCAN_CONFIG_FILE = BASE_DIR / "auto_scan_config.json"
 AUTO_SCAN_CONFIG_EXAMPLE_FILE = BASE_DIR / "config" / "auto_scan_config.example.json"
 AUTO_SCAN_SCHEDULER_LOCK_FILE = BASE_DIR / "data" / "auto_scan_scheduler.lock"
+SETTINGS_FILE = BASE_DIR / "data" / "settings.json"
 
 
 def resolve_scan_path(path: str) -> Optional[Path]:

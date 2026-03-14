@@ -30,8 +30,10 @@ def _is_permission_denied(result) -> bool:
     )
 
 
-def get_nmap_scan_technique():
+def get_nmap_scan_technique(force_unprivileged=False):
     """Choose a connect scan when the process is not running with root privileges."""
+    if force_unprivileged:
+        return "-sT"
     geteuid = getattr(os, "geteuid", None)
     if callable(geteuid) and geteuid() == 0:
         return "-sS"
@@ -254,6 +256,8 @@ def run_nmap_with_xml_output(
     *,
     scan_type="comprehensive",
     sid=None,
+    excluded_targets=None,
+    scan_only_mode=False,
     vulners_script,
     stylesheet_pdf,
     emit_to_client,
@@ -262,7 +266,10 @@ def run_nmap_with_xml_output(
     run_cancellable_command,
 ):
     """Run nmap with all formats output (-oA)."""
-    scan_technique = get_nmap_scan_technique()
+    scan_technique = get_nmap_scan_technique(force_unprivileged=scan_only_mode)
+    excluded_targets = [
+        str(item or "").strip() for item in (excluded_targets or []) if str(item or "").strip()
+    ]
 
     if scan_type == "quick":
         logger.info("Running quick scan on %s...", target)
@@ -306,6 +313,9 @@ def run_nmap_with_xml_output(
             target,
         ]
         timeout_seconds = 1200
+
+    if excluded_targets:
+        cmd[1:1] = ["--exclude", ",".join(excluded_targets)]
 
     cmd_str = " ".join(cmd)
     logger.info("Executing: %s", cmd_str)

@@ -107,6 +107,13 @@ def start_scan_task(context, sid, target):
     job_registry = context.job_registry
     emit_job_status = context.emit_job_status
     logger = context.logger
+    scan_rules = (context.settings_state or {}).get("scan_rules", {})
+    scan_only_mode = bool(scan_rules.get("scan_only_mode", False))
+    excluded_targets = [
+        str(item or "").strip()
+        for item in scan_rules.get("excluded_targets", [])
+        if str(item or "").strip()
+    ]
     ip_regex = context.ip_regex
     hostname_regex = context.hostname_regex
     host_status_regex = context.host_status_regex
@@ -130,7 +137,16 @@ def start_scan_task(context, sid, target):
         logger.info(command_str)
         socketio_sleep(0)
 
-        output = run_cancellable_command(["nmap", "-sn", target], sid=sid, job_type="scan").stdout
+        cmd = ["nmap", "-sn", target]
+        if excluded_targets:
+            exclusion_arg = ",".join(excluded_targets)
+            cmd[1:1] = ["--exclude", exclusion_arg]
+            emit_to_client(
+                sid,
+                "scan_feedback",
+                f"Applying exclusions to quick scan: {exclusion_arg}",
+            )
+        output = run_cancellable_command(cmd, sid=sid, job_type="scan").stdout
         lines = output.split("\n")
 
         hosts, current_host = [], None
@@ -180,19 +196,27 @@ def start_scan_task(context, sid, target):
         emit_to_client(sid, "quick_scan_complete")
         socketio_sleep(0)
 
-        update_job_progress(sid, "scan", phase="arp_scan", message="Collecting MAC and vendor data", progress=35)
-        emit_to_client(sid, "arp_scan_start")
-        socketio_sleep(0)
-        arp_data = run_arp_scan(target, sid=sid)
-        for host in sorted_hosts:
-            if host["ip"] in arp_data:
-                host["mac"] = arp_data[host["ip"]]["mac"]
-                host["vendor"] = arp_data[host["ip"]]["vendor"]
+        arp_data = {}
+        if scan_only_mode:
+            emit_to_client(
+                sid,
+                "scan_feedback",
+                "Scan-only mode enabled; skipping MAC/vendor detection",
+            )
+        else:
+            update_job_progress(sid, "scan", phase="arp_scan", message="Collecting MAC and vendor data", progress=35)
+            emit_to_client(sid, "arp_scan_start")
+            socketio_sleep(0)
+            arp_data = run_arp_scan(target, sid=sid)
+            for host in sorted_hosts:
+                if host["ip"] in arp_data:
+                    host["mac"] = arp_data[host["ip"]]["mac"]
+                    host["vendor"] = arp_data[host["ip"]]["vendor"]
 
-        if arp_data:
-            emit_to_client(sid, "arp_results", arp_data)
+            if arp_data:
+                emit_to_client(sid, "arp_results", arp_data)
 
-        emit_to_client(sid, "arp_scan_complete")
+            emit_to_client(sid, "arp_scan_complete")
 
         display_hosts = []
         for host in sorted_hosts:
@@ -295,6 +319,13 @@ def generate_report_task(context, sid, data):
     extract_scan_statistics = context.extract_scan_statistics
     customer_fingerprinter = context.customer_fingerprinter
     on_job_end = context.on_job_end
+    scan_rules = (context.settings_state or {}).get("scan_rules", {})
+    scan_only_mode = bool(scan_rules.get("scan_only_mode", False))
+    excluded_targets = [
+        str(item or "").strip()
+        for item in scan_rules.get("excluded_targets", [])
+        if str(item or "").strip()
+    ]
 
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
@@ -347,6 +378,19 @@ def generate_report_task(context, sid, data):
     elif not chunked_scan:
         emit_to_client(sid, "scan_feedback", "Running a single comprehensive scan without chunking")
         socketio_sleep(0)
+
+    if scan_only_mode:
+        emit_to_client(
+            sid,
+            "scan_feedback",
+            "Scan-only mode enabled; forcing unprivileged scan technique",
+        )
+    if excluded_targets:
+        emit_to_client(
+            sid,
+            "scan_feedback",
+            f"Applying exclusions to report scan: {', '.join(excluded_targets)}",
+        )
 
     logger.info("=" * 60)
     logger.info("REPORT GENERATION STARTED")
@@ -402,7 +446,19 @@ def generate_report_task(context, sid, data):
             socketio_sleep(0)
 
             chunk_output_base = output_base if num_chunks == 1 else scan_dir / f"scan_chunk_{i}"
-            if not run_nmap_with_xml_output(chunk_target, chunk_output_base, "comprehensive", sid=sid):
+            run_kwargs = {}
+            if excluded_targets:
+                run_kwargs["excluded_targets"] = excluded_targets
+            if scan_only_mode:
+                run_kwargs["scan_only_mode"] = True
+
+            if not run_nmap_with_xml_output(
+                chunk_target,
+                chunk_output_base,
+                "comprehensive",
+                sid=sid,
+                **run_kwargs,
+            ):
                 if job_registry.is_cancelled(sid, "report"):
                     if scan_dir is not None:
                         mark_scan_failure(

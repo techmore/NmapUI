@@ -8,6 +8,7 @@ def register_core_routes(app, deps):
     get_default_interface_cached = deps["get_default_interface_cached"]
     get_versions = deps["get_versions"]
     job_registry = deps["job_registry"]
+    settings_state = deps["settings_state"]
     startup_state = deps["startup_state"]
     get_auto_scan_thread = deps["get_auto_scan_thread"]
 
@@ -56,5 +57,23 @@ def register_core_routes(app, deps):
                     {job.get("job_type") for job in active_jobs if job.get("job_type")}
                 ),
                 "active_jobs": active_jobs,
+            }
+        )
+
+    @app.route("/api/runtime/settings-summary")
+    def runtime_settings_summary():
+        scan_rules = settings_state.get("scan_rules", {})
+        sync = settings_state.get("sync", {})
+        return jsonify(
+            {
+                "scan_only_mode": bool(scan_rules.get("scan_only_mode", False)),
+                "excluded_targets_count": len(scan_rules.get("excluded_targets", [])),
+                "target_profiles_count": len(settings_state.get("target_profiles", [])),
+                "google_drive_enabled": bool(
+                    (sync.get("google_drive") or {}).get("enabled", False)
+                ),
+                "remote_sync_enabled": bool(
+                    (sync.get("remote_sync") or {}).get("enabled", False)
+                ),
             }
         )

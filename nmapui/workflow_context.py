@@ -35,6 +35,7 @@ class ScanWorkflowContext:
     open_port_regex: Any
     nmap_done_regex: Any
     ip_sort_key: Any
+    settings_state: Any = None
     on_job_end: Any = None
 
 
@@ -63,6 +64,7 @@ class ReportWorkflowContext:
     current_customer: Any
     extract_scan_statistics: Any
     customer_fingerprinter: Any
+    settings_state: Any = None
     web_stylesheet: Any = None
     pdf_stylesheet: Any = None
     on_job_end: Any = None
@@ -118,6 +120,7 @@ def build_scan_workflow_context(deps):
             r"Nmap done: (\d+) IP address(?:es)? \((\d+) host(?:s)? up\) scanned in ([\d.]+) seconds"
         ),
         ip_sort_key=deps["ip_sort_key"],
+        settings_state=deps.get("settings_state"),
         on_job_end=deps.get("on_job_end"),
     )
 
@@ -175,6 +178,7 @@ def build_report_workflow_context(deps):
         current_customer=deps["current_customer"],
         extract_scan_statistics=deps["extract_scan_statistics"],
         customer_fingerprinter=deps["customer_fingerprinter"],
+        settings_state=deps.get("settings_state"),
         web_stylesheet=deps.get("web_stylesheet"),
         pdf_stylesheet=deps.get("pdf_stylesheet"),
         on_job_end=deps.get("on_job_end"),
