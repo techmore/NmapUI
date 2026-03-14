@@ -29,6 +29,21 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert (ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift").exists()
 
 
+def test_wrapper_build_creates_clean_bundle_runtime():
+    build_script = subprocess.check_output(
+        ["git", "show", ":build.sh"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert 'cp -r "$ROOT_DIR/.venv"' not in build_script
+    assert 'cp -r "$ROOT_DIR/venv"' not in build_script
+    assert 'python3 -m venv "$BUNDLE_VENV"' in build_script
+    assert 'python -m pip install -r "$ROOT_DIR/requirements.txt"' in build_script
+    assert 'cp -r "$ROOT_DIR/nmapui" "$APP_NAME/Contents/Resources/"' in build_script
+    assert 'cp -r "$ROOT_DIR/config" "$APP_NAME/Contents/Resources/"' in build_script
+
+
 def test_wrapper_docs_reference_current_local_port():
     for doc_name in ("packaging/macos/README.md", "packaging/macos/SETUP.md"):
         source = (ROOT / doc_name).read_text()
