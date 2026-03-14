@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 import base64
+import logging
 
 from flask import Flask
 from flask_socketio import SocketIO
@@ -10,6 +11,7 @@ from nmapui.auto_scan import (
     should_run_auto_scan,
     validate_auto_scan_config_update,
 )
+from nmapui.auto_scan_runtime import AUTO_SCAN_SID, execute_auto_scan
 from nmapui.handlers.auto_scan import (
     acquire_auto_scan_scheduler_lock,
     register_auto_scan_handlers,
@@ -254,3 +256,68 @@ def test_start_auto_scan_thread_starts_when_lock_acquired():
     assert thread_ref["lock_handle"] is not None
     assert created["thread"].daemon is True
     assert created["thread"].started is True
+
+
+def test_execute_auto_scan_emits_report_trigger_and_persists_last_run():
+    emitted = []
+    saved = {}
+
+    class RateLimiterStub:
+        def can_scan(self, sid):
+            saved["can_scan_sid"] = sid
+            return True, None
+
+        def record_scan(self, sid):
+            saved["record_scan_sid"] = sid
+
+    execute_auto_scan(
+        deps={
+            "auto_scan_config": dict(DEFAULT_AUTO_SCAN_CONFIG),
+            "current_customer": {"name": "Acme Customer (0.82)"},
+            "get_last_scan_target": lambda: "192.168.1.0/24",
+            "logger": logging.getLogger(__name__),
+            "network_key": {"cidr": "10.0.0.0/24"},
+            "rate_limiter": RateLimiterStub(),
+            "safe_emit": lambda event, data=None: emitted.append((event, data)),
+            "save_auto_scan_config": lambda config: saved.setdefault("config", dict(config)),
+            "validate_target": lambda target: (True, None),
+        }
+    )
+
+    assert saved["can_scan_sid"] == AUTO_SCAN_SID
+    assert saved["record_scan_sid"] == AUTO_SCAN_SID
+    assert emitted == [
+        (
+            "trigger_generate_report",
+            {
+                "target": "192.168.1.0/24",
+                "customer_name": "Acme Customer",
+                "auto_scan": True,
+            },
+        )
+    ]
+    assert saved["config"]["last_run"] is not None
+
+
+def test_execute_auto_scan_emits_validation_error_without_running():
+    emitted = []
+
+    class RateLimiterStub:
+        def can_scan(self, sid):
+            raise AssertionError("rate limiter should not run when target is invalid")
+
+    execute_auto_scan(
+        deps={
+            "auto_scan_config": dict(DEFAULT_AUTO_SCAN_CONFIG),
+            "current_customer": {"name": "Acme Customer"},
+            "get_last_scan_target": lambda: "not-a-target",
+            "logger": logging.getLogger(__name__),
+            "network_key": {"cidr": ""},
+            "rate_limiter": RateLimiterStub(),
+            "safe_emit": lambda event, data=None: emitted.append((event, data)),
+            "save_auto_scan_config": lambda config: None,
+            "validate_target": lambda target: (False, "Invalid target"),
+        }
+    )
+
+    assert emitted == [("auto_scan_error", {"error": "Invalid target"})]

@@ -28,6 +28,7 @@ from nmapui.auto_scan import (
     should_run_auto_scan,
     validate_auto_scan_config_update,
 )
+from nmapui.auto_scan_runtime import execute_auto_scan as execute_auto_scan_impl
 from nmapui.events import (
     emit_job_status as nmapui_emit_job_status,
     emit_to_client as nmapui_emit_to_client,
@@ -604,53 +605,19 @@ def merge_nmap_xml_files(xml_files, output_path):
 
 
 def execute_auto_scan():
-    """Execute automatic scan using current target"""
-    # Use the last scan target or current network
-    target = last_scan_target or network_key.get("cidr", "192.168.1.0/24")
-
-    if not target:
-        logger.warning("No target available for auto scan")
-        safe_emit("auto_scan_error", {"error": "No target configured"})
-        return
-
-    # Validate target before scanning
-    is_valid, error_msg = validate_target(target)
-    if not is_valid:
-        logger.error(f"Auto scan validation failed: {error_msg}")
-        safe_emit("auto_scan_error", {"error": error_msg})
-        return
-
-    # Check rate limit (auto-scan uses a fixed sentinel sid)
-    _AUTO_SCAN_SID = "__auto_scan__"
-    can_scan, rate_msg = rate_limiter.can_scan(_AUTO_SCAN_SID)
-    if not can_scan:
-        logger.warning(f"Auto scan rate limited: {rate_msg}")
-        safe_emit("auto_scan_error", {"error": rate_msg})
-        return
-
-    customer_name = current_customer.get("name", "Unknown").split(" (")[
-        0
-    ]  # Remove confidence
-
-    logger.info(f"Executing auto scan for target: {target}, customer: {customer_name}")
-
-    try:
-        # Record this scan
-        rate_limiter.record_scan(_AUTO_SCAN_SID)
-
-        safe_emit(
-            "trigger_generate_report",
-            {"target": target, "customer_name": customer_name, "auto_scan": True},
-        )
-
-        auto_scan_config["last_run"] = datetime.now().isoformat()
-        save_auto_scan_config(auto_scan_config)
-
-        logger.info(f"Auto scan executed for target: {target}")
-
-    except Exception as e:
-        logger.error(f"Auto scan failed: {e}")
-        safe_emit("auto_scan_error", {"error": str(e)})
+    return execute_auto_scan_impl(
+        deps={
+            "auto_scan_config": auto_scan_config,
+            "current_customer": current_customer,
+            "get_last_scan_target": lambda: last_scan_target,
+            "logger": logger,
+            "network_key": network_key,
+            "rate_limiter": rate_limiter,
+            "safe_emit": safe_emit,
+            "save_auto_scan_config": save_auto_scan_config,
+            "validate_target": validate_target,
+        }
+    )
 
 
 # Load auto scan config on startup

@@ -213,6 +213,13 @@ def test_app_delegates_scanning_helpers_to_shared_module():
     assert "return run_nmap_with_xml_output_impl(" in app_source
 
 
+def test_app_delegates_auto_scan_execution_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.auto_scan_runtime import execute_auto_scan as execute_auto_scan_impl" in app_source
+    assert "return execute_auto_scan_impl(" in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],
