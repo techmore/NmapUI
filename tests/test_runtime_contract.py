@@ -274,3 +274,16 @@ def test_template_does_not_include_dead_new_sites_prototype_script():
         ".compact-card",
     ):
         assert dead_selector not in template
+
+
+def test_template_loads_external_table_sorter_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    sorter_module = (ROOT / "static" / "js" / "table_sorter.js").read_text()
+
+    assert '<script src="/static/js/table_sorter.js"></script>' in template
+    assert "class TableSorter" not in template
+    assert "window.TableSorter = TableSorter;" in sorter_module
