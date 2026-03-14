@@ -619,6 +619,7 @@ register_scan_job_handlers(
         ),
         "start_scan_task": start_scan_task,
         "generate_report_task": generate_report_task,
+        "generate_pdf_from_saved_task": generate_pdf_from_saved_task,
         "broadcaster": broadcaster,
     },
 )
@@ -778,17 +779,6 @@ def generate_pdf_from_saved_task(sid, data):
         sid,
         data,
     )
-
-
-@socketio.on("generate_pdf_from_saved")
-@require_socket_auth()
-def generate_pdf_from_saved_event(data):
-    """Handle PDF-only generation from the latest saved scan."""
-    if not isinstance(data, dict):
-        emit("report_error", {"error": "Invalid PDF request"})
-        return
-
-    socketio.start_background_task(generate_pdf_from_saved_task, request.sid, data)
 
 
 def startup_checks(quick=False):

@@ -194,6 +194,7 @@ def test_app_delegates_scan_job_handlers_to_shared_module():
     assert "register_scan_job_handlers(" in app_source
     assert '@socketio.on("start_scan")' not in app_source
     assert '@socketio.on("generate_report")' not in app_source
+    assert '@socketio.on("generate_pdf_from_saved")' not in app_source
 
 
 def test_app_delegates_connection_handlers_to_shared_module():

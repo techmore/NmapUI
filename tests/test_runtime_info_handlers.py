@@ -103,6 +103,7 @@ def test_start_scan_persists_last_target_with_keyword_state_setter(monkeypatch):
             "set_last_scan_target_state": lambda *, value, sid=None: observed.setdefault("last_target", (sid, value)),
             "start_scan_task": lambda sid, target: None,
             "generate_report_task": lambda sid, data: None,
+            "generate_pdf_from_saved_task": lambda sid, data: None,
         }
     )
 
@@ -145,6 +146,7 @@ def test_start_scan_uses_sid_scoped_rate_limit_and_broadcaster(monkeypatch):
             "set_last_scan_target_state": lambda *, value, sid=None: observed.setdefault("last_target", (sid, value)),
             "start_scan_task": lambda sid, target: None,
             "generate_report_task": lambda sid, data: None,
+            "generate_pdf_from_saved_task": lambda sid, data: None,
             "broadcaster": BroadcasterStub(),
         }
     )
@@ -182,6 +184,35 @@ def test_runtime_info_handlers_reject_unauthenticated_socket_events(monkeypatch)
         for event in received
     )
     assert not any(event["name"] == "network_key" for event in received)
+
+
+def test_generate_pdf_from_saved_rejects_invalid_payload(monkeypatch):
+    configure_auth(monkeypatch)
+    observed = {}
+
+    app, socketio = build_scan_jobs_app(
+        {
+            "validate_target": lambda target: (True, None),
+            "rate_limiter": type("RateLimiterStub", (), {"can_scan": lambda self: (True, None), "record_scan": lambda self: None})(),
+            "job_registry": type("JobRegistryStub", (), {"start": lambda self, sid, job_type, details: True})(),
+            "emit_job_status": lambda sid, job_type: observed.setdefault("job_status", []).append((sid, job_type)),
+            "set_last_scan_target_state": lambda *, value, sid=None: None,
+            "start_scan_task": lambda sid, target: None,
+            "generate_report_task": lambda sid, data: None,
+            "generate_pdf_from_saved_task": lambda sid, data: observed.setdefault("pdf_calls", []).append((sid, data)),
+        }
+    )
+
+    client = socketio.test_client(app, headers=basic_auth_header())
+    client.emit("generate_pdf_from_saved", "invalid")
+    received = client.get_received()
+
+    assert any(
+        event["name"] == "report_error"
+        and event["args"] == [{"error": "Invalid PDF request"}]
+        for event in received
+    )
+    assert "pdf_calls" not in observed
 
 
 def test_connect_replays_active_scan_events_to_new_tab():

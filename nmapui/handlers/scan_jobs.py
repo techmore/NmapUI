@@ -13,6 +13,7 @@ def register_scan_job_handlers(socketio, deps):
     set_last_scan_target_state = deps["set_last_scan_target_state"]
     start_scan_task = deps["start_scan_task"]
     generate_report_task = deps["generate_report_task"]
+    generate_pdf_from_saved_task = deps.get("generate_pdf_from_saved_task")
 
     @socketio.on("start_scan")
     @require_socket_auth()
@@ -68,3 +69,13 @@ def register_scan_job_handlers(socketio, deps):
 
         emit_job_status(request.sid, "report")
         socketio.start_background_task(generate_report_task, request.sid, data)
+
+    if generate_pdf_from_saved_task is not None:
+        @socketio.on("generate_pdf_from_saved")
+        @require_socket_auth()
+        def generate_pdf_from_saved_event(data):
+            if not isinstance(data, dict):
+                emit("report_error", {"error": "Invalid PDF request"})
+                return
+
+            socketio.start_background_task(generate_pdf_from_saved_task, request.sid, data)
