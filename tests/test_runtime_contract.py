@@ -207,9 +207,10 @@ def test_template_uses_dom_helpers_for_update_and_route_rendering():
         cwd=ROOT,
         text=True,
     )
+    update_module = (ROOT / "static" / "js" / "update_modal.js").read_text()
 
-    assert "function setUpdateReleaseNotes(data)" in template
-    assert "function appendUpdateLogLine(message, isError = false)" in template
+    assert "function setUpdateReleaseNotes(data)" in update_module
+    assert "function appendUpdateLogLine(message, isError = false)" in update_module
     assert "function renderRoutePath(data)" in template
     assert "notesDiv.innerHTML =" not in template
     assert "log.innerHTML +=" not in template
@@ -302,3 +303,19 @@ def test_template_loads_external_history_modal_module():
     assert "function showHistoryModal()" not in template
     assert "window.loadScanHistory = loadScanHistory;" in history_module
     assert "window.showHistoryModal = showHistoryModal;" in history_module
+
+
+def test_template_loads_external_update_modal_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    update_module = (ROOT / "static" / "js" / "update_modal.js").read_text()
+
+    assert '<script src="/static/js/update_modal.js"></script>' in template
+    assert "function setUpdateReleaseNotes(data)" not in template
+    assert "function startAppUpdate()" not in template
+    assert "initializeUpdateModal(socket);" in template
+    assert "window.showUpdateModal = showUpdateModal;" in update_module
+    assert "window.startAppUpdate = () => {" in update_module
