@@ -282,8 +282,14 @@ def generate_report_task(context, sid, data):
     stylesheet = context["stylesheet"]
     get_app_version = context["get_app_version"]
     save_scan_metadata = context["save_scan_metadata"]
-    network_key = context["network_key"]
-    current_customer = context["current_customer"]
+    get_client_state = context.get("get_client_state")
+    if get_client_state is not None:
+        client_state = get_client_state(sid)
+        network_key = client_state["network_key"]
+        current_customer = client_state["current_customer"]
+    else:
+        network_key = context["network_key"]
+        current_customer = context["current_customer"]
     extract_scan_statistics = context["extract_scan_statistics"]
     customer_fingerprinter = context["customer_fingerprinter"]
 
