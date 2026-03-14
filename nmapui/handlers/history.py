@@ -2,6 +2,7 @@ from datetime import datetime
 
 from flask import request
 from flask_socketio import emit
+from nmapui.auth import require_socket_auth
 
 
 def register_history_handlers(socketio, deps):
@@ -20,6 +21,7 @@ def register_history_handlers(socketio, deps):
     logger = deps["logger"]
 
     @socketio.on("check_resumable_scan")
+    @require_socket_auth()
     def check_resumable_scan_event(data):
         customer_id = data.get("customer_id")
         max_days = data.get("max_days", 7)
@@ -60,6 +62,7 @@ def register_history_handlers(socketio, deps):
             emit("resumable_scan_check", {"available": False})
 
     @socketio.on("resume_from_last_scan")
+    @require_socket_auth()
     def resume_from_last_scan_event(data):
         customer_id = data.get("customer_id")
         max_days = data.get("max_days", 7)
@@ -124,15 +127,18 @@ def register_history_handlers(socketio, deps):
         )
 
     @socketio.on("get_versions")
+    @require_socket_auth()
     def get_versions_event():
         emit("versions", get_versions())
 
     @socketio.on("get_job_status")
+    @require_socket_auth()
     def get_job_status_event():
         emit_job_status(request.sid, "scan")
         emit_job_status(request.sid, "report")
 
     @socketio.on("cancel_job")
+    @require_socket_auth()
     def cancel_job_event(data):
         job_type = data.get("job_type") if isinstance(data, dict) else None
         if job_type not in {"scan", "report"}:

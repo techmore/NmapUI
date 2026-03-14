@@ -27,7 +27,7 @@ def default_credentials_allowed():
 
 
 def local_ui_trusted():
-    return os.environ.get("NMAPUI_TRUST_LOCAL_UI", "true").strip().lower() in {
+    return os.environ.get("NMAPUI_TRUST_LOCAL_UI", "false").strip().lower() in {
         "1",
         "true",
         "yes",

@@ -1,5 +1,6 @@
 from flask import request
 from flask_socketio import emit
+from nmapui.auth import require_socket_auth
 
 
 def register_runtime_info_handlers(socketio, deps):
@@ -13,10 +14,12 @@ def register_runtime_info_handlers(socketio, deps):
     run_traceroute = deps["run_traceroute"]
 
     @socketio.on("get_history_counts")
+    @require_socket_auth()
     def get_history_counts_event():
         emit("history_counts", get_report_counts())
 
     @socketio.on("get_network_key")
+    @require_socket_auth()
     def get_network_key_event():
         client_network_key = get_client_state(sid=request.sid)["network_key"]
         if client_network_key.get("total_hops", 0) == 0:
@@ -30,6 +33,7 @@ def register_runtime_info_handlers(socketio, deps):
         emit("network_key", client_network_key)
 
     @socketio.on("get_local_ip")
+    @require_socket_auth()
     def get_local_ip():
         try:
             interface = get_default_interface_cached()

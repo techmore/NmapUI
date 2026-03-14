@@ -889,6 +889,7 @@ def get_report_counts():
 
 
 @socketio.on("get_history_counts")
+@require_socket_auth()
 def get_history_counts_event():
     """Send report counts per customer to the client"""
     emit("history_counts", get_report_counts())
@@ -900,6 +901,7 @@ def index():
 
 
 @socketio.on("get_network_key")
+@require_socket_auth()
 def get_network_key_event():
     """Send the network key to the client"""
     # If network_key is empty (no hops), run traceroute to populate it
@@ -1050,6 +1052,7 @@ DEFAULT_INTERFACE = get_default_interface()
 
 
 @socketio.on("get_local_ip")
+@require_socket_auth()
 def get_local_ip():
     try:
         interface = DEFAULT_INTERFACE
@@ -1189,6 +1192,7 @@ def on_connect():
 
 
 @socketio.on("start_scan")
+@require_socket_auth()
 def start_scan(data):
     """Handle scan start request with validation."""
     # Extract target from data (handles both old format (target) and new format {target: ...})
@@ -1593,6 +1597,7 @@ def generate_pdf_from_saved_task(sid, data):
 
 
 @socketio.on("generate_report")
+@require_socket_auth()
 def generate_report_event(data):
     """Handle report generation request via SocketIO."""
     if not isinstance(data, dict):
@@ -1613,6 +1618,7 @@ def generate_report_event(data):
 
 
 @socketio.on("generate_pdf_from_saved")
+@require_socket_auth()
 def generate_pdf_from_saved_event(data):
     """Handle PDF-only generation from the latest saved scan."""
     if not isinstance(data, dict):

@@ -7,6 +7,20 @@ from nmapui.handlers.history import register_history_handlers
 from nmapui.jobs import ClientJobRegistry
 
 
+def basic_auth_header(username="scanner", password="secret-pass"):
+    import base64
+
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
+def configure_auth(monkeypatch, username="scanner", password="secret-pass"):
+    monkeypatch.setenv("NMAPUI_USERNAME", username)
+    monkeypatch.setenv("NMAPUI_PASSWORD", password)
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+
 def build_history_app(job_registry, release_client_state=None):
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
@@ -59,11 +73,13 @@ def get_socket_sid(client):
     raise AssertionError("whoami event did not return a socket session id")
 
 
-def test_cancel_job_is_scoped_to_requesting_client():
+def test_cancel_job_is_scoped_to_requesting_client(monkeypatch):
+    configure_auth(monkeypatch)
     registry = ClientJobRegistry()
     app, socketio = build_history_app(registry)
-    client_a = socketio.test_client(app)
-    client_b = socketio.test_client(app)
+    headers = basic_auth_header()
+    client_a = socketio.test_client(app, headers=headers)
+    client_b = socketio.test_client(app, headers=headers)
     sid_a = get_socket_sid(client_a)
     sid_b = get_socket_sid(client_b)
 
@@ -82,11 +98,13 @@ def test_cancel_job_is_scoped_to_requesting_client():
     assert client_b.get_received() == []
 
 
-def test_get_job_status_reports_only_the_current_client_jobs():
+def test_get_job_status_reports_only_the_current_client_jobs(monkeypatch):
+    configure_auth(monkeypatch)
     registry = ClientJobRegistry()
     app, socketio = build_history_app(registry)
-    client_a = socketio.test_client(app)
-    client_b = socketio.test_client(app)
+    headers = basic_auth_header()
+    client_a = socketio.test_client(app, headers=headers)
+    client_b = socketio.test_client(app, headers=headers)
     sid_a = get_socket_sid(client_a)
     sid_b = get_socket_sid(client_b)
 
@@ -110,11 +128,13 @@ def test_get_job_status_reports_only_the_current_client_jobs():
     ]
 
 
-def test_disconnect_marks_only_that_clients_running_jobs():
+def test_disconnect_marks_only_that_clients_running_jobs(monkeypatch):
+    configure_auth(monkeypatch)
     registry = ClientJobRegistry()
     app, socketio = build_history_app(registry)
-    client_a = socketio.test_client(app)
-    client_b = socketio.test_client(app)
+    headers = basic_auth_header()
+    client_a = socketio.test_client(app, headers=headers)
+    client_b = socketio.test_client(app, headers=headers)
     sid_a = get_socket_sid(client_a)
     sid_b = get_socket_sid(client_b)
 
@@ -132,16 +152,34 @@ def test_disconnect_marks_only_that_clients_running_jobs():
     assert registry.get(sid_b, "scan")["status"] == "running"
 
 
-def test_disconnect_releases_client_state_for_that_sid():
+def test_disconnect_releases_client_state_for_that_sid(monkeypatch):
+    configure_auth(monkeypatch)
     registry = ClientJobRegistry()
     released = []
     app, socketio = build_history_app(
         registry,
         release_client_state=lambda sid: released.append(sid),
     )
-    client = socketio.test_client(app)
+    client = socketio.test_client(app, headers=basic_auth_header())
     sid = get_socket_sid(client)
 
     client.disconnect()
 
     assert released == [sid]
+
+
+def test_history_handlers_reject_unauthenticated_socket_events(monkeypatch):
+    configure_auth(monkeypatch)
+    registry = ClientJobRegistry()
+    app, socketio = build_history_app(registry)
+    client = socketio.test_client(app)
+
+    client.emit("get_job_status")
+    received = client.get_received()
+
+    assert any(
+        event["name"] == "auth_error"
+        and event["args"] == [{"error": "Unauthorized"}]
+        for event in received
+    )
+    assert not any(event["name"] == "job_status" for event in received)
