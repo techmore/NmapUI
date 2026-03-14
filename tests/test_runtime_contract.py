@@ -232,3 +232,20 @@ def test_template_validates_external_links_and_avoids_report_card_innerhtml():
     assert "if (setSafeExternalLink(link, cve.url))" in template
     assert "if (setSafeExternalLink(link, vuln.url))" in template
     assert "reportCard.innerHTML =" not in template
+
+
+def test_template_does_not_include_dead_new_sites_prototype_script():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    for dead_selector in (
+        "2026 New Sites JavaScript Functionality",
+        "mobile-menu-btn",
+        "global-search",
+        "filter-pill",
+        ".compact-card",
+    ):
+        assert dead_selector not in template
