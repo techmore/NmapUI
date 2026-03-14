@@ -44,6 +44,7 @@ from nmapui.handlers.auto_scan import (
 )
 from nmapui.handlers.customers import register_customer_handlers
 from nmapui.handlers.history import register_history_handlers
+from nmapui.handlers.routes import register_core_routes
 from nmapui.handlers.runtime_info import register_runtime_info_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.health import build_liveness_payload, build_readiness_payload
@@ -883,11 +884,6 @@ def get_report_counts():
     return counts
 
 
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-
 def save_customers_config():
     try:
         customer_fingerprinter = get_customer_fingerprinter()
@@ -940,6 +936,18 @@ def merge_customer_metadata(customer_dict, saved_customer):
 
 def register_runtime_modules(app, socketio):
     """Register extracted route and Socket.IO modules on the active app stack."""
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": build_liveness_payload,
+            "build_readiness_payload": build_readiness_payload,
+            "get_app_version": get_app_version,
+            "get_auto_scan_thread": lambda: auto_scan_thread,
+            "get_default_interface_cached": get_default_interface_cached,
+            "get_versions": get_versions,
+            "startup_state": startup_state,
+        },
+    )
     register_auto_scan_handlers(
         app,
         socketio,
@@ -1506,39 +1514,6 @@ def startup_checks(quick=False):
 
     # Send initial auto scan status
     safe_emit("auto_scan_status", auto_scan_config)
-
-@app.route("/api/health")
-def health_check():
-    """Lightweight health endpoint for release smoke tests."""
-    return jsonify(
-        build_liveness_payload(
-            app_version=get_app_version(),
-            default_interface=get_default_interface_cached(),
-            auto_scan_thread_alive=bool(
-                auto_scan_thread and auto_scan_thread.is_alive()
-            ),
-            tool_versions=get_versions(),
-        )
-    )
-
-
-@app.route("/api/health/live")
-def health_live():
-    """Explicit liveness probe for packaging smoke tests."""
-    return health_check()
-
-
-@app.route("/api/health/ready")
-def health_ready():
-    """Readiness/diagnostics probe for operational checks."""
-    payload, status_code = build_readiness_payload(
-        startup_state=startup_state,
-        app_version=get_app_version(),
-        default_interface=get_default_interface_cached(),
-        auto_scan_thread_alive=bool(auto_scan_thread and auto_scan_thread.is_alive()),
-        tool_versions=get_versions(),
-    )
-    return jsonify(payload), status_code
 
 def start_auto_scan_thread():
     """Start the auto-scan worker once per process."""
