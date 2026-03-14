@@ -267,6 +267,25 @@ def test_app_uses_extracted_validation_helpers():
     assert "def sanitize_input(value: str)" in validation_source
 
 
+def test_app_uses_extracted_scan_execution_helpers():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    scanning_source = (ROOT / "nmapui" / "scanning.py").read_text()
+
+    assert "from nmapui.scanning import (" in app_source
+    assert "run_arp_scan as run_arp_scan_helper" in app_source
+    assert "run_nmap_with_xml_output as run_nmap_with_xml_output_helper" in app_source
+    assert 'def run_arp_scan(target, interface=None, sid=None):' in app_source
+    assert 'return run_arp_scan_helper(' in app_source
+    assert 'def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid=None):' in app_source
+    assert 'return run_nmap_with_xml_output_helper(' in app_source
+    assert "def run_arp_scan(" in scanning_source
+    assert "def run_nmap_with_xml_output(" in scanning_source
+
+
 def test_app_uses_extracted_tool_version_registry():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
