@@ -605,14 +605,61 @@
         <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
             <div>
                 <h2 class="text-3xl font-display italic text-olive-950">Logs</h2>
-                <p class="mt-1 text-sm text-olive-600">Open the live audit log drawer while the dedicated historical logs surface is being expanded.</p>
+                <p class="mt-1 text-sm text-olive-600">Inspect live scan, report, update, and runtime events with searchable filters and export.</p>
             </div>
-            <button onclick="toggleLogPanel()" class="action-button action-button-primary action-button-compact" aria-label="Open live audit log drawer">
-                Open Live Log
-            </button>
+            <div class="flex flex-wrap gap-2">
+                <button id="logs-export-btn" class="action-button action-button-secondary action-button-compact" aria-label="Export visible log entries">
+                    Export Visible Logs
+                </button>
+                <button id="logs-clear-btn" class="action-button action-button-secondary action-button-compact" aria-label="Clear captured log entries">
+                    Clear Logs
+                </button>
+                <button onclick="toggleLogPanel()" class="action-button action-button-primary action-button-compact" aria-label="Open live audit log drawer">
+                    Open Live Drawer
+                </button>
+            </div>
         </div>
-        <div class="mt-6 rounded-2xl border border-olive-200 bg-olive-50 p-5 text-sm text-olive-800">
-            The live log drawer remains available for real-time scan output and runtime errors. Historical log indexing is tracked separately and will be surfaced here as the logging work lands.
+        <div class="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div class="rounded-2xl border border-olive-200 bg-zinc-950 p-4 shadow-inner">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-widest text-olive-400">Runtime Log Stream</p>
+                        <p id="logs-tab-count" class="mt-1 text-xs text-zinc-400">0 visible entries</p>
+                    </div>
+                    <input
+                        type="search"
+                        id="logs-search-input"
+                        class="form-control form-control-sm w-full max-w-xs border-zinc-700 bg-zinc-900 text-zinc-100 placeholder-zinc-500"
+                        placeholder="Search target, message, level, or timestamp"
+                        aria-label="Search log entries"
+                    >
+                </div>
+                <div id="logs-tab-empty" class="mt-4 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">
+                    No log entries captured yet.
+                </div>
+                <div id="logs-tab-entries" class="mt-4 hidden max-h-[32rem] space-y-1 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs"></div>
+            </div>
+            <aside class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                <h3 class="text-xl font-display italic text-olive-900">Filters</h3>
+                <div class="mt-4 space-y-4">
+                    <div>
+                        <label for="logs-level-filter" class="block text-xs font-bold uppercase tracking-widest text-olive-600">Severity / Type</label>
+                        <select id="logs-level-filter" class="form-control form-control-md mt-2">
+                            <option value="all">All events</option>
+                            <option value="error">Errors</option>
+                            <option value="warn">Warnings</option>
+                            <option value="scan">Scan feedback</option>
+                            <option value="raw">Raw output</option>
+                            <option value="job">Job status</option>
+                            <option value="report">Reports</option>
+                            <option value="update">Updates</option>
+                        </select>
+                    </div>
+                    <div class="rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-700">
+                        Search matches timestamps, targets, messages, and event labels. Raw nmap output and runtime console errors are included in the same stream.
+                    </div>
+                </div>
+            </aside>
         </div>
     </section>
 
@@ -1299,6 +1346,9 @@
             }
             if (typeof initializeCustomerUI === 'function') {
                 initializeCustomerUI(socket);
+            }
+            if (typeof initializeAuditLog === 'function') {
+                initializeAuditLog();
             }
         });
 

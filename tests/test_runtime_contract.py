@@ -800,6 +800,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     auto_scan_module = (ROOT / "static" / "js" / "auto_scan_ui.js").read_text()
     scan_runtime_module = (ROOT / "static" / "js" / "scan_runtime.js").read_text()
     update_modal_module = (ROOT / "static" / "js" / "update_modal.js").read_text()
+    audit_log_module = (ROOT / "static" / "js" / "audit_log.js").read_text()
 
     assert "let getClientJobs = null;" not in report_generation_module
     assert "let reportGetClientJobs =" in report_generation_module
@@ -832,6 +833,13 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module
     assert "const saveHostsToStorage = window.saveHostsToStorage || (() => {});" in scan_runtime_module
     assert "window.showHistoryModal()" in (ROOT / "static" / "js" / "layout_runtime.js").read_text()
+    assert "const logEntries = [];" in audit_log_module
+    assert "function renderLogsTab()" in audit_log_module
+    assert "function initializeLogsTab()" in audit_log_module
+    assert "socket.on('job_status', function (data) {" in audit_log_module
+    assert "socket.on('report_complete', function (data) {" in audit_log_module
+    assert "socket.on('update_status', function (data) {" in audit_log_module
+    assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module
 
 
 def test_template_does_not_keep_inline_report_generation_block():
@@ -856,7 +864,13 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="reports-tab-panel"' in template
     assert 'id="logs-tab-panel"' in template
     assert 'id="settings-tab-panel"' in template
+    assert 'id="logs-search-input"' in template
+    assert 'id="logs-level-filter"' in template
+    assert 'id="logs-tab-entries"' in template
+    assert 'id="logs-export-btn"' in template
+    assert 'id="logs-clear-btn"' in template
     assert '<script src="/static/js/reports_tab.js"></script>' in template
+    assert "initializeAuditLog();" in template
 
 
 def test_pdf_generation_prefers_browser_renderer_before_wkhtml():
