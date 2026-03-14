@@ -171,7 +171,12 @@ def test_app_delegates_client_state_wrappers_to_shared_module():
     assert "release_client_state as release_client_state_runtime" in app_source
     assert "return get_client_state_runtime(" in app_source
     assert "return get_current_customer_state_runtime(" in app_source
+    assert "if sid is not None:" not in app_source
+    assert "sync_default_state=lambda customer:" in app_source
+    assert "sync_default_state=lambda key:" in app_source
+    assert "sync_default_state=lambda target:" in app_source
     assert "client_state_registry.release(sid)" in app_client_state_runtime_source
+    assert "if sid is not None and sync_default_state is not None:" in app_client_state_runtime_source
 
 
 def test_app_delegates_event_and_job_wrappers_to_shared_module():

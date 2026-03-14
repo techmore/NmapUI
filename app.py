@@ -228,42 +228,42 @@ def get_current_customer_state(sid=None):
 
 
 def set_current_customer_state(value, sid=None):
-    result = set_current_customer_state_runtime(
+    return set_current_customer_state_runtime(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_customer=lambda customer: globals().__setitem__("current_customer", customer),
+        sync_default_state=lambda customer: (
+            globals().__setitem__("current_customer", customer),
+            client_state_registry.set_default_customer(customer),
+        ),
     )
-    if sid is not None:
-        globals()["current_customer"] = value
-        client_state_registry.set_default_customer(value)
-    return result
 
 
 def set_network_key_state(value, sid=None):
-    result = set_network_key_state_runtime(
+    return set_network_key_state_runtime(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_network_key=lambda key: globals().__setitem__("network_key", key),
+        sync_default_state=lambda key: (
+            globals().__setitem__("network_key", key),
+            client_state_registry.set_default_network_key(key),
+        ),
     )
-    if sid is not None:
-        globals()["network_key"] = value
-        client_state_registry.set_default_network_key(value)
-    return result
 
 
 def set_last_scan_target_state(value, sid=None):
-    result = set_last_scan_target_state_runtime(
+    return set_last_scan_target_state_runtime(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_last_scan_target=lambda target: globals().__setitem__("last_scan_target", target),
+        sync_default_state=lambda target: (
+            globals().__setitem__("last_scan_target", target),
+            client_state_registry.set_default_last_scan_target(target),
+        ),
     )
-    if sid is not None:
-        globals()["last_scan_target"] = value
-        client_state_registry.set_default_last_scan_target(value)
-    return result
 
 
 def release_client_state(sid):

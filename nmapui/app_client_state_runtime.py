@@ -34,13 +34,17 @@ def set_current_customer_state(
     sid=None,
     client_state_registry,
     set_default_customer,
+    sync_default_state=None,
 ):
-    return set_current_customer_state_impl(
+    result = set_current_customer_state_impl(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_customer=set_default_customer,
     )
+    if sid is not None and sync_default_state is not None:
+        sync_default_state(value)
+    return result
 
 
 def set_network_key_state(
@@ -49,13 +53,17 @@ def set_network_key_state(
     sid=None,
     client_state_registry,
     set_default_network_key,
+    sync_default_state=None,
 ):
-    return set_network_key_state_impl(
+    result = set_network_key_state_impl(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_network_key=set_default_network_key,
     )
+    if sid is not None and sync_default_state is not None:
+        sync_default_state(value)
+    return result
 
 
 def set_last_scan_target_state(
@@ -64,13 +72,17 @@ def set_last_scan_target_state(
     sid=None,
     client_state_registry,
     set_default_last_scan_target,
+    sync_default_state=None,
 ):
-    return set_last_scan_target_state_impl(
+    result = set_last_scan_target_state_impl(
         value=value,
         sid=sid,
         client_state_registry=client_state_registry,
         set_default_last_scan_target=set_default_last_scan_target,
     )
+    if sid is not None and sync_default_state is not None:
+        sync_default_state(value)
+    return result
 
 
 def release_client_state(*, sid, client_state_registry):
