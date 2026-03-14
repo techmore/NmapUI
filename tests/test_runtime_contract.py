@@ -194,10 +194,12 @@ def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
         text=True,
     )
     scan_runtime_module = (ROOT / "static" / "js" / "scan_runtime.js").read_text()
+    discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
 
-    assert template.count("socket.on('scan_results'") == 1
-    assert template.count("socket.on('deep_scan_results'") == 1
-    assert template.count("socket.on('arp_results'") == 1
+    assert template.count("initializeDiscoveryUI(socket);") == 1
+    assert "socket.on('scan_results'" in discovery_module
+    assert "socket.on('deep_scan_results'" in discovery_module
+    assert "socket.on('arp_results'" in discovery_module
     assert "function normalizeFeedbackMessage(msg)" in scan_runtime_module
     assert "const message = normalizeFeedbackMessage(msg);" in scan_runtime_module
 
@@ -209,10 +211,11 @@ def test_template_uses_dom_helpers_for_update_and_route_rendering():
         text=True,
     )
     update_module = (ROOT / "static" / "js" / "update_modal.js").read_text()
+    discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
 
     assert "function setUpdateReleaseNotes(data)" in update_module
     assert "function appendUpdateLogLine(message, isError = false)" in update_module
-    assert "function renderRoutePath(data)" in template
+    assert "function renderRoutePath(data)" in discovery_module
     assert "notesDiv.innerHTML =" not in template
     assert "log.innerHTML +=" not in template
 
@@ -223,10 +226,11 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
         cwd=ROOT,
         text=True,
     )
+    discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
 
-    assert "function renderCveArrayCell(cell, cveArray)" in template
-    assert "function appendServiceInfoLine(cell, line)" in template
-    assert "function renderDelimitedCell(cell, items, options = {})" in template
+    assert "function renderCveArrayCell(cell, cveArray)" in discovery_module
+    assert "function appendServiceInfoLine(cell, line)" in discovery_module
+    assert "function renderDelimitedCell(cell, items, options = {})" in discovery_module
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template
@@ -478,3 +482,22 @@ def test_template_loads_external_scan_runtime_module():
     assert "socket.on('job_status'" not in template
     assert "initializeScanRuntime(socket);" in template
     assert "window.initializeScanRuntime = initializeScanRuntime;" in scan_runtime_module
+
+
+def test_template_loads_external_discovery_ui_module():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+    discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
+
+    assert '<script src="/static/js/discovery_ui.js"></script>' in template
+    assert "function setSafeExternalLink(link, rawUrl)" not in template
+    assert "function renderDelimitedCell(cell, items, options = {})" not in template
+    assert "function populateTableWithResults(data)" not in template
+    assert "socket.on('network_key'" not in template
+    assert "socket.on('scan_results'" not in template
+    assert "socket.on('report_complete'" not in template
+    assert "initializeDiscoveryUI(socket);" in template
+    assert "window.initializeDiscoveryUI = initializeDiscoveryUI;" in discovery_module
