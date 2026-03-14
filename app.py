@@ -556,15 +556,7 @@ def load_current_assignment():
     )
 
 
-def get_default_interface():
-    return get_default_interface_impl(ni, logger)
-
-
-DEFAULT_INTERFACE = get_default_interface()
-
-
-def calculate_cidr(ip, subnet_mask):
-    return calculate_cidr_impl(ip, subnet_mask)
+DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)
 
 
 def _traceroute_deps():
@@ -587,7 +579,7 @@ def _traceroute_deps():
 register_runtime_info_handlers(
     socketio,
     {
-        "calculate_cidr": calculate_cidr,
+        "calculate_cidr": calculate_cidr_impl,
         "get_client_state": get_client_state,
         "get_default_interface_cached": lambda: DEFAULT_INTERFACE,
         "get_report_counts": get_report_counts,

@@ -182,8 +182,8 @@ def test_app_delegates_networking_helpers_to_shared_module():
     assert "from nmapui.networking import (" in app_source
     assert "calculate_cidr as calculate_cidr_impl" in app_source
     assert "get_default_interface as get_default_interface_impl" in app_source
-    assert "return get_default_interface_impl(ni, logger)" in app_source
-    assert "return calculate_cidr_impl(ip, subnet_mask)" in app_source
+    assert "DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)" in app_source
+    assert '"calculate_cidr": calculate_cidr_impl' in app_source
     assert "return identify_gateway_firewall_targets_for_key(hosts, network_key)" in app_source
 
 
