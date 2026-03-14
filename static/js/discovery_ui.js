@@ -355,6 +355,7 @@ function initializeDiscoveryUI(socket) {
         } else {
             showReportStatus(formatReportCompleteMessage(data), 'success');
         }
+        window.dispatchEvent(new CustomEvent('report-complete-refresh'));
         document.getElementById('generate-report-btn').classList.remove('card-pulsing');
         stopReportTimer();
         socket.emit('get_history_counts');

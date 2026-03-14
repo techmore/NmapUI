@@ -455,6 +455,17 @@
         </div>
     </div>
 
+    <div class="mb-6 flex items-center gap-2 rounded-2xl border border-olive-200 bg-white/80 p-2 shadow-sm backdrop-blur">
+        <button id="tab-dashboard-btn" class="action-button action-button-primary" aria-label="Show dashboard tab">
+            Dashboard
+        </button>
+        <button id="tab-reports-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show reports tab">
+            Reports
+        </button>
+    </div>
+
+    <div id="dashboard-tab-panel">
+
     <!-- Auto-Update Banner -->
     <div id="auto-update-banner" class="hidden fixed top-16 left-4 right-4 z-50 bg-gradient-to-r from-olive-600 to-olive-700 text-white p-4 rounded-lg shadow-lg border border-olive-500 max-w-2xl mx-auto">
         <div class="flex items-center justify-between">
@@ -550,6 +561,20 @@
             </div>
         </div>
     </div>
+
+    <section id="reports-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">Reports</h2>
+                <p class="mt-1 text-sm text-olive-600">Open completed scan reports without relying on transient status messages.</p>
+            </div>
+            <button id="refresh-reports-btn" class="action-button action-button-primary action-button-compact" aria-label="Refresh available reports">
+                Refresh Reports
+            </button>
+        </div>
+        <div id="reports-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div id="reports-tab-list" class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    </section>
 
     <div id="add-customer-form" class="hidden modal-overlay z-50">
         <div class="modal-panel max-w-2xl p-6">
@@ -1416,6 +1441,9 @@
             }
             if (typeof initializeLayoutRuntime === 'function') {
                 initializeLayoutRuntime();
+            }
+            if (typeof initializeReportsTab === 'function') {
+                initializeReportsTab();
             }
             if (typeof initializeAutoScanUI === 'function') {
                 initializeAutoScanUI(socket, {
@@ -2321,6 +2349,7 @@
     <script src="/static/js/update_modal.js"></script>
     <script src="/static/js/asset_details_modal.js"></script>
     <script src="/static/js/layout_runtime.js"></script>
+    <script src="/static/js/reports_tab.js"></script>
     <script src="/static/js/auto_scan_ui.js"></script>
     <script src="/static/js/customer_ui.js"></script>
     <script src="/static/js/report_generation_ui.js"></script>
