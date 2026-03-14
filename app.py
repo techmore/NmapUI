@@ -24,6 +24,10 @@ from nmapui.app_runtime import (
     start_auto_scan_thread as start_auto_scan_thread_runtime,
     startup_checks as startup_checks_runtime,
 )
+from nmapui.app_runtime_bindings import (
+    build_state_bindings,
+    build_traceroute_bindings,
+)
 from nmapui.app_bindings import build_client_state_helpers, build_event_helpers
 from nmapui.app_events_runtime import (
     safe_emit as safe_emit_runtime,
@@ -41,12 +45,6 @@ from nmapui.app_composition import (
     build_startup_check_deps,
 )
 from nmapui.app_handler_registration import register_app_handlers
-from nmapui.app_state_runtime import (
-    get_report_counts as get_report_counts_runtime,
-    load_current_assignment as load_current_assignment_runtime,
-    save_current_assignment as save_current_assignment_runtime,
-    save_customers_config as save_customers_config_runtime,
-)
 from nmapui.health import build_liveness_payload, build_readiness_payload
 from nmapui.idle_state import IdleStateManager
 from nmapui.jobs import (
@@ -108,10 +106,7 @@ from nmapui.scanning import (
     split_subnet_into_chunks,
 )
 from nmapui.settings import load_settings_state, save_settings_state
-from nmapui.traceroute_runtime import (
-    build_traceroute_deps,
-    run_traceroute as run_traceroute_runtime,
-)
+from nmapui.traceroute_runtime import run_traceroute as run_traceroute_runtime
 from nmapui.validation import validate_target
 from persistence import (
     load_json_document,
@@ -219,70 +214,48 @@ load_auto_scan_config(auto_scan_config)
 # Global version information — populated by startup_checks().
 tool_versions = runtime_services["tool_versions"]
 startup_state = runtime_services["startup_state"]
-
-
-def run_traceroute(target="1.1.1.1"):
-    return run_traceroute_runtime(target=target, deps=_traceroute_deps())
-
-
-def get_report_counts():
-    return get_report_counts_runtime(
-        scans_dir=SCANS_DIR,
-        load_json_document=load_json_document,
-        normalize_scan_metadata_document=normalize_scan_metadata_document,
-    )
-
-
-def save_customers_config():
-    save_customers_config_runtime(
-        get_customer_fingerprinter=lambda: customer_fingerprinter,
-        save_yaml_document=save_yaml_document,
-        logger=logger,
-    )
-
-
-def save_current_assignment(sid=None):
-    save_current_assignment_runtime(
-        current_assignment_file=CURRENT_ASSIGNMENT_FILE,
-        get_current_customer_state=get_current_customer_state,
-        save_json_document=save_json_document,
-        logger=logger,
-        sid=sid,
-    )
+state_bindings = build_state_bindings(
+    current_assignment_file=CURRENT_ASSIGNMENT_FILE,
+    current_customer=current_customer,
+    scans_dir=SCANS_DIR,
+    normalize_current_assignment_document=normalize_current_assignment_document,
+    normalize_scan_metadata_document=normalize_scan_metadata_document,
+    load_json_document=load_json_document,
+    save_json_document=save_json_document,
+    save_yaml_document=save_yaml_document,
+    get_customer_fingerprinter=lambda: customer_fingerprinter,
+    merge_customer_metadata=merge_customer_metadata,
+    client_state_registry=client_state_registry,
+    get_current_customer_state=get_current_customer_state,
+    logger=logger,
+)
+get_report_counts = state_bindings["get_report_counts"]
+save_customers_config = state_bindings["save_customers_config"]
+save_current_assignment = state_bindings["save_current_assignment"]
 
 
 def load_current_assignment():
     global current_customer
-    current_customer = load_current_assignment_runtime(
-        current_assignment_file=CURRENT_ASSIGNMENT_FILE,
-        current_customer=current_customer,
-        normalize_current_assignment_document=normalize_current_assignment_document,
-        load_json_document=load_json_document,
-        get_customer_fingerprinter=lambda: customer_fingerprinter,
-        merge_customer_metadata=merge_customer_metadata,
-        client_state_registry=client_state_registry,
-        logger=logger,
-    )
+    current_customer = state_bindings["load_current_assignment"]()
 
 
 DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)
 
-
-def _traceroute_deps():
-    return build_traceroute_deps(
-        emit_to_client=emit_to_client,
-        safe_emit=safe_emit,
-        get_client_state=get_client_state,
-        socketio_sleep=socketio.sleep,
-        logger=logger,
-        is_private_ip=is_private_ip,
-        requests=requests,
-        set_network_key_state=set_network_key_state,
-        get_customer_fingerprinter=lambda: customer_fingerprinter,
-        merge_customer_metadata=merge_customer_metadata,
-        set_current_customer_state=set_current_customer_state,
-        get_current_customer_state=get_current_customer_state,
-    )
+traceroute_bindings = build_traceroute_bindings(
+    emit_to_client=emit_to_client,
+    safe_emit=safe_emit,
+    get_client_state=get_client_state,
+    socketio_sleep=socketio.sleep,
+    logger=logger,
+    is_private_ip=is_private_ip,
+    requests=requests,
+    set_network_key_state=set_network_key_state,
+    get_customer_fingerprinter=lambda: customer_fingerprinter,
+    merge_customer_metadata=merge_customer_metadata,
+    set_current_customer_state=set_current_customer_state,
+    get_current_customer_state=get_current_customer_state,
+)
+run_traceroute = traceroute_bindings["run_traceroute"]
 
 
 register_app_handlers(
@@ -336,7 +309,7 @@ register_app_handlers(
     run_traceroute=lambda target, sid=None: run_traceroute_runtime(
         target=target,
         sid=sid,
-        deps=_traceroute_deps(),
+        deps=traceroute_bindings["traceroute_deps"](),
     ),
     validate_target=validate_target,
     start_scan_task=lambda sid, target: start_scan_task(sid, target),
