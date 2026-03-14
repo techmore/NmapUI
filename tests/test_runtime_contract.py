@@ -441,8 +441,7 @@ def test_app_runtime_uses_bootstrap_origin_and_server_policy():
     assert 'allowed_origins = get_allowed_origins()' in app_source
     assert 'SocketIO(app, cors_allowed_origins=allowed_origins)' in app_source
     assert 'CORS(app, resources={r"/api/*": {"origins": allowed_origins}})' in app_source
-    assert "runtime_options = build_runtime_options(argv or sys.argv)" in app_source
-    assert "run_socketio_server(socketio, app, runtime_options)" in app_source
+    assert "run_server_runtime(" in app_source
     assert 'cors_allowed_origins="*"' not in app_source
 
 
@@ -525,6 +524,8 @@ def test_app_delegates_startup_checks_to_shared_module():
 
     assert "from nmapui.startup import create_startup_state" in app_source
     assert "from nmapui.app_runtime import (" in app_source
+    assert "configure_root_logging as configure_root_logging_runtime" in app_source
+    assert "run_server as run_server_runtime" in app_source
     assert "startup_checks as startup_checks_runtime" in app_source
     assert "start_auto_scan_thread as start_auto_scan_thread_runtime" in app_source
     assert "execute_auto_scan as execute_auto_scan_runtime" in app_source
@@ -533,7 +534,12 @@ def test_app_delegates_startup_checks_to_shared_module():
     assert "runtime_services = create_runtime_services(" in app_source
     assert 'tool_versions = runtime_services["tool_versions"]' in app_source
     assert 'startup_state = runtime_services["startup_state"]' in app_source
+    assert "configure_root_logging_runtime(base_dir=BASE_DIR)" in app_source
     assert "startup_checks_runtime(" in app_source
+    assert "def configure_root_logging(*, base_dir):" in app_runtime_source
+    assert "def run_server(" in app_runtime_source
+    assert "runtime_options = build_runtime_options(argv or sys_module.argv)" in app_runtime_source
+    assert "run_socketio_server(socketio, app, runtime_options)" in app_runtime_source
     assert "run_startup_checks(deps, quick=quick)" in app_runtime_source
     assert "handler_start_auto_scan_thread(" in app_runtime_source
     assert "execute_auto_scan_impl(deps=deps)" in app_runtime_source
@@ -770,6 +776,17 @@ def test_app_uses_shared_handler_registration_builders():
     assert "register_customer_handlers(" not in app_source
     assert "register_runtime_info_handlers(" not in app_source
     assert "register_scan_job_handlers(" not in app_source
+
+
+def test_app_delegates_root_logging_setup_to_shared_runtime_module():
+    app_source = (ROOT / "app.py").read_text()
+    app_runtime_source = (ROOT / "nmapui" / "app_runtime.py").read_text()
+
+    assert "configure_root_logging_runtime(base_dir=BASE_DIR)" in app_source
+    assert "RotatingFileHandler" not in app_source
+    assert "_root_logger = logging.getLogger()" not in app_source
+    assert "RotatingFileHandler" in app_runtime_source
+    assert "root_logger._nmapui_configured = True" in app_runtime_source
 
 
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():

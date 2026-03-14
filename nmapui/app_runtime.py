@@ -1,3 +1,6 @@
+import logging
+from logging.handlers import RotatingFileHandler
+
 from nmapui.auto_scan_runtime import execute_auto_scan as execute_auto_scan_impl
 from nmapui.handlers.auto_scan import start_auto_scan_thread as handler_start_auto_scan_thread
 from nmapui.startup_checks import run_startup_checks
@@ -34,3 +37,52 @@ def start_auto_scan_thread(
         logger=logger,
     )
     return thread_ref["thread"]
+
+
+def configure_root_logging(*, base_dir):
+    root_logger = logging.getLogger()
+    if getattr(root_logger, "_nmapui_configured", False):
+        return
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    root_logger.setLevel(logging.INFO)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    log_dir = base_dir / "logs"
+    log_dir.mkdir(exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_dir / "nmapui.log",
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+    root_logger._nmapui_configured = True
+
+
+def run_server(
+    *,
+    argv=None,
+    build_runtime_options,
+    log_auth_posture,
+    startup_checks,
+    start_auto_scan_thread,
+    run_socketio_server,
+    socketio,
+    app,
+    sys_module,
+):
+    runtime_options = build_runtime_options(argv or sys_module.argv)
+    quick_mode = runtime_options["quick_mode"]
+
+    log_auth_posture()
+    startup_checks(quick=quick_mode)
+    start_auto_scan_thread()
+    run_socketio_server(socketio, app, runtime_options)

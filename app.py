@@ -18,7 +18,9 @@ from nmapui.auto_scan import (
     validate_auto_scan_config_update,
 )
 from nmapui.app_runtime import (
+    configure_root_logging as configure_root_logging_runtime,
     execute_auto_scan as execute_auto_scan_runtime,
+    run_server as run_server_runtime,
     start_auto_scan_thread as start_auto_scan_thread_runtime,
     startup_checks as startup_checks_runtime,
 )
@@ -120,31 +122,7 @@ from persistence import (
     sanitize_customer_dir_name,
 )
 
-from logging.handlers import RotatingFileHandler
-
-_log_fmt = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-_root_logger = logging.getLogger()
-_root_logger.setLevel(logging.INFO)
-
-# Console handler (existing behaviour)
-_console_handler = logging.StreamHandler()
-_console_handler.setFormatter(_log_fmt)
-_root_logger.addHandler(_console_handler)
-
-# Rotating file handler — 10 MB per file, keep 5 backups
-_log_dir = BASE_DIR / "logs"
-_log_dir.mkdir(exist_ok=True)
-_file_handler = RotatingFileHandler(
-    _log_dir / "nmapui.log",
-    maxBytes=10 * 1024 * 1024,
-    backupCount=5,
-    encoding="utf-8",
-)
-_file_handler.setFormatter(_log_fmt)
-_root_logger.addHandler(_file_handler)
+configure_root_logging_runtime(base_dir=BASE_DIR)
 
 logger = logging.getLogger(__name__)
 
@@ -543,13 +521,17 @@ def start_auto_scan_thread():
     )
 
 def run_server(argv=None):
-    runtime_options = build_runtime_options(argv or sys.argv)
-    quick_mode = runtime_options["quick_mode"]
-
-    log_auth_posture()
-    startup_checks(quick=quick_mode)
-    start_auto_scan_thread()
-    run_socketio_server(socketio, app, runtime_options)
+    run_server_runtime(
+        argv=argv,
+        build_runtime_options=build_runtime_options,
+        log_auth_posture=log_auth_posture,
+        startup_checks=startup_checks,
+        start_auto_scan_thread=start_auto_scan_thread,
+        run_socketio_server=run_socketio_server,
+        socketio=socketio,
+        app=app,
+        sys_module=sys,
+    )
 
 
 if __name__ == "__main__":
