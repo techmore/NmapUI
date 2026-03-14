@@ -5,7 +5,7 @@ from typing import Optional
 BASE_DIR = Path(__file__).resolve().parents[1]
 VULNERS_SCRIPT = BASE_DIR / "nmap-vulners" / "vulners.nse"
 XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"
-XSL_STYLESHEET_PDF = BASE_DIR / "nmap-modern.xsl"
+XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"
 SCANS_DIR = BASE_DIR / "data" / "scans"
 VERSION_FILE = BASE_DIR / "VERSION"
 CURRENT_ASSIGNMENT_FILE = BASE_DIR / "data" / "current_assignment.json"

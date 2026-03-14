@@ -26,6 +26,7 @@ a = Analysis(
         (str(project_root / 'config'), 'config'),
         (str(project_root / 'VERSION'), '.'),
         (str(project_root / 'nmap-modern.xsl'), '.'),
+        (str(project_root / 'nmap-pdf-olive-legacy.xsl'), '.'),
         # Include nmap-vulners script if present
         (str(project_root / 'nmap-vulners'), 'nmap-vulners'),
     ],

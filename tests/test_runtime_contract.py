@@ -42,6 +42,14 @@ def test_pyinstaller_spec_includes_runtime_assets():
     assert "config" in spec
     assert "VERSION" in spec
     assert "nmap-modern.xsl" in spec
+    assert "nmap-pdf-olive-legacy.xsl" in spec
+
+
+def test_runtime_uses_separate_web_and_pdf_stylesheets():
+    paths_source = (ROOT / "nmapui" / "paths.py").read_text()
+
+    assert 'XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"' in paths_source
+    assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
 
 
 def test_deploy_script_uses_portable_python_timeout_smoke_test():
@@ -150,6 +158,27 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "autoScanGetClientJobs = deps?.getClientJobs || window.getClientJobs || autoScanGetClientJobs;" in auto_scan_module
     assert "function initializeUpdateModal(socket, deps = {})" in update_modal_module
     assert "const showReportStatus =" in update_modal_module
+    assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
+    assert "socket.on('scan_results'" in report_generation_module
+
+
+def test_template_does_not_keep_inline_report_generation_block():
+    template = subprocess.check_output(
+        ["git", "show", ":templates/index.html"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "document.getElementById('generate-report-btn').addEventListener('click'" not in template
+    assert "function startReportTimer()" not in template
+    assert "function stopReportTimer()" not in template
+
+
+def test_pdf_generation_prefers_browser_renderer_before_wkhtml():
+    reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
+
+    assert 'feedback("Trying browser-quality PDF rendering with Playwright")' in reporting_source
+    assert reporting_source.index("from playwright.async_api import async_playwright") < reporting_source.index('wkhtml = shutil.which("wkhtmltopdf")')
 
 
 def test_template_uses_dom_helpers_for_scan_result_rendering():
