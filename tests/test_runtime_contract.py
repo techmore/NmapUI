@@ -100,6 +100,18 @@ def test_template_uses_shared_customer_ui_module():
     assert "window.assignCustomer = () => {" in customer_source
 
 
+def test_template_uses_shared_report_status_module():
+    html = (ROOT / "templates" / "index.html").read_text()
+    report_status_source = (ROOT / "static" / "js" / "report_status.js").read_text()
+
+    assert '<script src="/static/js/report_status.js"></script>' in html
+    assert "showReportStatus: window.showReportStatus" in html
+    assert "function removeReportProgressCard()" not in html
+    assert "function showReportStatus(message, type)" not in html
+    assert "window.showReportStatus = showReportStatus;" in report_status_source
+    assert "window.removeReportProgressCard = removeReportProgressCard;" in report_status_source
+
+
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 

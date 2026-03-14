@@ -1352,7 +1352,7 @@
             }
             if (typeof initializeUpdateModal === 'function') {
                 initializeUpdateModal(socket, {
-                    showReportStatus
+                    showReportStatus: window.showReportStatus
                 });
             }
             if (typeof initializeLayoutRuntime === 'function') {
@@ -1385,32 +1385,6 @@
                 hideAutoUpdateBanner();
             });
         });
-
-        function removeReportProgressCard() {
-            const card = document.getElementById('report-progress-card');
-            if (card) {
-                card.remove();
-            }
-        }
-
-        function showReportStatus(message, type) {
-            const statusDiv = document.getElementById('report-status');
-            const statusText = document.getElementById('report-status-text');
-
-            statusDiv.classList.remove('hidden', 'bg-olive-100', 'bg-olive-200', 'bg-red-100', 'text-olive-800', 'text-olive-900', 'text-red-800');
-            statusDiv.classList.add(
-                type === 'error' ? 'bg-red-100' : 'bg-olive-100',
-                type === 'error' ? 'text-red-800' :
-                type === 'success' ? 'text-olive-900' :
-                'text-olive-800'
-            );
-
-            statusText.textContent = message;
-
-            if (type === 'success' || type === 'error') {
-                setTimeout(() => statusDiv.classList.add('hidden'), 5000);
-            }
-        }
 
         document.getElementById('reload-last-scan-btn').addEventListener('click', function() {
             // Try localStorage first (faster, more current); fall back to server XML
@@ -1471,6 +1445,7 @@
     <script src="/static/js/scan_runtime.js"></script>
     <script src="/static/js/scan_banners.js"></script>
     <script src="/static/js/discovery_ui.js"></script>
+    <script src="/static/js/report_status.js"></script>
     <script src="/static/js/update_modal.js"></script>
     <script src="/static/js/asset_details_modal.js"></script>
     <script src="/static/js/layout_runtime.js"></script>
