@@ -179,6 +179,7 @@ client_state_helpers = build_client_state_helpers(
     set_default_customer=lambda customer: globals().__setitem__("current_customer", customer),
     set_default_network_key=lambda key: globals().__setitem__("network_key", key),
     set_default_last_scan_target=lambda target: globals().__setitem__("last_scan_target", target),
+    runtime_store=runtime_store,
 )
 get_client_state = client_state_helpers["get_client_state"]
 get_current_customer_state = client_state_helpers["get_current_customer_state"]

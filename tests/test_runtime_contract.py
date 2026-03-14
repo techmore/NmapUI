@@ -504,6 +504,7 @@ def test_app_delegates_client_state_wrappers_to_shared_module():
 
     assert "from nmapui.app_bindings import build_client_state_helpers, build_event_helpers" in app_source
     assert 'client_state_helpers = build_client_state_helpers(' in app_source
+    assert "runtime_store=runtime_store" in app_source
     assert 'get_client_state = client_state_helpers["get_client_state"]' in app_source
     assert 'get_current_customer_state = client_state_helpers["get_current_customer_state"]' in app_source
     assert 'set_current_customer_state = client_state_helpers["set_current_customer_state"]' in app_source
@@ -515,6 +516,9 @@ def test_app_delegates_client_state_wrappers_to_shared_module():
     assert "set_default_network_key=lambda key:" in app_source
     assert "set_default_last_scan_target=lambda target:" in app_source
     assert "def build_client_state_helpers(" in app_bindings_source
+    assert 'persist_snapshot("current_customer", result)' in app_bindings_source
+    assert 'persist_snapshot("network_key", result)' in app_bindings_source
+    assert 'persist_snapshot("last_scan_target", {"value": result})' in app_bindings_source
     assert "client_state_registry.release(sid)" in app_client_state_runtime_source
     assert "if sid is not None and sync_default_state is not None:" in app_client_state_runtime_source
 

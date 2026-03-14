@@ -1,4 +1,5 @@
 from nmapui.client_state import ClientStateRegistry
+from nmapui.app_bindings import build_client_state_helpers
 from nmapui.runtime_state import (
     set_last_scan_target_state as set_last_scan_target_state_impl,
     set_network_key_state as set_network_key_state_impl,
@@ -71,6 +72,37 @@ def test_runtime_state_syncs_default_network_key_and_target_into_registry():
     assert state["network_key"]["target"] == "192.168.222.0/24"
     assert state["network_key"]["total_hops"] == 8
     assert state["last_scan_target"] == "192.168.222.0/24"
+
+
+def test_client_state_helpers_persist_runtime_snapshots():
+    registry = ClientStateRegistry()
+    current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
+    network_key = {"target": "1.1.1.1", "total_hops": 0}
+    last_scan_target = {"value": None}
+    snapshots = {}
+
+    class RuntimeStoreStub:
+        def upsert_runtime_snapshot(self, key, payload):
+            snapshots[key] = payload
+
+    helpers = build_client_state_helpers(
+        client_state_registry=registry,
+        get_current_customer=lambda: current_customer,
+        get_network_key=lambda: network_key,
+        get_last_scan_target=lambda: last_scan_target["value"],
+        set_default_customer=lambda value: current_customer.update(value),
+        set_default_network_key=lambda value: network_key.update(value),
+        set_default_last_scan_target=lambda value: last_scan_target.__setitem__("value", value),
+        runtime_store=RuntimeStoreStub(),
+    )
+
+    helpers["set_current_customer_state"]({"id": "cust-1", "name": "Acme", "confidence": 1.0})
+    helpers["set_network_key_state"]({"target": "192.168.222.0/24", "total_hops": 8})
+    helpers["set_last_scan_target_state"]("192.168.222.0/24")
+
+    assert snapshots["current_customer"]["id"] == "cust-1"
+    assert snapshots["network_key"]["target"] == "192.168.222.0/24"
+    assert snapshots["last_scan_target"] == {"value": "192.168.222.0/24"}
 
 
 class IdleStateStub:

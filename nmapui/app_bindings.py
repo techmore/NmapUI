@@ -80,7 +80,13 @@ def build_client_state_helpers(
     set_default_customer,
     set_default_network_key,
     set_default_last_scan_target,
+    runtime_store=None,
 ):
+    def persist_snapshot(key, payload):
+        if runtime_store is None:
+            return
+        runtime_store.upsert_runtime_snapshot(key, payload)
+
     def get_client_state(*, sid=None):
         return get_client_state_runtime(
             sid=sid,
@@ -97,7 +103,7 @@ def build_client_state_helpers(
         )
 
     def set_current_customer_state(value, sid=None):
-        return set_current_customer_state_runtime(
+        result = set_current_customer_state_runtime(
             value=value,
             sid=sid,
             client_state_registry=client_state_registry,
@@ -108,9 +114,11 @@ def build_client_state_helpers(
                 else None
             ),
         )
+        persist_snapshot("current_customer", result)
+        return result
 
     def set_network_key_state(value, sid=None):
-        return set_network_key_state_runtime(
+        result = set_network_key_state_runtime(
             value=value,
             sid=sid,
             client_state_registry=client_state_registry,
@@ -121,9 +129,11 @@ def build_client_state_helpers(
                 else None
             ),
         )
+        persist_snapshot("network_key", result)
+        return result
 
     def set_last_scan_target_state(value, sid=None):
-        return set_last_scan_target_state_runtime(
+        result = set_last_scan_target_state_runtime(
             value=value,
             sid=sid,
             client_state_registry=client_state_registry,
@@ -134,6 +144,8 @@ def build_client_state_helpers(
                 else None
             ),
         )
+        persist_snapshot("last_scan_target", {"value": result})
+        return result
 
     def release_client_state(sid):
         return release_client_state_runtime(
