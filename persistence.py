@@ -103,6 +103,10 @@ def normalize_scan_metadata_document(document: Any) -> dict[str, Any]:
     files = document.get("files")
     customer_info = document.get("customer_info")
     network_key = document.get("network_key")
+    status = document.get("status")
+    failure_stage = document.get("failure_stage")
+    failure_error = document.get("failure_error")
+    completed_successfully = document.get("completed_successfully")
     return {
         "schema_version": int(
             document.get("schema_version", SCAN_METADATA_SCHEMA_VERSION)
@@ -120,6 +124,12 @@ def normalize_scan_metadata_document(document: Any) -> dict[str, Any]:
         "network_key": network_key if isinstance(network_key, dict) else {},
         "customer_info": customer_info if isinstance(customer_info, dict) else {},
         "files": files if isinstance(files, dict) else {},
+        "status": str(status or ""),
+        "failure_stage": str(failure_stage or ""),
+        "failure_error": str(failure_error or ""),
+        "completed_successfully": completed_successfully
+        if isinstance(completed_successfully, bool)
+        else None,
     }
 
 

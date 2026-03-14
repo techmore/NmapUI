@@ -198,6 +198,8 @@ def save_scan_metadata(
         "network_key": network_key,
         "customer_info": current_customer,
         "files": {k: str(v) for k, v in files.items()},
+        "status": "completed",
+        "completed_successfully": True,
     }
 
     save_json_document(

@@ -5,6 +5,7 @@ from flask_socketio import SocketIO
 
 from nmapui.handlers.auto_scan import register_auto_scan_handlers
 from nmapui.handlers.scans import register_scan_routes
+from persistence import load_json_document, normalize_scan_metadata_document
 
 
 def basic_auth_header(username="scanner", password="secret-pass"):
@@ -55,6 +56,28 @@ def build_scan_app(tmp_path):
     return app
 
 
+def build_scan_app_with_real_metadata(tmp_path, metadata):
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    scan_dir = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    (scan_dir / "metadata.json").write_text(metadata)
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+        },
+    )
+    return app
+
+
 def build_auto_scan_app():
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
@@ -97,6 +120,34 @@ def test_scan_routes_allow_authorized_access(tmp_path, monkeypatch):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["scans"][0]["customer_name"] == "Acme"
+
+
+def test_scan_routes_surface_failed_report_metadata(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = build_scan_app_with_real_metadata(
+        tmp_path,
+        """
+        {
+          "timestamp": "2026-03-13T01:00:00",
+          "customer_name": "Acme",
+          "target": "10.0.0.0/24",
+          "status": "failed",
+          "failure_stage": "scan_chunks",
+          "failure_error": "Nmap scan failed on chunk 2",
+          "completed_successfully": false
+        }
+        """,
+    )
+    client = app.test_client()
+
+    response = client.get("/api/scans", headers=basic_auth_header())
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["scans"][0]["status"] == "failed"
+    assert payload["scans"][0]["failure_stage"] == "scan_chunks"
+    assert payload["scans"][0]["failure_error"] == "Nmap scan failed on chunk 2"
+    assert payload["scans"][0]["completed_successfully"] is False
 
 
 def test_auto_scan_routes_require_http_basic_auth(monkeypatch):
