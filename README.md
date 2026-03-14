@@ -28,11 +28,10 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 - Nmap installed and available in PATH
 - arp-scan (optional, for MAC/vendor detection)
 - xsltproc (for XML to HTML conversion)
-- wkhtmltopdf (primary HTML to PDF backend)
-- Playwright plus `playwright install chromium` (optional PDF fallback)
-- macOS only: `textutil` is used as a final fallback when other PDF backends are unavailable
+- wkhtmltopdf or weasyprint (for HTML to PDF conversion)
+- Chrome/Chromium (for headless screenshot functionality)
 
-## Installation
+## Installation & Quick Start (macOS)
 
 1. Clone the repository:
    ```bash
@@ -40,30 +39,27 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
    cd NmapUI
    ```
 
-2. Install Python dependencies:
+2. Build and launch the menu bar app:
    ```bash
-   pip install -r requirements.txt
+   ./build.sh
    ```
 
-3. Install system dependencies:
-   ```bash
-   # macOS
-   brew install nmap arp-scan libxslt wkhtmltopdf
+   `build.sh` will automatically run `install.sh` if dependencies haven't been set up yet. After a successful build, look for the network icon in your macOS menu bar. The app serves NmapUI at `http://127.0.0.1:9000`.
 
-   # Ubuntu/Debian
-   sudo apt install nmap arp-scan xsltproc wkhtmltopdf
-   ```
+   > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 
-   Optional PDF fallback:
-   ```bash
-   playwright install chromium
-   ```
+### Running without the menu bar app
 
-4. Copy the XSL stylesheet:
-   ```bash
-   # The nmap-modern.xsl stylesheet should be in the parent directory
-   # Update the XSL_STYLESHEET path in app.py if needed
-   ```
+To run the Python server directly (after `install.sh` has been run):
+```bash
+./start.sh
+```
+
+Or manually:
+```bash
+source .venv/bin/activate
+python app.py
+```
 
 ## Repository Layout
 
@@ -122,15 +118,6 @@ Click the **Generate Report** button after completing a scan to create comprehen
 2. **HTML Report**: Styled web report using XSL transformation (`scan.html`)
 3. **PDF Report**: Portable document for sharing (`scan_report.pdf`)
 4. **Metadata**: Scan details and customer information (`metadata.json`)
-
-PDF generation fallback order:
-
-1. `wkhtmltopdf` as the preferred backend
-2. `weasyprint` if it is installed manually in the runtime environment
-3. `playwright` with Chromium if `playwright install chromium` has been run
-4. `textutil` on macOS as a last-resort fallback
-
-The managed Python environment in `requirements.txt` includes Playwright, but not WeasyPrint. Treat WeasyPrint as an extra runtime dependency rather than part of the default install path.
 
 Reports are saved in an organized folder structure:
 ```

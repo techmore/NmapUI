@@ -156,6 +156,18 @@ echo "Application bundle created: $APP_NAME"
 # Make the binary executable
 chmod +x "$APP_NAME/Contents/MacOS/NmapUIMenuBar"
 
+# Ad-hoc code sign to satisfy macOS Gatekeeper on locally built bundles.
+# This prevents "cannot be opened because Apple cannot check it for malicious
+# software" dialogs without requiring a paid Apple Developer account.
+# For distribution, replace '-' with a Developer ID Application certificate.
+echo "Code signing the application bundle..."
+if codesign --force --deep --sign - "$APP_NAME" 2>/dev/null; then
+    echo "Code signing successful."
+else
+    echo "Warning: codesign failed — Gatekeeper may block the app on first launch."
+    echo "  Workaround: xattr -d com.apple.quarantine \"$APP_NAME\""
+fi
+
 # Open the application
 echo "Opening the application..."
 open "$APP_NAME"

@@ -6,7 +6,7 @@ from flask_socketio import emit
 
 def register_history_handlers(socketio, deps):
     get_most_recent_scan_xml = deps["get_most_recent_scan_xml"]
-    get_customer_fingerprinter = deps["get_customer_fingerprinter"]
+    customer_fingerprinter = deps["customer_fingerprinter"]
     scans_dir = deps["scans_dir"]
     sanitize_customer_dir_name = deps["sanitize_customer_dir_name"]
     parse_scan_xml_for_assets = deps["parse_scan_xml_for_assets"]
@@ -15,11 +15,11 @@ def register_history_handlers(socketio, deps):
     job_registry = deps["job_registry"]
     emit_to_client = deps["emit_to_client"]
     release_client_state = deps.get("release_client_state")
+    rate_limiter = deps.get("rate_limiter")
     logger = deps["logger"]
 
     @socketio.on("check_resumable_scan")
     def check_resumable_scan_event(data):
-        customer_fingerprinter = get_customer_fingerprinter()
         customer_id = data.get("customer_id")
         max_days = data.get("max_days", 7)
 
@@ -60,7 +60,6 @@ def register_history_handlers(socketio, deps):
 
     @socketio.on("resume_from_last_scan")
     def resume_from_last_scan_event(data):
-        customer_fingerprinter = get_customer_fingerprinter()
         customer_id = data.get("customer_id")
         max_days = data.get("max_days", 7)
 
@@ -159,5 +158,7 @@ def register_history_handlers(socketio, deps):
     def disconnect_event():
         logger.info("Client disconnected: %s", request.sid)
         job_registry.mark_disconnected(request.sid)
+        if rate_limiter:
+            rate_limiter.remove_client(request.sid)
         if release_client_state:
             release_client_state(request.sid)

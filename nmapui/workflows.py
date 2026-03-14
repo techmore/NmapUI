@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+import re
 
 from nmapui.reporting import mark_scan_failure
 
@@ -22,20 +23,13 @@ def start_deep_scan(context, targets, sid, is_gateway_phase=False):
         for target in targets:
             ensure_job_not_cancelled(sid, "scan")
             emit_to_client(sid, "deep_scan_host_start", {"ip": target})
-            command_str = f"nmap -T3 -sV --script {str(vulners_script)} {target}"
-            emit_to_client(sid, "scan_feedback", f"Executing: {command_str}")
-            logger.info(command_str)
+            cmd = ["nmap", "-T3", "-sV", "--script", str(vulners_script), target]
+            emit_to_client(sid, "scan_feedback", f"Executing: {' '.join(cmd)}")
+            logger.info("Executing: %s", " ".join(cmd))
             socketio_sleep(0)
 
             result = run_cancellable_command(
-                [
-                    "nmap",
-                    "-T3",
-                    "-sV",
-                    "--script",
-                    str(vulners_script),
-                    target,
-                ],
+                cmd,
                 sid=sid,
                 job_type="scan",
             )
@@ -49,13 +43,12 @@ def start_deep_scan(context, targets, sid, is_gateway_phase=False):
             # Emit raw nmap output to the client log for auditing
             emit_to_client(sid, "scan_raw_output", {"target": target, "output": output})
 
-            import re as _re
-            for line in output.split("\n"):
+            for line in output.splitlines():
                 if "/tcp" in line:
                     port_info = context["port_info_regex"].search(line)
                     if port_info:
                         # Normalize internal whitespace that nmap uses for column alignment
-                        service_raw = _re.sub(r"\s+", " ", port_info.group(3)).strip()
+                        service_raw = re.sub(r"\s+", " ", port_info.group(3)).strip()
                         current_host["ports"].append(
                             {
                                 "port": port_info.group(1),

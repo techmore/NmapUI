@@ -119,9 +119,11 @@ class CustomerFingerprinter:
                     "traceroutes": [],
                 }
 
-            self.customer_traceroutes[customer_id]["traceroutes"].append(
-                traceroute_entry
-            )
+            traces = self.customer_traceroutes[customer_id]["traceroutes"]
+            traces.append(traceroute_entry)
+            # Keep only the most recent 200 traceroutes per customer
+            if len(traces) > 200:
+                self.customer_traceroutes[customer_id]["traceroutes"] = traces[-200:]
 
             os.makedirs(os.path.dirname(self.traceroutes_path), exist_ok=True)
             save_json_document(
@@ -553,7 +555,7 @@ class CustomerFingerprinter:
 
             history.append(scan_result)
 
-            max_entries = indexing_config.get("max_entries", 10000)
+            max_entries = indexing_config.get("max_entries", 500)
             if len(history) > max_entries:
                 history = history[-max_entries:]
 

@@ -72,6 +72,29 @@ def check_auth(username, password):
     return username == expected_username and password == expected_password
 
 
+def log_auth_posture():
+    """Emit startup warnings about the active authentication posture."""
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+
+    if local_ui_trusted():
+        _log.warning(
+            "SECURITY: NMAPUI_TRUST_LOCAL_UI is ON — all localhost connections "
+            "bypass authentication. Set NMAPUI_TRUST_LOCAL_UI=false to enforce "
+            "credentials for every connection."
+        )
+    if auth_uses_insecure_defaults():
+        _log.warning(
+            "SECURITY: No credentials configured. Set NMAPUI_USERNAME and "
+            "NMAPUI_PASSWORD environment variables, or enable "
+            "NMAPUI_ALLOW_DEFAULT_CREDENTIALS=true to acknowledge the default "
+            "credentials (admin / nmapui123)."
+        )
+    elif not local_ui_trusted():
+        username, _ = get_auth_credentials()
+        _log.info("Auth active — username: %s", username)
+
+
 def require_auth(f):
     """Decorator to require HTTP Basic Auth for Flask routes."""
 

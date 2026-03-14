@@ -167,9 +167,9 @@ def run_arp_scan(
             ).stdout
 
         arp_data = {}
-        arp_pattern = re.compile(r"^(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+([0-9a-fA-F:]{17})\\s+(.*)$")
+        arp_pattern = re.compile(r"^(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F:]{17})\s+(.*)$")
 
-        for line in output.split("\\n"):
+        for line in output.splitlines():
             match = arp_pattern.match(line.strip())
             if match:
                 ip = match.group(1)

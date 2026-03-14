@@ -49,6 +49,35 @@ class RateLimiter:
         logger.info("Scan recorded. Total in last hour: %s", len(self.scan_timestamps))
 
 
+class PerClientRateLimiter:
+    """Per-session rate limiter so one client cannot block others."""
+
+    def __init__(self, max_scans_per_hour=10, cooldown_seconds=300):
+        self._max_scans_per_hour = max_scans_per_hour
+        self._cooldown_seconds = cooldown_seconds
+        self._clients: dict[str, RateLimiter] = {}
+        self._lock = threading.Lock()
+
+    def _get(self, sid: str) -> RateLimiter:
+        with self._lock:
+            if sid not in self._clients:
+                self._clients[sid] = RateLimiter(
+                    max_scans_per_hour=self._max_scans_per_hour,
+                    cooldown_seconds=self._cooldown_seconds,
+                )
+            return self._clients[sid]
+
+    def can_scan(self, sid: str):
+        return self._get(sid).can_scan()
+
+    def record_scan(self, sid: str):
+        self._get(sid).record_scan()
+
+    def remove_client(self, sid: str):
+        with self._lock:
+            self._clients.pop(sid, None)
+
+
 class ClientJobRegistry:
     """Track active scan/report jobs per connected client."""
 

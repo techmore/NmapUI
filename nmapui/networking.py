@@ -84,33 +84,3 @@ def identify_gateway_firewall_targets(hosts, network_key):
 
 def ip_sort_key(value):
     return ipaddress.IPv4Address(value)
-
-
-def split_subnet_into_chunks(target):
-    """Split large subnets into /29 chunks for manageable scanning."""
-    try:
-        network = ipaddress.ip_network(target, strict=False)
-        if network.num_addresses <= 8:
-            return [target]
-
-        chunks = []
-        for subnet in network.subnets(new_prefix=29):
-            if subnet.num_addresses > 0:
-                chunks.append(str(subnet))
-            if len(chunks) >= 2048:
-                break
-        return chunks[:2048]
-    except ValueError:
-        return [target]
-
-
-def is_private_ip(ip):
-    """Classify RFC1918, link-local, and CGNAT addresses as private."""
-    try:
-        addr = ipaddress.ip_address(ip)
-        if addr.is_private:
-            return True
-        cgnat = ipaddress.ip_network("100.64.0.0/10")
-        return addr in cgnat
-    except ValueError:
-        return False

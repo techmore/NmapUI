@@ -36,7 +36,6 @@
             }
         }
     </script>
-</head>
 <style>
     body {
         font-family: 'Inter', system-ui, sans-serif;
@@ -53,18 +52,6 @@
     ::selection {
         background-color: oklch(75% 0.040 110);
         color: oklch(46% 0.046 34);
-    }
-    input {
-        background-color: oklch(98% 0.008 110);
-        color: oklch(16% 0.015 110);
-        border: 1px solid oklch(75% 0.040 110);
-        padding: 8px 12px;
-        border-radius: 9999px;
-        outline: none;
-        transition: border-color 0.2s ease;
-    }
-    input:focus {
-        border-color: oklch(42% 0.055 110);
     }
     input::placeholder {
         color: oklch(50% 0.065 110);
@@ -277,6 +264,12 @@
         transform: scale(0.98);
     }
     
+    /* Historical / dimmed rows shown while a new scan is pending */
+    .historical-row {
+        opacity: 0.4;
+        transition: opacity 0.4s ease;
+    }
+
     /* Gradient text */
     .gradient-text {
         background: linear-gradient(135deg, oklch(55% 0.065 110) 0%, oklch(62% 0.055 110) 100%);
@@ -290,7 +283,8 @@
         --tw-ring-color: oklch(62% 0.055 110);
     }
 </style>
-    <body class="py-8">
+</head>
+<body class="py-8">
     <!-- Main Content Container (1200px) -->
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
     <!-- Header with Title -->
@@ -783,6 +777,15 @@
                         Archive
                         <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
                     </button>
+                    <button id="reload-last-scan-btn" class="hidden flex items-center gap-2 text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-colors" aria-label="Reload last scan results">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Reload Last
+                    </button>
+                    <button id="log-panel-toggle-btn" onclick="toggleLogPanel()" class="flex items-center gap-2 text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-colors relative" aria-label="Toggle audit log panel">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Log
+                        <span id="log-count-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-olive-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
+                    </button>
                 </div>
 
                 <div class="flex items-center gap-3 ml-4">
@@ -1031,37 +1034,1914 @@
     </div>
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-    <script src="/static/js/table_sorter.js"></script>
-    <script src="/static/js/history_modal.js"></script>
-    <script src="/static/js/update_modal.js"></script>
-    <script src="/static/js/report_status.js"></script>
-    <script src="/static/js/asset_details_modal.js"></script>
-    <script src="/static/js/scan_banners.js"></script>
-    <script src="/static/js/auto_update_banner.js"></script>
-    <script src="/static/js/customer_ui.js"></script>
-    <script src="/static/js/auto_scan_ui.js"></script>
-    <script src="/static/js/report_generation_ui.js"></script>
-    <script src="/static/js/customer_actions.js"></script>
-    <script src="/static/js/scan_runtime.js"></script>
-    <script src="/static/js/discovery_ui.js"></script>
-    <script src="/static/js/layout_runtime.js"></script>
     <script>
-        var socket = io.connect(`http://${document.domain}:${location.port}`);
-        window.socket = socket;
-        initializeUpdateModal(socket);
-        initializeAutoUpdateBanner(socket);
+        // Set current date and time
+        function updateDateTime() {
+            const now = new Date();
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            };
+            document.getElementById('current-date-time').textContent = now.toLocaleDateString('en-US', options);
+        }
 
-        initializeAutoScanUI(socket, {
-            getClientJobs: () => getClientJobs(),
-            getLastScanTarget: () => document.getElementById('scan-target').value || '',
+        // Initialize clock with precise minute-boundary updates
+        function startPreciseClock() {
+            // Update immediately on page load
+            updateDateTime();
+
+            // Calculate milliseconds until next minute boundary (:00 seconds)
+            const now = new Date();
+            const secondsUntilNextMinute = 60 - now.getSeconds();
+            const msUntilNextMinute = secondsUntilNextMinute * 1000 - now.getMilliseconds();
+
+            // Schedule first update at minute boundary
+            setTimeout(() => {
+                updateDateTime();
+                // Then update every minute thereafter
+                setInterval(updateDateTime, 60000);
+            }, msUntilNextMinute);
+        }
+
+        startPreciseClock();
+
+        var socket = io.connect(`http://${document.domain}:${location.port}`);
+        socket.on('connect', () => console.log('Socket.IO connected'));
+
+        // ── Host state tracking ────────────────────────────────────────────
+        // Keyed by IP; each entry mirrors the display_hosts structure so we
+        // can round-trip through localStorage and repopulate the table.
+        window.currentHosts = {};
+        window.currentCIDR  = null;
+        window.localStorageLoaded = false;   // prevents double-resume from server
+
+        function hostsStorageKey() {
+            return window.currentCIDR ? `nmapui_hosts_${window.currentCIDR}` : null;
+        }
+
+        function saveHostsToStorage() {
+            const key = hostsStorageKey();
+            if (!key || !Object.keys(window.currentHosts).length) return;
+            try {
+                localStorage.setItem(key, JSON.stringify({
+                    hosts: Object.values(window.currentHosts),
+                    savedAt: new Date().toISOString()
+                }));
+            } catch(e) { console.warn('localStorage save failed', e); }
+        }
+
+        // Load hosts from localStorage and show dimmed. Returns true if data found.
+        function loadHostsFromStorage() {
+            const key = hostsStorageKey();
+            if (!key) return false;
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return false;
+                const { hosts, savedAt } = JSON.parse(raw);
+                if (!hosts || !hosts.length) return false;
+                populateTableWithResults(hosts, true);   // true = dim rows
+                const ageDays = Math.floor((Date.now() - new Date(savedAt)) / 86400000);
+                showHistoricalDataBanner({
+                    age_days: ageDays,
+                    scan_date: savedAt,
+                    total: hosts.length,
+                    total_vulnerabilities: hosts.reduce((n, h) => n + (h.cves ? h.cves.split(',').filter(Boolean).length : 0), 0),
+                    total_exploits: 0
+                });
+                document.getElementById('reload-last-scan-btn').classList.remove('hidden');
+                window.localStorageLoaded = true;
+                return true;
+            } catch(e) { return false; }
+        }
+
+        function dimExistingRows() {
+            document.querySelectorAll('#discovery-table tbody tr').forEach(r => r.classList.add('historical-row'));
+        }
+
+        function undimAllRows() {
+            document.querySelectorAll('#discovery-table tbody tr').forEach(r => r.classList.remove('historical-row'));
+        }
+        // ──────────────────────────────────────────────────────────────────
+        
+        // Quick scan indicator handlers
+        socket.on('quick_scan_start', () => {
+            console.log('Quick scan started - pulsing card');
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) quickCard.classList.add('card-pulsing');
+            // Dim any previous results to signal a fresh scan is underway
+            dimExistingRows();
         });
-        initializeReportGenerationUI(socket, {
-            getClientJobs: () => getClientJobs(),
+
+        socket.on('quick_scan_complete', () => {
+            console.log('Quick scan complete - stopping pulse');
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.remove('card-pulsing');
+            }
         });
-        initializeCustomerActions(socket);
-        initializeScanRuntime(socket);
-        initializeDiscoveryUI(socket);
-        initializeLayoutRuntime();
+
+        // ARP scan indicator handler (no visual pulse - happens between quick and deep)
+        socket.on('arp_scan_start', () => {
+            console.log('ARP scan started');
+            // No visual indicator - ARP scan is very quick and happens between phases
+        });
+
+        socket.on('arp_scan_complete', () => {
+            console.log('ARP scan complete');
+            // No visual indicator needed
+        });
+
+        // Deep scan indicator handlers
+        socket.on('deep_scan_start', () => {
+            console.log('Deep scan started - pulsing card');
+            // Stop quick scan card pulsing if still active
+            const quickCard = document.getElementById('quick-scan-card');
+            if (quickCard) {
+                quickCard.classList.remove('card-pulsing');
+            }
+            // Start deep scan card pulsing
+            const deepCard = document.getElementById('deep-scan-card');
+            if (deepCard) {
+                deepCard.classList.add('card-pulsing');
+            }
+        });
+
+        socket.on('deep_scan_host_start', (data) => {
+            console.log('Deep scan started for host:', data.ip);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.ip) {
+                    row.cells[0].innerHTML = '<span class="relative flex size-3"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-400 opacity-75"></span><span class="relative inline-flex size-3 rounded-full bg-olive-500"></span></span>';
+                    break;
+                }
+            }
+        });
+
+        socket.on('deep_scan_host_complete', (data) => {
+            console.log('Deep scan complete for host:', data.ip);
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.ip) {
+                    row.cells[0].innerHTML = '';
+                    break;
+                }
+            }
+        });
+
+        socket.on('deep_scan_complete', () => {
+            console.log('All deep scans complete - stopping pulse');
+            const deepCard = document.getElementById('deep-scan-card');
+            if (deepCard) deepCard.classList.remove('card-pulsing');
+            const tb = document.querySelector('#discovery-table tbody');
+            Array.from(tb.rows).forEach(row => { row.cells[0].innerHTML = ''; });
+            // Persist the fully-enriched host state for next session
+            saveHostsToStorage();
+            document.getElementById('reload-last-scan-btn').classList.remove('hidden');
+        });
+
+        socket.on('scan_feedback', msg => {
+            // Hide feedback container for standard info messages if they are from recovery
+            if (msg.includes('Loaded') && msg.includes('assets from scan')) {
+                console.log('Suppressed recovery feedback in container');
+                return;
+            }
+            const container = document.getElementById('feedback-container');
+            // Ensure the container is visible when feedback starts
+            container.parentElement.classList.remove('hidden');
+            container.innerHTML += `<p>${msg}</p>`;
+        });
+
+        socket.on('local_ip', data => {
+            ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
+            document.getElementById('cidr-value').textContent = data.cidr || '';
+            document.getElementById('scan-target').value = data.cidr;
+
+            // Store CIDR then try to restore last table state from localStorage
+            window.currentCIDR = data.cidr;
+            loadHostsFromStorage();
+        });
+
+        socket.on('cve_array', data => {
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.target) { // IP is now column 1 (status is 0)
+                    let cell = row.cells[7]; // CVEs column (index 7 now with status column)
+                    cell.innerHTML = '';
+                    data.cve_array.forEach(cve => cell.innerHTML += `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`);
+                    break;
+                }
+            }
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        socket.on('service_info', data => {
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                if (row.cells[1].textContent === data.target) { // IP is now column 1
+                    row.cells[4].innerHTML += `<div class="text-xs text-olive-600">${data.line}</div>`; // Hostname column (index 4 now)
+                    break;
+                }
+            }
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        socket.on('quickscan_results', data => {
+            console.log("Received quick_scan_results:", data);
+            document.getElementById('quick-time').textContent = data.time_taken + 's';
+            document.getElementById('quick-hosts').textContent = data.hosts_up;
+        });
+
+        socket.on('deep_scan_results', data => {
+            data.forEach(updateRowWithResults);
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        function updateRowWithResults(host) {
+            const tb = document.querySelector('#discovery-table tbody');
+            let rowToUpdate = Array.from(tb.rows).find(row => row.cells[1].textContent === host.ip);
+            if (!rowToUpdate) return;
+
+            const portsStr = host.ports.map(p => `${p.port}/${p.service.split(/\s+/)[0]}`).join(', ');
+            const versionHtml = host.ports.map(p => `<div class="text-xs">${p.service}</div>`).join('');
+
+            rowToUpdate.cells[5].textContent = portsStr;
+            rowToUpdate.cells[6].innerHTML = versionHtml;
+
+            if (host.cves && host.cves.length > 0) {
+                rowToUpdate.cells[7].innerHTML = host.cves
+                    .map(cve => `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`)
+                    .join('');
+            }
+
+            // Keep localStorage state in sync
+            if (window.currentHosts[host.ip]) {
+                window.currentHosts[host.ip].open_ports = portsStr;
+                window.currentHosts[host.ip].version   = host.ports.map(p => p.service).join(', ');
+                window.currentHosts[host.ip].cves       = (host.cves || []).map(c => c.id).join(', ');
+            }
+            saveHostsToStorage();
+        }
+
+        document.getElementById('start-scan-btn').addEventListener('click', () => {
+            if (clientJobs.scan.status === 'running') {
+                return;
+            }
+            const target = document.getElementById('scan-target').value;
+            socket.emit('start_scan', target);
+        });
+
+        const clientJobs = {
+            scan: { status: 'idle' },
+            report: { status: 'idle' }
+        };
+
+        function updateJobButtons() {
+            const scanRunning = clientJobs.scan.status === 'running';
+            const reportRunning = clientJobs.report.status === 'running';
+            const stopButton = document.getElementById('stop-scan-btn');
+
+            const startScanBtn = document.getElementById('start-scan-btn');
+            const generateReportBtn = document.getElementById('generate-report-btn');
+
+            if (startScanBtn) {
+                startScanBtn.disabled = scanRunning;
+                startScanBtn.classList.toggle('opacity-60', scanRunning);
+                startScanBtn.classList.toggle('cursor-not-allowed', scanRunning);
+            }
+
+            if (generateReportBtn) {
+                generateReportBtn.disabled = reportRunning;
+                generateReportBtn.classList.toggle('opacity-60', reportRunning);
+                generateReportBtn.classList.toggle('cursor-not-allowed', reportRunning);
+            }
+
+            if (stopButton) {
+                const canStop = scanRunning || reportRunning;
+                stopButton.disabled = !canStop;
+                stopButton.classList.toggle('opacity-50', !canStop);
+                stopButton.classList.toggle('cursor-not-allowed', !canStop);
+            }
+        }
+
+        socket.on('job_status', function(data) {
+            if (!data || !data.job_type) return;
+            clientJobs[data.job_type] = data;
+            updateJobButtons();
+
+            if (data.job_type === 'report' && data.status === 'running' && data.details) {
+                const message = data.details.message || 'Generating report...';
+                updateReportProgress(message);
+                showReportStatus(message, 'info');
+            }
+
+            if (data.job_type === 'scan' && data.status === 'running' && data.details?.message) {
+                showReportStatus(data.details.message, 'info');
+            }
+        });
+
+        socket.on('job_cancelled', function(data) {
+            if (!data || !data.message) return;
+            showReportStatus(data.message, 'info');
+        });
+
+        socket.emit('get_local_ip');
+        socket.emit('get_network_key');
+        socket.emit('get_customer_info');
+        socket.emit('get_versions');
+        socket.emit('get_customers');
+        socket.emit('get_history_counts');
+        socket.emit('get_job_status');
+
+        document.getElementById('stop-scan-btn').addEventListener('click', function() {
+            if (clientJobs.report.status === 'running') {
+                socket.emit('cancel_job', { job_type: 'report' });
+                return;
+            }
+
+            if (clientJobs.scan.status === 'running') {
+                socket.emit('cancel_job', { job_type: 'scan' });
+            }
+        });
+
+        // Customer quick add dropdown handler
+        document.getElementById('customer-quick-add').addEventListener('change', function() {
+            const selectedId = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
+
+            // Update history badge for selected customer
+            updateHistoryBadge(selectedName);
+
+            if (selectedId) {
+                // Assign the selected customer to this network
+                socket.emit('assign_customer', {
+                    customer_id: selectedId,
+                    customer_name: selectedName
+                });
+            }
+        });
+
+        socket.on('network_key', data => {
+            console.log('Network key received:', data);
+            document.getElementById('total-hops').textContent = data.total_hops;
+            document.getElementById('private-hops').textContent = data.private_hops.length;
+            document.getElementById('public-hops').textContent = data.public_hops.length;
+            document.getElementById('exit-ip').textContent = data.exit_ip || '--';
+            
+            const routePath = document.getElementById('route-path');
+            if (data.hops && data.hops.length > 0) {
+                // Reverse the hops so it reads: internet -> ... -> local
+                const reversedHops = [...data.hops].reverse();
+                routePath.innerHTML = reversedHops.map((hop, i) => {
+                    const typeColor = hop.is_private ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                    const isLast = i === reversedHops.length - 1;
+                    const arrow = !isLast ? '<svg class="w-3 h-3 text-olive-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>' : '';
+                    return `<div class="flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-mono font-bold ${typeColor} shadow-sm transition-all hover:scale-105">
+                                <span class="opacity-40 text-[9px]">${reversedHops.length - i}</span>
+                                <span>${hop.ip}</span>
+                            </div>${arrow}`;
+                }).join('');
+            } else if (data.error) {
+                routePath.innerHTML = `<span class="text-red-700 font-medium">${data.error}</span>`;
+            } else {
+                routePath.innerHTML = '<span class="text-olive-500 italic">No route data available</span>';
+            }
+        });
+
+        socket.on('customers_list', data => {
+            console.log('customers_list event received with data:', data);
+            populateCustomerDropdown(data);
+            // Request customer info again after dropdown is populated
+            // to ensure the correct selection is applied to the newly created options
+            socket.emit('get_customer_info');
+        });
+
+        socket.on('customer_info', data => {
+            console.log('Customer info received:', data);
+            // Store globally as a string for consistent matching
+            window.currentMatchedCustomerId = data.id ? String(data.id) : '';
+            updateCustomerSelection(data);
+            updateDropdownSelection(window.currentMatchedCustomerId, data.name);
+
+            // Check for resumable scan data when customer is identified
+            if (data.id && data.id !== 'unknown') {
+                socket.emit('check_resumable_scan', {
+                    customer_id: data.id,
+                    max_days: 7
+                });
+            }
+        });
+
+        // Historical data / asset resume socket handlers
+        socket.on('resumable_scan_check', data => {
+            if (data.available && !window.localStorageLoaded) {
+                console.log('Resumable scan available, loading from server:', data);
+                socket.emit('resume_from_last_scan', {
+                    customer_id: window.currentMatchedCustomerId,
+                    max_days: 7
+                });
+            } else if (!data.available && !window.localStorageLoaded) {
+                hideHistoricalDataBanner();
+            }
+            // If localStorageLoaded, keep the already-shown localStorage data
+        });
+
+        socket.on('resume_scan_error', data => {
+            console.error('Resume scan error:', data.error);
+            hideHistoricalDataBanner();
+        });
+
+        socket.on('versions', data => {
+            console.log('Versions received:', data);
+            // Update version displays with formatted strings
+            const nmapVersion = data.nmap || 'Not found';
+            const vulnersVersion = data.vulners || 'Not found';
+            const arpScanVersion = data.arp_scan || 'Not found';
+            const appVersion = data.app || 'v--.--.--.__';
+
+            document.getElementById('app-version').textContent = appVersion;
+            document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
+            document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
+            document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
+
+            // Check for updates whenever version is received
+            socket.emit('check_app_updates');
+        });
+
+
+
+        socket.on('app_update_available', data => {
+            console.log('App update check result:', data);
+            const badge = document.getElementById('app-update-badge');
+            const notesDiv = document.getElementById('update-release-notes');
+            if (data.available) {
+                badge.classList.remove('hidden');
+                if (data.release_notes) {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>${data.release_notes.replace(/\n/g, '<br>')}`;
+                } else {
+                    notesDiv.innerHTML = `<strong>Release Notes:</strong><br>New version ${data.latest_version} is available.`;
+                }
+            } else {
+                badge.classList.add('hidden');
+                notesDiv.innerHTML = `<strong>Release Notes:</strong><br>You are using the latest version.`;
+            }
+        });
+
+        socket.on('update_status', data => {
+            console.log('Update status:', data.message);
+            const log = document.getElementById('update-log');
+            const statusText = document.getElementById('update-current-status');
+            const progressBar = document.getElementById('update-progress-bar');
+            const percentageText = document.getElementById('update-percentage');
+
+            statusText.textContent = data.message;
+            log.innerHTML += `<div class="py-0.5"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+
+            // Simple progress simulation based on message content
+            let progress = 0;
+            if (data.message.includes('Starting')) progress = 10;
+            if (data.message.includes('Pulling')) progress = 30;
+            if (data.message.includes('Git Pull Output')) progress = 50;
+            if (data.message.includes('Updating dependencies')) progress = 70;
+            if (data.message.includes('Dependencies updated')) progress = 90;
+            if (data.message.includes('Update complete')) {
+                progress = 100;
+                setTimeout(() => {
+                    document.getElementById('update-progress').classList.add('hidden');
+                    document.getElementById('update-complete').classList.remove('hidden');
+                }, 1000);
+            }
+
+            if (progress > 0) {
+                progressBar.style.width = `${progress}%`;
+                percentageText.textContent = `${progress}%`;
+            }
+        });
+
+        socket.on('update_error', data => {
+            console.error('Update error:', data.message);
+            const log = document.getElementById('update-log');
+            log.innerHTML += `<div class="py-0.5 text-red-400 font-bold"><span class="text-zinc-500 mr-2">[${new Date().toLocaleTimeString()}]</span> ERROR: ${data.message}</div>`;
+            log.scrollTop = log.scrollHeight;
+            document.getElementById('update-current-status').textContent = 'Update failed';
+            document.getElementById('update-current-status').classList.add('text-red-500');
+            document.getElementById('update-progress-bar').classList.add('bg-red-500');
+        });
+
+        function showUpdateModal() {
+            document.getElementById('update-modal').classList.remove('hidden');
+            document.getElementById('update-initial').classList.remove('hidden');
+            document.getElementById('update-progress').classList.add('hidden');
+            document.getElementById('update-complete').classList.add('hidden');
+        }
+
+        function hideUpdateModal() {
+            // Only allow closing if not in progress or complete
+            const progressVisible = !document.getElementById('update-progress').classList.contains('hidden');
+            if (!progressVisible) {
+                document.getElementById('update-modal').classList.add('hidden');
+            }
+        }
+
+        function startAppUpdate() {
+            document.getElementById('update-initial').classList.add('hidden');
+            document.getElementById('update-progress').classList.remove('hidden');
+            document.getElementById('update-log').innerHTML = '';
+            socket.emit('perform_app_update');
+        }
+
+        // Auto-Update Banner Logic
+        let countdownInterval = null;
+        let remainingSeconds = 30;
+        let bannerVisible = false;
+
+        socket.on('idle_state_changed', data => {
+            console.log('Idle state changed:', data);
+        });
+
+        socket.on('show_auto_update_banner', data => {
+            console.log('Showing auto-update banner:', data);
+            showAutoUpdateBanner(data);
+        });
+
+        socket.on('hide_auto_update_banner', () => {
+            console.log('Hiding auto-update banner');
+            hideAutoUpdateBanner();
+        });
+
+        function showAutoUpdateBanner(updateInfo) {
+            if (bannerVisible) return;
+
+            bannerVisible = true;
+            remainingSeconds = 30;
+
+            // Update description
+            const descElement = document.getElementById('update-description');
+            if (updateInfo.latest_version) {
+                descElement.textContent = `NmapUI ${updateInfo.latest_version} is ready to install`;
+            }
+
+            // Show banner with animation
+            const banner = document.getElementById('auto-update-banner');
+            banner.classList.remove('hidden');
+            banner.style.animation = 'slideDown 0.5s ease-out';
+
+            // Start countdown
+            startCountdown();
+        }
+
+        function hideAutoUpdateBanner() {
+            if (!bannerVisible) return;
+
+            bannerVisible = false;
+            clearInterval(countdownInterval);
+
+            const banner = document.getElementById('auto-update-banner');
+            banner.style.animation = 'slideUp 0.3s ease-in';
+            setTimeout(() => {
+                banner.classList.add('hidden');
+                banner.style.animation = '';
+            }, 300);
+        }
+
+        function startCountdown() {
+            const timerElement = document.getElementById('countdown-timer');
+            const progressBar = document.getElementById('progress-bar');
+
+            countdownInterval = setInterval(() => {
+                remainingSeconds--;
+                timerElement.textContent = remainingSeconds;
+
+                const progressPercent = ((30 - remainingSeconds) / 30) * 100;
+                progressBar.style.width = `${progressPercent}%`;
+
+                if (remainingSeconds <= 0) {
+                    performAutoUpdate();
+                }
+            }, 1000);
+        }
+
+        function performAutoUpdate() {
+            clearInterval(countdownInterval);
+            socket.emit('perform_app_update');
+            hideAutoUpdateBanner();
+        }
+
+        // Event listeners for banner buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('update-now-btn')?.addEventListener('click', () => {
+                performAutoUpdate();
+            });
+
+            document.getElementById('cancel-update-btn')?.addEventListener('click', () => {
+                socket.emit('cancel_auto_update');
+                hideAutoUpdateBanner();
+            });
+        });
+
+        socket.on('history_counts', data => {
+            console.log('History counts received:', data);
+            window.historyCounts = data;
+            
+            const dropdown = document.getElementById('customer-quick-add');
+            const currentCustomerName = dropdown.selectedOptions[0]?.text || 'Unassigned';
+            updateHistoryBadge(currentCustomerName);
+        });
+
+        function updateHistoryBadge(customerName) {
+            const badge = document.getElementById('history-badge');
+            const lastScanSpan = document.getElementById('last-scan-days');
+            if (!badge || !window.historyCounts) return;
+
+            // Normalize the name to use as key
+            const key = (customerName && customerName !== 'Unassigned') ? customerName.split(' (')[0] : 'Unassigned';
+            const count = window.historyCounts[key] || 0;
+            
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                
+                // Muted premium styling for the report count badge
+                badge.className = 'absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-olive-900 text-white text-[10px] font-bold shadow-sm transition-all scale-110';
+
+                // Add a little pop animation when it updates
+                badge.classList.remove('scale-110');
+                void badge.offsetWidth; // Trigger reflow
+                badge.classList.add('scale-110');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            // Handle Days Since Last Scan - Muted Premium Version
+            const lastScanTime = window.historyCounts.last_scans ? window.historyCounts.last_scans[key] : null;
+            const container = document.getElementById('last-scan-container');
+            if (lastScanTime && lastScanSpan) {
+                const lastDate = new Date(lastScanTime);
+                const now = new Date();
+                const diffTime = Math.abs(now - lastDate);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                lastScanSpan.textContent = diffDays === 0 ? 'Today' : `${diffDays} days ago`;
+                if (container) container.classList.remove('hidden');
+                
+                // Muted, theme-appropriate colors using the olive palette
+                lastScanSpan.className = 'px-3 py-1 rounded-full text-xs font-medium transition-all';
+                
+                if (diffDays <= 1) {
+                    lastScanSpan.classList.add('bg-olive-200', 'text-olive-900');
+                } else if (diffDays <= 7) {
+                    lastScanSpan.classList.add('bg-olive-100', 'text-olive-700');
+                } else {
+                    lastScanSpan.classList.add('bg-olive-50', 'text-olive-500');
+                }
+            } else if (container) {
+                container.classList.add('hidden');
+            }
+        }
+
+        socket.on('scan_complete_summary', function(data) {
+            // Display the scan summary banner with statistics
+            showScanSummaryBanner(data);
+        });
+        socket.on('scan_results', function(data) {
+            const hosts = Array.isArray(data) ? data : data.hosts;
+            const isHistorical = !!(data.is_historical);
+
+            if (isHistorical) {
+                showHistoricalDataBanner(data);
+            } else {
+                hideHistoricalDataBanner();
+                document.getElementById('reload-last-scan-btn').classList.add('hidden');
+                window.localStorageLoaded = false;
+            }
+
+            populateTableWithResults(hosts, isHistorical);
+            if (window.tableSorter) window.tableSorter.resort();
+
+            // Persist live (non-historical) results immediately so refresh restores them
+            if (!isHistorical) saveHostsToStorage();
+        });
+        
+        // Report Generation socket listeners
+        socket.on('report_complete', function(data) {
+            showReportStatus('Report generated successfully! Check: ' + data.scan_dir, 'success');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+
+            // Refresh history counts to update the real-time badge
+            socket.emit('get_history_counts');
+
+            // Optionally reload history
+            if (!document.getElementById('history-modal').classList.contains('hidden')) {
+                loadScanHistory();
+            }
+        });
+
+        socket.on('report_error', function(data) {
+            showReportStatus('Error: ' + data.error, 'error');
+            
+            // Remove pulsing from the button
+            document.getElementById('generate-report-btn').classList.remove('card-pulsing');
+            
+            // Stop the timer
+            stopReportTimer();
+        });
+
+        socket.on('arp_results', data => {
+            const tb = document.querySelector('#discovery-table tbody');
+            for (let row of tb.rows) {
+                const ip = row.cells[1].textContent;
+                if (data[ip]) {
+                    row.cells[2].textContent = data[ip].mac;
+                    row.cells[3].textContent = data[ip].vendor;
+                    if (window.currentHosts[ip]) {
+                        window.currentHosts[ip].mac    = data[ip].mac;
+                        window.currentHosts[ip].vendor = data[ip].vendor;
+                    }
+                }
+            }
+            saveHostsToStorage();
+            if (window.tableSorter) window.tableSorter.resort();
+        });
+
+        // Store asset data globally for modal access
+        window.assetData = {};
+
+        function populateTableWithResults(data, dim = false) {
+            const tb = document.querySelector('#discovery-table tbody');
+            tb.innerHTML = '';
+
+            window.assetData = {};
+            window.currentHosts = {};   // rebuild from incoming data
+
+            data.forEach(result => {
+            if (result.ip) {
+                window.assetData[result.ip] = result;
+                window.currentHosts[result.ip] = Object.assign({}, result);
+            }
+
+            const newRow = tb.insertRow(-1);
+            if (dim) newRow.classList.add('historical-row');
+
+            // Add status column first (keep empty for status indicators)
+            const statusCell = newRow.insertCell(0);
+            statusCell.className = 'px-4 py-3 text-center';
+            statusCell.innerHTML = '';
+
+            // Add other columns
+            ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
+                const cell = newRow.insertCell(i + 1); // Offset by 1 for status column
+                cell.className = 'px-4 py-3 text-olive-900';
+
+                // Format open_ports, version, and cves with line breaks
+                if (col === 'open_ports' || col === 'version' || col === 'cves') {
+                    const value = result[col] || '';
+                    if (value) {
+                        // Split by comma and create divs for each item
+                        const items = value.split(',').map(item => item.trim()).filter(item => item);
+
+                        // Make CVEs clickable with purple color
+                        if (col === 'cves') {
+                            cell.innerHTML = items.map(item =>
+                                `<div class="whitespace-nowrap text-purple-600 hover:text-purple-800 cursor-pointer underline" onclick="event.stopPropagation(); showAssetDetailsModal(window.assetData['${result.ip}'])">${item}</div>`
+                            ).join('');
+                        } else {
+                            cell.innerHTML = items.map(item => `<div class="whitespace-nowrap">${item}</div>`).join('');
+                        }
+                    } else {
+                        cell.textContent = '';
+                    }
+                    if (col === 'open_ports') cell.classList.add('open-ports-cell');
+                } else {
+                    cell.textContent = result[col] || '';
+                }
+
+                if (col === 'mac') cell.classList.add('font-mono', 'text-xs');
+                if (col === 'vendor') cell.classList.add('text-olive-600');
+                if (col === 'hostname') {
+                    cell.classList.add('truncate', 'max-w-[150px]', 'block');
+                    cell.title = result[col]; // Add tooltip for full hostname
+                }
+            });
+            const rescanCell = newRow.insertCell(-1);
+            rescanCell.className = 'px-4 py-3';
+            const rescanBtn = document.createElement('button');
+            rescanBtn.textContent = 'Rescan';
+            rescanBtn.classList.add('inline-flex', 'items-center', 'justify-center', 'rounded-full', 'bg-olive-950', 'text-white', 'hover:bg-olive-800', 'font-medium', 'py-1', 'px-3', 'text-xs', 'transition-colors');
+            rescanBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent row click
+                handleRescan(result['ip']);
+            });
+            rescanCell.appendChild(rescanBtn);
+            });
+        }
+
+        // Tooltip toggle
+        document.getElementById('info-icon').addEventListener('click', () => {
+            document.getElementById('tooltip').classList.toggle('hidden');
+        });
+
+        // Asset Details Modal Functions
+        function showAssetDetailsModal(asset) {
+            const modal = document.getElementById('asset-details-modal');
+
+            // Populate basic info
+            document.getElementById('asset-detail-ip').textContent = asset.ip || 'Unknown';
+            document.getElementById('asset-detail-hostname').textContent = asset.hostname ? `(${asset.hostname})` : '';
+            document.getElementById('asset-detail-mac').textContent = asset.mac || 'N/A';
+            document.getElementById('asset-detail-vendor').textContent = asset.vendor || 'Unknown';
+            document.getElementById('asset-detail-status').textContent = asset.status || 'up';
+
+            // Vendor link
+            const vendorLink = document.getElementById('asset-vendor-link');
+            if (asset.vendor && asset.vendor !== 'Unknown') {
+                const vendorSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(asset.vendor + ' company website')}`;
+                vendorLink.href = vendorSearchUrl;
+                vendorLink.classList.remove('hidden');
+            } else {
+                vendorLink.classList.add('hidden');
+            }
+
+            // Populate services
+            const servicesContainer = document.getElementById('asset-detail-services');
+            servicesContainer.innerHTML = '';
+
+            if (asset.open_ports && asset.open_ports.trim()) {
+                const ports = asset.open_ports.split(',').map(p => p.trim()).filter(p => p);
+                const versions = asset.version ? asset.version.split(',').map(v => v.trim()).filter(v => v) : [];
+
+                // Create a map of port to version
+                const versionMap = {};
+                versions.forEach(v => {
+                    const match = v.match(/^(\d+):(.*)/);
+                    if (match) {
+                        versionMap[match[1]] = match[2];
+                    }
+                });
+
+                ports.forEach(port => {
+                    const portMatch = port.match(/^(\d+)\s*\(?(.*?)\)?$/);
+                    if (portMatch) {
+                        const portNum = portMatch[1];
+                        const serviceName = portMatch[2] || 'unknown';
+                        const version = versionMap[portNum] || '';
+
+                        const serviceDiv = document.createElement('div');
+                        serviceDiv.className = 'flex items-start p-3 bg-white rounded border border-olive-200';
+                        serviceDiv.innerHTML = `
+                            <div class="flex-shrink-0 w-20">
+                                <span class="font-mono text-sm font-bold text-olive-900">${portNum}</span>
+                                <span class="text-xs text-olive-600">/${serviceName}</span>
+                            </div>
+                            <div class="flex-1">
+                                ${version ? `<div class="text-sm text-olive-700">${version}</div>` : '<div class="text-xs text-olive-500 italic">No version detected</div>'}
+                            </div>
+                        `;
+                        servicesContainer.appendChild(serviceDiv);
+                    }
+                });
+            } else {
+                servicesContainer.innerHTML = '<p class="text-sm text-olive-500 italic">No open ports detected</p>';
+            }
+
+            // Populate CVEs
+            const cveSection = document.getElementById('asset-cve-section');
+            const cveContainer = document.getElementById('asset-detail-cves');
+            const cveCount = document.getElementById('asset-cve-count');
+
+            cveContainer.innerHTML = '';
+
+            if (asset.vulnerabilities && asset.vulnerabilities.length > 0) {
+                cveCount.textContent = asset.vulnerabilities.length;
+                cveSection.classList.remove('hidden');
+
+                asset.vulnerabilities.forEach(vuln => {
+                    const cveDiv = document.createElement('div');
+                    cveDiv.className = 'flex items-start justify-between p-3 bg-white rounded border border-amber-200';
+
+                    const isExploit = vuln.is_exploit || false;
+                    const cvss = vuln.cvss || 'N/A';
+
+                    cveDiv.innerHTML = `
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-sm font-bold text-amber-900">${vuln.cve_id || 'Unknown'}</span>
+                                ${isExploit ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded">EXPLOIT</span>' : ''}
+                            </div>
+                            <div class="text-xs text-amber-700 mt-1">
+                                Port ${vuln.port || 'N/A'} (${vuln.service || 'unknown'})
+                                ${cvss !== 'N/A' ? `• CVSS: ${cvss}` : ''}
+                            </div>
+                        </div>
+                        ${vuln.url ? `
+                            <a href="${vuln.url}" target="_blank" class="ml-2 text-amber-600 hover:text-amber-800">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        ` : ''}
+                    `;
+                    cveContainer.appendChild(cveDiv);
+                });
+            } else {
+                cveSection.classList.add('hidden');
+            }
+
+            // Show modal
+            modal.classList.remove('hidden');
+        }
+
+        function closeAssetDetailsModal() {
+            document.getElementById('asset-details-modal').classList.add('hidden');
+        }
+
+        // Historical Data Functions
+        function showHistoricalDataBanner(data) {
+            const banner = document.getElementById('historical-data-banner');
+            const title = document.getElementById('historical-title');
+            const details = document.getElementById('historical-details');
+            const hosts = document.getElementById('historical-hosts');
+            const vulns = document.getElementById('historical-vulns');
+            const exploits = document.getElementById('historical-exploits');
+
+            // Calculate age and format message
+            const ageDays = data.age_days || 0;
+            let ageText = '';
+            let bannerColor = 'bg-olive-100 border-olive-600'; // Default
+
+            if (ageDays === 0) {
+                ageText = 'today';
+                title.textContent = 'Scan from Today';
+                bannerColor = 'bg-olive-100 border-olive-600';
+            } else if (ageDays === 1) {
+                ageText = 'yesterday';
+                title.textContent = 'Scan from Yesterday';
+                bannerColor = 'bg-amber-50 border-amber-500';
+            } else {
+                ageText = `${ageDays} days ago`;
+                title.textContent = `Scan from ${ageDays} Days Ago`;
+                bannerColor = 'bg-amber-100 border-amber-600';
+            }
+
+            // Format scan date
+            const scanDate = new Date(data.scan_date);
+            const dateStr = scanDate.toLocaleString();
+
+            details.textContent = `Scanned ${ageText} on ${dateStr} • Target: ${data.target || 'Unknown'}`;
+            hosts.textContent = `📊 ${data.total || 0} hosts`;
+            vulns.textContent = `🔒 ${data.total_vulnerabilities || 0} CVEs`;
+            exploits.textContent = `⚠️  ${data.total_exploits || 0} exploits`;
+
+            // Update banner styling based on age
+            const bannerInner = banner.querySelector('div');
+            bannerInner.className = `${bannerColor} border-l-4 p-4 rounded-lg shadow-sm`;
+
+            // Show the banner
+            banner.classList.remove('hidden');
+        }
+
+        function hideHistoricalDataBanner() {
+            const banner = document.getElementById('historical-data-banner');
+            banner.classList.add('hidden');
+        }
+
+        // Scan Summary Banner Functions
+        function showScanSummaryBanner(data) {
+            const banner = document.getElementById('scan-summary-banner');
+
+            // Update duration
+            document.getElementById('summary-duration').textContent = data.duration_formatted || '--';
+
+            // Update hosts found
+            document.getElementById('summary-hosts').textContent = data.hosts_up || 0;
+
+            // Update open ports
+            document.getElementById('summary-ports').textContent = data.total_ports || 0;
+
+            // Update CVEs found
+            document.getElementById('summary-cves').textContent = data.total_cves || 0;
+
+            // Show the banner
+            banner.classList.remove('hidden');
+
+            // Auto-hide after 30 seconds
+            setTimeout(() => {
+                hideScanSummaryBanner();
+            }, 30000);
+        }
+
+        function hideScanSummaryBanner() {
+            const banner = document.getElementById('scan-summary-banner');
+            banner.classList.add('hidden');
+        }
+
+        // Customer Management Functions
+        function showCustomerForm() {
+            document.getElementById('add-customer-form').classList.remove('hidden');
+        }
+
+        function hideCustomerForm() {
+            document.getElementById('add-customer-form').classList.add('hidden');
+        }
+
+        function addCustomer() {
+            const customerData = {
+                name: document.getElementById('cust-name').value,
+                id: document.getElementById('cust-id').value,
+                description: document.getElementById('cust-description').value,
+                location: document.getElementById('cust-location').value,
+                connection_type: document.getElementById('cust-connection-type').value,
+                gateway_pattern: document.getElementById('cust-gateway').value,
+                exit_pattern: document.getElementById('cust-exit-pattern').value,
+                hop_count: document.getElementById('cust-hop-count').value,
+                private_ranges: document.getElementById('cust-private-ranges').value,
+                confidence: 0.7
+            };
+
+            // Clear form
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-id').value = '';
+            document.getElementById('cust-description').value = '';
+            document.getElementById('cust-location').value = '';
+            document.getElementById('cust-gateway').value = '';
+            document.getElementById('cust-exit-pattern').value = '';
+            document.getElementById('cust-hop-count').value = '';
+            document.getElementById('cust-private-ranges').value = '';
+
+            // Hide form
+            hideCustomerForm();
+
+            // Send to server
+            socket.emit('add_customer', customerData);
+        }
+
+        function assignCustomer() {
+            const dropdown = document.getElementById('current-customer');
+            const selectedId = dropdown.value;
+            const selectedOption = dropdown.options[dropdown.selectedIndex];
+            const selectedName = selectedOption?.textContent || '';
+
+            if (!selectedId) {
+                showCustomerMessage('Please select a customer to assign', 'error');
+                return;
+            }
+
+            // Extract clean name (remove confidence if present)
+            const cleanName = selectedName.split(' (')[0];
+
+            socket.emit('assign_customer', {
+                customer_id: selectedId,
+                customer_name: cleanName
+            });
+        }
+
+        socket.on('customer_added', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to add customer', 'error');
+            }
+        });
+
+        socket.on('customer_assigned', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                // Update dropdown selection
+                updateDropdownSelection(data.customer.id, data.customer.name);
+            } else {
+                showCustomerMessage('Failed to assign customer', 'error');
+            }
+        });
+
+        socket.on('customer_identified', data => {
+            console.log('Customer identified:', data);
+            // Update dropdown to show auto-detected customer
+            if (data.customer && data.customer.id) {
+                // Store globally for resume functionality
+                window.currentMatchedCustomerId = String(data.customer.id);
+
+                updateDropdownSelection(data.customer.id, data.customer.name);
+
+                // Show confidence info if available
+                if (data.customer.confidence !== undefined) {
+                    console.log(`Customer detected with ${(data.customer.confidence * 100).toFixed(0)}% confidence via ${data.match_method}`);
+                }
+
+                // Check for resumable scan data when customer is auto-identified
+                if (data.customer.id !== 'unknown') {
+                    socket.emit('check_resumable_scan', {
+                        customer_id: data.customer.id,
+                        max_days: 7
+                    });
+                }
+            }
+        });
+
+        socket.on('customer_deleted', data => {
+            if (data.success) {
+                showCustomerMessage(data.message, 'success');
+                socket.emit('get_customers'); // Refresh customer list
+            } else {
+                showCustomerMessage('Failed to delete customer', 'error');
+            }
+        });
+
+        socket.on('customer_error', message => {
+            showCustomerMessage(message, 'error');
+        });
+
+        function showCustomerList() {
+            socket.emit('get_customers');
+        }
+
+        function showCustomerMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('customer-messages');
+            const messageSpan = document.getElementById('customer-message');
+            
+            messagesDiv.classList.remove('hidden');
+            messageSpan.textContent = message;
+            
+            // Update styling based on type
+            messagesDiv.firstElementChild.className = `p-3 border rounded-lg text-sm ${
+                type === 'error' ? 'bg-red-100 border-red-300 text-red-800' :
+                type === 'success' ? 'bg-green-100 border-green-300 text-green-800' :
+                'bg-yellow-100 border-yellow-300 text-yellow-800'
+            }`;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messagesDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        function populateCustomerDropdown(customers) {
+            console.log('Populating customer dropdowns with', customers.length, 'customers');
+
+            const mainDropdown = document.getElementById('current-customer');
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+
+            if (!quickAddDropdown) return;
+
+            // Clear and add Unassigned
+            quickAddDropdown.innerHTML = '<option value="">Unassigned</option>';
+            if (mainDropdown) mainDropdown.innerHTML = '<option value="">Unassigned</option>';
+
+            customers.forEach(customer => {
+                const customerId = String(customer.id);
+                const customerName = customer.name;
+
+                if (!customerId || !customerName) return;
+
+                // Add to main dropdown if it exists
+                if (mainDropdown) {
+                    const mainOption = document.createElement('option');
+                    mainOption.value = customerId;
+                    mainOption.textContent = customerName;
+                    if (customerId === 'unknown') mainOption.classList.add('hidden');
+                    mainDropdown.appendChild(mainOption);
+                }
+
+                // Add to quick-add dropdown
+                const quickOption = document.createElement('option');
+                quickOption.value = customerId;
+                quickOption.textContent = customerName;
+                if (customerId === 'unknown') quickOption.classList.add('hidden');
+                quickAddDropdown.appendChild(quickOption);
+            });
+
+            // Target ID to select: preference is global matched ID, then current value
+            const targetId = window.currentMatchedCustomerId || '';
+            
+            if (targetId) {
+                console.log('Applying target customer selection:', targetId);
+                if (quickAddDropdown) quickAddDropdown.value = targetId;
+                if (mainDropdown) mainDropdown.value = targetId;
+                updateHistoryBadge(targetId);
+            } else {
+                updateHistoryBadge('');
+            }
+        }
+
+        function updateDropdownSelection(customerId, customerName) {
+            const idToSelect = customerId ? String(customerId) : '';
+            // Update the quick-add dropdown to show the selected customer
+            const quickAddDropdown = document.getElementById('customer-quick-add');
+            if (quickAddDropdown) {
+                quickAddDropdown.value = idToSelect;
+                console.log(`Dropdown updated to customer ID: ${idToSelect}, Name: ${customerName}`);
+                // Update history badge when selection changes via detection
+                updateHistoryBadge(customerName);
+            }
+
+            // Also update main dropdown if it exists
+            const mainDropdown = document.getElementById('current-customer');
+            if (mainDropdown) {
+                mainDropdown.value = idToSelect;
+            }
+        }
+
+        function updateCustomerSelection(customer) {
+            const dropdown = document.getElementById('current-customer');
+
+            // If dropdown doesn't exist, skip update
+            if (!dropdown) {
+                console.log('current-customer dropdown not found, skipping update');
+                return;
+            }
+
+            if (customer.id && customer.name) {
+                // Update TLL display
+                const tllDiv = document.getElementById('last-scan-duration');
+                if (tllDiv) {
+                    if (customer.metadata && customer.metadata.last_scan_duration) {
+                        tllDiv.textContent = 'TLL: ' + customer.metadata.last_scan_duration;
+                        tllDiv.classList.remove('hidden');
+                    } else {
+                        tllDiv.classList.add('hidden');
+                    }
+                }
+
+                // Update dropdown to show selected customer
+                let customerExists = false;
+                for (let option of dropdown.options) {
+                    if (option.value === customer.id) {
+                        option.textContent = `${customer.name} (${customer.confidence.toFixed(2)} confidence)`;
+                        customerExists = true;
+                        break;
+                    }
+                }
+                
+                if (!customerExists) {
+                    // Add temporary option for current customer
+                    const option = document.createElement('option');
+                    option.value = customer.id;
+                    option.textContent = `${customer.name} (Manual Assignment)`;
+                    dropdown.appendChild(option);
+                }
+                
+                dropdown.value = customer.id;
+            } else {
+                dropdown.value = '';
+            }
+        }
+
+        function displayCustomerList(customers) {
+            // Create a simple modal or alert to show customers
+            const customerList = customers.map(c =>
+                `${c.name || c.get?.('name')} (ID: ${c.id || c.get?.('id')})`
+            ).join('\n');
+
+            showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
+        }
+
+        // Report Generation Functions
+        let lastScanTarget = '';
+        let lastScanResults = {};
+        let reportTimerInterval = null;
+        let reportStartTime = 0;
+
+        function startReportTimer() {
+            const container = document.getElementById('scan-timer-container');
+            const display = document.getElementById('scan-timer');
+            const feedbackBox = document.getElementById('feedback-container');
+            
+            container.classList.remove('hidden');
+            feedbackBox.classList.add('card-pulsing');
+            reportStartTime = Date.now();
+            
+            if (reportTimerInterval) clearInterval(reportTimerInterval);
+            
+            reportTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - reportStartTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                display.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopReportTimer() {
+            const feedbackBox = document.getElementById('feedback-container');
+            const timerContainer = document.getElementById('scan-timer-container');
+            
+            if (reportTimerInterval) {
+                clearInterval(reportTimerInterval);
+                reportTimerInterval = null;
+            }
+            
+            feedbackBox.classList.remove('card-pulsing');
+            
+            // Hide timer and clear feedback box after 5 seconds
+            setTimeout(() => {
+                timerContainer.classList.add('hidden');
+                feedbackBox.innerHTML = '';
+                // Also hide the feedback container parent div
+                feedbackBox.parentElement.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Store scan results globally for report generation
+        socket.on('scan_results', function(data) {
+            lastScanResults.quickScan = data;
+        });
+
+        socket.on('deep_scan_results', function(data) {
+            lastScanResults.deepScan = data;
+        });
+
+        socket.on('arp_results', function(data) {
+            lastScanResults.arpScan = data;
+        });
+
+        document.getElementById('generate-report-btn').addEventListener('click', function() {
+            if (clientJobs.report.status === 'running') {
+                return;
+            }
+            const target = document.getElementById('scan-target').value || lastScanTarget;
+
+            if (!target) {
+                showReportStatus('Please enter a target or run a scan first', 'error');
+                return;
+            }
+
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Unknown';
+            
+            if (customerOption) {
+                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                customerName = customerOption.text.split(' (')[0];
+            }
+
+            // Add pulsing to the button
+            this.classList.add('card-pulsing');
+            
+            // Start the incrementing timer
+            startReportTimer();
+
+            socket.emit('generate_report', {
+                target: target,
+                customer_name: customerName,
+                scan_results: lastScanResults
+            });
+        });
+
+        // Pulsing Progress Card Helper Functions
+        function createReportProgressCard(message) {
+            const reportCard = document.createElement('div');
+            reportCard.id = 'report-progress-card';
+            reportCard.className = 'mt-4 bg-olive-50 p-4 rounded-xl border border-olive-300 card-pulsing';
+            reportCard.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="relative flex size-3">
+                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-500 opacity-75"></span>
+                        <span class="relative inline-flex size-3 rounded-full bg-olive-600"></span>
+                    </span>
+                    <p id="report-progress-text" class="text-sm font-medium text-olive-900">${message}</p>
+                </div>
+            `;
+            const statusDiv = document.getElementById('report-status');
+            statusDiv.parentNode.insertBefore(reportCard, statusDiv.nextSibling);
+        }
+
+        function updateReportProgress(message) {
+            const progressText = document.getElementById('report-progress-text');
+            if (!progressText) {
+                createReportProgressCard(message);
+                return;
+            }
+
+            progressText.textContent = message;
+        }
+
+        function removeReportProgressCard() {
+            const card = document.getElementById('report-progress-card');
+            if (card) {
+                card.remove();
+            }
+        }
+
+        function showReportStatus(message, type) {
+            const statusDiv = document.getElementById('report-status');
+            const statusText = document.getElementById('report-status-text');
+
+            statusDiv.classList.remove('hidden', 'bg-olive-100', 'bg-olive-200', 'bg-red-100', 'text-olive-800', 'text-olive-900', 'text-red-800');
+            statusDiv.classList.add(
+                type === 'error' ? 'bg-red-100' : 'bg-olive-100',
+                type === 'error' ? 'text-red-800' :
+                type === 'success' ? 'text-olive-900' :
+                'text-olive-800'
+            );
+
+            statusText.textContent = message;
+
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+            }
+        }
+
+        // Historical Scan Viewer Functions
+        document.getElementById('view-history-btn').addEventListener('click', function() {
+            showHistoryModal();
+        });
+
+        document.getElementById('reload-last-scan-btn').addEventListener('click', function() {
+            // Try localStorage first (faster, more current); fall back to server XML
+            if (!loadHostsFromStorage()) {
+                if (window.currentMatchedCustomerId && window.currentMatchedCustomerId !== 'unknown') {
+                    socket.emit('resume_from_last_scan', {
+                        customer_id: window.currentMatchedCustomerId,
+                        max_days: 30
+                    });
+                }
+            }
+        });
+
+        function showHistoryModal() {
+            const modal = document.getElementById('history-modal');
+            const customerDropdown = document.getElementById('current-customer');
+            const filter = document.getElementById('history-customer-filter');
+            
+            modal.classList.remove('hidden');
+            
+            // Get current customer name from the main UI
+            let currentName = '';
+            if (customerDropdown && customerDropdown.selectedOptions[0]) {
+                currentName = customerDropdown.selectedOptions[0].text.split(' (')[0];
+            }
+            
+            if (currentName && currentName !== 'Unassigned' && currentName !== 'Unknown Network' && currentName !== 'Auto-detect network...') {
+                // Set the filter to this customer by default
+                modal.dataset.defaultCustomer = currentName;
+            } else {
+                delete modal.dataset.defaultCustomer;
+            }
+            
+            loadScanHistory(true);
+        }
+
+        function hideHistoryModal() {
+            document.getElementById('history-modal').classList.add('hidden');
+        }
+
+        async function loadScanHistory(isInitialLoad = false) {
+            const modal = document.getElementById('history-modal');
+            const filter = document.getElementById('history-customer-filter');
+            const dateFilter = document.getElementById('history-date-filter').value;
+            
+            let customerFilter = filter.value;
+            
+            // On initial load, use the default customer from the modal dataset if filter is empty
+            if (isInitialLoad && !customerFilter && modal.dataset.defaultCustomer) {
+                customerFilter = modal.dataset.defaultCustomer;
+            }
+
+            try {
+                const response = await fetch('/api/scans');
+                const data = await response.json();
+
+                let scans = data.scans || [];
+
+                // Re-populate the customer filter list first so we can select the right one
+                populateCustomerFilter(scans, customerFilter);
+                
+                // Now get the possibly updated filter value (if populateCustomerFilter set it)
+                const activeFilter = filter.value;
+
+                // Apply filters
+                if (activeFilter) {
+                    scans = scans.filter(s => s.customer_name === activeFilter);
+                }
+                if (dateFilter) {
+                    scans = scans.filter(s => s.date === dateFilter);
+                }
+
+                displayScanHistory(scans);
+
+            } catch (error) {
+                console.error('Error loading scan history:', error);
+                document.getElementById('history-list').innerHTML =
+                    '<p class="text-red-600">Error loading scan history</p>';
+            }
+        }
+
+        function populateCustomerFilter(scans, defaultValue = '') {
+            const filter = document.getElementById('history-customer-filter');
+            const customers = [...new Set(scans.map(s => s.customer_name))].sort();
+
+            const currentValue = filter.value || defaultValue;
+            filter.innerHTML = '<option value="">All Customers</option>';
+
+            customers.forEach(customer => {
+                const option = document.createElement('option');
+                option.value = customer;
+                option.textContent = customer;
+                filter.appendChild(option);
+            });
+
+            // Set to current/default value if it exists in the new list
+            if (customers.includes(currentValue)) {
+                filter.value = currentValue;
+            } else {
+                filter.value = '';
+            }
+        }
+
+        function displayScanHistory(scans) {
+            const historyList = document.getElementById('history-list');
+
+            if (scans.length === 0) {
+                historyList.innerHTML = '<p class="text-olive-600">No scans found</p>';
+                return;
+            }
+
+            historyList.innerHTML = scans.map(scan => {
+                const date = new Date(scan.timestamp).toLocaleString();
+
+                return `
+                    <div class="bg-olive-50 p-4 rounded-lg border border-olive-300">
+                        <div class="flex justify-between items-start mb-2">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                                <h3 class="font-display text-lg text-olive-900">${scan.customer_name || 'Unknown'}</h3>
+                                <p class="text-sm text-olive-600">${date}</p>
+                                <p class="text-sm text-olive-700 mt-1">Target: <span class="font-mono">${scan.target}</span></p>
+                            </div>
+                            <div class="flex gap-2">
+                                ${scan.has_html ? `
+                                    <a href="/api/scans/${scan.path}/html" target="_blank"
+                                       class="px-3 py-1 bg-olive-600 text-white rounded text-sm hover:bg-olive-700">
+                                        View HTML
+                                    </a>
+                                ` : ''}
+                                ${scan.has_pdf ? `
+                                    <a href="/api/scans/${scan.path}/pdf"
+                                       class="px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800">
+                                        Download PDF
+                                    </a>
+                                ` : ''}
+                                ${scan.has_xml ? `
+                                    <a href="/api/scans/${scan.path}/xml"
+                                       class="px-3 py-1 bg-olive-500 text-white rounded text-sm hover:bg-olive-600">
+                                        Download XML
+                                    </a>
+                                ` : ''}
+                                <button onclick="deleteScan('${scan.path}')"
+                                        class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deleteScan(path) {
+            if (!confirm('Are you sure you want to delete this scan?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/scans/${path}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadScanHistory(); // Reload list
+                } else {
+                    alert('Error deleting scan');
+                }
+            } catch (error) {
+                console.error('Error deleting scan:', error);
+                alert('Error deleting scan');
+            }
+        }
+
+        // Store last scan target
+        document.getElementById('start-scan-btn').addEventListener('click', function() {
+            lastScanTarget = document.getElementById('scan-target').value;
+        });
+
+        // Auto Scan Toggle
+        let autoScanEnabled = false;
+        let autoScanStartTime = '01:00';
+        let autoScanEndTime = '06:00';
+
+        document.getElementById('auto-scan-toggle').addEventListener('change', function() {
+            autoScanEnabled = this.checked;
+            const timesDiv = document.getElementById('auto-scan-times');
+
+            if (autoScanEnabled) {
+                // Show time selection modal
+                showAutoScanTimeModal();
+            } else {
+                // Disable auto scanning
+                timesDiv.classList.add('hidden');
+                socket.emit('update_auto_scan', { enabled: false });
+                showReportStatus('Automatic scanning disabled', 'info');
+            }
+        });
+
+        function showAutoScanTimeModal() {
+            const modal = document.getElementById('auto-scan-modal');
+            modal.classList.remove('hidden');
+
+            // Pre-fill with current values
+            document.getElementById('auto-start-time').value = autoScanStartTime;
+            document.getElementById('auto-end-time').value = autoScanEndTime;
+        }
+
+        function hideAutoScanTimeModal() {
+            document.getElementById('auto-scan-modal').classList.add('hidden');
+        }
+
+        function saveAutoScanTimes() {
+            const startTime = document.getElementById('auto-start-time').value;
+            const endTime = document.getElementById('auto-end-time').value;
+
+            if (!startTime || !endTime) {
+                showReportStatus('Please select both start and end times', 'error');
+                return;
+            }
+
+            autoScanStartTime = startTime;
+            autoScanEndTime = endTime;
+
+            // Update display
+            const windowEl = document.getElementById('auto-scan-window');
+            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
+            const timesDiv = document.getElementById('auto-scan-times');
+            if (timesDiv) timesDiv.classList.remove('hidden');
+
+            // Enable auto scanning
+            socket.emit('update_auto_scan', {
+                enabled: true,
+                start_time: startTime,
+                end_time: endTime
+            });
+
+            hideAutoScanTimeModal();
+            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
+        }
+
+        function saveAndRunScan() {
+            if (clientJobs.report.status === 'running') {
+                showReportStatus('A report job is already running', 'error');
+                return;
+            }
+
+            const startTime = document.getElementById('auto-start-time').value;
+            const endTime = document.getElementById('auto-end-time').value;
+
+            if (!startTime || !endTime) {
+                showReportStatus('Please select both start and end times', 'error');
+                return;
+            }
+
+            // Close modal immediately
+            hideAutoScanTimeModal();
+
+            autoScanStartTime = startTime;
+            autoScanEndTime = endTime;
+
+            // Update display
+            const windowEl = document.getElementById('auto-scan-window');
+            if (windowEl) windowEl.textContent = `${startTime} to ${endTime}`;
+            const timesDiv = document.getElementById('auto-scan-times');
+            if (timesDiv) timesDiv.classList.remove('hidden');
+
+            // Enable auto scanning
+            socket.emit('update_auto_scan', {
+                enabled: true,
+                start_time: startTime,
+                end_time: endTime
+            });
+
+            hideAutoScanTimeModal();
+            showReportStatus(`Automatic scanning enabled: ${startTime} to ${endTime}`, 'success');
+
+            // Immediately trigger a scan using generate_report
+            // Use the same target selection logic as the main Generate Report button
+            const target = document.getElementById('scan-target').value || lastScanTarget || '127.0.0.1';
+
+            // Use the same customer name logic as the main Generate Report button
+            const customerOption = document.getElementById('current-customer').selectedOptions[0];
+            let customerName = 'Auto Scan'; // Default for auto scans
+
+            if (customerOption) {
+                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                customerName = customerOption.text.split(' (')[0];
+            }
+
+            console.log('About to emit generate_report with target:', target, 'customer:', customerName);
+            console.log('Socket connected:', socket.connected);
+            showReportStatus(`Starting scan of ${target}...`, 'info');
+
+            // Use the same generate_report event as the main Generate Report button
+            socket.emit('generate_report', {
+                target: target,
+                customer_name: customerName
+            });
+            console.log('generate_report emitted');
+        }
+
+        // Auto scan status updates
+        socket.on('auto_scan_status', function(status) {
+            autoScanEnabled = status.enabled || false;
+            document.getElementById('auto-scan-toggle').checked = autoScanEnabled;
+
+            if (status.start_time && status.end_time) {
+                autoScanStartTime = status.start_time;
+                autoScanEndTime = status.end_time;
+                const windowEl = document.getElementById('auto-scan-window');
+                if (windowEl) windowEl.textContent = `${status.start_time} to ${status.end_time}`;
+                const timesDiv = document.getElementById('auto-scan-times');
+                if (timesDiv) timesDiv.classList.remove('hidden');
+            } else {
+                const timesDiv = document.getElementById('auto-scan-times');
+                if (timesDiv) timesDiv.classList.add('hidden');
+            }
+        });
+
+        socket.on('auto_scan_error', function(data) {
+            showReportStatus(`Automatic scan error: ${data.error}`, 'error');
+        });
+
+        // TableSorter class for sortable table functionality
+        class TableSorter {
+            constructor(tableId) {
+                this.table = document.getElementById(tableId);
+                this.currentSort = { column: null, direction: 'asc' };
+                this.sortFunctions = {
+                    'ip': this.sortIPAddresses.bind(this),
+                    'mac': this.sortMACAddresses.bind(this),
+                    'text': this.sortText.bind(this),
+                    'number': this.sortNumbers.bind(this),
+                    'ports': this.sortPortCount.bind(this)
+                };
+                this.initializeSorting();
+                this.loadSortState();
+            }
+
+            initializeSorting() {
+                const headers = this.table.querySelectorAll('.sortable');
+                headers.forEach(header => {
+                    header.addEventListener('click', () => this.sortByColumn(header));
+                    header.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            this.sortByColumn(header);
+                        }
+                    });
+                    header.setAttribute('tabindex', '0');
+                });
+            }
+
+            sortByColumn(header) {
+                const column = header.dataset.column;
+                const type = header.dataset.type;
+
+                // Toggle sort direction if same column, otherwise default to ascending
+                if (this.currentSort.column === column) {
+                    this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.currentSort.column = column;
+                    this.currentSort.direction = 'asc';
+                }
+
+                this.sortTable(column, type, this.currentSort.direction);
+                this.updateVisualIndicators(header);
+                this.saveSortState();
+            }
+
+            sortTable(column, type, direction) {
+                const tbody = this.table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                rows.sort((a, b) => {
+                    const aValue = this.getCellValue(a, column);
+                    const bValue = this.getCellValue(b, column);
+
+                    const sortFn = this.sortFunctions[type] || this.sortFunctions.text;
+                    const result = sortFn(aValue, bValue);
+
+                    return direction === 'asc' ? result : -result;
+                });
+
+                // Reorder DOM elements
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            sortIPAddresses(a, b) {
+                // Convert IP addresses to comparable numbers
+                const aParts = a.split('.').map(Number);
+                const bParts = b.split('.').map(Number);
+
+                for (let i = 0; i < 4; i++) {
+                    if (aParts[i] !== bParts[i]) {
+                        return aParts[i] - bParts[i];
+                    }
+                }
+                return 0;
+            }
+
+            sortMACAddresses(a, b) {
+                // Remove colons and compare as hex
+                const aHex = a.replace(/:/g, '');
+                const bHex = b.replace(/:/g, '');
+                return parseInt(aHex, 16) - parseInt(bHex, 16);
+            }
+
+            sortText(a, b) {
+                return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+            }
+
+            sortNumbers(a, b) {
+                return parseFloat(a) - parseFloat(b);
+            }
+
+            sortPortCount(a, b) {
+                // Extract port count from "80/tcp, 443/tcp, 22/tcp" format
+                const aCount = (a || '').split(',').length;
+                const bCount = (b || '').split(',').length;
+                return aCount - bCount;
+            }
+
+            getCellValue(row, column) {
+                const columnIndex = this.getColumnIndex(column);
+                const cell = row.cells[columnIndex];
+                return cell ? cell.textContent.trim() : '';
+            }
+
+            getColumnIndex(column) {
+                // Map column names to table indices
+                const columnMap = {
+                    'status': 0,
+                    'ip': 1,
+                    'mac': 2,
+                    'vendor': 3,
+                    'hostname': 4,
+                    'open_ports': 5,
+                    'version': 6,
+                    'cves': 7
+                };
+                return columnMap[column] || 0;
+            }
+
+            updateVisualIndicators(activeHeader) {
+                // Clear all indicators
+                this.table.querySelectorAll('.sortable').forEach(header => {
+                    header.classList.remove('sorted-asc', 'sorted-desc');
+                });
+
+                // Set active indicator
+                const directionClass = this.currentSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc';
+                activeHeader.classList.add(directionClass);
+            }
+
+            saveSortState() {
+                const state = {
+                    column: this.currentSort.column,
+                    direction: this.currentSort.direction,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('tableSortState', JSON.stringify(state));
+            }
+
+            loadSortState() {
+                try {
+                    const state = JSON.parse(localStorage.getItem('tableSortState'));
+                    if (state && state.column) {
+                        this.currentSort = state;
+                        // Apply saved sort
+                        const header = this.table.querySelector(`[data-column="${state.column}"]`);
+                        if (header) {
+                            this.sortTable(state.column, header.dataset.type, state.direction);
+                            this.updateVisualIndicators(header);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to load sort state:', e);
+                }
+            }
+
+            resort() {
+                if (this.currentSort.column) {
+                    const header = this.table.querySelector(`[data-column="${this.currentSort.column}"]`);
+                    if (header) {
+                        this.sortTable(this.currentSort.column, header.dataset.type, this.currentSort.direction);
+                    }
+                }
+            }
+        }
 
         // Initialize table sorter when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
@@ -1069,6 +2949,210 @@
         });
     </script>
     
+    <!-- 2026 New Sites JavaScript Functionality -->
+    <script>
+    // Mobile Menu Toggle
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    
+    if (mobileMenuBtn && mobileMenu) {
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+        
+        mobileMenu.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+            });
+        });
+    }
+    
+    // Global Search Functionality
+    const searchInput = document.getElementById('global-search');
+    
+    if (searchInput) {
+        // Real-time search across all content
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            
+            // Search in all compact cards
+            document.querySelectorAll('.compact-card').forEach(card => {
+                const title = card.querySelector('h3')?.textContent.toLowerCase() || '';
+                const subtitle = card.querySelector('p')?.textContent.toLowerCase() || '';
+                const meta = card.textContent.toLowerCase() || '';
+                
+                if (!searchTerm || title.includes(searchTerm) || subtitle.includes(searchTerm) || meta.includes(searchTerm)) {
+                    card.style.display = '';
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                    }, 10);
+                } else {
+                    card.style.opacity = '0';
+                    setTimeout(() => {
+                        card.style.display = 'none';
+                    }, 150);
+                }
+            });
+        });
+        
+        // Keyboard shortcut Cmd/Ctrl + K
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
+            
+            if (e.key === 'Escape') {
+                const mobileMenu = document.getElementById('mobile-menu');
+                if (mobileMenu) mobileMenu.classList.add('hidden');
+                searchInput.blur();
+            }
+        });
+    }
+    
+    // Filter Pills Functionality
+    const filterPills = document.querySelectorAll('.filter-pill');
+    
+    filterPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            // Remove active from siblings
+            const parent = pill.parentElement;
+            if (parent) {
+                parent.querySelectorAll('.filter-pill').forEach(p => {
+                    p.classList.remove('active', 'bg-olive-600', 'text-white');
+                    p.classList.add('text-stone-600');
+                    if (!p.classList.contains('bg-white') && !p.classList.contains('border')) {
+                        p.classList.add('text-stone-600');
+                    }
+                });
+            }
+            
+            // Add active to clicked
+            pill.classList.add('active');
+            pill.classList.remove('text-stone-600');
+            
+            // If it's a sidebar filter with icon
+            if (pill.querySelector('svg')) {
+                pill.classList.add('bg-olive-600', 'text-white');
+            }
+            
+            const filter = pill.getAttribute('data-filter');
+            if (filter && filter !== 'all') {
+                // Filter logic - show/hide based on data attribute or content type
+                document.querySelectorAll('.compact-card').forEach(card => {
+                    // Check if card has matching category or related content
+                    const cardText = card.textContent.toLowerCase();
+                    let matches = false;
+                    
+                    if (filter === 'books' && (cardText.includes('book') || cardText.includes('press') || cardText.includes('pp'))) matches = true;
+                    else if (filter === 'video' && (cardText.includes('video') || cardText.includes('movie') || cardText.includes('hbo') || cardText.includes('bbc') || cardText.includes('eps') || cardText.includes('m'))) matches = true;
+                    else if (filter === 'research' && (cardText.includes('pdf') || cardText.includes('paper') || cardText.includes('journal') || cardText.includes('et al') || cardText.includes('cites'))) matches = true;
+                    else if (filter === 'audio' && (cardText.includes('audio') || cardText.includes('podcast') || cardText.includes('headphones') || cardText.includes('h'))) matches = true;
+                    else if (filter === 'photos' && (cardText.includes('photo') || cardText.includes('collection') || cardText.includes('natgeo'))) matches = true;
+                    
+                    if (matches || filter === 'all') {
+                        card.style.display = '';
+                        setTimeout(() => card.style.opacity = '1', 10);
+                    } else {
+                        card.style.opacity = '0';
+                        setTimeout(() => card.style.display = 'none', 200);
+                    }
+                });
+            } else if (filter === 'all') {
+                document.querySelectorAll('.compact-card').forEach(card => {
+                    card.style.display = '';
+                    setTimeout(() => card.style.opacity = '1', 10);
+                });
+            }
+        });
+    });
+    
+    // Horizontal scroll buttons
+    window.scrollContent = function(gridId, direction) {
+        const grid = document.getElementById(gridId + '-grid');
+        if (grid) {
+            const scrollAmount = 300;
+            grid.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+        }
+    };
+    
+    // Compact card interactions
+    document.querySelectorAll('.compact-card').forEach(card => {
+        card.addEventListener('click', () => {
+            // In real app: open detail view
+            card.style.transform = 'scale(0.98)';
+            setTimeout(() => {
+                card.style.transform = '';
+            }, 150);
+        });
+    });
+    
+    // Add to collection buttons
+    document.querySelectorAll('.compact-card button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const icon = btn.querySelector('svg');
+            const isAdded = btn.classList.contains('bg-olive-600');
+            
+            if (!isAdded) {
+                btn.classList.add('bg-olive-600', 'text-white');
+                btn.classList.remove('bg-white');
+                btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i>';
+            } else {
+                btn.classList.remove('bg-olive-600', 'text-white');
+                btn.classList.add('bg-white');
+                btn.innerHTML = '<i data-lucide="plus" class="w-4 h-4 text-olive-700"></i>';
+            }
+            
+            lucide.createIcons();
+            
+            // Visual feedback
+            btn.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                btn.style.transform = '';
+            }, 200);
+        });
+    });
+    
+    // Lazy loading images with blur effect
+    if ('IntersectionObserver' in window) {
+        const imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    img.classList.add('opacity-0');
+                    setTimeout(() => {
+                        img.classList.remove('opacity-0');
+                        img.classList.add('transition-opacity', 'duration-500');
+                    }, 50);
+                    imageObserver.unobserve(img);
+                }
+            });
+        }, { rootMargin: '50px' });
+        
+        document.querySelectorAll('img').forEach(img => {
+            imageObserver.observe(img);
+        });
+    }
+    
+    // Load more functionality
+    const loadMoreBtn = document.querySelector('button:not([onclick])');
+    if (loadMoreBtn && loadMoreBtn.textContent.includes('Load More')) {
+        loadMoreBtn.addEventListener('click', function() {
+            const originalText = this.textContent;
+            this.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Loading...';
+            this.disabled = true;
+            
+            setTimeout(() => {
+                this.textContent = originalText;
+                this.disabled = false;
+                // In real app: append new content
+            }, 800);
+        });
+    }
+    </script>
+
     <!-- Auto Scan Time Modal -->
     <div id="auto-scan-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-lg max-w-md w-full p-6">
@@ -1110,6 +3194,167 @@
         </div>
     </div>
     </div>
+
+    <!-- ── Audit Log Panel ─────────────────────────────────────────────── -->
+    <div id="log-panel" class="hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col" style="height:320px;">
+        <div class="bg-olive-950 text-white flex items-center justify-between px-4 py-2 shadow-2xl border-t-2 border-olive-600 flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <svg class="w-4 h-4 text-olive-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span class="font-bold text-sm tracking-widest uppercase text-olive-200">Audit Log</span>
+                <span id="log-entry-count" class="text-xs font-mono text-olive-500">0 entries</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="copyLog()" class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-olive-800 hover:bg-olive-700 text-olive-200 rounded transition-colors">Copy</button>
+                <button onclick="clearLog()" class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-olive-800 hover:bg-olive-700 text-olive-200 rounded transition-colors">Clear</button>
+                <button onclick="toggleLogPanel()" class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-olive-800 hover:bg-olive-700 text-olive-200 rounded transition-colors">Close</button>
+            </div>
+        </div>
+        <div id="log-entries" class="flex-1 overflow-y-auto bg-olive-950 font-mono text-xs px-4 py-2 space-y-0.5"></div>
+    </div>
+    <!-- ── /Audit Log Panel ─────────────────────────────────────────────── -->
+
+    <script>
+    // ── Audit Log ──────────────────────────────────────────────────────────
+    (function () {
+        let logCount = 0;
+        const LEVEL_STYLES = {
+            log:     'text-olive-300',
+            info:    'text-olive-300',
+            warn:    'text-amber-400',
+            error:   'text-red-400',
+            scan:    'text-emerald-400',
+            raw:     'text-olive-500',
+        };
+
+        function ts() {
+            return new Date().toISOString().replace('T', ' ').slice(0, 23);
+        }
+
+        function appendLog(level, msg) {
+            logCount++;
+            const container = document.getElementById('log-entries');
+            if (!container) return;
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 leading-5 ' + (LEVEL_STYLES[level] || 'text-olive-300');
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'text-olive-600 flex-shrink-0 select-none';
+            timeSpan.textContent = ts();
+            const levelSpan = document.createElement('span');
+            levelSpan.className = 'uppercase font-bold flex-shrink-0 w-6 select-none ' + (LEVEL_STYLES[level] || '');
+            levelSpan.textContent = level === 'scan' ? 'SCN' : level === 'raw' ? 'RAW' : level.slice(0,3).toUpperCase();
+            const msgSpan = document.createElement('span');
+            msgSpan.className = 'break-all whitespace-pre-wrap';
+            msgSpan.textContent = msg;
+            div.appendChild(timeSpan);
+            div.appendChild(levelSpan);
+            div.appendChild(msgSpan);
+            container.appendChild(div);
+            // Auto-scroll if already near the bottom
+            if (container.scrollHeight - container.scrollTop < container.clientHeight + 80) {
+                container.scrollTop = container.scrollHeight;
+            }
+            // Update counts
+            const countEl = document.getElementById('log-entry-count');
+            if (countEl) countEl.textContent = logCount + ' entr' + (logCount === 1 ? 'y' : 'ies');
+            const badge = document.getElementById('log-count-badge');
+            if (badge) {
+                badge.textContent = logCount > 999 ? '999+' : logCount;
+                badge.classList.remove('hidden');
+            }
+        }
+
+        // Intercept console methods
+        const _origLog   = console.log.bind(console);
+        const _origInfo  = console.info.bind(console);
+        const _origWarn  = console.warn.bind(console);
+        const _origError = console.error.bind(console);
+
+        function toStr(args) {
+            return Array.from(args).map(a => {
+                if (typeof a === 'string') return a;
+                try { return JSON.stringify(a); } catch { return String(a); }
+            }).join(' ');
+        }
+
+        console.log = function (...args) { _origLog(...args);   appendLog('log',   toStr(args)); };
+        console.info = function (...args) { _origInfo(...args); appendLog('info',  toStr(args)); };
+        console.warn = function (...args) { _origWarn(...args); appendLog('warn',  toStr(args)); };
+        console.error = function (...args) { _origError(...args); appendLog('error', toStr(args)); };
+
+        window.addEventListener('error', function (e) {
+            appendLog('error', (e.message || String(e)) + (e.filename ? ' @ ' + e.filename + ':' + e.lineno : ''));
+        });
+
+        // Socket events for scan feedback / raw nmap output
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof socket !== 'undefined') {
+                bindLogSocket();
+            } else {
+                // socket may not be defined yet — wait a tick
+                setTimeout(function () {
+                    if (typeof socket !== 'undefined') bindLogSocket();
+                }, 2000);
+            }
+        });
+
+        function bindLogSocket() {
+            socket.on('scan_feedback', function (data) {
+                appendLog('scan', '[' + (data.target || '') + '] ' + (data.message || JSON.stringify(data)));
+            });
+            socket.on('scan_raw_output', function (data) {
+                const lines = (data.output || '').split('\n');
+                lines.forEach(function (line) {
+                    if (line.trim()) appendLog('raw', '[' + (data.target || '') + '] ' + line);
+                });
+            });
+        }
+
+        // Expose helpers to window
+        window._appendLog = appendLog;
+    })();
+
+    window.toggleLogPanel = function () {
+        const panel = document.getElementById('log-panel');
+        if (!panel) return;
+        const isHidden = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden');
+        if (isHidden) {
+            // Scroll to bottom when opened
+            const c = document.getElementById('log-entries');
+            if (c) c.scrollTop = c.scrollHeight;
+            // Reset badge when panel is opened
+            const badge = document.getElementById('log-count-badge');
+            if (badge) badge.classList.add('hidden');
+        }
+    };
+
+    window.clearLog = function () {
+        const c = document.getElementById('log-entries');
+        if (c) c.innerHTML = '';
+        const countEl = document.getElementById('log-entry-count');
+        if (countEl) countEl.textContent = '0 entries';
+    };
+
+    window.copyLog = function () {
+        const c = document.getElementById('log-entries');
+        if (!c) return;
+        const text = Array.from(c.querySelectorAll('div')).map(d => d.textContent).join('\n');
+        navigator.clipboard.writeText(text).then(function () {
+            const btn = event.target;
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(function () { btn.textContent = orig; }, 1500);
+        }).catch(function () {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        });
+    };
+    </script>
 
 </body>
 </html>
