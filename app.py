@@ -94,11 +94,14 @@ from nmapui.reporting import (
     convert_xml_to_html,
     extract_scan_statistics,
     find_latest_saved_scan_for_pdf,
-    generate_pdf_from_saved_task as generate_pdf_from_saved_task_impl,
     get_most_recent_scan_xml,
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
     save_scan_metadata,
+)
+from nmapui.report_runtime import (
+    generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime,
+    generate_report_task as generate_report_task_runtime,
 )
 from nmapui.scan_runtime import start_scan_task as start_scan_task_impl
 from nmapui.scanning import (
@@ -112,10 +115,6 @@ from nmapui.scanning import (
 )
 from nmapui.traceroute import run_traceroute as run_traceroute_for_state
 from nmapui.validation import validate_target
-from nmapui.workflows import generate_report_task as workflow_generate_report_task
-from nmapui.workflow_context import (
-    build_report_workflow_context,
-)
 from persistence import (
     load_json_document,
     normalize_current_assignment_document,
@@ -570,9 +569,10 @@ def run_nmap_with_xml_output(target, output_base, scan_type="comprehensive", sid
 
 def generate_report_task(sid, data):
     """Run report generation in a background task for a single client."""
-    workflow_generate_report_task(
-        build_report_workflow_context(
-            {
+    return generate_report_task_runtime(
+        sid=sid,
+        data=data,
+        deps={
             "job_registry": job_registry,
             "idle_state_manager": idle_state_manager,
             "emit_job_status": emit_job_status,
@@ -598,15 +598,14 @@ def generate_report_task(sid, data):
             "current_customer": current_customer,
             "extract_scan_statistics": extract_scan_statistics,
             "customer_fingerprinter": customer_fingerprinter,
-        }
-        ),
-        sid,
-        data,
+        },
     )
 
 def generate_pdf_from_saved_task(sid, data):
-    return generate_pdf_from_saved_task_impl(
-        {
+    return generate_pdf_from_saved_task_runtime(
+        sid=sid,
+        data=data,
+        deps={
             "job_registry": job_registry,
             "emit_job_status": emit_job_status,
             "emit_to_client": emit_to_client,
@@ -627,8 +626,6 @@ def generate_pdf_from_saved_task(sid, data):
             "web_stylesheet": XSL_STYLESHEET,
             "pdf_stylesheet": XSL_STYLESHEET_PDF,
         },
-        sid,
-        data,
     )
 
 

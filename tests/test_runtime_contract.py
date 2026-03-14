@@ -263,13 +263,16 @@ def test_app_uses_shared_workflow_context_builders():
     app_source = (ROOT / "app.py").read_text()
     workflow_context_source = (ROOT / "nmapui" / "workflow_context.py").read_text()
     scan_runtime_source = (ROOT / "nmapui" / "scan_runtime.py").read_text()
+    report_runtime_source = (ROOT / "nmapui" / "report_runtime.py").read_text()
 
-    assert "from nmapui.workflow_context import (" in app_source
-    assert "build_report_workflow_context" in app_source
-    assert "build_report_workflow_context(" in app_source
+    assert "from nmapui.report_runtime import (" in app_source
+    assert "generate_report_task as generate_report_task_runtime" in app_source
+    assert "generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime" in app_source
+    assert "build_report_workflow_context(" in report_runtime_source
     assert "class ScanWorkflowContext" in workflow_context_source
     assert "class ReportWorkflowContext" in workflow_context_source
     assert "context = build_scan_workflow_context(" in scan_runtime_source
+    assert "workflow_generate_report_task(build_report_workflow_context(deps), sid, data)" in report_runtime_source
     assert "def identify_gateway_firewall_targets(" not in app_source
     assert "def start_deep_scan(" not in app_source
     assert '"cve_pattern":' not in app_source
@@ -286,10 +289,12 @@ def test_app_uses_shared_validation_helpers():
 
 def test_app_uses_shared_saved_pdf_helpers():
     app_source = (ROOT / "app.py").read_text()
+    report_runtime_source = (ROOT / "nmapui" / "report_runtime.py").read_text()
 
     assert "find_latest_saved_scan_for_pdf," in app_source
-    assert "generate_pdf_from_saved_task as generate_pdf_from_saved_task_impl" in app_source
-    assert "return generate_pdf_from_saved_task_impl(" in app_source
+    assert "generate_pdf_from_saved_task as generate_pdf_from_saved_task_runtime" in app_source
+    assert "return generate_pdf_from_saved_task_runtime(" in app_source
+    assert "return generate_pdf_from_saved_task_impl(deps, sid, data)" in report_runtime_source
     assert "def find_latest_saved_scan_for_pdf(" not in app_source
 
 
