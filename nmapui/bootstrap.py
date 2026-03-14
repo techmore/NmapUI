@@ -8,6 +8,17 @@ from flask_socketio import SocketIO
 from .runtime import env_flag
 
 
+def get_allowed_origins():
+    """Return the explicit CORS allowlist for HTTP and Socket.IO."""
+    configured = os.environ.get("NMAPUI_ALLOWED_ORIGINS", "").strip()
+    if configured:
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return [
+        "http://127.0.0.1:9000",
+        "http://localhost:9000",
+    ]
+
+
 def build_runtime_options(argv):
     """Build server runtime options from argv and environment."""
     return {
@@ -20,9 +31,10 @@ def build_runtime_options(argv):
 
 def create_web_app(import_name):
     """Create the Flask app and Socket.IO server with the default CORS policy."""
+    allowed_origins = get_allowed_origins()
     app = Flask(import_name)
-    socketio = SocketIO(app, cors_allowed_origins="*")
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
     return app, socketio
 
 

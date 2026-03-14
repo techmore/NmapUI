@@ -3,6 +3,7 @@ from nmapui.bootstrap import (
     build_runtime_options,
     create_web_app,
     complete_startup_state,
+    get_allowed_origins,
     run_socketio_server,
 )
 
@@ -20,6 +21,27 @@ def test_build_runtime_options_uses_env_and_argv(monkeypatch):
         "port": 9100,
         "debug": True,
     }
+
+
+def test_get_allowed_origins_defaults_to_local_ui_hosts(monkeypatch):
+    monkeypatch.delenv("NMAPUI_ALLOWED_ORIGINS", raising=False)
+
+    assert get_allowed_origins() == [
+        "http://127.0.0.1:9000",
+        "http://localhost:9000",
+    ]
+
+
+def test_get_allowed_origins_uses_environment_allowlist(monkeypatch):
+    monkeypatch.setenv(
+        "NMAPUI_ALLOWED_ORIGINS",
+        "https://scanner.example.com, https://ops.example.com ",
+    )
+
+    assert get_allowed_origins() == [
+        "https://scanner.example.com",
+        "https://ops.example.com",
+    ]
 
 
 def test_begin_startup_state_resets_transient_fields():
@@ -79,22 +101,27 @@ def test_create_web_app_initializes_flask_and_socketio():
     original_flask = bootstrap.Flask
     original_socketio = bootstrap.SocketIO
     original_cors = bootstrap.CORS
+    original_get_allowed_origins = bootstrap.get_allowed_origins
     bootstrap.Flask = FlaskStub
     bootstrap.SocketIO = SocketIOStub
     bootstrap.CORS = cors_stub
+    bootstrap.get_allowed_origins = lambda: ["https://scanner.example.com"]
     try:
         app, socketio = create_web_app("nmapui.app")
     finally:
         bootstrap.Flask = original_flask
         bootstrap.SocketIO = original_socketio
         bootstrap.CORS = original_cors
+        bootstrap.get_allowed_origins = original_get_allowed_origins
 
     assert created["import_name"] == "nmapui.app"
     assert created["socketio_app"] is app
     assert socketio is not None
-    assert created["cors_allowed_origins"] == "*"
+    assert created["cors_allowed_origins"] == ["https://scanner.example.com"]
     assert created["cors_app"] is app
-    assert created["cors_resources"] == {r"/api/*": {"origins": "*"}}
+    assert created["cors_resources"] == {
+        r"/api/*": {"origins": ["https://scanner.example.com"]}
+    }
 
 
 def test_run_socketio_server_uses_normalized_runtime_options():
