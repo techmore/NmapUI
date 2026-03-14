@@ -301,6 +301,20 @@ def generate_report_task(context, sid, data):
         customer_name = current_customer.get("name", "Unknown")
     customer_name = customer_name.split(" (")[0]
 
+    current_customer_id = str(current_customer.get("id", "") or "")
+    if customer_name in ["Unknown", "Unassigned", "Unknown Network"] or current_customer_id in ["", "unknown"]:
+        public_ip = str(network_key.get("public_ip") or "").strip()
+        exit_ip = str(network_key.get("exit_ip") or "").strip()
+        if public_ip or exit_ip:
+            generated_customer = customer_fingerprinter.ensure_generated_customer(network_key)
+            current_customer = {
+                "id": generated_customer.get("id"),
+                "name": generated_customer.get("name"),
+                "confidence": generated_customer.get("confidence", 0.35),
+                "metadata": generated_customer.get("metadata", {}),
+            }
+            customer_name = current_customer["name"].split(" (")[0]
+
     if not target:
         job_registry.complete(sid, "report", status="failed", details={"error": "No target specified"})
         emit_job_status(sid, "report")
