@@ -330,9 +330,12 @@ def test_app_uses_tool_version_registry_accessor_directly():
 
 def test_app_uses_single_traceroute_dependency_bundle():
     app_source = (ROOT / "app.py").read_text()
+    traceroute_runtime_source = (ROOT / "nmapui" / "traceroute_runtime.py").read_text()
 
     assert "def _traceroute_deps():" in app_source
-    assert "deps=_traceroute_deps()" in app_source
+    assert "return build_traceroute_deps(" in app_source
+    assert "run_traceroute as run_traceroute_runtime" in app_source
+    assert "run_traceroute_for_state(target, sid=sid, deps=deps)" in traceroute_runtime_source
 
 
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():

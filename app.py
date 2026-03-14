@@ -115,7 +115,10 @@ from nmapui.scanning import (
     run_nmap_with_xml_output as run_nmap_with_xml_output_impl,
     split_subnet_into_chunks,
 )
-from nmapui.traceroute import run_traceroute as run_traceroute_for_state
+from nmapui.traceroute_runtime import (
+    build_traceroute_deps,
+    run_traceroute as run_traceroute_runtime,
+)
 from nmapui.validation import validate_target
 from persistence import (
     load_json_document,
@@ -397,10 +400,7 @@ register_core_routes(
 
 
 def run_traceroute(target="1.1.1.1"):
-    return run_traceroute_for_state(
-        target,
-        deps=_traceroute_deps(),
-    )
+    return run_traceroute_runtime(target=target, deps=_traceroute_deps())
 
 
 def get_report_counts():
@@ -464,20 +464,20 @@ DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)
 
 
 def _traceroute_deps():
-    return {
-        "emit_to_client": emit_to_client,
-        "safe_emit": safe_emit,
-        "get_client_state": get_client_state,
-        "socketio_sleep": socketio.sleep,
-        "logger": logger,
-        "is_private_ip": is_private_ip,
-        "requests": requests,
-        "set_network_key_state": set_network_key_state,
-        "get_customer_fingerprinter": lambda: customer_fingerprinter,
-        "merge_customer_metadata": merge_customer_metadata,
-        "set_current_customer_state": set_current_customer_state,
-        "get_current_customer_state": get_current_customer_state,
-    }
+    return build_traceroute_deps(
+        emit_to_client=emit_to_client,
+        safe_emit=safe_emit,
+        get_client_state=get_client_state,
+        socketio_sleep=socketio.sleep,
+        logger=logger,
+        is_private_ip=is_private_ip,
+        requests=requests,
+        set_network_key_state=set_network_key_state,
+        get_customer_fingerprinter=lambda: customer_fingerprinter,
+        merge_customer_metadata=merge_customer_metadata,
+        set_current_customer_state=set_current_customer_state,
+        get_current_customer_state=get_current_customer_state,
+    )
 
 
 register_runtime_info_handlers(
@@ -490,8 +490,8 @@ register_runtime_info_handlers(
         "logger": logger,
         "netifaces": ni,
         "requests": requests,
-        "run_traceroute": lambda target, sid=None: run_traceroute_for_state(
-            target,
+        "run_traceroute": lambda target, sid=None: run_traceroute_runtime(
+            target=target,
             sid=sid,
             deps=_traceroute_deps(),
         ),
