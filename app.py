@@ -1621,9 +1621,13 @@ def start_auto_scan_thread():
     )
     auto_scan_thread = thread_ref["thread"]
 
-if __name__ == "__main__":
-    runtime_options = build_runtime_options(sys.argv)
+def run_server(argv=None):
+    runtime_options = build_runtime_options(argv or sys.argv)
 
     startup_checks(quick=runtime_options["quick_mode"])
     start_auto_scan_thread()
     run_socketio_server(socketio, app, runtime_options)
+
+
+if __name__ == "__main__":
+    run_server()

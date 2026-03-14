@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,3 +89,14 @@ def test_release_paths_prefer_dot_venv():
     assert "source .venv/bin/activate" in building_guide
     assert "source .venv/bin/activate" in testing_guide
     assert "source .venv/bin/activate" in release_checklist
+
+
+def test_app_exposes_explicit_run_server_entrypoint():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+
+    assert "def run_server(argv=None):" in app_source
+    assert 'if __name__ == "__main__":\n    run_server()' in app_source
