@@ -3,6 +3,7 @@ import re
 import shutil
 
 from flask import jsonify, send_file
+from nmapui.auth import require_auth
 
 
 def register_scan_routes(app, deps):
@@ -13,6 +14,7 @@ def register_scan_routes(app, deps):
     logger = deps["logger"]
 
     @app.route("/api/scans")
+    @require_auth
     def list_scans():
         scans = []
         if not scans_dir.exists():
@@ -47,6 +49,7 @@ def register_scan_routes(app, deps):
         return jsonify({"scans": scans})
 
     @app.route("/api/scans/<path:path>/html")
+    @require_auth
     def get_scan_html(path):
         scan_dir = resolve_scan_path(path)
         if scan_dir is None:
@@ -60,6 +63,7 @@ def register_scan_routes(app, deps):
         return send_file(html_path)
 
     @app.route("/api/scans/<path:path>/pdf")
+    @require_auth
     def get_scan_pdf(path):
         scan_dir = resolve_scan_path(path)
         if scan_dir is None:
@@ -91,6 +95,7 @@ def register_scan_routes(app, deps):
         return send_file(pdf_path, as_attachment=True, download_name=download_name)
 
     @app.route("/api/scans/<path:path>/xml")
+    @require_auth
     def get_scan_xml(path):
         scan_dir = resolve_scan_path(path)
         if scan_dir is None:
@@ -122,6 +127,7 @@ def register_scan_routes(app, deps):
         return send_file(xml_path, as_attachment=True, download_name=download_name)
 
     @app.route("/api/scans/<path:path>", methods=["DELETE"])
+    @require_auth
     def delete_scan(path):
         scan_dir = resolve_scan_path(path)
         if scan_dir is None or not scan_dir.exists():
