@@ -617,6 +617,7 @@ def save_scan_metadata(
     current_customer,
     start_time=None,
     end_time=None,
+    runtime_store=None,
 ):
     """Save scan metadata to JSON file with duration tracking."""
     duration_seconds = None
@@ -664,6 +665,38 @@ def save_scan_metadata(
         scans_dir,
         customer_id=customer_id,
         target=target,
+    )
+    persist_report_artifact(
+        scan_dir=scan_dir,
+        customer_id=customer_id,
+        target=target,
+        files=files,
+        metadata=metadata,
+        runtime_store=runtime_store,
+    )
+
+
+def persist_report_artifact(
+    *,
+    scan_dir,
+    customer_id,
+    target,
+    files,
+    metadata,
+    runtime_store=None,
+):
+    if runtime_store is None:
+        return
+
+    scans_dir = _get_scans_dir_for_scan(scan_dir)
+    runtime_store.upsert_report_artifact(
+        scan_path=str(scan_dir.relative_to(scans_dir)),
+        customer_id=str(customer_id or ""),
+        target=str(target or ""),
+        html_path=str(files.get("web_html", "") or ""),
+        pdf_path=str(files.get("pdf", "") or ""),
+        xml_path=str(files.get("xml", "") or ""),
+        payload=normalize_scan_metadata_document(metadata),
     )
 
 
@@ -1067,6 +1100,7 @@ def generate_pdf_from_saved_task(context, sid, data):
     pdf_stylesheet = context["pdf_stylesheet"]
     on_job_end = context.get("on_job_end")
     broadcaster = context.get("broadcaster")
+    runtime_store = context.get("runtime_store")
 
     target = data.get("target")
     max_days = int(data.get("max_days", 30))
@@ -1161,6 +1195,19 @@ def generate_pdf_from_saved_task(context, sid, data):
             "report",
             status="completed",
             details={"target": target, "path": relative_path, "mode": "pdf_only"},
+        )
+        persist_report_artifact(
+            scan_dir=scan_dir,
+            customer_id=customer_id,
+            target=target,
+            files={
+                "xml": xml_path,
+                "web_html": web_html_path,
+                "pdf_html": pdf_html_path,
+                "pdf": pdf_path,
+            },
+            metadata=current_metadata,
+            runtime_store=runtime_store,
         )
         emit_job_status(sid, "report")
     except Exception as exc:

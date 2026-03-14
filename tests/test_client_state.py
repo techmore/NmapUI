@@ -131,7 +131,17 @@ def test_generate_report_task_prefers_per_client_state_snapshot(tmp_path):
         scan_dir.mkdir(parents=True, exist_ok=True)
         return scan_dir
 
-    def save_scan_metadata_stub(scan_dir, customer_name, target, files, network_key, current_customer, start_time, end_time):
+    def save_scan_metadata_stub(
+        scan_dir,
+        customer_name,
+        target,
+        files,
+        network_key,
+        current_customer,
+        start_time,
+        end_time,
+        runtime_store=None,
+    ):
         captured["network_key"] = network_key
         captured["current_customer"] = current_customer
 

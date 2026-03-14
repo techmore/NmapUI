@@ -64,6 +64,7 @@ class ReportWorkflowContext:
     current_customer: Any
     extract_scan_statistics: Any
     customer_fingerprinter: Any
+    runtime_store: Any = None
     settings_state: Any = None
     web_stylesheet: Any = None
     pdf_stylesheet: Any = None
@@ -178,6 +179,7 @@ def build_report_workflow_context(deps):
         current_customer=deps["current_customer"],
         extract_scan_statistics=deps["extract_scan_statistics"],
         customer_fingerprinter=deps["customer_fingerprinter"],
+        runtime_store=deps.get("runtime_store"),
         settings_state=deps.get("settings_state"),
         web_stylesheet=deps.get("web_stylesheet"),
         pdf_stylesheet=deps.get("pdf_stylesheet"),

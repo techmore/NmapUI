@@ -77,6 +77,7 @@ def build_report_task_deps(
     broadcaster,
     current_customer,
     customer_fingerprinter,
+    runtime_store,
     emit_job_status,
     emit_to_client,
     extract_scan_statistics,
@@ -130,6 +131,7 @@ def build_report_task_deps(
         "current_customer": current_customer,
         "extract_scan_statistics": extract_scan_statistics,
         "customer_fingerprinter": customer_fingerprinter,
+        "runtime_store": runtime_store,
     }
 
 
@@ -146,6 +148,7 @@ def build_saved_pdf_task_deps(
     job_registry,
     logger,
     pdf_stylesheet,
+    runtime_store,
     scans_dir,
     socketio_sleep,
     web_stylesheet,
@@ -165,6 +168,7 @@ def build_saved_pdf_task_deps(
         "socketio_sleep": socketio_sleep,
         "web_stylesheet": web_stylesheet,
         "pdf_stylesheet": pdf_stylesheet,
+        "runtime_store": runtime_store,
     }
 
 

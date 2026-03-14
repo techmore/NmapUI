@@ -49,6 +49,7 @@ def build_task_bindings(
     current_customer,
     extract_scan_statistics,
     customer_fingerprinter,
+    runtime_store,
     find_latest_saved_scan_for_pdf,
     load_json_document,
     normalize_scan_metadata_document,
@@ -147,6 +148,7 @@ def build_task_bindings(
                 current_customer=current_customer,
                 extract_scan_statistics=extract_scan_statistics,
                 customer_fingerprinter=customer_fingerprinter,
+                runtime_store=runtime_store,
             ),
         )
 
@@ -171,6 +173,7 @@ def build_task_bindings(
                 convert_html_to_pdf=convert_html_to_pdf,
                 get_app_version=get_app_version,
                 logger=logger,
+                runtime_store=runtime_store,
                 scans_dir=scans_dir,
                 socketio_sleep=socketio.sleep,
                 web_stylesheet=web_stylesheet,

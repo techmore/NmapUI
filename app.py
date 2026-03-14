@@ -366,6 +366,7 @@ task_bindings = build_task_bindings(
     current_customer=current_customer,
     extract_scan_statistics=extract_scan_statistics,
     customer_fingerprinter=customer_fingerprinter,
+    runtime_store=runtime_store,
     find_latest_saved_scan_for_pdf=find_latest_saved_scan_for_pdf,
     load_json_document=load_json_document,
     normalize_scan_metadata_document=normalize_scan_metadata_document,

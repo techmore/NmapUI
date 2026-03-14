@@ -584,6 +584,7 @@ def generate_report_task(context, sid, data):
             current_customer=current_customer,
             start_time=start_time,
             end_time=end_time,
+            runtime_store=context.runtime_store,
         )
 
         emit_to_client(sid, "scan_feedback", "📊 Extracting scan statistics...")

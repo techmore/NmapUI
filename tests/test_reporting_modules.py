@@ -17,6 +17,7 @@ from nmapui.reporting import (
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
     parse_vulners_script,
+    persist_report_artifact,
     render_report_diff_summary_html,
     save_scan_metadata,
     summarize_asset_differences,
@@ -126,6 +127,38 @@ def test_save_scan_metadata_persists_customer_id(tmp_path):
     assert metadata["customer_name"] == "Acme Customer"
     assert index["entries"][0]["path"] == "Acme/2026-03-14/scan_010000_target"
     assert index["entries"][0]["metadata"]["customer_id"] == "cust-123"
+
+
+def test_save_scan_metadata_persists_report_artifact_record(tmp_path):
+    scan_dir = tmp_path / "data" / "scans" / "Acme" / "2026-03-14" / "scan_010000_target"
+    scan_dir.mkdir(parents=True)
+    runtime_calls = []
+
+    class RuntimeStoreStub:
+        def upsert_report_artifact(self, **kwargs):
+            runtime_calls.append(kwargs)
+
+    save_scan_metadata(
+        scan_dir,
+        "Acme Customer",
+        "192.168.1.0/24",
+        {
+            "xml": scan_dir / "scan.xml",
+            "web_html": scan_dir / "scan_web.html",
+            "pdf": scan_dir / "scan_report.pdf",
+        },
+        network_key={"target": "192.168.1.0/24"},
+        current_customer={"id": "cust-123", "name": "Acme Customer"},
+        start_time=datetime.now() - timedelta(minutes=3),
+        end_time=datetime.now(),
+        runtime_store=RuntimeStoreStub(),
+    )
+
+    assert runtime_calls[0]["scan_path"] == "Acme/2026-03-14/scan_010000_target"
+    assert runtime_calls[0]["customer_id"] == "cust-123"
+    assert runtime_calls[0]["target"] == "192.168.1.0/24"
+    assert runtime_calls[0]["html_path"].endswith("scan_web.html")
+    assert runtime_calls[0]["pdf_path"].endswith("scan_report.pdf")
 
 
 def test_save_scan_metadata_persists_diff_summary_for_followup_scan(tmp_path):
@@ -395,6 +428,7 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
         '{"path":"Acme/2026-03-14/scan_020000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-14T02:00:00"}'
     )
     observed = {"events": []}
+    runtime_calls = []
 
     class JobRegistryStub:
         def start(self, sid, job_type, details):
@@ -421,6 +455,13 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
             "convert_html_to_pdf": lambda *args, **kwargs: True,
             "get_app_version": lambda: "v1.0.0",
             "logger": type("LoggerStub", (), {"exception": lambda self, *args, **kwargs: None})(),
+            "runtime_store": type(
+                "RuntimeStoreStub",
+                (),
+                {
+                    "upsert_report_artifact": lambda self, **kwargs: runtime_calls.append(kwargs),
+                },
+            )(),
             "scans_dir": scans_dir,
             "socketio_sleep": lambda value: None,
             "web_stylesheet": "web.xsl",
@@ -434,6 +475,9 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
     assert observed["completed"][2] == "completed"
     assert observed["completed"][3]["mode"] == "pdf_only"
     assert observed["cleared"] == ("sid-1", "report")
+    assert runtime_calls[0]["scan_path"] == "Acme/2026-03-14/scan_020000_target"
+    assert runtime_calls[0]["customer_id"] == "cust-123"
+    assert runtime_calls[0]["pdf_path"].endswith("scan_report.pdf")
     report_complete = next(event for event in observed["events"] if event[1] == "report_complete")
     assert report_complete[2]["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
     assert 'id="scan-diff-summary"' in (scan_dir / "scan_web.html").read_text(encoding="utf-8")
