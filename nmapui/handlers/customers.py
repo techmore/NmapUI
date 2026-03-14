@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 
+from flask import request
 from flask_socketio import emit
 from nmapui.auth import require_socket_auth
 
@@ -10,6 +11,7 @@ from nmapui.auth import require_socket_auth
 def register_customer_handlers(socketio, deps):
     get_customer_fingerprinter = deps["get_customer_fingerprinter"]
     network_key = deps["network_key"]
+    get_network_key = network_key if callable(network_key) else lambda sid=None: network_key
     get_current_customer = deps["get_current_customer"]
     set_current_customer = deps["set_current_customer"]
     merge_customer_metadata = deps["merge_customer_metadata"]
@@ -25,8 +27,9 @@ def register_customer_handlers(socketio, deps):
     def get_customer_info_event():
         customer_fingerprinter = get_customer_fingerprinter()
         current_customer = get_current_customer()
+        active_network_key = get_network_key(request.sid)
         if not current_customer.get("id") and not current_customer.get("manual_assignment"):
-            customer, confidence = customer_fingerprinter.match_customer(network_key)
+            customer, confidence = customer_fingerprinter.match_customer(active_network_key)
             if confidence > 0 and customer and customer.get("id") != "unknown":
                 set_current_customer(
                     {

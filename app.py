@@ -50,6 +50,8 @@ from nmapui.jobs import (
     ensure_job_not_cancelled as nmapui_ensure_job_not_cancelled,
     run_cancellable_command as nmapui_run_cancellable_command,
 )
+from nmapui.client_state import ClientStateRegistry
+from nmapui.networking import identify_gateway_firewall_targets as identify_gateway_firewall_targets_for_key
 from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
@@ -64,6 +66,13 @@ from nmapui.runtime import (
     env_flag,
     get_app_version,
     restart_application,
+)
+from nmapui.runtime_state import (
+    get_client_state as get_client_state_impl,
+    get_current_customer_state as get_current_customer_state_impl,
+    set_current_customer_state as set_current_customer_state_impl,
+    set_last_scan_target_state as set_last_scan_target_state_impl,
+    set_network_key_state as set_network_key_state_impl,
 )
 from nmapui.reporting import (
     convert_html_to_pdf,
@@ -81,6 +90,7 @@ from nmapui.scanning import (
     create_scan_folder,
     run_quick_auto_scan,
 )
+from nmapui.traceroute import run_traceroute as run_traceroute_for_state
 from nmapui.workflows import (
     generate_report_task as workflow_generate_report_task,
     start_deep_scan as workflow_start_deep_scan,
@@ -307,6 +317,10 @@ AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
 rate_limiter = PerClientRateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
 job_registry = ClientJobRegistry()
 broadcaster = ScanBroadcaster()
+client_state_registry = ClientStateRegistry(
+    default_customer=current_customer,
+    default_network_key=network_key,
+)
 
 
 def safe_emit(event, data=None):
@@ -343,6 +357,51 @@ def update_job_progress(
 
 def ensure_job_not_cancelled(sid: str, job_type: str):
     return nmapui_ensure_job_not_cancelled(job_registry, sid, job_type)
+
+
+def get_client_state(*, sid=None):
+    return get_client_state_impl(
+        sid=sid,
+        client_state_registry=client_state_registry,
+        current_customer=current_customer,
+        network_key=network_key,
+        last_scan_target=last_scan_target,
+    )
+
+
+def get_current_customer_state(sid=None):
+    return get_current_customer_state_impl(sid=sid, get_client_state=get_client_state)
+
+
+def set_current_customer_state(value, sid=None):
+    return set_current_customer_state_impl(
+        value=value,
+        sid=sid,
+        client_state_registry=client_state_registry,
+        set_default_customer=lambda customer: globals().__setitem__("current_customer", customer),
+    )
+
+
+def set_network_key_state(value, sid=None):
+    return set_network_key_state_impl(
+        value=value,
+        sid=sid,
+        client_state_registry=client_state_registry,
+        set_default_network_key=lambda key: globals().__setitem__("network_key", key),
+    )
+
+
+def set_last_scan_target_state(value, sid=None):
+    return set_last_scan_target_state_impl(
+        value=value,
+        sid=sid,
+        client_state_registry=client_state_registry,
+        set_default_last_scan_target=lambda target: globals().__setitem__("last_scan_target", target),
+    )
+
+
+def release_client_state(sid):
+    client_state_registry.release(sid)
 
 
 def run_cancellable_command(
@@ -638,6 +697,7 @@ register_history_handlers(
         "emit_to_client": emit_to_client,
         "rate_limiter": rate_limiter,
         "broadcaster": broadcaster,
+        "release_client_state": release_client_state,
         "logger": logger,
     },
 )
@@ -667,179 +727,23 @@ def is_private_ip(ip):
 
 
 def run_traceroute(target="1.1.1.1"):
-    global current_customer
-    try:
-        safe_emit("customer_identification_start")
-        socketio.sleep(0)
-
-        logger.info(f"Running traceroute to {target}...")
-        safe_emit(
-            "customer_identification_progress",
-            {"message": f"Running traceroute to {target}..."},
-        )
-        socketio.sleep(0)
-
-        import platform
-
-        system = platform.system()
-
-        if system == "Darwin":
-            traceroute_cmd = ["traceroute", "-I", "-n", "-q", "1", target]
-        else:
-            traceroute_cmd = ["traceroute", "-n", "-I", "-q", "1", target]
-
-        logger.info(f"Running traceroute: {' '.join(traceroute_cmd)}")
-        output = subprocess.check_output(
-            traceroute_cmd, stderr=subprocess.STDOUT, timeout=60
-        ).decode("utf-8")
-
-        network_key["raw"] = output
-        network_key["target"] = target
-        network_key["hops"] = []
-        network_key["private_hops"] = []
-        network_key["public_hops"] = []
-
-        hop_pattern = re.compile(r"^\s*(\d+)\s+(\S+)\s+(.+)$", re.MULTILINE)
-
-        for match in hop_pattern.finditer(output):
-            hop_num = int(match.group(1))
-            ip_or_star = match.group(2)
-            latencies = match.group(3)
-
-            if ip_or_star == "*" or "traceroute" in ip_or_star.lower():
-                continue
-
-            latency_matches = re.findall(r"([\d.]+)\s*ms", latencies)
-            avg_latency = None
-            if latency_matches:
-                avg_latency = round(
-                    sum(float(lat) for lat in latency_matches) / len(latency_matches), 2
-                )
-
-            hop_data = {
-                "hop": hop_num,
-                "ip": ip_or_star,
-                "latency_ms": avg_latency,
-                "is_private": is_private_ip(ip_or_star),
-            }
-
-            network_key["hops"].append(hop_data)
-
-            if hop_data["is_private"]:
-                network_key["private_hops"].append(hop_data)
-            else:
-                network_key["public_hops"].append(hop_data)
-
-        network_key["total_hops"] = len(network_key["hops"])
-
-        if network_key["hops"]:
-            network_key["exit_ip"] = network_key["hops"][-1]["ip"]
-
-        # Get actual public IP (WAN IP) from external service
-        try:
-            import requests
-
-            network_key["public_ip"] = requests.get(
-                "https://api.ipify.org", timeout=5
-            ).text
-            logger.info(f"Detected public IP: {network_key['public_ip']}")
-        except Exception as e:
-            logger.warning(f"Could not detect public IP: {e}")
-            network_key["public_ip"] = None
-
-        logger.info(
-            f"Traceroute complete: {network_key['total_hops']} hops, {len(network_key['private_hops'])} private, {len(network_key['public_hops'])} public"
-        )
-        safe_emit(
-            "customer_identification_progress",
-            {"message": f"Traceroute complete ({network_key['total_hops']} hops)"},
-        )
-        socketio.sleep(0)
-
-        logger.info("Running customer identification...")
-        safe_emit(
-            "customer_identification_progress", {"message": "Identifying customer..."}
-        )
-        socketio.sleep(0)
-
-        # Only auto-detect if no manual assignment exists
-        if not current_customer.get("manual_assignment"):
-            customer, confidence = customer_fingerprinter.match_customer(network_key)
-            if confidence > 0 and customer and customer.get("id") != "unknown":
-                current_customer = {
-                    "id": customer.get("id"),
-                    "name": customer.get("name"),
-                    "confidence": confidence,
-                }
-                # Merge metadata from saved customer configuration
-                current_customer = merge_customer_metadata(current_customer, customer)
-                logger.info(f"Auto-detected customer: {current_customer['name']}")
-                save_customer = customer
-            else:
-                current_customer = {
-                    "id": "",
-                    "name": "Unassigned",
-                    "confidence": 0.0,
-                }
-                logger.info("No customer match found, setting to Unassigned")
-                save_customer = customer_fingerprinter.unknown_customer or {}
-        else:
-            logger.info(f"Preserving manual assignment: {current_customer['name']}")
-            # For manual assignments, also merge metadata if customer exists
-            if current_customer.get("id"):
-                saved_customer = customer_fingerprinter.get_customer_by_id(
-                    current_customer["id"]
-                )
-                if saved_customer:
-                    current_customer = merge_customer_metadata(
-                        current_customer, saved_customer
-                    )
-            save_customer = {
-                "id": current_customer["id"],
-                "name": current_customer["name"],
-            }
-            confidence = current_customer.get("confidence", 1.0)
-
-        customer_fingerprinter.save_scan_result(network_key, save_customer, confidence)
-        customer_fingerprinter.save_traceroute_to_history(
-            current_customer["id"],
-            network_key,
-            f"WAN: {network_key.get('public_ip', 'unknown')}",
-        )
-
-        safe_emit(
-            "customer_identified",
-            {
-                "customer": current_customer,
-                "match_method": getattr(
-                    customer_fingerprinter, "last_match_method", "unknown"
-                ),
-                "public_ip": network_key.get("public_ip"),
-                "exit_ip": network_key.get("exit_ip"),
-                "hop_count": network_key["total_hops"],
-            },
-        )
-
-        safe_emit("file_updated", {"file": "data/scan_history.json", "action": "saved"})
-        safe_emit(
-            "file_updated",
-            {"file": "data/customer_traceroutes.json", "action": "saved"},
-        )
-
-        logger.info(
-            f"Customer identified: {current_customer['name']} (confidence: {confidence:.2f})"
-        )
-
-    except subprocess.TimeoutExpired:
-        logger.error("Traceroute timed out")
-        network_key["error"] = "Traceroute timed out"
-        safe_emit("customer_identification_error", {"error": "Traceroute timed out"})
-    except Exception as e:
-        logger.error(f"Traceroute error: {e}")
-        network_key["error"] = str(e)
-        safe_emit("customer_identification_error", {"error": str(e)})
-
-    return network_key
+    return run_traceroute_for_state(
+        target,
+        deps={
+            "emit_to_client": emit_to_client,
+            "safe_emit": safe_emit,
+            "get_client_state": get_client_state,
+            "socketio_sleep": socketio.sleep,
+            "logger": logger,
+            "is_private_ip": is_private_ip,
+            "requests": requests,
+            "set_network_key_state": set_network_key_state,
+            "get_customer_fingerprinter": lambda: customer_fingerprinter,
+            "merge_customer_metadata": merge_customer_metadata,
+            "set_current_customer_state": set_current_customer_state,
+            "get_current_customer_state": get_current_customer_state,
+        },
+    )
 
 
 def get_report_counts():
@@ -904,15 +808,33 @@ def index():
 @require_socket_auth()
 def get_network_key_event():
     """Send the network key to the client"""
+    client_network_key = get_client_state(sid=request.sid)["network_key"]
     # If network_key is empty (no hops), run traceroute to populate it
-    if network_key.get("total_hops", 0) == 0:
+    if client_network_key.get("total_hops", 0) == 0:
         logger.info("Network key empty, running traceroute...")
-        run_traceroute("1.1.1.1")
+        client_network_key = run_traceroute_for_state(
+            "1.1.1.1",
+            sid=request.sid,
+            deps={
+                "emit_to_client": emit_to_client,
+                "safe_emit": safe_emit,
+                "get_client_state": get_client_state,
+                "socketio_sleep": socketio.sleep,
+                "logger": logger,
+                "is_private_ip": is_private_ip,
+                "requests": requests,
+                "set_network_key_state": set_network_key_state,
+                "get_customer_fingerprinter": lambda: customer_fingerprinter,
+                "merge_customer_metadata": merge_customer_metadata,
+                "set_current_customer_state": set_current_customer_state,
+                "get_current_customer_state": get_current_customer_state,
+            },
+        )
 
     logger.info(
-        f"Sending network_key to client: {network_key.get('total_hops', 0)} hops"
+        f"Sending network_key to client: {client_network_key.get('total_hops', 0)} hops"
     )
-    emit("network_key", network_key)
+    emit("network_key", client_network_key)
 
 
 def save_customers_config():
@@ -937,12 +859,12 @@ def save_customers_config():
         logger.error(f"Error saving customers config: {e}")
 
 
-def save_current_assignment():
+def save_current_assignment(sid=None):
     try:
         assignment_data = {
             "schema_version": 1,
             "timestamp": datetime.now().isoformat(),
-            "customer": current_customer,
+            "customer": get_current_customer_state(sid),
         }
 
         assignment_path = CURRENT_ASSIGNMENT_FILE
@@ -968,11 +890,11 @@ register_customer_handlers(
     socketio,
     {
         "get_customer_fingerprinter": lambda: customer_fingerprinter,
-        "network_key": network_key,
-        "get_current_customer": lambda: current_customer,
-        "set_current_customer": lambda value: globals().__setitem__("current_customer", value),
+        "network_key": lambda sid=None: get_client_state(sid=sid)["network_key"],
+        "get_current_customer": lambda: get_current_customer_state(request.sid),
+        "set_current_customer": lambda value: set_current_customer_state(value, request.sid),
         "merge_customer_metadata": merge_customer_metadata,
-        "save_current_assignment": save_current_assignment,
+        "save_current_assignment": lambda: save_current_assignment(request.sid),
         "save_customers_config": save_customers_config,
         "normalize_scan_metadata_document": normalize_scan_metadata_document,
         "load_json_document": load_json_document,
@@ -1004,6 +926,7 @@ def load_current_assignment():
             logger.info(
                 f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
             )
+            client_state_registry.set_default_customer(current_customer)
 
     except Exception as e:
         logger.error(f"Error loading current assignment: {e}")
@@ -1124,6 +1047,7 @@ def _make_broadcast_emit(owner_sid: str):
 
 def _scan_workflow_context(owner_sid: str):
     return {
+        "get_client_state": get_client_state,
         "ensure_job_not_cancelled": ensure_job_not_cancelled,
         "idle_state_manager": idle_state_manager,
         "update_job_progress": update_job_progress,
@@ -1131,7 +1055,9 @@ def _scan_workflow_context(owner_sid: str):
         "socketio_sleep": socketio.sleep,
         "run_cancellable_command": run_cancellable_command,
         "run_arp_scan": run_arp_scan,
-        "identify_gateway_firewall_targets": identify_gateway_firewall_targets,
+        "identify_gateway_firewall_targets": lambda hosts: identify_gateway_firewall_targets_for_key(
+            hosts, get_client_state(sid=owner_sid)["network_key"]
+        ),
         "start_deep_scan": workflow_start_deep_scan,
         "job_registry": job_registry,
         "emit_job_status": emit_job_status,
@@ -1217,6 +1143,8 @@ def start_scan(data):
         emit("scan_error", "A scan is already running for this client")
         emit_job_status(request.sid, "scan")
         return
+
+    set_last_scan_target_state(target, request.sid)
 
     # Register this tab as the scan owner so other tabs can subscribe
     broadcaster.start_job(request.sid)
@@ -1473,6 +1401,7 @@ def generate_report_task(sid, data):
             "pdf_stylesheet": XSL_STYLESHEET,
             "get_app_version": get_app_version,
             "save_scan_metadata": save_scan_metadata,
+            "get_client_state": get_client_state,
             "network_key": network_key,
             "current_customer": current_customer,
             "extract_scan_statistics": extract_scan_statistics,
@@ -1525,7 +1454,7 @@ def find_latest_saved_scan_for_pdf(target, customer_id=None, max_days=30):
 def generate_pdf_from_saved_task(sid, data):
     target = data.get("target")
     max_days = int(data.get("max_days", 30))
-    customer_id = str(current_customer.get("id", "") or "")
+    customer_id = str(get_client_state(sid=sid)["current_customer"].get("id", "") or "")
 
     if not target:
         emit_to_client(sid, "report_error", {"error": "No target specified"})

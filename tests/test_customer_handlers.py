@@ -127,6 +127,48 @@ def test_get_customer_info_auto_detects_when_session_is_unassigned(monkeypatch):
     )
 
 
+def test_get_customer_info_supports_sid_scoped_network_key_provider(monkeypatch):
+    configure_auth(monkeypatch)
+    state = {"current_customer": {"id": "", "name": "Unknown Network", "confidence": 0.0}}
+    observed = {}
+    logger = Flask(__name__).logger
+    customer_fingerprinter = type(
+        "FingerprinterStub",
+        (),
+        {
+            "customers": [],
+            "unknown_customer": {"id": "unknown", "name": "Unknown Network"},
+            "customer_traceroutes": {},
+            "match_customer": lambda self, network_key: (
+                observed.setdefault("network_key", network_key),
+                0.0,
+            ),
+        },
+    )()
+
+    app, socketio = build_customer_app(
+        {
+            "get_customer_fingerprinter": lambda: customer_fingerprinter,
+            "network_key": lambda sid=None: {"public_ip": "203.0.113.77", "sid": sid},
+            "get_current_customer": lambda: state["current_customer"],
+            "set_current_customer": lambda value: state.__setitem__("current_customer", value),
+            "merge_customer_metadata": lambda customer, saved_customer: customer,
+            "save_current_assignment": lambda: None,
+            "save_customers_config": lambda: None,
+            "normalize_scan_metadata_document": lambda value: value,
+            "load_json_document": lambda path, default: default,
+            "save_json_document": lambda path, value: None,
+            "logger": logger,
+        },
+    )
+
+    client = socketio.test_client(app, headers=basic_auth_header())
+    client.emit("get_customer_info")
+
+    assert observed["network_key"]["public_ip"] == "203.0.113.77"
+    assert observed["network_key"]["sid"]
+
+
 def test_customer_handlers_reject_unauthorized_socket_client(monkeypatch):
     configure_auth(monkeypatch)
     state = {"current_customer": {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}}
