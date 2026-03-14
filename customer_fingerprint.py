@@ -9,14 +9,9 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 
+from customer_fingerprint_store import CustomerFingerprintStore, ScanHistoryStore
 from persistence import (
-    load_json_document,
-    load_yaml_document,
     normalize_customer_config_document,
-    normalize_scan_history_document,
-    normalize_traceroute_history_document,
-    save_json_document,
-    save_yaml_document,
 )
 
 logging.basicConfig(
@@ -30,9 +25,6 @@ BASE_DIR = Path(__file__).parent.resolve()
 
 
 class CustomerFingerprinter:
-    # TTL for the in-memory scan-history cache (seconds)
-    _HISTORY_CACHE_TTL = 30.0
-
     def __init__(self, config_path: Optional[str] = None):
         self.config_path = config_path or (BASE_DIR / "config" / "customers.yaml")
         self.config = None
@@ -42,32 +34,19 @@ class CustomerFingerprinter:
         self.traceroutes_path = BASE_DIR / "data" / "customer_traceroutes.json"
         self.customer_traceroutes = {}
         self.last_match_method = "unknown"
-        # Scan history in-memory cache
-        self._history_cache: Optional[dict] = None
-        self._history_cache_at: float = 0.0
+        self.store = CustomerFingerprintStore(
+            config_path=self.config_path,
+            traceroutes_path=self.traceroutes_path,
+            logger=logger,
+        )
+        self.scan_history_store = ScanHistoryStore(logger=logger)
         self.load_config()
         self.load_traceroute_history()
 
-    def _load_history_cached(self, storage_path: str) -> dict:
-        """Return scan history document, using in-memory cache when fresh."""
-        import time
-        now = time.monotonic()
-        if self._history_cache is None or (now - self._history_cache_at) > self._HISTORY_CACHE_TTL:
-            self._history_cache = normalize_scan_history_document(
-                load_json_document(Path(storage_path), {"entries": []})
-            )
-            self._history_cache_at = now
-        return self._history_cache
-
-    def _invalidate_history_cache(self):
-        self._history_cache = None
-        self._history_cache_at = 0.0
-
     def load_config(self):
         try:
-            self.config = normalize_customer_config_document(
-                load_yaml_document(self.config_path, {})
-            )
+            self.store.config_path = Path(self.config_path)
+            self.config = self.store.load_config_document()
 
             self.settings = self.config.get("settings", {})
             self.customers = self.config.get("customers", [])
@@ -91,16 +70,8 @@ class CustomerFingerprinter:
 
     def load_traceroute_history(self):
         try:
-            if not self.traceroutes_path.exists():
-                logger.warning(
-                    f"Traceroute history not found at {self.traceroutes_path}"
-                )
-                return
-
-            document = normalize_traceroute_history_document(
-                load_json_document(self.traceroutes_path, {})
-            )
-            self.customer_traceroutes = document["customers"]
+            self.store.traceroutes_path = Path(self.traceroutes_path)
+            self.customer_traceroutes = self.store.load_traceroute_customers()
 
             total_traceroutes = sum(
                 len(c.get("traceroutes", []))
@@ -147,11 +118,8 @@ class CustomerFingerprinter:
             if len(traces) > 200:
                 self.customer_traceroutes[customer_id]["traceroutes"] = traces[-200:]
 
-            os.makedirs(os.path.dirname(self.traceroutes_path), exist_ok=True)
-            save_json_document(
-                self.traceroutes_path,
-                normalize_traceroute_history_document(self.customer_traceroutes),
-            )
+            self.store.traceroutes_path = Path(self.traceroutes_path)
+            self.store.save_traceroute_customers(self.customer_traceroutes)
 
             logger.info(
                 f"Saved traceroute to history for customer '{customer_id}': {network_key.get('public_ip')}"
@@ -655,18 +623,12 @@ class CustomerFingerprinter:
         }
 
         try:
-            history_document = self._load_history_cached(storage_path)
-            history = list(history_document["entries"])
-
-            history.append(scan_result)
-
             max_entries = indexing_config.get("max_entries", 500)
-            if len(history) > max_entries:
-                history = history[-max_entries:]
-
-            history_document["entries"] = history
-            save_json_document(Path(storage_path), history_document)
-            self._invalidate_history_cache()
+            self.scan_history_store.append_entry(
+                storage_path,
+                scan_result,
+                max_entries=max_entries,
+            )
 
             logger.info(f"Scan result saved to {storage_path}")
         except Exception as e:
@@ -711,7 +673,8 @@ class CustomerFingerprinter:
                 "indexing": (self.config or {}).get("indexing", {}),
             }
 
-            save_yaml_document(self.config_path, config_data)
+            self.store.config_path = Path(self.config_path)
+            self.store.save_config_document(config_data)
 
             logger.info(f"Customers config saved to {self.config_path}")
 
@@ -743,17 +706,8 @@ class CustomerFingerprinter:
         if not os.path.exists(storage_path):
             return []
 
-        try:
-            history_document = self._load_history_cached(storage_path)
-            history = history_document["entries"]
-
-            if customer_id:
-                history = [h for h in history if h.get("customer_id") == customer_id]
-
-            return sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)[
-                :limit
-            ]
-
-        except Exception as e:
-            logger.error("Error loading scan history: %s", e)
-            return []
+        return self.scan_history_store.get_entries(
+            storage_path,
+            customer_id=customer_id,
+            limit=limit,
+        )

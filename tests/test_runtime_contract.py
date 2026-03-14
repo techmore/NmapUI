@@ -298,6 +298,17 @@ def test_browser_regression_test_exists_and_is_gated():
     assert "test_second_tab_replays_active_report_state" in browser_source
 
 
+def test_customer_fingerprinter_uses_extracted_store_services():
+    fingerprinter_source = (ROOT / "customer_fingerprint.py").read_text()
+    store_source = (ROOT / "customer_fingerprint_store.py").read_text()
+
+    assert "from customer_fingerprint_store import CustomerFingerprintStore, ScanHistoryStore" in fingerprinter_source
+    assert "self.store = CustomerFingerprintStore(" in fingerprinter_source
+    assert "self.scan_history_store = ScanHistoryStore(" in fingerprinter_source
+    assert "class CustomerFingerprintStore:" in store_source
+    assert "class ScanHistoryStore:" in store_source
+
+
 def test_release_paths_prefer_dot_venv():
     deploy_script = (ROOT / "deploy.sh").read_text()
     building_guide = (ROOT / "BUILDING.md").read_text()
