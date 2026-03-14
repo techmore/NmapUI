@@ -163,8 +163,8 @@ def test_start_scan_uses_sid_scoped_rate_limit_and_broadcaster(monkeypatch):
             return True
 
     class BroadcasterStub:
-        def start_job(self, sid):
-            observed["broadcaster_sid"] = sid
+        def start_job(self, sid, job_type="scan"):
+            observed["broadcaster"] = (sid, job_type)
 
     app, socketio = build_scan_jobs_app(
         {
@@ -185,7 +185,7 @@ def test_start_scan_uses_sid_scoped_rate_limit_and_broadcaster(monkeypatch):
 
     assert observed["can_scan_sid"]
     assert observed["record_scan_sid"] == observed["can_scan_sid"]
-    assert observed["broadcaster_sid"] == observed["can_scan_sid"]
+    assert observed["broadcaster"] == (observed["can_scan_sid"], "scan")
 
 
 def test_runtime_info_handlers_reject_unauthenticated_socket_events(monkeypatch):
@@ -296,19 +296,20 @@ def test_connect_replays_active_scan_events_to_new_tab():
     observed = {}
 
     class BroadcasterStub:
-        def find_active_owner(self):
-            return "owner-sid"
+        def find_active_owner(self, job_type="scan"):
+            observed.setdefault("active_lookups", []).append(job_type)
+            return "owner-sid" if job_type == "scan" else None
 
-        def get_replay_buffer(self, owner_sid):
-            observed["buffer_owner"] = owner_sid
+        def get_replay_buffer(self, owner_sid, job_type="scan"):
+            observed["buffer_lookup"] = (owner_sid, job_type)
             return [("scan_feedback", "Scanning..."), ("scan_progress", {"pct": 50})]
 
-        def subscribe(self, owner_sid, new_sid):
-            observed["subscribe"] = (owner_sid, new_sid)
+        def subscribe(self, owner_sid, new_sid, job_type="scan"):
+            observed["subscribe"] = (owner_sid, new_sid, job_type)
             return True
 
-        def end_job(self, owner_sid):
-            observed["ended_owner"] = owner_sid
+        def end_job(self, owner_sid, job_type="scan"):
+            observed["ended_owner"] = (owner_sid, job_type)
 
     class JobRegistryStub:
         def get(self, sid, job_type):
@@ -338,7 +339,7 @@ def test_connect_replays_active_scan_events_to_new_tab():
 
     assert client.is_connected()
     assert observed["job_lookup"] == ("owner-sid", "scan")
-    assert observed["buffer_owner"] == "owner-sid"
+    assert observed["buffer_lookup"] == ("owner-sid", "scan")
     assert observed["subscribe"][0] == "owner-sid"
     assert observed["customer_state"][0][1]["id"] == "cust-123"
     assert observed["network_state"][0][1]["target"] == "10.0.0.0/24"
@@ -357,12 +358,79 @@ def test_connect_replays_active_scan_events_to_new_tab():
     ]
 
 
+def test_connect_replays_active_report_events_to_new_tab():
+    observed = {}
+
+    class BroadcasterStub:
+        def find_active_owner(self, job_type="scan"):
+            observed.setdefault("active_lookups", []).append(job_type)
+            if job_type == "report":
+                return "owner-sid"
+            return None
+
+        def get_replay_buffer(self, owner_sid, job_type="scan"):
+            observed["buffer_lookup"] = (owner_sid, job_type)
+            return [
+                ("scan_feedback", "Generating PDF report..."),
+                ("report_complete", {"path": "Acme/2026-03-14/scan_120000_10.0.0.0_24"}),
+            ]
+
+        def subscribe(self, owner_sid, new_sid, job_type="scan"):
+            observed["subscribe"] = (owner_sid, new_sid, job_type)
+            return True
+
+        def end_job(self, owner_sid, job_type="scan"):
+            observed["ended_owner"] = (owner_sid, job_type)
+
+    class JobRegistryStub:
+        def get(self, sid, job_type):
+            observed["job_lookup"] = (sid, job_type)
+            return {"status": "running", "details": {"target": "10.0.0.0/24"}}
+
+    emitted = []
+    app, socketio = build_connection_app(
+        {
+            "auto_scan_config": {"enabled": False},
+            "broadcaster": BroadcasterStub(),
+            "emit_to_client": lambda sid, event, data=None: emitted.append((sid, event, data)),
+            "get_client_state": lambda sid=None: {
+                "current_customer": {"id": "cust-123", "name": "Acme", "confidence": 0.9},
+                "network_key": {"target": "10.0.0.0/24", "total_hops": 2, "private_hops": [], "public_hops": [], "exit_ip": "1.1.1.1"},
+                "last_scan_target": "10.0.0.0/24",
+            },
+            "job_registry": JobRegistryStub(),
+            "logger": Flask(__name__).logger,
+            "set_current_customer_state": lambda value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
+            "set_network_key_state": lambda value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
+            "set_last_scan_target_state": lambda value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
+        }
+    )
+
+    client = socketio.test_client(app)
+
+    assert client.is_connected()
+    assert observed["active_lookups"] == ["scan", "report"]
+    assert observed["job_lookup"] == ("owner-sid", "report")
+    assert observed["buffer_lookup"] == ("owner-sid", "report")
+    assert observed["subscribe"][2] == "report"
+    assert emitted[4][1] == "job_status"
+    assert emitted[4][2]["job_type"] == "report"
+    assert emitted[5:] == [
+        (observed["subscribe"][1], "scan_feedback", "Generating PDF report..."),
+        (
+            observed["subscribe"][1],
+            "report_complete",
+            {"path": "Acme/2026-03-14/scan_120000_10.0.0.0_24"},
+        ),
+    ]
+
+
 def test_connect_hydrates_new_tab_from_shared_snapshot_without_active_scan():
     observed = {}
     emitted = []
 
     class BroadcasterStub:
-        def find_active_owner(self):
+        def find_active_owner(self, job_type="scan"):
             return None
 
     app, socketio = build_connection_app(
@@ -401,11 +469,11 @@ def test_connect_clears_stale_broadcast_slot_when_no_scan_job():
     observed = {}
 
     class BroadcasterStub:
-        def find_active_owner(self):
-            return "owner-sid"
+        def find_active_owner(self, job_type="scan"):
+            return "owner-sid" if job_type == "scan" else None
 
-        def end_job(self, owner_sid):
-            observed["ended_owner"] = owner_sid
+        def end_job(self, owner_sid, job_type="scan"):
+            observed["ended_owner"] = (owner_sid, job_type)
 
     class JobRegistryStub:
         def get(self, sid, job_type):
@@ -425,4 +493,4 @@ def test_connect_clears_stale_broadcast_slot_when_no_scan_job():
 
     assert client.is_connected()
     assert observed["job_lookup"] == ("owner-sid", "scan")
-    assert observed["ended_owner"] == "owner-sid"
+    assert observed["ended_owner"] == ("owner-sid", "scan")

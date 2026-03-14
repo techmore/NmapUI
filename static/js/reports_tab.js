@@ -3,6 +3,29 @@ let reportsTabLoaded = false;
 let historyTabLoaded = false;
 let currentAppTab = 'dashboard';
 
+function ensureTabPanelsAreSiblings() {
+    const dashboardPanel = document.getElementById('dashboard-tab-panel');
+    if (!dashboardPanel || !dashboardPanel.parentElement) {
+        return;
+    }
+
+    const parent = dashboardPanel.parentElement;
+    const panelIds = [
+        'history-tab-panel',
+        'reports-tab-panel',
+        'logs-tab-panel',
+        'settings-tab-panel',
+    ];
+
+    panelIds.forEach((panelId) => {
+        const panel = document.getElementById(panelId);
+        if (!panel || panel.parentElement !== dashboardPanel) {
+            return;
+        }
+        parent.insertBefore(panel, dashboardPanel.nextSibling);
+    });
+}
+
 function setTabStatus(elementId, message, isError = false) {
     const status = document.getElementById(elementId);
     if (!status) {
@@ -207,6 +230,7 @@ function initializeReportsTab() {
         return;
     }
     appTabsInitialized = true;
+    ensureTabPanelsAreSiblings();
 
     document.getElementById('tab-dashboard-btn')?.addEventListener('click', () => switchAppTab('dashboard'));
     document.getElementById('tab-history-btn')?.addEventListener('click', () => switchAppTab('history'));

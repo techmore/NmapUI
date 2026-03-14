@@ -67,6 +67,8 @@ def register_scan_job_handlers(socketio, deps):
             emit_job_status(request.sid, "report")
             return
 
+        if broadcaster is not None:
+            broadcaster.start_job(request.sid, job_type="report")
         emit_job_status(request.sid, "report")
         socketio.start_background_task(generate_report_task, request.sid, data)
 

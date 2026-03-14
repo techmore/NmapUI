@@ -294,6 +294,7 @@ def generate_report_task(context, sid, data):
         current_customer = context.current_customer
     extract_scan_statistics = context.extract_scan_statistics
     customer_fingerprinter = context.customer_fingerprinter
+    on_job_end = context.on_job_end
 
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
@@ -624,4 +625,6 @@ def generate_report_task(context, sid, data):
             job_registry.complete(sid, "report", status="completed")
             emit_job_status(sid, "report")
         job_registry.clear_if_disconnected(sid, "report")
+        if on_job_end:
+            on_job_end()
         idle_state_manager.end_operation(operation_id)

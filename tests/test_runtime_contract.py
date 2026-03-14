@@ -437,6 +437,8 @@ def test_app_uses_shared_workflow_context_builders():
     assert "class ReportWorkflowContext" in workflow_context_source
     assert "context = build_scan_workflow_context(" in scan_runtime_source
     assert "workflow_generate_report_task(build_report_workflow_context(deps), sid, data)" in report_runtime_source
+    assert 'job_type="report"' in report_runtime_source
+    assert '"broadcaster": broadcaster' in app_composition_source
     assert "def build_scan_task_deps(" in app_composition_source
     assert "def build_report_task_deps(" in app_composition_source
     assert "def build_saved_pdf_task_deps(" in app_composition_source
@@ -668,6 +670,9 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "buildLink(`/api/scans/${path}/html`, 'View Report', true);" in report_status_module
     assert "buildLink(`/api/scans/${path}/pdf`, 'Download PDF');" in report_status_module
     assert "function initializeReportsTab()" in reports_tab_module
+    assert "function ensureTabPanelsAreSiblings()" in reports_tab_module
+    assert "panel.parentElement !== dashboardPanel" in reports_tab_module
+    assert "parent.insertBefore(panel, dashboardPanel.nextSibling);" in reports_tab_module
     assert "switchAppTab('history')" in reports_tab_module
     assert "switchAppTab('reports')" in reports_tab_module
     assert "switchAppTab('logs')" in reports_tab_module

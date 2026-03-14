@@ -71,6 +71,7 @@ def build_scan_task_deps(
 
 def build_report_task_deps(
     *,
+    broadcaster,
     current_customer,
     customer_fingerprinter,
     emit_job_status,
@@ -99,6 +100,7 @@ def build_report_task_deps(
 ):
     return {
         "job_registry": job_registry,
+        "broadcaster": broadcaster,
         "idle_state_manager": idle_state_manager,
         "emit_job_status": emit_job_status,
         "emit_to_client": emit_to_client,
@@ -128,6 +130,7 @@ def build_report_task_deps(
 
 def build_saved_pdf_task_deps(
     *,
+    broadcaster,
     convert_html_to_pdf,
     convert_xml_to_html,
     emit_job_status,
@@ -144,6 +147,7 @@ def build_saved_pdf_task_deps(
 ):
     return {
         "job_registry": job_registry,
+        "broadcaster": broadcaster,
         "emit_job_status": emit_job_status,
         "emit_to_client": emit_to_client,
         "get_client_state": get_client_state,

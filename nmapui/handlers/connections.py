@@ -15,7 +15,14 @@ def register_connection_handlers(socketio, deps):
     @socketio.on("connect")
     def on_connect():
         new_sid = request.sid
-        owner_sid = broadcaster.find_active_owner()
+        active_job_type = None
+        owner_sid = broadcaster.find_active_owner("scan")
+        if owner_sid is not None:
+            active_job_type = "scan"
+        else:
+            owner_sid = broadcaster.find_active_owner("report")
+            if owner_sid is not None:
+                active_job_type = "report"
         source_state = get_client_state(sid=owner_sid) if owner_sid else get_client_state()
 
         set_current_customer_state(source_state["current_customer"], sid=new_sid)
@@ -35,21 +42,22 @@ def register_connection_handlers(socketio, deps):
         if owner_sid is None:
             return
 
-        job = job_registry.get(owner_sid, "scan")
+        job = job_registry.get(owner_sid, active_job_type)
         if not job or job.get("status") not in ("running", "cancelling"):
-            broadcaster.end_job(owner_sid)
+            broadcaster.end_job(owner_sid, job_type=active_job_type)
             return
 
-        replay_buffer = broadcaster.get_replay_buffer(owner_sid)
+        replay_buffer = broadcaster.get_replay_buffer(owner_sid, job_type=active_job_type)
         logger.info(
-            "New tab %s joining active scan owned by %s — replaying %d events",
+            "New tab %s joining active %s owned by %s — replaying %d events",
             new_sid,
+            active_job_type,
             owner_sid,
             len(replay_buffer),
         )
 
-        broadcaster.subscribe(owner_sid, new_sid)
-        emit_to_client(new_sid, "job_status", {**job, "job_type": "scan"})
+        broadcaster.subscribe(owner_sid, new_sid, job_type=active_job_type)
+        emit_to_client(new_sid, "job_status", {**job, "job_type": active_job_type})
 
         for event, data in replay_buffer:
             emit_to_client(new_sid, event, data)

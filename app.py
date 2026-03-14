@@ -471,6 +471,7 @@ def generate_report_task(sid, data):
         sid=sid,
         data=data,
         deps=build_report_task_deps(
+            broadcaster=broadcaster,
             job_registry=job_registry,
             idle_state_manager=idle_state_manager,
             emit_job_status=emit_job_status,
@@ -504,6 +505,7 @@ def generate_pdf_from_saved_task(sid, data):
         sid=sid,
         data=data,
         deps=build_saved_pdf_task_deps(
+            broadcaster=broadcaster,
             job_registry=job_registry,
             emit_job_status=emit_job_status,
             emit_to_client=emit_to_client,

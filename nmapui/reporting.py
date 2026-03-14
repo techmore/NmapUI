@@ -960,6 +960,8 @@ def generate_pdf_from_saved_task(context, sid, data):
     socketio_sleep = context["socketio_sleep"]
     web_stylesheet = context["web_stylesheet"]
     pdf_stylesheet = context["pdf_stylesheet"]
+    on_job_end = context.get("on_job_end")
+    broadcaster = context.get("broadcaster")
 
     target = data.get("target")
     max_days = int(data.get("max_days", 30))
@@ -979,6 +981,8 @@ def generate_pdf_from_saved_task(context, sid, data):
         return
 
     emit_job_status(sid, "report")
+    if broadcaster is not None:
+        broadcaster.start_job(sid, job_type="report")
     start_time = datetime.now()
 
     try:
@@ -1060,4 +1064,6 @@ def generate_pdf_from_saved_task(context, sid, data):
         emit_job_status(sid, "report")
         emit_to_client(sid, "report_error", {"error": str(exc)})
     finally:
+        if on_job_end:
+            on_job_end()
         job_registry.clear_if_disconnected(sid, "report")
