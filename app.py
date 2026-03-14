@@ -40,6 +40,7 @@ from nmapui.handlers.auto_scan import (
 )
 from nmapui.handlers.customers import register_customer_handlers
 from nmapui.handlers.history import register_history_handlers
+from nmapui.handlers.runtime_info import register_runtime_info_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.handlers.updates import register_update_handlers
 from nmapui.health import build_liveness_payload, build_readiness_payload
@@ -768,49 +769,9 @@ def get_report_counts():
     )
 
 
-@socketio.on("get_history_counts")
-@require_socket_auth()
-def get_history_counts_event():
-    """Send report counts per customer to the client"""
-    emit("history_counts", get_report_counts())
-
-
 @app.route("/")
 def index():
     return render_template("index.html")
-
-
-@socketio.on("get_network_key")
-@require_socket_auth()
-def get_network_key_event():
-    """Send the network key to the client"""
-    client_network_key = get_client_state(sid=request.sid)["network_key"]
-    # If network_key is empty (no hops), run traceroute to populate it
-    if client_network_key.get("total_hops", 0) == 0:
-        logger.info("Network key empty, running traceroute...")
-        client_network_key = run_traceroute_for_state(
-            "1.1.1.1",
-            sid=request.sid,
-            deps={
-                "emit_to_client": emit_to_client,
-                "safe_emit": safe_emit,
-                "get_client_state": get_client_state,
-                "socketio_sleep": socketio.sleep,
-                "logger": logger,
-                "is_private_ip": is_private_ip,
-                "requests": requests,
-                "set_network_key_state": set_network_key_state,
-                "get_customer_fingerprinter": lambda: customer_fingerprinter,
-                "merge_customer_metadata": merge_customer_metadata,
-                "set_current_customer_state": set_current_customer_state,
-                "get_current_customer_state": get_current_customer_state,
-            },
-        )
-
-    logger.info(
-        f"Sending network_key to client: {client_network_key.get('total_hops', 0)} hops"
-    )
-    emit("network_key", client_network_key)
 
 
 def save_customers_config():
@@ -847,7 +808,6 @@ register_customer_handlers(
         "logger": logger,
     },
 )
-
 
 def load_current_assignment():
     global current_customer
@@ -905,34 +865,6 @@ def get_default_interface():
 DEFAULT_INTERFACE = get_default_interface()
 
 
-@socketio.on("get_local_ip")
-@require_socket_auth()
-def get_local_ip():
-    try:
-        interface = DEFAULT_INTERFACE
-        local_ip, subnet_mask = (
-            ni.ifaddresses(interface)[ni.AF_INET][0]["addr"],
-            ni.ifaddresses(interface)[ni.AF_INET][0]["netmask"],
-        )
-        public_ip, cidr = (
-            requests.get("https://api.ipify.org").text,
-            calculate_cidr(local_ip, subnet_mask),
-        )
-        emit(
-            "local_ip",
-            {
-                "local_ip": local_ip,
-                "subnet_mask": subnet_mask,
-                "public_ip": public_ip,
-                "cidr": cidr,
-                "interface": interface,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Failed to get local IP: {e}")
-        emit("scan_error", f"Failed to get local IP: {str(e)}")
-
-
 def calculate_cidr(ip, subnet_mask):
     cidr_prefix = sum(bin(int(x)).count("1") for x in subnet_mask.split("."))
     ip_nodes, mask_nodes = (
@@ -941,6 +873,38 @@ def calculate_cidr(ip, subnet_mask):
     )
     network_address = ".".join([str(ip_nodes[i] & mask_nodes[i]) for i in range(4)])
     return f"{network_address}/{cidr_prefix}"
+
+
+register_runtime_info_handlers(
+    socketio,
+    {
+        "calculate_cidr": calculate_cidr,
+        "get_client_state": get_client_state,
+        "get_default_interface_cached": lambda: DEFAULT_INTERFACE,
+        "get_report_counts": get_report_counts,
+        "logger": logger,
+        "netifaces": ni,
+        "requests": requests,
+        "run_traceroute": lambda target, sid=None: run_traceroute_for_state(
+            target,
+            sid=sid,
+            deps={
+                "emit_to_client": emit_to_client,
+                "safe_emit": safe_emit,
+                "get_client_state": get_client_state,
+                "socketio_sleep": socketio.sleep,
+                "logger": logger,
+                "is_private_ip": is_private_ip,
+                "requests": requests,
+                "set_network_key_state": set_network_key_state,
+                "get_customer_fingerprinter": lambda: customer_fingerprinter,
+                "merge_customer_metadata": merge_customer_metadata,
+                "set_current_customer_state": set_current_customer_state,
+                "get_current_customer_state": get_current_customer_state,
+            },
+        ),
+    },
+)
 
 
 def identify_gateway_firewall_targets(hosts):

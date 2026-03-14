@@ -139,6 +139,16 @@ def test_app_delegates_state_persistence_to_shared_module():
     assert "current_customer = load_current_assignment_impl(" in app_source
 
 
+def test_app_delegates_runtime_info_events_to_handler_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.handlers.runtime_info import register_runtime_info_handlers" in app_source
+    assert "register_runtime_info_handlers(" in app_source
+    assert '@socketio.on("get_history_counts")' not in app_source
+    assert '@socketio.on("get_network_key")' not in app_source
+    assert '@socketio.on("get_local_ip")' not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],
