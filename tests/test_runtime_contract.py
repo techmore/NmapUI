@@ -458,7 +458,8 @@ def test_app_delegates_state_persistence_to_shared_module():
     assert 'get_report_counts = state_bindings["get_report_counts"]' in app_source
     assert 'save_customers_config = state_bindings["save_customers_config"]' in app_source
     assert 'save_current_assignment = state_bindings["save_current_assignment"]' in app_source
-    assert 'current_customer = state_bindings["load_current_assignment"]()' in app_source
+    assert 'current_assignment_loader=state_bindings["load_current_assignment"]' in app_source
+    assert 'load_current_assignment = runtime_bindings["load_current_assignment"]' in app_source
     assert "def build_state_bindings(" in app_runtime_bindings_source
     assert "return get_report_counts_runtime(" in app_runtime_bindings_source
     assert "save_current_assignment_runtime(" in app_runtime_bindings_source
@@ -494,6 +495,9 @@ def test_app_delegates_client_state_wrappers_to_shared_module():
 def test_app_delegates_event_and_job_wrappers_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
     app_events_runtime_source = (ROOT / "nmapui" / "app_events_runtime.py").read_text()
+    app_runtime_bindings_source = (
+        ROOT / "nmapui" / "app_runtime_bindings.py"
+    ).read_text()
     app_bindings_source = (ROOT / "nmapui" / "app_bindings.py").read_text()
 
     assert "from nmapui.app_bindings import build_client_state_helpers, build_event_helpers" in app_source
@@ -503,7 +507,11 @@ def test_app_delegates_event_and_job_wrappers_to_shared_module():
     assert 'update_job_progress = event_helpers["update_job_progress"]' in app_source
     assert 'ensure_job_not_cancelled = event_helpers["ensure_job_not_cancelled"]' in app_source
     assert 'run_cancellable_command = event_helpers["run_cancellable_command"]' in app_source
-    assert "safe_emit as safe_emit_runtime" in app_source
+    assert "build_runtime_bindings," in app_source
+    assert 'runtime_bindings = build_runtime_bindings(' in app_source
+    assert 'return runtime_bindings["safe_emit"](event, data)' in app_source
+    assert "safe_emit as safe_emit_runtime" in app_runtime_bindings_source
+    assert "def safe_emit(event, data=None):" in app_runtime_bindings_source
     assert "def build_event_helpers(" in app_bindings_source
     assert "return nmapui_emit_to_client(" not in app_source
     assert "return nmapui_run_cancellable_command(" not in app_source
@@ -527,14 +535,16 @@ def test_app_delegates_runtime_info_events_to_handler_module():
 def test_app_delegates_startup_checks_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
     app_runtime_source = (ROOT / "nmapui" / "app_runtime.py").read_text()
+    app_runtime_bindings_source = (
+        ROOT / "nmapui" / "app_runtime_bindings.py"
+    ).read_text()
 
     assert "from nmapui.startup import create_startup_state" in app_source
     assert "from nmapui.app_runtime import (" in app_source
     assert "configure_root_logging as configure_root_logging_runtime" in app_source
     assert "run_server as run_server_runtime" in app_source
     assert "startup_checks as startup_checks_runtime" in app_source
-    assert "start_auto_scan_thread as start_auto_scan_thread_runtime" in app_source
-    assert "execute_auto_scan as execute_auto_scan_runtime" in app_source
+    assert "build_runtime_bindings," in app_source
     assert "from nmapui.runtime_services import create_runtime_services" in app_source
     assert "from nmapui.tooling import ToolVersionRegistry" in app_source
     assert "runtime_services = create_runtime_services(" in app_source
@@ -542,6 +552,11 @@ def test_app_delegates_startup_checks_to_shared_module():
     assert 'startup_state = runtime_services["startup_state"]' in app_source
     assert "configure_root_logging_runtime(base_dir=BASE_DIR)" in app_source
     assert "startup_checks_runtime(" in app_source
+    assert 'execute_auto_scan = runtime_bindings["execute_auto_scan"]' in app_source
+    assert 'start_auto_scan_thread = runtime_bindings["start_auto_scan_thread"]' in app_source
+    assert "def build_runtime_bindings(" in app_runtime_bindings_source
+    assert "return execute_auto_scan_runtime(" in app_runtime_bindings_source
+    assert "thread_ref[\"thread\"] = start_auto_scan_thread_runtime(" in app_runtime_bindings_source
     assert "def configure_root_logging(*, base_dir):" in app_runtime_source
     assert "def run_server(" in app_runtime_source
     assert "runtime_options = build_runtime_options(argv or sys_module.argv)" in app_runtime_source
@@ -649,9 +664,15 @@ def test_app_delegates_scanning_helpers_to_shared_module():
 def test_app_delegates_auto_scan_execution_to_shared_module():
     app_source = (ROOT / "app.py").read_text()
     app_runtime_source = (ROOT / "nmapui" / "app_runtime.py").read_text()
+    app_runtime_bindings_source = (
+        ROOT / "nmapui" / "app_runtime_bindings.py"
+    ).read_text()
 
-    assert "execute_auto_scan as execute_auto_scan_runtime" in app_source
-    assert "return execute_auto_scan_runtime(" in app_source
+    assert 'execute_auto_scan = runtime_bindings["execute_auto_scan"]' in app_source
+    assert "def build_runtime_bindings(" in app_runtime_bindings_source
+    assert "return execute_auto_scan_runtime(" in app_runtime_bindings_source
+    assert "current_customer=get_current_customer()" in app_runtime_bindings_source
+    assert "network_key=get_network_key()" in app_runtime_bindings_source
     assert "execute_auto_scan_impl(deps=deps)" in app_runtime_source
 
 

@@ -19,20 +19,16 @@ from nmapui.auto_scan import (
 )
 from nmapui.app_runtime import (
     configure_root_logging as configure_root_logging_runtime,
-    execute_auto_scan as execute_auto_scan_runtime,
     run_server as run_server_runtime,
-    start_auto_scan_thread as start_auto_scan_thread_runtime,
     startup_checks as startup_checks_runtime,
 )
 from nmapui.app_runtime_bindings import (
+    build_runtime_bindings,
     build_state_bindings,
     build_traceroute_bindings,
 )
 from nmapui.app_task_bindings import build_task_bindings
 from nmapui.app_bindings import build_client_state_helpers, build_event_helpers
-from nmapui.app_events_runtime import (
-    safe_emit as safe_emit_runtime,
-)
 from nmapui.app_composition import (
     build_execute_auto_scan_deps,
     build_startup_check_deps,
@@ -117,7 +113,7 @@ CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
 
 def safe_emit(event, data=None):
-    return safe_emit_runtime(event, data)
+    return runtime_bindings["safe_emit"](event, data)
 
 
 # Global idle state manager
@@ -181,23 +177,6 @@ set_network_key_state = client_state_helpers["set_network_key_state"]
 set_last_scan_target_state = client_state_helpers["set_last_scan_target_state"]
 release_client_state = client_state_helpers["release_client_state"]
 
-
-def execute_auto_scan():
-    return execute_auto_scan_runtime(
-        deps=build_execute_auto_scan_deps(
-            auto_scan_config=auto_scan_config,
-            current_customer=current_customer,
-            get_last_scan_target=lambda: last_scan_target,
-            logger=logger,
-            network_key=network_key,
-            rate_limiter=rate_limiter,
-            safe_emit=safe_emit,
-            save_auto_scan_config=save_auto_scan_config,
-            validate_target=validate_target,
-        )
-    )
-
-
 # Load auto scan config on startup
 load_auto_scan_config(auto_scan_config)
 # Global version information — populated by startup_checks().
@@ -222,13 +201,29 @@ get_report_counts = state_bindings["get_report_counts"]
 save_customers_config = state_bindings["save_customers_config"]
 save_current_assignment = state_bindings["save_current_assignment"]
 
-
-def load_current_assignment():
-    global current_customer
-    current_customer = state_bindings["load_current_assignment"]()
-
-
 DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)
+
+runtime_bindings = build_runtime_bindings(
+    build_execute_auto_scan_deps=build_execute_auto_scan_deps,
+    auto_scan_config=auto_scan_config,
+    get_current_customer=lambda: current_customer,
+    get_last_scan_target=lambda: last_scan_target,
+    logger=logger,
+    get_network_key=lambda: network_key,
+    rate_limiter=rate_limiter,
+    save_auto_scan_config=save_auto_scan_config,
+    validate_target=validate_target,
+    auto_scan_thread=auto_scan_thread,
+    socketio=socketio,
+    should_run_auto_scan=should_run_auto_scan,
+    startup_at=AUTO_SCAN_STARTUP_AT,
+    startup_grace_seconds=AUTO_SCAN_STARTUP_GRACE_SECONDS,
+    current_assignment_loader=state_bindings["load_current_assignment"],
+    set_current_customer=lambda value: globals().__setitem__("current_customer", value),
+)
+execute_auto_scan = runtime_bindings["execute_auto_scan"]
+load_current_assignment = runtime_bindings["load_current_assignment"]
+start_auto_scan_thread = runtime_bindings["start_auto_scan_thread"]
 
 traceroute_bindings = build_traceroute_bindings(
     emit_to_client=emit_to_client,
@@ -283,7 +278,7 @@ register_app_handlers(
     get_default_interface_cached=lambda: DEFAULT_INTERFACE,
     settings_state=settings_state,
     startup_state=startup_state,
-    get_auto_scan_thread=lambda: auto_scan_thread,
+    get_auto_scan_thread=runtime_bindings["get_auto_scan_thread"],
     get_customer_fingerprinter=lambda: customer_fingerprinter,
     get_current_customer=lambda: get_current_customer_state(request.sid),
     set_current_customer=lambda value: set_current_customer_state(value, request.sid),
@@ -382,20 +377,6 @@ def startup_checks(quick=False):
             vulners_script=VULNERS_SCRIPT,
         ),
         quick=quick,
-    )
-
-def start_auto_scan_thread():
-    """Start the auto-scan worker once per process."""
-    global auto_scan_thread
-    auto_scan_thread = start_auto_scan_thread_runtime(
-        auto_scan_thread=auto_scan_thread,
-        socketio=socketio,
-        auto_scan_config=auto_scan_config,
-        should_run_auto_scan=should_run_auto_scan,
-        startup_at=AUTO_SCAN_STARTUP_AT,
-        startup_grace_seconds=AUTO_SCAN_STARTUP_GRACE_SECONDS,
-        execute_auto_scan=execute_auto_scan,
-        logger=logger,
     )
 
 def run_server(argv=None):

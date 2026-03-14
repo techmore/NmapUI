@@ -4,6 +4,11 @@ from nmapui.app_state_runtime import (
     save_current_assignment as save_current_assignment_runtime,
     save_customers_config as save_customers_config_runtime,
 )
+from nmapui.app_runtime import (
+    execute_auto_scan as execute_auto_scan_runtime,
+    start_auto_scan_thread as start_auto_scan_thread_runtime,
+)
+from nmapui.app_events_runtime import safe_emit as safe_emit_runtime
 from nmapui.traceroute_runtime import (
     build_traceroute_deps,
     run_traceroute as run_traceroute_runtime,
@@ -106,4 +111,71 @@ def build_traceroute_bindings(
     return {
         "traceroute_deps": traceroute_deps,
         "run_traceroute": run_traceroute,
+    }
+
+
+def build_runtime_bindings(
+    *,
+    build_execute_auto_scan_deps,
+    auto_scan_config,
+    get_current_customer,
+    get_last_scan_target,
+    logger,
+    get_network_key,
+    rate_limiter,
+    save_auto_scan_config,
+    validate_target,
+    auto_scan_thread,
+    socketio,
+    should_run_auto_scan,
+    startup_at,
+    startup_grace_seconds,
+    current_assignment_loader,
+    set_current_customer,
+):
+    def safe_emit(event, data=None):
+        return safe_emit_runtime(event, data)
+
+    def execute_auto_scan():
+        return execute_auto_scan_runtime(
+            deps=build_execute_auto_scan_deps(
+                auto_scan_config=auto_scan_config,
+                current_customer=get_current_customer(),
+                get_last_scan_target=get_last_scan_target,
+                logger=logger,
+                network_key=get_network_key(),
+                rate_limiter=rate_limiter,
+                safe_emit=safe_emit,
+                save_auto_scan_config=save_auto_scan_config,
+                validate_target=validate_target,
+            )
+        )
+
+    thread_ref = {"thread": auto_scan_thread}
+
+    def start_auto_scan_thread():
+        thread_ref["thread"] = start_auto_scan_thread_runtime(
+            auto_scan_thread=thread_ref["thread"],
+            socketio=socketio,
+            auto_scan_config=auto_scan_config,
+            should_run_auto_scan=should_run_auto_scan,
+            startup_at=startup_at,
+            startup_grace_seconds=startup_grace_seconds,
+            execute_auto_scan=execute_auto_scan,
+            logger=logger,
+        )
+        return thread_ref["thread"]
+
+    def get_auto_scan_thread():
+        return thread_ref["thread"]
+
+    def load_current_assignment():
+        set_current_customer(current_assignment_loader())
+
+    return {
+        "safe_emit": safe_emit,
+        "execute_auto_scan": execute_auto_scan,
+        "start_auto_scan_thread": start_auto_scan_thread,
+        "get_auto_scan_thread": get_auto_scan_thread,
+        "load_current_assignment": load_current_assignment,
     }
