@@ -56,6 +56,9 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert (ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift").exists()
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
+    assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
+    assert 'PLAYWRIGHT_BROWSERS_PATH="$BUNDLE_PLAYWRIGHT_BROWSERS" python -m playwright install chromium' in build_script
+    assert 'export PLAYWRIGHT_BROWSERS_PATH="$(pwd)/playwright-browsers"' in build_script
 
 
 def test_wrapper_docs_reference_current_local_port():
@@ -164,6 +167,15 @@ def test_runtime_manifest_does_not_include_removed_browser_stack():
 
     assert "chromedriver-autoinstaller" not in install_script
     assert "Chrome/ChromeDriver for Selenium" not in install_script
+    assert 'PLAYWRIGHT_BROWSERS_PATH="$(pwd)/.playwright-browsers"' in install_script
+    assert "python -m playwright install chromium" in install_script
+    assert 'export PLAYWRIGHT_BROWSERS_PATH="$ROOT_DIR/.playwright-browsers"' in install_script
+
+
+def test_local_playwright_browser_cache_is_gitignored():
+    gitignore = (ROOT / ".gitignore").read_text()
+
+    assert ".playwright-browsers/" in gitignore
 
 
 def test_release_paths_prefer_dot_venv():

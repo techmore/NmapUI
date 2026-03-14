@@ -40,3 +40,4 @@ logs/
 .claude
 agents
 reports/
+.playwright-browsers/

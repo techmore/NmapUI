@@ -16,6 +16,7 @@ SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"
 BIN="$ROOT_DIR/NmapUIMenuBar"
 APP_NAME="$ROOT_DIR/NmapUIMenuBar.app"
 BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
+BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 
 if [[ ! -f "$SRC" ]]; then
@@ -93,8 +94,10 @@ python3 -m venv "$BUNDLE_VENV"
 source "$BUNDLE_VENV/bin/activate"
 python -m pip install --upgrade pip
 PIP_DISABLE_PIP_VERSION_CHECK=1 python -m pip install -r "$APP_NAME/Contents/Resources/requirements.txt"
+echo "Installing bundled Playwright Chromium browser..."
+PLAYWRIGHT_BROWSERS_PATH="$BUNDLE_PLAYWRIGHT_BROWSERS" python -m playwright install chromium
 deactivate
-echo "Bundled virtual environment created from current workspace requirements.txt."
+echo "Bundled virtual environment and Playwright browser created from current workspace requirements.txt."
 
 # Create a run script that activates the bundled venv and runs the app.
 # Dependencies must already be installed in the venv — runtime pip installs
@@ -112,6 +115,7 @@ if [[ ! -f "$VENV_ACTIVATE" ]]; then
 fi
 
 source "$VENV_ACTIVATE"
+export PLAYWRIGHT_BROWSERS_PATH="$(pwd)/playwright-browsers"
 
 # The menu bar wrapper runs a local embedded Flask-SocketIO server rather than
 # a separate production WSGI stack, so allow Werkzeug explicitly for this

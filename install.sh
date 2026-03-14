@@ -36,6 +36,8 @@ fi
 # Activate virtual environment
 echo "📦 Activating virtual environment..."
 source .venv/bin/activate
+PLAYWRIGHT_BROWSERS_PATH="$(pwd)/.playwright-browsers"
+export PLAYWRIGHT_BROWSERS_PATH
 
 # Upgrade pip
 echo "📦 Upgrading pip..."
@@ -45,6 +47,11 @@ pip install --upgrade pip
 echo "📦 Installing Python dependencies..."
 pip install -r requirements.txt
 echo "✅ Python dependencies installed"
+
+# Install the preferred browser payload for HTML-to-PDF rendering
+echo "📦 Installing Playwright Chromium browser..."
+python -m playwright install chromium
+echo "✅ Playwright Chromium installed at $PLAYWRIGHT_BROWSERS_PATH"
 
 # Check and install system dependencies
 echo "📦 Checking system dependencies..."
@@ -102,8 +109,11 @@ cat > start.sh << 'EOF'
 #!/bin/bash
 # NmapUI Startup Script
 
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # Activate virtual environment
-source .venv/bin/activate
+source "$ROOT_DIR/.venv/bin/activate"
+export PLAYWRIGHT_BROWSERS_PATH="$ROOT_DIR/.playwright-browsers"
 
 # Run the application
 python app.py "$@"
