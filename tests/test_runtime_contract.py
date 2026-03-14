@@ -145,6 +145,8 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'echo "Host architecture: $HOST_ARCH"' in build_script
     assert 'echo "Target: $SWIFT_TARGET"' in build_script
     assert '  -target "$SWIFT_TARGET" \\' in build_script
+    assert 'if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then' in build_script
+    assert 'echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
@@ -274,6 +276,16 @@ def test_local_playwright_browser_cache_is_gitignored():
     gitignore = (ROOT / ".gitignore").read_text()
 
     assert ".playwright-browsers/" in gitignore
+
+
+def test_packaged_smoke_test_exists_and_is_gated():
+    smoke_source = (ROOT / "tests" / "test_packaged_app_smoke.py").read_text()
+
+    assert 'sys.platform != "darwin"' in smoke_source
+    assert 'NMAPUI_RUN_PACKAGED_SMOKE' in smoke_source
+    assert 'NMAPUI_SKIP_OPEN' in smoke_source
+    assert 'build.sh' in smoke_source
+    assert '/api/health/live' in smoke_source
 
 
 def test_release_paths_prefer_dot_venv():

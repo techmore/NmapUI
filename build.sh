@@ -193,8 +193,12 @@ else
 fi
 
 # Open the application
-echo "Opening the application..."
-open "$APP_NAME"
+if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then
+    echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"
+else
+    echo "Opening the application..."
+    open "$APP_NAME"
+fi
 
 echo "Done! The NmapUI Menu Bar application is now running."
 echo "Look for the network icon in your menu bar."
