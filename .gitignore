@@ -41,3 +41,4 @@ logs/
 agents
 reports/
 .playwright-browsers/
+data/*.sqlite3
