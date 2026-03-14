@@ -994,7 +994,16 @@ def create_application(import_name):
     return app, socketio
 
 
-app, socketio = create_application(__name__)
+app, socketio = create_app_stack(__name__)
+_runtime_modules_registered = False
+
+
+def ensure_runtime_modules_registered():
+    global _runtime_modules_registered
+    if not _runtime_modules_registered:
+        register_runtime_modules(app, socketio)
+        _runtime_modules_registered = True
+    return app, socketio
 
 
 def load_current_assignment():
@@ -1419,6 +1428,7 @@ def start_auto_scan_thread():
 def run_server(argv=None):
     runtime_options = build_runtime_options(argv or sys.argv)
 
+    ensure_runtime_modules_registered()
     startup_checks(quick=runtime_options["quick_mode"])
     start_auto_scan_thread()
     run_socketio_server(socketio, app, runtime_options)
