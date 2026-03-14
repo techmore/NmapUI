@@ -301,12 +301,19 @@ def test_browser_regression_test_exists_and_is_gated():
 def test_customer_fingerprinter_uses_extracted_store_services():
     fingerprinter_source = (ROOT / "customer_fingerprint.py").read_text()
     store_source = (ROOT / "customer_fingerprint_store.py").read_text()
+    matcher_source = (ROOT / "customer_fingerprint_matcher.py").read_text()
 
     assert "from customer_fingerprint_store import CustomerFingerprintStore, ScanHistoryStore" in fingerprinter_source
+    assert "from customer_fingerprint_matcher import CustomerFingerprintMatcher" in fingerprinter_source
     assert "self.store = CustomerFingerprintStore(" in fingerprinter_source
     assert "self.scan_history_store = ScanHistoryStore(" in fingerprinter_source
+    assert "self.matcher = CustomerFingerprintMatcher(" in fingerprinter_source
+    assert "matched_customer, confidence = self.matcher.match_customer(" in fingerprinter_source
+    assert "self.last_match_method = self.matcher.last_match_method" in fingerprinter_source
     assert "class CustomerFingerprintStore:" in store_source
     assert "class ScanHistoryStore:" in store_source
+    assert "class CustomerFingerprintMatcher:" in matcher_source
+    assert "def match_customer(" in matcher_source
 
 
 def test_release_paths_prefer_dot_venv():
