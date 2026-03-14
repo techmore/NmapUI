@@ -125,6 +125,20 @@ def test_app_runtime_uses_bootstrap_origin_and_server_policy():
     assert 'cors_allowed_origins="*"' not in app_source
 
 
+def test_app_delegates_state_persistence_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "nmapui.state" in app_source
+    assert "get_report_counts as get_report_counts_impl" in app_source
+    assert "load_current_assignment as load_current_assignment_impl" in app_source
+    assert "save_current_assignment as save_current_assignment_impl" in app_source
+    assert "save_customers_config as save_customers_config_impl" in app_source
+    assert "return get_report_counts_impl(" in app_source
+    assert "save_current_assignment_impl(" in app_source
+    assert "save_customers_config_impl(" in app_source
+    assert "current_customer = load_current_assignment_impl(" in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

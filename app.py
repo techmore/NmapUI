@@ -72,6 +72,13 @@ from nmapui.runtime import (
     get_app_version,
     restart_application,
 )
+from nmapui.state import (
+    get_report_counts as get_report_counts_impl,
+    load_current_assignment as load_current_assignment_impl,
+    merge_customer_metadata,
+    save_current_assignment as save_current_assignment_impl,
+    save_customers_config as save_customers_config_impl,
+)
 from nmapui.runtime_state import (
     get_client_state as get_client_state_impl,
     get_current_customer_state as get_current_customer_state_impl,
@@ -754,40 +761,11 @@ def run_traceroute(target="1.1.1.1"):
 
 
 def get_report_counts():
-    """Count reports and find last scan date per customer name"""
-    counts = {"total": 0, "last_scans": {}}
-    for _, data in iter_scan_metadata_documents(
+    return get_report_counts_impl(
         SCANS_DIR,
         load_json_document,
         normalize_scan_metadata_document,
-    ):
-        # Use normalized customer name as the key
-        name = data.get("customer_name")
-        if not name:
-            customer_info = data.get("customer_info", {})
-            name = customer_info.get("name")
-        if not name:
-            name = data.get("customer", "Unassigned")
-
-        # Normalize: remove confidence score if present
-        name = name.split(" (")[0]
-        key = name if name else "Unassigned"
-
-        counts[key] = counts.get(key, 0) + 1
-        counts["total"] = counts.get("total", 0) + 1
-
-        # Track last scan timestamp
-        timestamp = data.get("timestamp")
-        if timestamp:
-            if key not in counts["last_scans"] or timestamp > counts["last_scans"][key]:
-                counts["last_scans"][key] = timestamp
-            if (
-                "total" not in counts["last_scans"]
-                or timestamp > counts["last_scans"]["total"]
-            ):
-                counts["last_scans"]["total"] = timestamp
-
-    return counts
+    )
 
 
 @socketio.on("get_history_counts")
@@ -836,52 +814,21 @@ def get_network_key_event():
 
 
 def save_customers_config():
-    try:
-        config = customer_fingerprinter.config or {}
-        config_data = {
-            "version": config.get("version", "1.0"),
-            "description": config.get(
-                "description", "Customer network fingerprinting database"
-            ),
-            "settings": customer_fingerprinter.settings,
-            "customers": customer_fingerprinter.customers,
-            "unknown_customer": customer_fingerprinter.unknown_customer,
-            "indexing": config.get("indexing", {}),
-        }
-
-        save_yaml_document(customer_fingerprinter.config_path, config_data)
-
-        logger.info(f"Customers config saved to {customer_fingerprinter.config_path}")
-
-    except Exception as e:
-        logger.error(f"Error saving customers config: {e}")
+    save_customers_config_impl(
+        lambda: customer_fingerprinter,
+        save_yaml_document,
+        logger,
+    )
 
 
 def save_current_assignment(sid=None):
-    try:
-        assignment_data = {
-            "schema_version": 1,
-            "timestamp": datetime.now().isoformat(),
-            "customer": get_current_customer_state(sid),
-        }
-
-        assignment_path = CURRENT_ASSIGNMENT_FILE
-        save_json_document(assignment_path, assignment_data)
-
-        logger.info(f"Current assignment saved to {assignment_path}")
-
-    except Exception as e:
-        logger.error(f"Error saving current assignment: {e}")
-
-
-def merge_customer_metadata(customer_dict, saved_customer):
-    """Merge metadata from saved customer configuration into customer dictionary"""
-    if saved_customer and "metadata" in saved_customer:
-        if "metadata" not in customer_dict:
-            customer_dict["metadata"] = {}
-        # Merge all metadata fields, preserving any existing ones
-        customer_dict["metadata"].update(saved_customer["metadata"])
-    return customer_dict
+    save_current_assignment_impl(
+        CURRENT_ASSIGNMENT_FILE,
+        get_current_customer_state,
+        save_json_document,
+        logger,
+        sid=sid,
+    )
 
 
 register_customer_handlers(
@@ -904,30 +851,16 @@ register_customer_handlers(
 
 def load_current_assignment():
     global current_customer
-    try:
-        assignment_path = CURRENT_ASSIGNMENT_FILE
-        if assignment_path.exists():
-            data = normalize_current_assignment_document(
-                load_json_document(assignment_path, {})
-            )
-            current_customer = data.get("customer", current_customer)
-
-            # Merge metadata from saved customer configuration
-            if current_customer.get("id"):
-                saved_customer = customer_fingerprinter.get_customer_by_id(
-                    current_customer["id"]
-                )
-                if saved_customer:
-                    current_customer = merge_customer_metadata(
-                        current_customer, saved_customer
-                    )
-            logger.info(
-                f"Loaded previous customer assignment: {current_customer.get('name', 'unknown')}"
-            )
-            client_state_registry.set_default_customer(current_customer)
-
-    except Exception as e:
-        logger.error(f"Error loading current assignment: {e}")
+    current_customer = load_current_assignment_impl(
+        CURRENT_ASSIGNMENT_FILE,
+        current_customer,
+        normalize_current_assignment_document,
+        load_json_document,
+        lambda: customer_fingerprinter,
+        merge_customer_metadata,
+        client_state_registry,
+        logger,
+    )
 
 
 def get_default_interface():
