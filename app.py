@@ -81,6 +81,7 @@ from nmapui.runtime import (
     get_app_version,
     restart_application,
 )
+from nmapui.runtime_services import create_runtime_services
 from nmapui.runtime_state import (
     get_client_state as get_client_state_helper,
     get_current_customer_state as get_current_customer_state_helper,
@@ -246,45 +247,28 @@ def create_app_stack(import_name):
     """Build the Flask and Socket.IO objects for this module."""
     return create_web_app(import_name)
 
-# Global network key - populated at startup
-network_key = {
-    "hops": [],
-    "total_hops": 0,
-    "private_hops": [],
-    "public_hops": [],
-    "exit_ip": None,
-    "target": "1.1.1.1",
-    "raw": "",
-}
-
-# Global idle state manager
-idle_state_manager = IdleStateManager()
-
-# Global customer fingerprinter
-customer_fingerprinter = None
-current_customer = {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}
-
-# Global scan target tracking
-last_scan_target = None
-
-
-# Auto Scan System
-auto_scan_config = dict(DEFAULT_AUTO_SCAN_CONFIG)
-auto_scan_thread = None
-AUTO_SCAN_STARTUP_AT = datetime.now()
-AUTO_SCAN_STARTUP_GRACE_SECONDS = 300
-
-# ============================================================================
-# RATE LIMITING
-# ============================================================================
-
-
-rate_limiter = RateLimiter(max_scans_per_hour=10, cooldown_seconds=300)
-job_registry = ClientJobRegistry()
-client_state_registry = ClientStateRegistry(
-    default_customer=current_customer,
-    default_network_key=network_key,
+runtime_services = create_runtime_services(
+    default_auto_scan_config=DEFAULT_AUTO_SCAN_CONFIG,
+    rate_limiter_cls=RateLimiter,
+    job_registry_cls=ClientJobRegistry,
+    client_state_registry_cls=ClientStateRegistry,
+    tool_version_registry_cls=ToolVersionRegistry,
+    startup_state_factory=create_startup_state,
+    idle_state_manager=IdleStateManager(),
 )
+
+network_key = runtime_services["network_key"]
+idle_state_manager = runtime_services["idle_state_manager"]
+customer_fingerprinter = runtime_services["customer_fingerprinter"]
+current_customer = runtime_services["current_customer"]
+last_scan_target = runtime_services["last_scan_target"]
+auto_scan_config = runtime_services["auto_scan_config"]
+auto_scan_thread = runtime_services["auto_scan_thread"]
+AUTO_SCAN_STARTUP_AT = runtime_services["auto_scan_startup_at"]
+AUTO_SCAN_STARTUP_GRACE_SECONDS = runtime_services["auto_scan_startup_grace_seconds"]
+rate_limiter = runtime_services["rate_limiter"]
+job_registry = runtime_services["job_registry"]
+client_state_registry = runtime_services["client_state_registry"]
 
 
 def get_client_state(sid: Optional[str] = None):
@@ -357,9 +341,9 @@ def execute_auto_scan():
     )
 
 
-tool_versions = ToolVersionRegistry()
+tool_versions = runtime_services["tool_versions"]
 
-startup_state = create_startup_state()
+startup_state = runtime_services["startup_state"]
 
 
 def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):

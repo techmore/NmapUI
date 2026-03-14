@@ -300,6 +300,25 @@ def test_app_uses_extracted_runtime_state_helpers():
     assert 'def set_last_scan_target_state(*, value, sid=None, client_state_registry, set_default_last_scan_target):' in runtime_state_source
 
 
+def test_app_uses_extracted_runtime_services_factory():
+    app_source = subprocess.check_output(
+        ["git", "show", ":app.py"],
+        cwd=ROOT,
+        text=True,
+    )
+    runtime_services_source = (ROOT / "nmapui" / "runtime_services.py").read_text()
+
+    assert "from nmapui.runtime_services import create_runtime_services" in app_source
+    assert "runtime_services = create_runtime_services(" in app_source
+    assert "network_key = {" not in app_source
+    assert "current_customer = {\"id\": \"unknown\"" not in app_source
+    assert "rate_limiter = RateLimiter(" not in app_source
+    assert "job_registry = ClientJobRegistry()" not in app_source
+    assert "tool_versions = ToolVersionRegistry()" not in app_source
+    assert "startup_state = create_startup_state()" not in app_source
+    assert "def create_runtime_services(" in runtime_services_source
+
+
 def test_app_uses_extracted_workflow_context_builders():
     app_source = subprocess.check_output(
         ["git", "show", ":app.py"],
