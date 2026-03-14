@@ -1,6 +1,32 @@
 from flask import request
 
 
+def _load_persisted_source_state(runtime_store):
+    if runtime_store is None:
+        return None
+
+    current_customer = runtime_store.get_runtime_snapshot("current_customer")
+    network_key = runtime_store.get_runtime_snapshot("network_key")
+    last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")
+
+    if current_customer is None and network_key is None and last_scan_target is None:
+        return None
+
+    return {
+        "current_customer": current_customer
+        or {"id": "unknown", "name": "Unknown Network", "confidence": 0.0},
+        "network_key": network_key
+        or {
+            "target": "1.1.1.1",
+            "total_hops": 0,
+            "private_hops": [],
+            "public_hops": [],
+            "exit_ip": None,
+        },
+        "last_scan_target": last_scan_target,
+    }
+
+
 def register_connection_handlers(socketio, deps):
     auto_scan_config = deps.get("auto_scan_config")
     broadcaster = deps["broadcaster"]
@@ -8,6 +34,7 @@ def register_connection_handlers(socketio, deps):
     get_client_state = deps["get_client_state"]
     job_registry = deps["job_registry"]
     logger = deps["logger"]
+    runtime_store = deps.get("runtime_store")
     set_current_customer_state = deps["set_current_customer_state"]
     set_last_scan_target_state = deps["set_last_scan_target_state"]
     set_network_key_state = deps["set_network_key_state"]
@@ -23,7 +50,10 @@ def register_connection_handlers(socketio, deps):
             owner_sid = broadcaster.find_active_owner("report")
             if owner_sid is not None:
                 active_job_type = "report"
-        source_state = get_client_state(sid=owner_sid) if owner_sid else get_client_state()
+        if owner_sid:
+            source_state = get_client_state(sid=owner_sid)
+        else:
+            source_state = _load_persisted_source_state(runtime_store) or get_client_state()
 
         set_current_customer_state(value=source_state["current_customer"], sid=new_sid)
         set_network_key_state(value=source_state["network_key"], sid=new_sid)

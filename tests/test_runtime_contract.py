@@ -210,6 +210,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert 'saved_last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")' in runtime_services_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
     assert "def persist_report_artifact(" in (ROOT / "nmapui" / "reporting.py").read_text()
+    assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
 
 
 def test_runtime_logs_route_and_ui_hydration_exist():
@@ -220,6 +221,18 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert 'runtime_store.get_recent_logs(' in routes_source
     assert "function loadPersistedLogs()" in audit_log_source
     assert "fetch('/api/runtime/logs?limit=200')" in audit_log_source
+
+
+def test_connection_handler_prefers_sqlite_snapshots_without_active_owner():
+    connections_source = (ROOT / "nmapui" / "handlers" / "connections.py").read_text()
+    app_handler_registration_source = (ROOT / "nmapui" / "app_handler_registration.py").read_text()
+
+    assert "def _load_persisted_source_state(runtime_store):" in connections_source
+    assert 'runtime_store.get_runtime_snapshot("current_customer")' in connections_source
+    assert 'runtime_store.get_runtime_snapshot("network_key")' in connections_source
+    assert 'runtime_store.get_runtime_snapshot("last_scan_target")' in connections_source
+    assert "source_state = _load_persisted_source_state(runtime_store) or get_client_state()" in connections_source
+    assert "runtime_store=runtime_store" in app_handler_registration_source
 
 
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():

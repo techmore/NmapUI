@@ -112,6 +112,7 @@ def register_app_handlers(
             get_client_state=get_client_state,
             job_registry=job_registry,
             logger=logger,
+            runtime_store=runtime_store,
             set_current_customer_state=set_current_customer_state,
             set_last_scan_target_state=set_last_scan_target_state,
             set_network_key_state=set_network_key_state,
