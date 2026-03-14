@@ -29,6 +29,9 @@ BASE_DIR = Path(__file__).parent.resolve()
 
 
 class CustomerFingerprinter:
+    # TTL for the in-memory scan-history cache (seconds)
+    _HISTORY_CACHE_TTL = 30.0
+
     def __init__(self, config_path: Optional[str] = None):
         self.config_path = config_path or (BASE_DIR / "config" / "customers.yaml")
         self.config = None
@@ -38,8 +41,26 @@ class CustomerFingerprinter:
         self.traceroutes_path = BASE_DIR / "data" / "customer_traceroutes.json"
         self.customer_traceroutes = {}
         self.last_match_method = "unknown"
+        # Scan history in-memory cache
+        self._history_cache: Optional[dict] = None
+        self._history_cache_at: float = 0.0
         self.load_config()
         self.load_traceroute_history()
+
+    def _load_history_cached(self, storage_path: str) -> dict:
+        """Return scan history document, using in-memory cache when fresh."""
+        import time
+        now = time.monotonic()
+        if self._history_cache is None or (now - self._history_cache_at) > self._HISTORY_CACHE_TTL:
+            self._history_cache = normalize_scan_history_document(
+                load_json_document(Path(storage_path), {"entries": []})
+            )
+            self._history_cache_at = now
+        return self._history_cache
+
+    def _invalidate_history_cache(self):
+        self._history_cache = None
+        self._history_cache_at = 0.0
 
     def load_config(self):
         try:
@@ -548,10 +569,8 @@ class CustomerFingerprinter:
         }
 
         try:
-            history_document = normalize_scan_history_document(
-                load_json_document(Path(storage_path), {"entries": []})
-            )
-            history = history_document["entries"]
+            history_document = self._load_history_cached(storage_path)
+            history = list(history_document["entries"])
 
             history.append(scan_result)
 
@@ -561,6 +580,7 @@ class CustomerFingerprinter:
 
             history_document["entries"] = history
             save_json_document(Path(storage_path), history_document)
+            self._invalidate_history_cache()
 
             logger.info(f"Scan result saved to {storage_path}")
         except Exception as e:
@@ -638,9 +658,7 @@ class CustomerFingerprinter:
             return []
 
         try:
-            history_document = normalize_scan_history_document(
-                load_json_document(Path(storage_path), {"entries": []})
-            )
+            history_document = self._load_history_cached(storage_path)
             history = history_document["entries"]
 
             if customer_id:
