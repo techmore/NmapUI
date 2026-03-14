@@ -180,6 +180,17 @@ def test_app_delegates_startup_checks_to_shared_module():
     assert 'versions["arp_scan"] = version' not in app_source
 
 
+def test_app_delegates_idle_state_manager_to_shared_module():
+    app_source = (ROOT / "app.py").read_text()
+    idle_state_source = (ROOT / "nmapui" / "idle_state.py").read_text()
+
+    assert "from nmapui.idle_state import IdleStateManager" in app_source
+    assert "idle_state_manager = IdleStateManager(" in app_source
+    assert "class IdleStateManager:" not in app_source
+    assert "class IdleStateManager:" in idle_state_source
+    assert 'self.safe_emit("idle_state_changed", {"idle": self.idle_state})' in idle_state_source
+
+
 def test_app_delegates_core_routes_to_handler_module():
     app_source = (ROOT / "app.py").read_text()
 

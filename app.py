@@ -9,7 +9,6 @@ import ipaddress
 import netifaces as ni
 import shutil
 import logging
-from datetime import datetime
 from customer_fingerprint import CustomerFingerprinter
 from nmapui.auth import log_auth_posture
 from nmapui.auto_scan import (
@@ -39,6 +38,7 @@ from nmapui.handlers.scan_jobs import register_scan_job_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.handlers.updates import register_update_handlers
 from nmapui.health import build_liveness_payload, build_readiness_payload
+from nmapui.idle_state import IdleStateManager
 from nmapui.jobs import (
     ClientJobRegistry,
     PerClientRateLimiter,
@@ -157,138 +157,10 @@ _root_logger.addHandler(_file_handler)
 
 logger = logging.getLogger(__name__)
 
-class IdleStateManager:
-    """Manages application idle state for auto-update functionality"""
-
-    def __init__(self):
-        self.active_operations = set()
-        self.last_activity = datetime.now()
-        self.idle_threshold = 30  # seconds
-        self.idle_check_interval = 5  # seconds
-        self.idle_state = False
-        self.update_available = False
-        self.auto_update_enabled = True
-        self.countdown_active = False
-
-    def start_operation(self, operation_id: str):
-        """Mark an operation as started"""
-        self.active_operations.add(operation_id)
-        self.last_activity = datetime.now()
-        self._update_idle_state()
-        logger.debug(
-            f"Started operation: {operation_id}, active operations: {len(self.active_operations)}"
-        )
-
-    def end_operation(self, operation_id: str):
-        """Mark an operation as completed"""
-        self.active_operations.discard(operation_id)
-        self.last_activity = datetime.now()
-        self._update_idle_state()
-        logger.debug(
-            f"Ended operation: {operation_id}, active operations: {len(self.active_operations)}"
-        )
-
-    def _update_idle_state(self):
-        """Update idle state and notify if changed"""
-        was_idle = self.idle_state
-        self.idle_state = self._is_idle()
-
-        if was_idle != self.idle_state:
-            logger.info(
-                f"Idle state changed: {'idle' if self.idle_state else 'active'}"
-            )
-            safe_emit("idle_state_changed", {"idle": self.idle_state})
-
-            # If now idle and update available, trigger auto-update banner
-            if (
-                self.idle_state
-                and self.update_available
-                and self.auto_update_enabled
-                and not self.countdown_active
-            ):
-                self._trigger_auto_update_banner()
-
-    def _is_idle(self):
-        """Check if system is currently idle"""
-        if len(self.active_operations) > 0:
-            return False
-
-        time_since_activity = (datetime.now() - self.last_activity).seconds
-        return time_since_activity >= self.idle_threshold
-
-    def set_update_available(self, available: bool, update_info=None):
-        """Update availability status"""
-        self.update_available = available
-        if (
-            available
-            and self.idle_state
-            and self.auto_update_enabled
-            and not self.countdown_active
-        ):
-            self._trigger_auto_update_banner()
-        elif not available:
-            # Hide banner if update no longer available
-            safe_emit("hide_auto_update_banner")
-
-    def _trigger_auto_update_banner(self):
-        """Trigger the auto-update banner display"""
-        update_info = check_for_updates()
-        logger.info(f"Auto-update check: {update_info}")
-        if isinstance(update_info, dict) and update_info.get("available"):
-            self.countdown_active = True
-            logger.info("Showing auto-update banner")
-            safe_emit("show_auto_update_banner", update_info)
-        else:
-            logger.info("No update available or invalid update info")
-
-    def cancel_countdown(self):
-        """Cancel active countdown"""
-        self.countdown_active = False
-        safe_emit("hide_auto_update_banner")
-
-    def start_countdown(self):
-        """Start the countdown (called from frontend)"""
-        self.countdown_active = True
-
-    def complete_auto_update(self):
-        """Mark auto-update as completed"""
-        self.countdown_active = False
-        self.update_available = False
-
-
-
 app = Flask(__name__)
 allowed_origins = get_allowed_origins()
 socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
-
-# Global idle state manager
-idle_state_manager = IdleStateManager()
-
-# Global customer fingerprinter
-customer_fingerprinter = CustomerFingerprinter()
-runtime_services = create_runtime_services(
-    default_auto_scan_config=DEFAULT_AUTO_SCAN_CONFIG,
-    rate_limiter_cls=PerClientRateLimiter,
-    job_registry_cls=ClientJobRegistry,
-    client_state_registry_cls=ClientStateRegistry,
-    tool_version_registry_cls=ToolVersionRegistry,
-    startup_state_factory=create_startup_state,
-    idle_state_manager=idle_state_manager,
-)
-
-network_key = runtime_services["network_key"]
-current_customer = runtime_services["current_customer"]
-last_scan_target = runtime_services["last_scan_target"]
-auto_scan_config = runtime_services["auto_scan_config"]
-auto_scan_thread = runtime_services["auto_scan_thread"]
-AUTO_SCAN_STARTUP_AT = runtime_services["auto_scan_startup_at"]
-AUTO_SCAN_STARTUP_GRACE_SECONDS = runtime_services["auto_scan_startup_grace_seconds"]
-rate_limiter = runtime_services["rate_limiter"]
-job_registry = runtime_services["job_registry"]
-broadcaster = ScanBroadcaster()
-client_state_registry = runtime_services["client_state_registry"]
-
 
 def safe_emit(event, data=None):
     return nmapui_safe_emit(event, data)
@@ -396,6 +268,38 @@ def run_cancellable_command(
         job_type=job_type,
         timeout=timeout,
     )
+
+
+# Global idle state manager
+idle_state_manager = IdleStateManager(
+    safe_emit=safe_emit,
+    check_for_updates=check_for_updates,
+    logger=logger,
+)
+
+# Global customer fingerprinter
+customer_fingerprinter = CustomerFingerprinter()
+runtime_services = create_runtime_services(
+    default_auto_scan_config=DEFAULT_AUTO_SCAN_CONFIG,
+    rate_limiter_cls=PerClientRateLimiter,
+    job_registry_cls=ClientJobRegistry,
+    client_state_registry_cls=ClientStateRegistry,
+    tool_version_registry_cls=ToolVersionRegistry,
+    startup_state_factory=create_startup_state,
+    idle_state_manager=idle_state_manager,
+)
+
+network_key = runtime_services["network_key"]
+current_customer = runtime_services["current_customer"]
+last_scan_target = runtime_services["last_scan_target"]
+auto_scan_config = runtime_services["auto_scan_config"]
+auto_scan_thread = runtime_services["auto_scan_thread"]
+AUTO_SCAN_STARTUP_AT = runtime_services["auto_scan_startup_at"]
+AUTO_SCAN_STARTUP_GRACE_SECONDS = runtime_services["auto_scan_startup_grace_seconds"]
+rate_limiter = runtime_services["rate_limiter"]
+job_registry = runtime_services["job_registry"]
+broadcaster = ScanBroadcaster()
+client_state_registry = runtime_services["client_state_registry"]
 
 
 def execute_auto_scan():
