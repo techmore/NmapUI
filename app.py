@@ -207,9 +207,6 @@ def create_app_stack(import_name):
     """Build the Flask and Socket.IO objects for this module."""
     return create_web_app(import_name)
 
-
-app, socketio = create_app_stack(__name__)
-
 # ============================================================================
 # SECURITY: Input Validation
 # ============================================================================
@@ -1016,7 +1013,14 @@ def register_runtime_modules(app, socketio):
     )
 
 
-register_runtime_modules(app, socketio)
+def create_application(import_name):
+    """Create and fully register the active Flask/Socket.IO application stack."""
+    app, socketio = create_app_stack(import_name)
+    register_runtime_modules(app, socketio)
+    return app, socketio
+
+
+app, socketio = create_application(__name__)
 
 
 def load_current_assignment():

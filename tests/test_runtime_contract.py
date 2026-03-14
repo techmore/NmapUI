@@ -140,9 +140,11 @@ def test_app_exposes_explicit_stack_builder_and_runtime_registration():
     )
 
     assert "def create_app_stack(import_name):" in app_source
-    assert "app, socketio = create_app_stack(__name__)" in app_source
     assert "def register_runtime_modules(app, socketio):" in app_source
+    assert "def create_application(import_name):" in app_source
+    assert "app, socketio = create_app_stack(import_name)" in app_source
     assert "register_runtime_modules(app, socketio)" in app_source
+    assert "app, socketio = create_application(__name__)" in app_source
 
 
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
