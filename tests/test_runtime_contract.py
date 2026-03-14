@@ -55,6 +55,18 @@ def test_template_uses_shared_table_sorter_module():
     assert "window.TableSorter = TableSorter;" in sorter_source
 
 
+def test_template_uses_site_chrome_module():
+    html = (ROOT / "templates" / "index.html").read_text()
+    site_chrome_source = (ROOT / "static" / "js" / "site_chrome.js").read_text()
+
+    assert '<script src="/static/js/site_chrome.js"></script>' in html
+    assert "initializeSiteChrome();" in html
+    assert "<!-- 2026 New Sites JavaScript Functionality -->" not in html
+    assert "const mobileMenuBtn = document.getElementById('mobile-menu-btn');" not in html
+    assert "const searchInput = document.getElementById('global-search');" not in html
+    assert "window.initializeSiteChrome = initializeSiteChrome;" in site_chrome_source
+
+
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 
