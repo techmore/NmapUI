@@ -237,6 +237,14 @@ def test_app_uses_shared_workflow_context_builders():
     assert "build_report_workflow_context(" in app_source
 
 
+def test_app_uses_shared_validation_helpers():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.validation import sanitize_input, validate_target" in app_source
+    assert "def validate_target(" not in app_source
+    assert "def sanitize_input(" not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],
