@@ -269,6 +269,13 @@ def test_app_uses_shared_private_ip_helper():
     assert "def is_private_ip(" not in app_source
 
 
+def test_app_uses_tool_version_registry_accessor_directly():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert '"get_versions": tool_versions.get_versions' in app_source
+    assert "def get_versions(" not in app_source
+
+
 def test_app_uses_single_traceroute_dependency_bundle():
     app_source = (ROOT / "app.py").read_text()
 

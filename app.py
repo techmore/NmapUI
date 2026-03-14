@@ -438,14 +438,9 @@ register_scan_routes(
         "logger": logger,
     },
 )
-# Global version information — populated by startup_checks(), readable via get_versions()
+# Global version information — populated by startup_checks().
 tool_versions = runtime_services["tool_versions"]
 startup_state = runtime_services["startup_state"]
-
-
-def get_versions():
-    """Get version information for all tools"""
-    return tool_versions.get_versions()
 
 
 register_history_handlers(
@@ -456,7 +451,7 @@ register_history_handlers(
         "scans_dir": SCANS_DIR,
         "sanitize_customer_dir_name": sanitize_customer_dir_name,
         "parse_scan_xml_for_assets": parse_scan_xml_for_assets,
-        "get_versions": get_versions,
+        "get_versions": tool_versions.get_versions,
         "emit_job_status": emit_job_status,
         "job_registry": job_registry,
         "emit_to_client": emit_to_client,
@@ -490,7 +485,7 @@ register_core_routes(
         "build_readiness_payload": build_readiness_payload,
         "get_app_version": get_app_version,
         "get_default_interface_cached": lambda: DEFAULT_INTERFACE,
-        "get_versions": get_versions,
+        "get_versions": tool_versions.get_versions,
         "startup_state": startup_state,
         "get_auto_scan_thread": lambda: auto_scan_thread,
     },
@@ -791,7 +786,7 @@ def startup_checks(quick=False):
             "complete_startup_state": complete_startup_state,
             "get_app_version": get_app_version,
             "get_default_interface_cached": lambda: DEFAULT_INTERFACE,
-            "get_versions": get_versions,
+            "get_versions": tool_versions.get_versions,
             "load_auto_scan_config": load_auto_scan_config,
             "load_current_assignment": load_current_assignment,
             "logger": logger,
