@@ -268,6 +268,13 @@ def test_app_uses_shared_private_ip_helper():
     assert "def is_private_ip(" not in app_source
 
 
+def test_app_uses_single_traceroute_dependency_bundle():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "def _traceroute_deps():" in app_source
+    assert "deps=_traceroute_deps()" in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

@@ -500,20 +500,7 @@ register_core_routes(
 def run_traceroute(target="1.1.1.1"):
     return run_traceroute_for_state(
         target,
-        deps={
-            "emit_to_client": emit_to_client,
-            "safe_emit": safe_emit,
-            "get_client_state": get_client_state,
-            "socketio_sleep": socketio.sleep,
-            "logger": logger,
-            "is_private_ip": is_private_ip,
-            "requests": requests,
-            "set_network_key_state": set_network_key_state,
-            "get_customer_fingerprinter": lambda: customer_fingerprinter,
-            "merge_customer_metadata": merge_customer_metadata,
-            "set_current_customer_state": set_current_customer_state,
-            "get_current_customer_state": get_current_customer_state,
-        },
+        deps=_traceroute_deps(),
     )
 
 
@@ -585,6 +572,23 @@ def calculate_cidr(ip, subnet_mask):
     return calculate_cidr_impl(ip, subnet_mask)
 
 
+def _traceroute_deps():
+    return {
+        "emit_to_client": emit_to_client,
+        "safe_emit": safe_emit,
+        "get_client_state": get_client_state,
+        "socketio_sleep": socketio.sleep,
+        "logger": logger,
+        "is_private_ip": is_private_ip,
+        "requests": requests,
+        "set_network_key_state": set_network_key_state,
+        "get_customer_fingerprinter": lambda: customer_fingerprinter,
+        "merge_customer_metadata": merge_customer_metadata,
+        "set_current_customer_state": set_current_customer_state,
+        "get_current_customer_state": get_current_customer_state,
+    }
+
+
 register_runtime_info_handlers(
     socketio,
     {
@@ -598,20 +602,7 @@ register_runtime_info_handlers(
         "run_traceroute": lambda target, sid=None: run_traceroute_for_state(
             target,
             sid=sid,
-            deps={
-                "emit_to_client": emit_to_client,
-                "safe_emit": safe_emit,
-                "get_client_state": get_client_state,
-                "socketio_sleep": socketio.sleep,
-                "logger": logger,
-                "is_private_ip": is_private_ip,
-                "requests": requests,
-                "set_network_key_state": set_network_key_state,
-                "get_customer_fingerprinter": lambda: customer_fingerprinter,
-                "merge_customer_metadata": merge_customer_metadata,
-                "set_current_customer_state": set_current_customer_state,
-                "get_current_customer_state": get_current_customer_state,
-            },
+            deps=_traceroute_deps(),
         ),
     },
 )
