@@ -54,6 +54,18 @@ function initializeReportGenerationUI(socket, deps) {
     reportSocket = socket;
     reportGetClientJobs = deps?.getClientJobs || window.getClientJobs || reportGetClientJobs;
 
+    socket.on('scan_results', function(data) {
+        updateLastScanResults('quickScan', data);
+    });
+
+    socket.on('deep_scan_results', function(data) {
+        updateLastScanResults('deepScan', data);
+    });
+
+    socket.on('arp_results', function(data) {
+        updateLastScanResults('arpScan', data);
+    });
+
     document.getElementById('generate-report-btn').addEventListener('click', function() {
         if (reportGetClientJobs().report.status === 'running') {
             return;
@@ -68,8 +80,37 @@ function initializeReportGenerationUI(socket, deps) {
         const customerOption = document.getElementById('current-customer').selectedOptions[0];
         let customerName = 'Unknown';
 
+         if (customerOption) {
+             customerName = customerOption.textContent.split(' (')[0];
+         }
+
+        this.classList.add('card-pulsing');
+        startReportTimer();
+
+        reportSocket.emit('generate_report', {
+            target: target,
+            customer_name: customerName,
+            scan_results: lastScanResults,
+            chunked: false
+        });
+    });
+
+    document.getElementById('chunked-scan-btn')?.addEventListener('click', function() {
+        if (reportGetClientJobs().report.status === 'running') {
+            return;
+        }
+
+        const target = document.getElementById('scan-target').value || lastScanTarget;
+        if (!target) {
+            showReportStatus('Please enter a target or run a scan first', 'error');
+            return;
+        }
+
+        const customerOption = document.getElementById('current-customer').selectedOptions[0];
+        let customerName = 'Unknown';
+
         if (customerOption) {
-            customerName = customerOption.text.split(' (')[0];
+            customerName = customerOption.textContent.split(' (')[0];
         }
 
         this.classList.add('card-pulsing');
@@ -78,7 +119,8 @@ function initializeReportGenerationUI(socket, deps) {
         reportSocket.emit('generate_report', {
             target: target,
             customer_name: customerName,
-            scan_results: lastScanResults
+            scan_results: lastScanResults,
+            chunked: true
         });
     });
 

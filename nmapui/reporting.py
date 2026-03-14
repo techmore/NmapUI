@@ -52,47 +52,9 @@ def convert_xml_to_html(
 
 
 def convert_html_to_pdf(html_path, pdf_path, *, feedback=None):
-    """Convert HTML to PDF using wkhtmltopdf, weasyprint, playwright, or textutil."""
-    wkhtml = shutil.which("wkhtmltopdf")
-    if wkhtml:
-        cmd = [
-            wkhtml,
-            "--print-media-type",
-            "--background",
-            "--margin-top",
-            "0mm",
-            "--margin-right",
-            "0mm",
-            "--margin-bottom",
-            "0mm",
-            "--margin-left",
-            "0mm",
-            "--page-size",
-            "Letter",
-            str(html_path),
-            str(pdf_path),
-        ]
-        command_str = " ".join(cmd)
-        if feedback:
-            feedback(f"Executing: {command_str}")
-        try:
-            subprocess.run(cmd, check=True)
-            return True
-        except Exception as exc:
-            logger.error("wkhtmltopdf failed: %s", exc)
-
+    """Convert HTML to PDF using playwright, wkhtmltopdf, weasyprint, or textutil."""
     if feedback:
-        feedback("Falling back to weasyprint for PDF generation")
-    try:
-        from weasyprint import HTML
-
-        HTML(str(html_path)).write_pdf(str(pdf_path))
-        return True
-    except Exception as exc:
-        logger.error("weasyprint failed: %s", exc)
-
-    if feedback:
-        feedback("Falling back to playwright for PDF generation")
+        feedback("Trying browser-quality PDF rendering with Playwright")
     try:
         import asyncio
         from playwright.async_api import async_playwright
@@ -109,10 +71,10 @@ def convert_html_to_pdf(html_path, pdf_path, *, feedback=None):
                     format="A4",
                     print_background=True,
                     margin={
-                        "top": "0mm",
-                        "right": "0mm",
-                        "bottom": "0mm",
-                        "left": "0mm",
+                        "top": "8mm",
+                        "right": "8mm",
+                        "bottom": "10mm",
+                        "left": "8mm",
                     },
                 )
                 await browser.close()
@@ -121,6 +83,50 @@ def convert_html_to_pdf(html_path, pdf_path, *, feedback=None):
         return True
     except Exception as exc:
         logger.error("playwright failed: %s", exc)
+
+    wkhtml = shutil.which("wkhtmltopdf")
+    if wkhtml:
+        cmd = [
+            wkhtml,
+            "--enable-local-file-access",
+            "--encoding",
+            "utf-8",
+            "--print-media-type",
+            "--background",
+            "--margin-top",
+            "8mm",
+            "--margin-right",
+            "8mm",
+            "--margin-bottom",
+            "10mm",
+            "--margin-left",
+            "8mm",
+            "--page-size",
+            "Letter",
+            str(html_path),
+            str(pdf_path),
+        ]
+        command_str = " ".join(cmd)
+        if feedback:
+            feedback(f"Falling back to wkhtmltopdf: {command_str}")
+        try:
+            subprocess.run(cmd, check=True)
+            return True
+        except Exception as exc:
+            logger.error("wkhtmltopdf failed: %s", exc)
+
+    if feedback:
+        feedback("Falling back to weasyprint for PDF generation")
+    try:
+        from weasyprint import HTML
+
+        HTML(str(html_path)).write_pdf(
+            str(pdf_path),
+            stylesheets=None,
+        )
+        return True
+    except Exception as exc:
+        logger.error("weasyprint failed: %s", exc)
 
     if feedback:
         feedback("Falling back to textutil for PDF generation")

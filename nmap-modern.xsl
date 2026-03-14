@@ -351,21 +351,40 @@ Updated: 2026
           }
 
           @media print {
-            /* Force background colors to print in PDF */
             body {
-              background-color: #e9ebe0 !important;
+              background-color: white !important;
+              color: #25291f !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
 
-            /* Ensure cards have white background */
+            nav {
+              display: none !important;
+            }
+
+            .max-w-7xl {
+              max-width: none !important;
+            }
+
+            body,
+            .card,
+            .progress-bar,
+            pre,
+            table,
+            th,
+            td {
+              box-shadow: none !important;
+            }
+
             .card {
               background: white !important;
+              border: 1px solid #d8dbc7 !important;
+              border-radius: 8px !important;
+              margin-bottom: 8mm !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
 
-            /* Ensure table headers have background color */
             table.dataTable thead th {
               background-color: #32382a !important;
               color: white !important;
@@ -373,7 +392,6 @@ Updated: 2026
               print-color-adjust: exact !important;
             }
 
-            /* Ensure badges have background colors */
             .badge-success {
               background-color: #979f83 !important;
               color: white !important;
@@ -395,7 +413,6 @@ Updated: 2026
               print-color-adjust: exact !important;
             }
 
-            /* Ensure progress segments have background colors */
             .progress-success {
               background-color: #979f83 !important;
               -webkit-print-color-adjust: exact !important;
@@ -408,8 +425,6 @@ Updated: 2026
               print-color-adjust: exact !important;
             }
 
-            /* Hide navigation, buttons, and interactive elements */
-            nav,
             .dt-buttons,
             .dataTables_paginate,
             .dataTables_length,
@@ -421,19 +436,18 @@ Updated: 2026
               display: none !important;
             }
 
-            /* Show all collapsible content */
             [id^="content-"] {
               display: block !important;
             }
 
-            /* Ensure pre blocks have background */
             pre {
               background-color: #f5f6f3 !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
+              white-space: pre-wrap !important;
+              word-break: break-word !important;
             }
 
-            /* Add page breaks between major sections */
             #scannedhosts,
             #openservices,
             #webservices,
@@ -448,9 +462,8 @@ Updated: 2026
               page-break-inside: avoid;
             }
 
-            /* Adjust margins for print */
             @page {
-              margin: 10mm;
+              margin: 8mm;
             }
           }
         </style>

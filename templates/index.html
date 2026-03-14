@@ -737,7 +737,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                         </svg>
                     </button>
-                    <button id="generate-report-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Generate PDF from the latest saved scan">
+                    <button id="generate-report-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Generate comprehensive PDF report">
                         <span>Generate PDF</span>
                         <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -2312,149 +2312,6 @@
             showCustomerMessage(`Configured Customers:\n${customerList}`, 'info');
         }
 
-        // Report Generation Functions
-        let lastScanTarget = '';
-        let lastScanResults = {};
-        let reportTimerInterval = null;
-        let reportStartTime = 0;
-
-        function startReportTimer() {
-            const container = document.getElementById('scan-timer-container');
-            const display = document.getElementById('scan-timer');
-            const feedbackBox = document.getElementById('feedback-container');
-            
-            container.classList.remove('hidden');
-            feedbackBox.classList.add('card-pulsing');
-            reportStartTime = Date.now();
-            
-            if (reportTimerInterval) clearInterval(reportTimerInterval);
-            
-            reportTimerInterval = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - reportStartTime) / 1000);
-                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
-                const secs = (elapsed % 60).toString().padStart(2, '0');
-                display.textContent = `${mins}:${secs}`;
-            }, 1000);
-        }
-
-        function stopReportTimer() {
-            const feedbackBox = document.getElementById('feedback-container');
-            const timerContainer = document.getElementById('scan-timer-container');
-            
-            if (reportTimerInterval) {
-                clearInterval(reportTimerInterval);
-                reportTimerInterval = null;
-            }
-            
-            feedbackBox.classList.remove('card-pulsing');
-            
-            // Hide timer and clear feedback box after 5 seconds
-            setTimeout(() => {
-                timerContainer.classList.add('hidden');
-                feedbackBox.innerHTML = '';
-                // Also hide the feedback container parent div
-                feedbackBox.parentElement.classList.add('hidden');
-            }, 5000);
-        }
-
-        // Store scan results globally for report generation
-        socket.on('scan_results', function(data) {
-            lastScanResults.quickScan = data;
-        });
-
-        socket.on('deep_scan_results', function(data) {
-            lastScanResults.deepScan = data;
-        });
-
-        socket.on('arp_results', function(data) {
-            lastScanResults.arpScan = data;
-        });
-
-        document.getElementById('generate-report-btn').addEventListener('click', function() {
-            if (clientJobs.report.status === 'running') {
-                return;
-            }
-            const target = document.getElementById('scan-target').value || lastScanTarget;
-
-            if (!target) {
-                showReportStatus('Please enter a target or run a scan first', 'error');
-                return;
-            }
-
-            const customerOption = document.getElementById('current-customer').selectedOptions[0];
-            let customerName = 'Unknown';
-            
-            if (customerOption) {
-                customerName = customerOption.text.split(' (')[0];
-            }
-
-            this.classList.add('card-pulsing');
-            startReportTimer();
-
-            socket.emit('generate_report', {
-                target: target,
-                customer_name: customerName,
-                chunked: false
-            });
-        });
-
-        document.getElementById('chunked-scan-btn').addEventListener('click', function() {
-            if (clientJobs.report.status === 'running') {
-                return;
-            }
-            const target = document.getElementById('scan-target').value || lastScanTarget;
-
-            if (!target) {
-                showReportStatus('Please enter a target or run a scan first', 'error');
-                return;
-            }
-
-            const customerOption = document.getElementById('current-customer').selectedOptions[0];
-            let customerName = 'Unknown';
-            
-            if (customerOption) {
-                customerName = customerOption.text.split(' (')[0];
-            }
-
-            this.classList.add('card-pulsing');
-            startReportTimer();
-
-            socket.emit('generate_report', {
-                target: target,
-                customer_name: customerName,
-                scan_results: lastScanResults,
-                chunked: true
-            });
-        });
-
-        // Pulsing Progress Card Helper Functions
-        function createReportProgressCard(message) {
-            const reportCard = document.createElement('div');
-            reportCard.id = 'report-progress-card';
-            reportCard.className = 'mt-4 bg-olive-50 p-4 rounded-xl border border-olive-300 card-pulsing';
-            reportCard.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <span class="relative flex size-3">
-                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-500 opacity-75"></span>
-                        <span class="relative inline-flex size-3 rounded-full bg-olive-600"></span>
-                    </span>
-                    <p id="report-progress-text" class="text-sm font-medium text-olive-900">${message}</p>
-                </div>
-            `;
-            const statusDiv = document.getElementById('report-status');
-            statusDiv.parentNode.insertBefore(reportCard, statusDiv.nextSibling);
-        }
-
-        function updateReportProgress(message) {
-            const progressText = document.getElementById('report-progress-text');
-            if (!progressText) {
-                createReportProgressCard(message);
-                return;
-            }
-
-            progressText.textContent = message;
-        }
-
         function removeReportProgressCard() {
             const card = document.getElementById('report-progress-card');
             if (card) {
@@ -2505,11 +2362,11 @@
             
             modal.classList.remove('hidden');
             
-            // Get current customer name from the main UI
-            let currentName = '';
-            if (customerDropdown && customerDropdown.selectedOptions[0]) {
-                currentName = customerDropdown.selectedOptions[0].text.split(' (')[0];
-            }
+             // Get current customer name from the main UI
+             let currentName = '';
+             if (customerDropdown && customerDropdown.selectedOptions[0]) {
+                 currentName = customerDropdown.selectedOptions[0].textContent.split(' (')[0];
+             }
             
             if (currentName && currentName !== 'Unassigned' && currentName !== 'Unknown Network' && currentName !== 'Auto-detect network...') {
                 // Set the filter to this customer by default
@@ -2769,10 +2626,10 @@
             const customerOption = document.getElementById('current-customer').selectedOptions[0];
             let customerName = 'Auto Scan'; // Default for auto scans
 
-            if (customerOption) {
-                // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
-                customerName = customerOption.text.split(' (')[0];
-            }
+             if (customerOption) {
+                 // Strip confidence score if present: "TechMore (1.00 confidence)" -> "TechMore"
+                 customerName = customerOption.textContent.split(' (')[0];
+             }
 
             console.log('About to emit generate_report with target:', target, 'customer:', customerName);
             console.log('Socket connected:', socket.connected);
