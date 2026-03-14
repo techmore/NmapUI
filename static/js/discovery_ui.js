@@ -350,7 +350,11 @@ function initializeDiscoveryUI(socket) {
     });
 
     socket.on('report_complete', function(data) {
-        showReportStatus(formatReportCompleteMessage(data), 'success');
+        if (typeof window.showReportCompleteStatus === 'function') {
+            window.showReportCompleteStatus(data);
+        } else {
+            showReportStatus(formatReportCompleteMessage(data), 'success');
+        }
         document.getElementById('generate-report-btn').classList.remove('card-pulsing');
         stopReportTimer();
         socket.emit('get_history_counts');

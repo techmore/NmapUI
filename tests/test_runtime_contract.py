@@ -626,6 +626,7 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert "getLastScanTarget: window.getLastScanTarget" in template
     assert "Complete + PDF" in template
     assert 'aria-label="Run a complete scan and generate a new PDF"' in template
+    assert 'id="report-status-actions"' in template
 
 
 def test_pdf_generation_prefers_browser_renderer_before_wkhtml():
@@ -643,12 +644,17 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     text=True,
     )
     discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
+    report_status_module = (ROOT / "static" / "js" / "report_status.js").read_text()
 
     assert "function renderCveArrayCell(cell, cveArray)" in discovery_module
     assert "function appendServiceInfoLine(cell, line)" in discovery_module
     assert "function renderDelimitedCell(cell, items, options = {})" in discovery_module
     assert "function formatReportCompleteMessage(data)" in discovery_module
-    assert "showReportStatus(formatReportCompleteMessage(data), 'success');" in discovery_module
+    assert "window.showReportCompleteStatus(data)" in discovery_module
+    assert "function showReportActions(path)" in report_status_module
+    assert "function showReportCompleteStatus(data)" in report_status_module
+    assert "buildLink(`/api/scans/${path}/html`, 'View Report', true);" in report_status_module
+    assert "buildLink(`/api/scans/${path}/pdf`, 'Download PDF');" in report_status_module
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template

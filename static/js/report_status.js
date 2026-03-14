@@ -45,6 +45,41 @@ function removeReportProgressCard() {
     }
 }
 
+function clearReportStatusActions() {
+    const actions = document.getElementById('report-status-actions');
+    if (!actions) {
+        return;
+    }
+    actions.replaceChildren();
+    actions.classList.add('hidden');
+}
+
+function showReportActions(path) {
+    const actions = document.getElementById('report-status-actions');
+    if (!actions || !path) {
+        return;
+    }
+
+    actions.replaceChildren();
+
+    const buildLink = (href, label, newTab = false) => {
+        const link = document.createElement('a');
+        link.href = href;
+        link.textContent = label;
+        link.className = 'action-button action-button-primary action-button-compact';
+        if (newTab) {
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+        }
+        actions.appendChild(link);
+    };
+
+    buildLink(`/api/scans/${path}/html`, 'View Report', true);
+    buildLink(`/api/scans/${path}/pdf`, 'Download PDF');
+    buildLink(`/api/scans/${path}/xml`, 'Download XML');
+    actions.classList.remove('hidden');
+}
+
 function showReportStatus(message, type) {
     const statusDiv = document.getElementById('report-status');
     const statusText = document.getElementById('report-status-text');
@@ -59,12 +94,24 @@ function showReportStatus(message, type) {
 
     statusText.textContent = message;
 
+    if (type !== 'success') {
+        clearReportStatusActions();
+    }
+
     if (type === 'success' || type === 'error') {
         setTimeout(() => statusDiv.classList.add('hidden'), 5000);
     }
 }
 
+function showReportCompleteStatus(data) {
+    showReportStatus(window.formatReportCompleteMessage(data), 'success');
+    showReportActions(data?.path);
+}
+
 window.createReportProgressCard = createReportProgressCard;
 window.updateReportProgress = updateReportProgress;
 window.removeReportProgressCard = removeReportProgressCard;
+window.clearReportStatusActions = clearReportStatusActions;
+window.showReportActions = showReportActions;
 window.showReportStatus = showReportStatus;
+window.showReportCompleteStatus = showReportCompleteStatus;
