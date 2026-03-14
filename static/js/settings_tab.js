@@ -97,6 +97,25 @@ function renderRuntimeSummary(summary) {
     });
 }
 
+function setSyncStatus(elementId, message, isError = false) {
+    const element = document.getElementById(elementId);
+    if (!element) {
+        return;
+    }
+
+    element.textContent = message;
+    element.classList.remove('text-olive-600', 'text-red-700', 'text-emerald-700');
+    if (isError) {
+        element.classList.add('text-red-700');
+        return;
+    }
+    if (/ready|accepted|configured/i.test(message)) {
+        element.classList.add('text-emerald-700');
+        return;
+    }
+    element.classList.add('text-olive-600');
+}
+
 function applyProfileToDashboard(profile) {
     const targetInput = document.getElementById('scan-target');
     if (targetInput) {
@@ -247,6 +266,51 @@ async function saveSettingsTab() {
     }
 }
 
+async function testGoogleDriveSettings() {
+    const folderId = document.getElementById('settings-google-drive-folder')?.value || '';
+    setSyncStatus('settings-google-drive-status', 'Testing Google Drive configuration...');
+
+    try {
+        const response = await fetch('/api/settings/validate/google-drive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_id: folderId }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.status) {
+            throw new Error(payload.error || `Drive validation failed (${response.status})`);
+        }
+
+        setSyncStatus('settings-google-drive-status', payload.status, false);
+    } catch (error) {
+        console.error('Error validating Google Drive settings:', error);
+        setSyncStatus('settings-google-drive-status', error.message || 'Drive validation failed.', true);
+    }
+}
+
+async function testRemoteSyncSettings() {
+    const endpoint = document.getElementById('settings-remote-sync-endpoint')?.value || '';
+    const apiKey = document.getElementById('settings-remote-sync-api-key')?.value || '';
+    setSyncStatus('settings-remote-sync-status', 'Testing remote sync configuration...');
+
+    try {
+        const response = await fetch('/api/settings/validate/remote-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint, api_key: apiKey }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.status) {
+            throw new Error(payload.error || `Remote sync validation failed (${response.status})`);
+        }
+
+        setSyncStatus('settings-remote-sync-status', payload.status, false);
+    } catch (error) {
+        console.error('Error validating remote sync settings:', error);
+        setSyncStatus('settings-remote-sync-status', error.message || 'Remote sync validation failed.', true);
+    }
+}
+
 function addTargetProfile() {
     const nameInput = document.getElementById('settings-profile-name');
     const targetInput = document.getElementById('settings-profile-target');
@@ -312,6 +376,8 @@ function initializeSettingsTab() {
     });
     document.getElementById('add-target-profile-btn')?.addEventListener('click', addTargetProfile);
     document.getElementById('capture-current-target-btn')?.addEventListener('click', captureCurrentTarget);
+    document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', testGoogleDriveSettings);
+    document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', testRemoteSyncSettings);
     populateProfileCustomerOptions();
 }
 

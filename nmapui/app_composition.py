@@ -334,10 +334,18 @@ def build_core_routes_deps(
     }
 
 
-def build_settings_routes_deps(*, settings_state, save_settings):
+def build_settings_routes_deps(
+    *,
+    settings_state,
+    save_settings,
+    validate_google_drive,
+    validate_remote_sync,
+):
     return {
         "settings_state": settings_state,
         "save_settings": save_settings,
+        "validate_google_drive": validate_google_drive,
+        "validate_remote_sync": validate_remote_sync,
     }
 
 

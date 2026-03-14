@@ -109,6 +109,14 @@ def build_settings_app():
         {
             "settings_state": settings_state,
             "save_settings": lambda payload: payload,
+            "validate_google_drive": lambda folder_id: {
+                "success": True,
+                "status": f"Drive OK:{folder_id}",
+            },
+            "validate_remote_sync": lambda endpoint, api_key: {
+                "success": True,
+                "status": f"Remote OK:{endpoint}:{api_key}",
+            },
         },
     )
     return app, settings_state
@@ -574,6 +582,8 @@ def test_settings_routes_save_normalized_payload(monkeypatch):
                     "sync": payload["sync"],
                 },
             ),
+            "validate_google_drive": lambda folder_id: {"success": True, "status": "Configured"},
+            "validate_remote_sync": lambda endpoint, api_key: {"success": True, "status": "Configured"},
         },
     )
 
@@ -608,6 +618,37 @@ def test_settings_routes_save_normalized_payload(monkeypatch):
     assert payload["settings"]["scan_rules"]["scan_only_mode"] is True
     assert payload["settings"]["scan_rules"]["excluded_targets"] == ["192.168.1.10", "192.168.1.11"]
     assert payload["settings"]["sync"]["remote_sync"]["api_key"] == "secret"
+
+
+def test_settings_routes_validate_google_drive(monkeypatch):
+    configure_auth(monkeypatch)
+    app, _ = build_settings_app()
+
+    response = app.test_client().post(
+        "/api/settings/validate/google-drive",
+        json={"folder_id": "folder-123"},
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"success": True, "status": "Drive OK:folder-123"}
+
+
+def test_settings_routes_validate_remote_sync(monkeypatch):
+    configure_auth(monkeypatch)
+    app, _ = build_settings_app()
+
+    response = app.test_client().post(
+        "/api/settings/validate/remote-sync",
+        json={"endpoint": "https://pilot.example/api", "api_key": "secret"},
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "success": True,
+        "status": "Remote OK:https://pilot.example/api:secret",
+    }
 
 
 def test_http_auth_rejects_builtin_default_credentials_by_default(tmp_path, monkeypatch):

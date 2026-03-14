@@ -183,6 +183,7 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
 
     assert 'XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"' in paths_source
     assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
+    assert 'GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"' in paths_source
     assert '"web_stylesheet": web_stylesheet' in app_composition_source
     assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
 
@@ -960,6 +961,8 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="settings-excluded-targets"' in template
     assert 'id="settings-google-drive-enabled"' in template
     assert 'id="settings-remote-sync-enabled"' in template
+    assert 'id="settings-google-drive-test-btn"' in template
+    assert 'id="settings-remote-sync-test-btn"' in template
     assert '<script src="/static/js/reports_tab.js"></script>' in template
     assert '<script src="/static/js/settings_tab.js"></script>' in template
     assert "initializeAuditLog();" in template
@@ -1015,8 +1018,14 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "Compare to Base" in reports_tab_module
     assert "async function loadSettingsTab(force = false)" in settings_tab_module
     assert "async function saveSettingsTab()" in settings_tab_module
+    assert "async function testGoogleDriveSettings()" in settings_tab_module
+    assert "async function testRemoteSyncSettings()" in settings_tab_module
     assert "function addTargetProfile()" in settings_tab_module
     assert "function applyProfileToDashboard(profile)" in settings_tab_module
+    assert "setSyncStatus('settings-google-drive-status'" in settings_tab_module
+    assert "setSyncStatus('settings-remote-sync-status'" in settings_tab_module
+    assert "fetch('/api/settings/validate/google-drive'" in settings_tab_module
+    assert "fetch('/api/settings/validate/remote-sync'" in settings_tab_module
     assert "window.initializeSettingsTab = initializeSettingsTab;" in settings_tab_module
     assert "window.loadSettingsTab = loadSettingsTab;" in settings_tab_module
     assert "cell.innerHTML = items.map" not in template

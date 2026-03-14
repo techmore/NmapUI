@@ -65,6 +65,8 @@ def register_app_handlers(
     generate_report_task,
     generate_pdf_from_saved_task,
     save_settings,
+    validate_google_drive_settings,
+    validate_remote_sync_settings,
     logger,
 ):
     register_shared_handlers(
@@ -162,5 +164,7 @@ def register_app_handlers(
         settings_routes_deps=build_settings_routes_deps(
             settings_state=settings_state,
             save_settings=save_settings,
+            validate_google_drive=validate_google_drive_settings,
+            validate_remote_sync=validate_remote_sync_settings,
         ),
     )

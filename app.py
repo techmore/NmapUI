@@ -58,6 +58,7 @@ from nmapui.networking import (
 from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
+    GOOGLE_DRIVE_CREDENTIALS_FILE,
     SCANS_DIR,
     SETTINGS_FILE,
     VULNERS_SCRIPT,
@@ -90,7 +91,12 @@ from nmapui.scanning import (
     create_scan_folder,
     split_subnet_into_chunks,
 )
-from nmapui.settings import load_settings_state, save_settings_state
+from nmapui.settings import (
+    load_settings_state,
+    save_settings_state,
+    validate_google_drive_settings,
+    validate_remote_sync_settings,
+)
 from nmapui.traceroute_runtime import run_traceroute as run_traceroute_runtime
 from nmapui.validation import validate_target
 from persistence import (
@@ -303,6 +309,15 @@ register_app_handlers(
         settings_path=SETTINGS_FILE,
         save_json_document=save_json_document,
         settings_state=payload,
+    ),
+    validate_google_drive_settings=lambda *, folder_id: validate_google_drive_settings(
+        folder_id=folder_id,
+        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+    ),
+    validate_remote_sync_settings=lambda *, endpoint, api_key: validate_remote_sync_settings(
+        endpoint=endpoint,
+        api_key=api_key,
+        requests_module=requests,
     ),
     logger=logger,
 )

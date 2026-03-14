@@ -1,6 +1,8 @@
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 import uuid
+from urllib.parse import urlparse
 
 
 SETTINGS_SCHEMA_VERSION = 1
@@ -116,3 +118,91 @@ def save_settings_state(*, settings_path, save_json_document, settings_state) ->
     normalized = normalize_settings_document(settings_state)
     save_json_document(settings_path, normalized)
     return normalized
+
+
+def validate_google_drive_settings(*, folder_id, credentials_path: Path) -> dict[str, Any]:
+    folder_id = str(folder_id or "").strip()
+
+    if folder_id and not all(ch.isalnum() or ch in "-_" for ch in folder_id):
+        return {
+            "success": False,
+            "status": "Invalid folder ID format",
+            "error": "Drive folder IDs should contain only letters, numbers, dashes, and underscores.",
+        }
+
+    if not credentials_path.exists():
+        return {
+            "success": False,
+            "status": "OAuth credentials missing",
+            "error": f"Missing Google Drive OAuth credentials file at {credentials_path}",
+        }
+
+    return {
+        "success": True,
+        "status": "Ready for Google Drive auth",
+        "details": "OAuth credentials are present. Complete Drive auth separately before enabling uploads.",
+    }
+
+
+def validate_remote_sync_settings(*, endpoint, api_key, requests_module, timeout=5) -> dict[str, Any]:
+    endpoint = str(endpoint or "").strip()
+    api_key = str(api_key or "").strip()
+
+    if not endpoint:
+        return {
+            "success": False,
+            "status": "Endpoint required",
+            "error": "Remote sync endpoint is required.",
+        }
+
+    parsed = urlparse(endpoint)
+    if parsed.scheme != "https" or not parsed.netloc:
+        return {
+            "success": False,
+            "status": "Invalid endpoint",
+            "error": "Remote sync endpoint must be a valid HTTPS URL.",
+        }
+
+    if not api_key:
+        return {
+            "success": False,
+            "status": "API key required",
+            "error": "Remote sync API key is required.",
+        }
+
+    try:
+        response = requests_module.get(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Accept": "application/json",
+                "User-Agent": "NmapUI settings validation",
+            },
+            timeout=timeout,
+        )
+    except Exception as exc:
+        return {
+            "success": False,
+            "status": "Endpoint unreachable",
+            "error": str(exc),
+        }
+
+    if 200 <= response.status_code < 300:
+        return {
+            "success": True,
+            "status": "Remote sync credentials accepted",
+            "details": f"Remote endpoint responded with HTTP {response.status_code}.",
+        }
+
+    if response.status_code in (401, 403):
+        return {
+            "success": False,
+            "status": "API key rejected",
+            "error": f"Remote endpoint rejected the API key with HTTP {response.status_code}.",
+        }
+
+    return {
+        "success": False,
+        "status": "Endpoint responded unexpectedly",
+        "error": f"Remote endpoint returned HTTP {response.status_code}.",
+    }
