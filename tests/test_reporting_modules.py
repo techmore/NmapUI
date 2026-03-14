@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from nmapui.reporting import (
     extract_scan_statistics,
     find_latest_saved_scan_for_pdf,
+    find_previous_scan_metadata,
     generate_pdf_from_saved_task,
     get_most_recent_scan_xml,
     mark_scan_failure,
@@ -12,6 +13,7 @@ from nmapui.reporting import (
     parse_scan_xml_for_assets,
     parse_vulners_script,
     save_scan_metadata,
+    summarize_asset_differences,
 )
 
 
@@ -320,3 +322,73 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
     assert observed["completed"][3]["mode"] == "pdf_only"
     assert observed["cleared"] == ("sid-1", "report")
     assert any(event[1] == "report_complete" for event in observed["events"])
+
+
+def test_find_previous_scan_metadata_matches_customer_and_target():
+    current = {
+        "path": "Acme/2026-03-14/scan_020000_target",
+        "customer_id": "cust-123",
+        "target": "192.168.1.0/24",
+        "timestamp": "2026-03-14T02:00:00",
+    }
+    scans = [
+        current,
+        {
+            "path": "Acme/2026-03-13/scan_010000_target",
+            "customer_id": "cust-123",
+            "target": "192.168.1.0/24",
+            "timestamp": "2026-03-13T01:00:00",
+        },
+        {
+            "path": "Other/2026-03-13/scan_010000_target",
+            "customer_id": "cust-999",
+            "target": "192.168.1.0/24",
+            "timestamp": "2026-03-13T03:00:00",
+        },
+    ]
+
+    previous = find_previous_scan_metadata(current, scans)
+
+    assert previous["path"] == "Acme/2026-03-13/scan_010000_target"
+
+
+def test_summarize_asset_differences_reports_added_removed_and_changed_hosts():
+    previous_assets = [
+        {
+            "ip": "192.168.1.10",
+            "hostname": "router.local",
+            "ports": "22 (ssh), 80 (http)",
+            "vulnerabilities": [{"cve_id": "CVE-2026-0001"}],
+        },
+        {
+            "ip": "192.168.1.20",
+            "hostname": "printer.local",
+            "ports": "9100 (jetdirect)",
+            "vulnerabilities": [],
+        },
+    ]
+    current_assets = [
+        {
+            "ip": "192.168.1.10",
+            "hostname": "router.local",
+            "ports": "22 (ssh), 443 (https)",
+            "vulnerabilities": [{"cve_id": "CVE-2026-0002"}],
+        },
+        {
+            "ip": "192.168.1.30",
+            "hostname": "camera.local",
+            "ports": "554 (rtsp)",
+            "vulnerabilities": [],
+        },
+    ]
+
+    diff = summarize_asset_differences(current_assets, previous_assets)
+
+    assert diff["has_changes"] is True
+    assert diff["added_hosts"] == ["192.168.1.30"]
+    assert diff["removed_hosts"] == ["192.168.1.20"]
+    assert diff["new_ports"] == ["443 (https)", "554 (rtsp)"]
+    assert "80 (http)" in diff["removed_ports"]
+    assert diff["new_vulnerabilities"] == ["CVE-2026-0002"]
+    assert diff["removed_vulnerabilities"] == ["CVE-2026-0001"]
+    assert diff["changed_hosts"][0]["host"] == "192.168.1.10"

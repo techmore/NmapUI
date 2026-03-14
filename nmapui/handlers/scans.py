@@ -4,6 +4,11 @@ import shutil
 
 from flask import jsonify, send_file
 from nmapui.auth import require_auth
+from nmapui.reporting import (
+    find_previous_scan_metadata,
+    parse_scan_xml_for_assets,
+    summarize_asset_differences,
+)
 from persistence import iter_scan_metadata_documents, remove_scan_metadata_index_entry
 
 
@@ -42,6 +47,31 @@ def register_scan_routes(app, deps):
             scans.append(data)
 
         scans.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
+
+        for scan in scans:
+            previous = find_previous_scan_metadata(scan, scans)
+            if previous is None:
+                continue
+
+            current_xml = scans_dir / scan["path"] / "scan.xml"
+            previous_xml = scans_dir / previous["path"] / "scan.xml"
+            if not current_xml.exists() or not previous_xml.exists():
+                continue
+
+            try:
+                diff_summary = summarize_asset_differences(
+                    parse_scan_xml_for_assets(current_xml),
+                    parse_scan_xml_for_assets(previous_xml),
+                )
+            except Exception as exc:
+                logger.error("Error building diff summary for %s: %s", scan["path"], exc)
+                continue
+
+            scan["diff_summary"] = {
+                **diff_summary,
+                "baseline_path": previous["path"],
+                "baseline_timestamp": previous.get("timestamp", ""),
+            }
         return jsonify({"scans": scans})
 
     @app.route("/api/scans/<path:path>/html")

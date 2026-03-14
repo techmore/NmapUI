@@ -144,6 +144,77 @@ def test_scan_routes_surface_failed_report_metadata(tmp_path, monkeypatch):
     assert payload["scans"][0]["completed_successfully"] is False
 
 
+def test_scan_routes_include_diff_summary_against_previous_scan(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    older = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    newer = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    older.mkdir(parents=True, exist_ok=True)
+    newer.mkdir(parents=True, exist_ok=True)
+    (older / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24"}'
+    )
+    (newer / "metadata.json").write_text(
+        '{"timestamp":"2026-03-14T01:00:00","customer_name":"Acme","customer_id":"cust-123","target":"10.0.0.0/24"}'
+    )
+    (older / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.10" addrtype="ipv4"/>
+            <ports>
+              <port portid="80"><state state="open"/><service name="http"/></port>
+            </ports>
+          </host>
+        </nmaprun>
+        """
+    )
+    (newer / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.10" addrtype="ipv4"/>
+            <ports>
+              <port portid="443"><state state="open"/><service name="https"/></port>
+              <script id="vulners">
+                <table><elem key="id">CVE-2026-0009</elem></table>
+              </script>
+            </ports>
+          </host>
+          <host>
+            <status state="up"/>
+            <address addr="10.0.0.20" addrtype="ipv4"/>
+          </host>
+        </nmaprun>
+        """
+    )
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+        },
+    )
+    client = app.test_client()
+
+    response = client.get("/api/scans", headers=basic_auth_header())
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    latest = payload["scans"][0]
+    assert latest["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+    assert latest["diff_summary"]["added_hosts"] == ["10.0.0.20"]
+    assert latest["diff_summary"]["new_ports"] == ["443 (https)"]
+
+
 def test_delete_scan_removes_index_entry(tmp_path, monkeypatch):
     configure_auth(monkeypatch)
     app = build_scan_app_with_real_metadata(

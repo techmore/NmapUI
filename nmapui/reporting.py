@@ -21,6 +21,126 @@ def _get_scans_dir_for_scan(scan_dir):
     return scan_dir.parents[2]
 
 
+def _normalize_asset_ports(asset):
+    ports = set()
+    for item in (asset.get("ports") or "").split(","):
+        value = item.strip()
+        if value:
+            ports.add(value)
+    return ports
+
+
+def _normalize_asset_vulns(asset):
+    vulns = set()
+    for vuln in asset.get("vulnerabilities") or []:
+        cve_id = str(vuln.get("cve_id", "") or "").strip()
+        if cve_id:
+            vulns.add(cve_id)
+    return vulns
+
+
+def _asset_identity(asset):
+    hostname = str(asset.get("hostname", "") or "").strip().lower()
+    ip = str(asset.get("ip", "") or "").strip()
+    mac = str(asset.get("mac", "") or "").strip().lower()
+    if ip:
+        return ("ip", ip)
+    if hostname:
+        return ("hostname", hostname)
+    return ("mac", mac)
+
+
+def summarize_asset_differences(current_assets, previous_assets):
+    current_by_id = {_asset_identity(asset): asset for asset in current_assets or []}
+    previous_by_id = {_asset_identity(asset): asset for asset in previous_assets or []}
+
+    added_hosts = []
+    removed_hosts = []
+    changed_hosts = []
+    new_ports = set()
+    removed_ports = set()
+    new_vulnerabilities = set()
+    removed_vulnerabilities = set()
+
+    for asset_id, asset in current_by_id.items():
+        previous = previous_by_id.get(asset_id)
+        if previous is None:
+            added_hosts.append(asset.get("ip") or asset.get("hostname") or asset.get("mac"))
+            new_ports.update(_normalize_asset_ports(asset))
+            new_vulnerabilities.update(_normalize_asset_vulns(asset))
+            continue
+
+        current_ports = _normalize_asset_ports(asset)
+        previous_ports = _normalize_asset_ports(previous)
+        current_vulns = _normalize_asset_vulns(asset)
+        previous_vulns = _normalize_asset_vulns(previous)
+
+        added_for_host = sorted(current_ports - previous_ports)
+        removed_for_host = sorted(previous_ports - current_ports)
+        added_vulns = sorted(current_vulns - previous_vulns)
+        removed_vulns = sorted(previous_vulns - current_vulns)
+
+        if added_for_host or removed_for_host or added_vulns or removed_vulns:
+            changed_hosts.append(
+                {
+                    "host": asset.get("ip") or asset.get("hostname") or asset.get("mac"),
+                    "new_ports": added_for_host,
+                    "removed_ports": removed_for_host,
+                    "new_vulnerabilities": added_vulns,
+                    "removed_vulnerabilities": removed_vulns,
+                }
+            )
+
+        new_ports.update(added_for_host)
+        removed_ports.update(removed_for_host)
+        new_vulnerabilities.update(added_vulns)
+        removed_vulnerabilities.update(removed_vulns)
+
+    for asset_id, asset in previous_by_id.items():
+        if asset_id not in current_by_id:
+            removed_hosts.append(asset.get("ip") or asset.get("hostname") or asset.get("mac"))
+            removed_ports.update(_normalize_asset_ports(asset))
+            removed_vulnerabilities.update(_normalize_asset_vulns(asset))
+
+    return {
+        "has_changes": bool(
+            added_hosts
+            or removed_hosts
+            or changed_hosts
+            or new_ports
+            or removed_ports
+            or new_vulnerabilities
+            or removed_vulnerabilities
+        ),
+        "added_hosts": sorted(value for value in added_hosts if value),
+        "removed_hosts": sorted(value for value in removed_hosts if value),
+        "changed_hosts": changed_hosts,
+        "new_ports": sorted(new_ports),
+        "removed_ports": sorted(removed_ports),
+        "new_vulnerabilities": sorted(new_vulnerabilities),
+        "removed_vulnerabilities": sorted(removed_vulnerabilities),
+    }
+
+
+def find_previous_scan_metadata(current_metadata, scan_entries):
+    current_path = str(current_metadata.get("path", "") or "")
+    current_timestamp = str(current_metadata.get("timestamp", "") or "")
+    current_customer_id = str(current_metadata.get("customer_id", "") or "")
+    current_target = str(current_metadata.get("target", "") or "")
+
+    for entry in scan_entries or []:
+        if entry.get("path") == current_path:
+            continue
+        if str(entry.get("customer_id", "") or "") != current_customer_id:
+            continue
+        if str(entry.get("target", "") or "") != current_target:
+            continue
+        if str(entry.get("timestamp", "") or "") >= current_timestamp:
+            continue
+        return entry
+    return None
+
+
 def merge_nmap_xml_files(xml_files, output_path):
     """Merge multiple Nmap XML files into one with updated statistics."""
     if not xml_files:
