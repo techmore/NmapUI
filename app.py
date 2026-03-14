@@ -60,7 +60,9 @@ from nmapui.networking import (
     calculate_cidr,
     get_default_interface,
     identify_gateway_firewall_targets,
+    is_private_ip,
     ip_sort_key,
+    split_subnet_into_chunks,
 )
 from nmapui.paths import (
     BASE_DIR,
@@ -317,30 +319,6 @@ def set_last_scan_target_state(value, sid: Optional[str] = None):
     last_scan_target = value
 
 
-def split_subnet_into_chunks(target):
-    """Split large subnets into /29 chunks (~8 hosts each) for manageable scanning"""
-    import ipaddress
-
-    try:
-        network = ipaddress.ip_network(target, strict=False)
-        if network.num_addresses <= 8:  # /29 or smaller
-            return [target]
-
-        # Split into /29 chunks (~8 hosts each)
-        chunks = []
-        for subnet in network.subnets(new_prefix=29):
-            if subnet.num_addresses > 0:
-                chunks.append(str(subnet))
-            if (
-                len(chunks) >= 2048
-            ):  # Limit to prevent excessive chunks (increased for smaller chunks)
-                break
-        return chunks[:2048]  # Max 2048 chunks
-    except ValueError:
-        # Not a valid subnet, return as-is
-        return [target]
-
-
 def execute_auto_scan():
     """Execute automatic scan using current target"""
     # Use the last scan target or current network
@@ -393,21 +371,6 @@ def execute_auto_scan():
 tool_versions = ToolVersionRegistry()
 
 startup_state = create_startup_state()
-
-
-def is_private_ip(ip):
-    try:
-        addr = ipaddress.ip_address(ip)
-        # Check standard private + CGNAT (100.64.0.0/10) + link-local
-        if addr.is_private:
-            return True
-        # CGNAT range: 100.64.0.0 - 100.127.255.255
-        cgnat = ipaddress.ip_network("100.64.0.0/10")
-        return addr in cgnat
-    except ValueError:
-        return False
-
-
 
 
 def run_traceroute(target="1.1.1.1", sid: Optional[str] = None):

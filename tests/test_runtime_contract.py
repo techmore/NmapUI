@@ -221,9 +221,13 @@ def test_app_uses_extracted_networking_helpers():
     assert "def get_default_interface():" not in app_source
     assert "def calculate_cidr(ip, subnet_mask):" not in app_source
     assert "def identify_gateway_firewall_targets(hosts):" not in app_source
+    assert "def split_subnet_into_chunks(target):" not in app_source
+    assert "def is_private_ip(ip):" not in app_source
     assert "def get_default_interface(netifaces, logger):" in networking_source
     assert "def calculate_cidr(ip, subnet_mask):" in networking_source
     assert "def identify_gateway_firewall_targets(hosts, network_key):" in networking_source
+    assert "def split_subnet_into_chunks(target):" in networking_source
+    assert "def is_private_ip(ip):" in networking_source
 
 
 def test_app_uses_extracted_state_helpers():
