@@ -163,6 +163,17 @@ def test_app_delegates_startup_checks_to_shared_module():
     assert 'versions["arp_scan"] = version' not in app_source
 
 
+def test_app_delegates_core_routes_to_handler_module():
+    app_source = (ROOT / "app.py").read_text()
+
+    assert "from nmapui.handlers.routes import register_core_routes" in app_source
+    assert "register_core_routes(" in app_source
+    assert '@app.route("/")' not in app_source
+    assert '@app.route("/api/health")' not in app_source
+    assert '@app.route("/api/health/live")' not in app_source
+    assert '@app.route("/api/health/ready")' not in app_source
+
+
 def test_template_unifies_scan_result_listeners_and_normalizes_feedback():
     template = subprocess.check_output(
         ["git", "show", ":templates/index.html"],

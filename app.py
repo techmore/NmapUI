@@ -40,6 +40,7 @@ from nmapui.handlers.auto_scan import (
 )
 from nmapui.handlers.customers import register_customer_handlers
 from nmapui.handlers.history import register_history_handlers
+from nmapui.handlers.routes import register_core_routes
 from nmapui.handlers.runtime_info import register_runtime_info_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.handlers.updates import register_update_handlers
@@ -715,6 +716,18 @@ register_update_handlers(
         "logger": logger,
     },
 )
+register_core_routes(
+    app,
+    {
+        "build_liveness_payload": build_liveness_payload,
+        "build_readiness_payload": build_readiness_payload,
+        "get_app_version": get_app_version,
+        "get_default_interface_cached": lambda: DEFAULT_INTERFACE,
+        "get_versions": get_versions,
+        "startup_state": startup_state,
+        "get_auto_scan_thread": lambda: auto_scan_thread,
+    },
+)
 
 
 def is_private_ip(ip):
@@ -758,11 +771,6 @@ def get_report_counts():
         load_json_document,
         normalize_scan_metadata_document,
     )
-
-
-@app.route("/")
-def index():
-    return render_template("index.html")
 
 
 def save_customers_config():
@@ -1486,40 +1494,6 @@ def startup_checks(quick=False):
         },
         quick=quick,
     )
-
-@app.route("/api/health")
-def health_check():
-    """Lightweight health endpoint for release smoke tests."""
-    return jsonify(
-        build_liveness_payload(
-            app_version=get_app_version(),
-            default_interface=DEFAULT_INTERFACE,
-            auto_scan_thread_alive=bool(
-                auto_scan_thread and auto_scan_thread.is_alive()
-            ),
-            tool_versions=get_versions(),
-        )
-    )
-
-
-@app.route("/api/health/live")
-def health_live():
-    """Explicit liveness probe for packaging smoke tests."""
-    return health_check()
-
-
-@app.route("/api/health/ready")
-def health_ready():
-    """Readiness/diagnostics probe for operational checks."""
-    payload, status_code = build_readiness_payload(
-        startup_state=startup_state,
-        app_version=get_app_version(),
-        default_interface=DEFAULT_INTERFACE,
-        auto_scan_thread_alive=bool(auto_scan_thread and auto_scan_thread.is_alive()),
-        tool_versions=get_versions(),
-    )
-    return jsonify(payload), status_code
-
 
 def start_auto_scan_thread():
     """Start the auto-scan worker once per process."""
