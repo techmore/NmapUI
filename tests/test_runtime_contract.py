@@ -67,6 +67,25 @@ def test_template_uses_site_chrome_module():
     assert "window.initializeSiteChrome = initializeSiteChrome;" in site_chrome_source
 
 
+def test_template_uses_shared_scan_display_modules():
+    html = (ROOT / "templates" / "index.html").read_text()
+    discovery_source = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
+    banner_source = (ROOT / "static" / "js" / "scan_banners.js").read_text()
+
+    assert '<script src="/static/js/scan_banners.js"></script>' in html
+    assert "window.socket = socket;" in html
+    assert "function startPreciseClock()" not in html
+    assert "function saveHostsToStorage()" not in html
+    assert "function loadHostsFromStorage()" not in html
+    assert "function showHistoricalDataBanner(data)" not in html
+    assert "function showScanSummaryBanner(data)" not in html
+    assert "function showUpdateModal()" not in html
+    assert "window.saveHostsToStorage = saveHostsToStorage;" in discovery_source
+    assert "window.loadHostsFromStorage = loadHostsFromStorage;" in discovery_source
+    assert "window.showHistoricalDataBanner = showHistoricalDataBanner;" in banner_source
+    assert "window.showScanSummaryBanner = showScanSummaryBanner;" in banner_source
+
+
 def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 

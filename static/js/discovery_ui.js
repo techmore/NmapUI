@@ -163,24 +163,117 @@ function updateHistoryBadge(customerName) {
 function updateRowWithResults(host) {
     const tb = document.querySelector('#discovery-table tbody');
     let rowToUpdate = Array.from(tb.rows).find(row => row.cells[1].textContent === host.ip);
-    if (rowToUpdate) {
-        rowToUpdate.cells[5].textContent = host.ports.map(port => port.port).join(', ');
-        rowToUpdate.cells[6].textContent = host.ports.map(port => port.service).join(', ');
+    if (!rowToUpdate) {
+        return;
+    }
+
+    const ports = host.ports || [];
+    const portsStr = ports.map(port => `${port.port}/${String(port.service || '').split(/\s+/)[0]}`).join(', ');
+    const versionHtml = ports.map(port => `<div class="text-xs">${port.service}</div>`).join('');
+
+    rowToUpdate.cells[5].textContent = portsStr;
+    rowToUpdate.cells[6].innerHTML = versionHtml;
+
+    if (host.cves && host.cves.length > 0) {
+        rowToUpdate.cells[7].innerHTML = host.cves
+            .map(cve => `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`)
+            .join('');
+    }
+
+    if (window.currentHosts[host.ip]) {
+        window.currentHosts[host.ip].open_ports = portsStr;
+        window.currentHosts[host.ip].version = ports.map(port => port.service).join(', ');
+        window.currentHosts[host.ip].cves = (host.cves || []).map(cve => cve.id).join(', ');
     }
 }
 
-function populateTableWithResults(data) {
+function hostsStorageKey() {
+    return window.currentCIDR ? `nmapui_hosts_${window.currentCIDR}` : null;
+}
+
+function saveHostsToStorage() {
+    const key = hostsStorageKey();
+    if (!key || !Object.keys(window.currentHosts).length) {
+        return;
+    }
+
+    try {
+        localStorage.setItem(key, JSON.stringify({
+            hosts: Object.values(window.currentHosts),
+            savedAt: new Date().toISOString(),
+        }));
+    } catch (error) {
+        console.warn('localStorage save failed', error);
+    }
+}
+
+function loadHostsFromStorage() {
+    const key = hostsStorageKey();
+    if (!key) {
+        return false;
+    }
+
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) {
+            return false;
+        }
+
+        const { hosts, savedAt } = JSON.parse(raw);
+        if (!hosts || !hosts.length) {
+            return false;
+        }
+
+        populateTableWithResults(hosts, true);
+        const ageDays = Math.floor((Date.now() - new Date(savedAt)) / 86400000);
+        showHistoricalDataBanner({
+            age_days: ageDays,
+            scan_date: savedAt,
+            total: hosts.length,
+            total_vulnerabilities: hosts.reduce((count, host) => count + (host.cves ? host.cves.split(',').filter(Boolean).length : 0), 0),
+            total_exploits: 0,
+        });
+
+        const reloadButton = document.getElementById('reload-last-scan-btn');
+        if (reloadButton) {
+            reloadButton.classList.remove('hidden');
+        }
+        window.localStorageLoaded = true;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function dimExistingRows() {
+    document.querySelectorAll('#discovery-table tbody tr').forEach((row) => {
+        row.classList.add('historical-row');
+    });
+}
+
+function undimAllRows() {
+    document.querySelectorAll('#discovery-table tbody tr').forEach((row) => {
+        row.classList.remove('historical-row');
+    });
+}
+
+function populateTableWithResults(data, isHistorical = false) {
     const tb = document.querySelector('#discovery-table tbody');
     tb.innerHTML = '';
 
     window.assetData = {};
+    window.currentHosts = {};
 
     data.forEach(result => {
         if (result.ip) {
             window.assetData[result.ip] = result;
+            window.currentHosts[result.ip] = result;
         }
 
         const newRow = tb.insertRow(-1);
+        if (isHistorical) {
+            newRow.classList.add('historical-row');
+        }
         const statusCell = newRow.insertCell(0);
         statusCell.className = 'px-4 py-3 text-center';
         statusCell.innerHTML = '';
@@ -234,6 +327,10 @@ function populateTableWithResults(data) {
 }
 
 function initializeDiscoveryUI(socket) {
+    window.currentHosts = window.currentHosts || {};
+    window.currentCIDR = window.currentCIDR || null;
+    window.localStorageLoaded = window.localStorageLoaded || false;
+
     socket.on('local_ip', data => {
         ['local-ip', 'subnet-mask', 'public-ip'].forEach((id, i) => document.getElementById(`${id}-value`).textContent = Object.values(data)[i]);
         document.getElementById('cidr-value').textContent = data.cidr || '';
@@ -275,6 +372,7 @@ function initializeDiscoveryUI(socket) {
 
     socket.on('deep_scan_results', data => {
         data.forEach(updateRowWithResults);
+        saveHostsToStorage();
         updateLastScanResults('deepScan', data);
         if (window.tableSorter) window.tableSorter.resort();
     });
@@ -336,16 +434,24 @@ function initializeDiscoveryUI(socket) {
 
     socket.on('scan_results', function(data) {
         const hosts = Array.isArray(data) ? data : data.hosts;
-        const isHistorical = data.is_historical || false;
+        const isHistorical = !!data.is_historical;
 
         if (isHistorical) {
             showHistoricalDataBanner(data);
         } else {
             hideHistoricalDataBanner();
+            const reloadButton = document.getElementById('reload-last-scan-btn');
+            if (reloadButton) {
+                reloadButton.classList.add('hidden');
+            }
+            window.localStorageLoaded = false;
         }
 
-        populateTableWithResults(hosts);
+        populateTableWithResults(hosts, isHistorical);
         updateLastScanResults('quickScan', data);
+        if (!isHistorical) {
+            saveHostsToStorage();
+        }
         if (window.tableSorter) window.tableSorter.resort();
     });
 
@@ -432,5 +538,11 @@ window.renderCveArrayCell = renderCveArrayCell;
 window.appendServiceInfoLine = appendServiceInfoLine;
 window.renderRoutePath = renderRoutePath;
 window.updateHistoryBadge = updateHistoryBadge;
+window.hostsStorageKey = hostsStorageKey;
+window.saveHostsToStorage = saveHostsToStorage;
+window.loadHostsFromStorage = loadHostsFromStorage;
+window.dimExistingRows = dimExistingRows;
+window.undimAllRows = undimAllRows;
+window.updateRowWithResults = updateRowWithResults;
 window.populateTableWithResults = populateTableWithResults;
 window.initializeDiscoveryUI = initializeDiscoveryUI;
