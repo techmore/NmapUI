@@ -377,6 +377,12 @@
     .action-button-secondary:hover {
         background: oklch(42% 0.055 110);
     }
+
+    .action-button-compact {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
     
     /* Custom button press effect */
     .btn-press:active {
@@ -633,7 +639,7 @@
                         <option value="">All Customers</option>
                     </select>
                     <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="form-control form-control-sm">
-                    <button onclick="loadScanHistory()" class="action-button action-button-primary text-sm">
+                    <button onclick="loadScanHistory()" class="action-button action-button-primary action-button-compact">
                         Refresh
                     </button>
                 </div>

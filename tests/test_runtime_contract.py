@@ -97,6 +97,7 @@ def test_frontend_layout_guide_and_page_shell_exist():
     assert ".action-button {" in template
     assert ".action-button-primary {" in template
     assert ".action-button-secondary {" in template
+    assert ".action-button-compact {" in template
     assert template.count('class="page-shell"') >= 2
     assert 'class="results-band"' in template
     assert 'class="table-fixed min-w-[2400px]"' in template
@@ -107,12 +108,14 @@ def test_frontend_layout_guide_and_page_shell_exist():
     assert template.count("icon-button") >= 6
     assert template.count("action-button action-button-primary") >= 5
     assert template.count("action-button action-button-secondary") >= 2
+    assert "action-button action-button-primary action-button-compact" in template
     assert "Do not repeat `mx-auto max-w-7xl px-4 sm:px-6 lg:px-8` inline. Use `page-shell`." in guide
     assert "For oversized tables, keep `page-shell` outside and put `overflow-x-auto` on the inner band." in guide
     assert "For modals, keep `modal-overlay` and `modal-panel` shared" in guide
     assert "For standard inputs and selects, prefer `form-control` plus a size class" in guide
     assert "For modal close buttons, use `icon-button` instead of repeating text-color hover stacks." in guide
     assert "For modal/footer action buttons, use `action-button` with an intent variant" in guide
+    assert "For smaller action rows such as history filters, add a shared size helper" in guide
     assert "/Users/techmore/projects/NmapUI/templates/index.html" in guide
 
 

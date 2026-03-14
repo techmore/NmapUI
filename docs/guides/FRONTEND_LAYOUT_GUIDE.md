@@ -27,6 +27,7 @@ This page has a small set of layout rules. New sections should follow these inst
 - Standard actions
   - Use shared action-button classes for repeated modal/footer actions.
   - Keep intent local by choosing between primary and secondary variants instead of rewriting the full olive button stack inline.
+  - Use a compact size helper when a shared action button needs smaller control-row sizing.
 
 ## Rules
 
@@ -38,6 +39,7 @@ This page has a small set of layout rules. New sections should follow these inst
 - For standard inputs and selects, prefer `form-control` plus a size class instead of repeating border/padding/focus utilities inline.
 - For modal close buttons, use `icon-button` instead of repeating text-color hover stacks.
 - For modal/footer action buttons, use `action-button` with an intent variant instead of repeating the olive background stack.
+- For smaller action rows such as history filters, add a shared size helper instead of inline text-size/padding overrides.
 - If a section needs a custom width, document why it is not using `page-shell`.
 
 ## Current Standard
