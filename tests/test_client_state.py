@@ -1,4 +1,8 @@
 from nmapui.client_state import ClientStateRegistry
+from nmapui.runtime_state import (
+    set_last_scan_target_state as set_last_scan_target_state_impl,
+    set_network_key_state as set_network_key_state_impl,
+)
 from nmapui.workflow_context import build_report_workflow_context
 from nmapui.workflows import generate_report_task
 
@@ -40,6 +44,33 @@ def test_client_state_registry_defaults_seed_future_tabs():
     assert state_b["current_customer"]["id"] == "cust-1"
     assert state_b["network_key"]["target"] == "10.0.0.0/24"
     assert state_b["last_scan_target"] == "10.0.0.0/24"
+
+
+def test_runtime_state_syncs_default_network_key_and_target_into_registry():
+    registry = ClientStateRegistry()
+    default_network_key = {"target": "1.1.1.1", "total_hops": 0}
+    default_target = {"value": None}
+
+    set_network_key_state_impl(
+        value={"target": "192.168.222.0/24", "total_hops": 8},
+        sid=None,
+        client_state_registry=registry,
+        set_default_network_key=lambda value: default_network_key.update(value),
+    )
+    set_last_scan_target_state_impl(
+        value="192.168.222.0/24",
+        sid=None,
+        client_state_registry=registry,
+        set_default_last_scan_target=lambda value: default_target.__setitem__("value", value),
+    )
+
+    state = registry.get_state("sid-future")
+
+    assert default_network_key["target"] == "192.168.222.0/24"
+    assert default_target["value"] == "192.168.222.0/24"
+    assert state["network_key"]["target"] == "192.168.222.0/24"
+    assert state["network_key"]["total_hops"] == 8
+    assert state["last_scan_target"] == "192.168.222.0/24"
 
 
 class IdleStateStub:

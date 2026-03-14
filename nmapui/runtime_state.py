@@ -26,6 +26,7 @@ def set_network_key_state(*, value, sid=None, client_state_registry, set_default
         client_state_registry.set_network_key(sid, value)
         return value
     set_default_network_key(value)
+    client_state_registry.set_default_network_key(value)
     return value
 
 
@@ -34,4 +35,5 @@ def set_last_scan_target_state(*, value, sid=None, client_state_registry, set_de
         client_state_registry.set_last_scan_target(sid, value)
         return value
     set_default_last_scan_target(value)
+    client_state_registry.set_default_last_scan_target(value)
     return value
