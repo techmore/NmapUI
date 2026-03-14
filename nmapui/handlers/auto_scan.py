@@ -5,7 +5,7 @@ from flask import jsonify, request
 from flask_socketio import emit
 
 from nmapui.auto_scan import validate_auto_scan_config_update as default_validate_auto_scan_config_update
-from nmapui.auth import require_auth
+from nmapui.auth import require_auth, require_socket_auth
 from nmapui.paths import AUTO_SCAN_SCHEDULER_LOCK_FILE
 
 try:
@@ -24,6 +24,7 @@ def register_auto_scan_handlers(app, socketio, deps):
     logger = deps["logger"]
 
     @socketio.on("update_auto_scan")
+    @require_socket_auth()
     def update_auto_scan_event(data):
         is_valid, error = validate_auto_scan_config_update(data)
         if not is_valid:

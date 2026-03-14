@@ -1,7 +1,9 @@
+import base64
 import os
 from functools import wraps
 
 from flask import jsonify, request
+from flask_socketio import emit
 
 
 AUTH_USERNAME = os.environ.get("NMAPUI_USERNAME", "admin")
@@ -27,5 +29,30 @@ def require_auth(f):
 
 
 def require_socket_auth():
-    """Check auth for SocketIO events - returns (authenticated, error_response)."""
-    return (True, None)
+    """Decorator to require HTTP Basic Auth context for Socket.IO events."""
+
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            auth = request.authorization
+            if not auth:
+                header = request.headers.get("Authorization", "")
+                if header.startswith("Basic "):
+                    try:
+                        decoded = base64.b64decode(header.split(" ", 1)[1]).decode()
+                        username, password = decoded.split(":", 1)
+                        if check_auth(username, password):
+                            return f(*args, **kwargs)
+                    except Exception:
+                        pass
+                emit("auth_error", {"error": "Unauthorized"})
+                return None
+
+            if not check_auth(auth.username, auth.password):
+                emit("auth_error", {"error": "Unauthorized"})
+                return None
+            return f(*args, **kwargs)
+
+        return wrapped
+
+    return decorator

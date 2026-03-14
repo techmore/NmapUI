@@ -1173,6 +1173,7 @@ def start_scan_task(sid, target):
 
 
 @socketio.on("start_scan")
+@require_socket_auth()
 def start_scan(data):
     """Handle scan start request with validation."""
     # Extract target from data (handles both old format (target) and new format {target: ...})
@@ -1466,6 +1467,7 @@ def generate_report_task(sid, data):
 
 
 @socketio.on("generate_report")
+@require_socket_auth()
 def generate_report_event(data):
     """Handle report generation request via SocketIO."""
     if not isinstance(data, dict):

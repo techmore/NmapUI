@@ -127,7 +127,7 @@ def test_socket_auto_scan_update_rejects_invalid_payload():
         },
     )
 
-    client = socketio.test_client(app)
+    client = socketio.test_client(app, headers=basic_auth_header())
     client.emit("update_auto_scan", {"enabled": "yes"})
     received = client.get_received()
 

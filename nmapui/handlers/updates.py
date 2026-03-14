@@ -1,6 +1,7 @@
 import subprocess
 
 from flask_socketio import emit
+from nmapui.auth import require_socket_auth
 
 
 def register_update_handlers(socketio, deps):
@@ -9,6 +10,7 @@ def register_update_handlers(socketio, deps):
     logger = deps["logger"]
 
     @socketio.on("check_app_updates")
+    @require_socket_auth()
     def check_app_updates_event():
         update_info = check_for_updates()
         if isinstance(update_info, dict):
@@ -20,6 +22,7 @@ def register_update_handlers(socketio, deps):
             emit("app_update_available", {"available": False})
 
     @socketio.on("perform_app_update")
+    @require_socket_auth()
     def perform_app_update_event():
         try:
             emit("update_status", {"message": "Opening download page..."})
@@ -60,10 +63,12 @@ def register_update_handlers(socketio, deps):
             emit("update_error", {"message": f"Failed to open download: {str(exc)}"})
 
     @socketio.on("cancel_auto_update")
+    @require_socket_auth()
     def cancel_auto_update_event():
         idle_state_manager.cancel_countdown()
         emit("hide_auto_update_banner")
 
     @socketio.on("start_auto_update_countdown")
+    @require_socket_auth()
     def start_auto_update_countdown_event():
         idle_state_manager.start_countdown()
