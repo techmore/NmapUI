@@ -160,9 +160,19 @@ function updateHistoryBadge(customerName) {
     }
 }
 
+function getDiscoveryTableCell(row, column) {
+    if (!row) return null;
+    if (window.tableSorter?.getCellByColumn) {
+        return window.tableSorter.getCellByColumn(row, column);
+    }
+    const headers = Array.from(document.querySelectorAll('#discovery-table thead th'));
+    const index = headers.findIndex((header) => header.dataset.column === column);
+    return index === -1 ? null : (row.cells[index] || null);
+}
+
 function updateRowWithResults(host) {
     const tb = document.querySelector('#discovery-table tbody');
-    let rowToUpdate = Array.from(tb.rows).find(row => row.cells[1].textContent === host.ip);
+    let rowToUpdate = Array.from(tb.rows).find(row => getDiscoveryTableCell(row, 'ip')?.textContent === host.ip);
     if (!rowToUpdate) {
         return;
     }
@@ -171,11 +181,15 @@ function updateRowWithResults(host) {
     const portsStr = ports.map(port => `${port.port}/${String(port.service || '').split(/\s+/)[0]}`).join(', ');
     const versionHtml = ports.map(port => `<div class="text-xs">${port.service}</div>`).join('');
 
-    rowToUpdate.cells[5].textContent = portsStr;
-    rowToUpdate.cells[6].innerHTML = versionHtml;
+    const openPortsCell = getDiscoveryTableCell(rowToUpdate, 'open_ports');
+    const versionCell = getDiscoveryTableCell(rowToUpdate, 'version');
+    const cvesCell = getDiscoveryTableCell(rowToUpdate, 'cves');
 
-    if (host.cves && host.cves.length > 0) {
-        rowToUpdate.cells[7].innerHTML = host.cves
+    if (openPortsCell) openPortsCell.textContent = portsStr;
+    if (versionCell) versionCell.innerHTML = versionHtml;
+
+    if (host.cves && host.cves.length > 0 && cvesCell) {
+        cvesCell.innerHTML = host.cves
             .map(cve => `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`)
             .join('');
     }
@@ -275,11 +289,13 @@ function populateTableWithResults(data, isHistorical = false) {
             newRow.classList.add('historical-row');
         }
         const statusCell = newRow.insertCell(0);
+        statusCell.dataset.column = 'status';
         statusCell.className = 'px-4 py-3 text-center';
         statusCell.innerHTML = '';
 
         ['ip', 'mac', 'vendor', 'hostname', 'open_ports', 'version', 'cves'].forEach((col, i) => {
             const cell = newRow.insertCell(i + 1);
+            cell.dataset.column = col;
             cell.className = 'px-4 py-3 text-olive-900';
 
             if (col === 'open_ports' || col === 'version' || col === 'cves') {
@@ -314,6 +330,7 @@ function populateTableWithResults(data, isHistorical = false) {
             }
         });
         const rescanCell = newRow.insertCell(-1);
+        rescanCell.dataset.column = 'actions';
         rescanCell.className = 'px-4 py-3';
         const rescanBtn = document.createElement('button');
         rescanBtn.textContent = 'Rescan';
@@ -371,8 +388,9 @@ function initializeDiscoveryUI(socket) {
     socket.on('cve_array', data => {
         const tb = document.querySelector('#discovery-table tbody');
         for (let row of tb.rows) {
-            if (row.cells[1].textContent === data.target) {
-                let cell = row.cells[7];
+            if (getDiscoveryTableCell(row, 'ip')?.textContent === data.target) {
+                let cell = getDiscoveryTableCell(row, 'cves');
+                if (!cell) break;
                 renderCveArrayCell(cell, data.cve_array || []);
                 break;
             }
@@ -383,8 +401,11 @@ function initializeDiscoveryUI(socket) {
     socket.on('service_info', data => {
         const tb = document.querySelector('#discovery-table tbody');
         for (let row of tb.rows) {
-            if (row.cells[1].textContent === data.target) {
-                appendServiceInfoLine(row.cells[4], data.line);
+            if (getDiscoveryTableCell(row, 'ip')?.textContent === data.target) {
+                const hostnameCell = getDiscoveryTableCell(row, 'hostname');
+                if (hostnameCell) {
+                    appendServiceInfoLine(hostnameCell, data.line);
+                }
                 break;
             }
         }
@@ -507,10 +528,12 @@ function initializeDiscoveryUI(socket) {
         console.log('ARP results received:', data);
         const tb = document.querySelector('#discovery-table tbody');
         for (let row of tb.rows) {
-            const ip = row.cells[1].textContent;
+            const ip = getDiscoveryTableCell(row, 'ip')?.textContent;
             if (data[ip]) {
-                row.cells[2].textContent = data[ip].mac;
-                row.cells[3].textContent = data[ip].vendor;
+                const macCell = getDiscoveryTableCell(row, 'mac');
+                const vendorCell = getDiscoveryTableCell(row, 'vendor');
+                if (macCell) macCell.textContent = data[ip].mac;
+                if (vendorCell) vendorCell.textContent = data[ip].vendor;
             }
         }
         updateLastScanResults('arpScan', data);
@@ -557,6 +580,7 @@ window.renderDelimitedCell = renderDelimitedCell;
 window.formatReportCompleteMessage = formatReportCompleteMessage;
 window.renderCveArrayCell = renderCveArrayCell;
 window.appendServiceInfoLine = appendServiceInfoLine;
+window.getDiscoveryTableCell = getDiscoveryTableCell;
 window.renderRoutePath = renderRoutePath;
 window.updateHistoryBadge = updateHistoryBadge;
 window.hostsStorageKey = hostsStorageKey;

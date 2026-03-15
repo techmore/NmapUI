@@ -1339,8 +1339,8 @@
         <table id="discovery-table" class="table-fixed min-w-[2400px]">
                         <thead>
                             <tr>
-                                <th class="w-12 px-4 py-3 text-left"></th>
-                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip">
+                                <th class="w-12 px-4 py-3 text-left" data-column="status" data-fixed="true"></th>
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>IP Address</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1353,7 +1353,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable px-4 py-3 text-left hidden md:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac">
+                                <th class="sortable px-4 py-3 text-left hidden md:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>MAC Address</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1366,7 +1366,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable px-4 py-3 text-left hidden lg:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="vendor" data-type="text">
+                                <th class="sortable px-4 py-3 text-left hidden lg:table-cell cursor-pointer hover:bg-olive-100 transition-colors group" data-column="vendor" data-type="text" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Vendor</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1379,7 +1379,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable px-4 py-3 text-left max-w-[150px] cursor-pointer hover:bg-olive-100 transition-colors group" data-column="hostname" data-type="text">
+                                <th class="sortable px-4 py-3 text-left max-w-[150px] cursor-pointer hover:bg-olive-100 transition-colors group" data-column="hostname" data-type="text" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Hostname</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1392,7 +1392,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="open_ports" data-type="ports">
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="open_ports" data-type="ports" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Open Ports</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1405,7 +1405,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="version" data-type="text">
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="version" data-type="text" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Version</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1418,7 +1418,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="cves" data-type="number">
+                                <th class="sortable px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="cves" data-type="number" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>CVEs</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1431,7 +1431,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="px-4 py-3 text-left">Actions</th>
+                                <th class="px-4 py-3 text-left" data-column="actions" data-fixed="true">Actions</th>
                             </tr>
                         </thead>
 

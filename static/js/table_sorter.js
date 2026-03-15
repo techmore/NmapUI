@@ -1,6 +1,8 @@
 class TableSorter {
     constructor(tableId) {
         this.table = document.getElementById(tableId);
+        this.columnOrderStorageKey = `${tableId}ColumnOrder`;
+        this.draggedColumn = null;
         this.currentSort = {
             column: null,
             direction: "asc",
@@ -20,6 +22,8 @@ class TableSorter {
         }
 
         this.initializeSorting();
+        this.initializeColumnReordering();
+        this.loadColumnOrder();
         this.loadSortState();
     }
 
@@ -35,6 +39,146 @@ class TableSorter {
             });
             header.setAttribute("tabindex", "0");
         });
+    }
+
+    initializeColumnReordering() {
+        this.getReorderableHeaders().forEach((header) => {
+            header.draggable = true;
+            header.classList.add("draggable-column");
+
+            header.addEventListener("dragstart", (event) => {
+                this.draggedColumn = header.dataset.column;
+                header.classList.add("dragging-column");
+                if (event.dataTransfer) {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", this.draggedColumn);
+                }
+            });
+
+            header.addEventListener("dragover", (event) => {
+                event.preventDefault();
+                header.classList.add("drag-target-column");
+            });
+
+            header.addEventListener("dragleave", () => {
+                header.classList.remove("drag-target-column");
+            });
+
+            header.addEventListener("drop", (event) => {
+                event.preventDefault();
+                header.classList.remove("drag-target-column");
+                const sourceColumn = this.draggedColumn || event.dataTransfer?.getData("text/plain");
+                const targetColumn = header.dataset.column;
+                if (!sourceColumn || !targetColumn || sourceColumn === targetColumn) {
+                    return;
+                }
+                this.moveColumn(sourceColumn, targetColumn);
+            });
+
+            header.addEventListener("dragend", () => {
+                this.draggedColumn = null;
+                this.table.querySelectorAll(".drag-target-column, .dragging-column").forEach((element) => {
+                    element.classList.remove("drag-target-column", "dragging-column");
+                });
+            });
+        });
+    }
+
+    getReorderableHeaders() {
+        return Array.from(this.table.querySelectorAll('thead th[data-column]:not([data-fixed="true"])'));
+    }
+
+    getCurrentColumnOrder() {
+        return this.getReorderableHeaders().map((header) => header.dataset.column);
+    }
+
+    loadColumnOrder() {
+        try {
+            const savedOrder = JSON.parse(localStorage.getItem(this.columnOrderStorageKey));
+            if (!Array.isArray(savedOrder) || !savedOrder.length) {
+                return;
+            }
+            this.applyColumnOrder(savedOrder);
+        } catch (error) {
+            console.warn("Failed to load column order:", error);
+        }
+    }
+
+    saveColumnOrder() {
+        localStorage.setItem(
+            this.columnOrderStorageKey,
+            JSON.stringify(this.getCurrentColumnOrder())
+        );
+    }
+
+    applyColumnOrder(order) {
+        const tableHeadRow = this.table.querySelector("thead tr");
+        const tbody = this.table.querySelector("tbody");
+        if (!tableHeadRow || !tbody) {
+            return;
+        }
+
+        const headersByColumn = new Map(
+            this.getReorderableHeaders().map((header) => [header.dataset.column, header])
+        );
+        const orderedHeaders = order
+            .map((column) => headersByColumn.get(column))
+            .filter(Boolean);
+        const remainingHeaders = this.getReorderableHeaders().filter(
+            (header) => !order.includes(header.dataset.column)
+        );
+
+        const statusHeader = tableHeadRow.querySelector('th[data-column="status"]');
+        const actionsHeader = tableHeadRow.querySelector('th[data-column="actions"]');
+
+        if (statusHeader) {
+            tableHeadRow.appendChild(statusHeader);
+        }
+        orderedHeaders.concat(remainingHeaders).forEach((header) => tableHeadRow.appendChild(header));
+        if (actionsHeader) {
+            tableHeadRow.appendChild(actionsHeader);
+        }
+
+        Array.from(tbody.rows).forEach((row) => {
+            this.reorderRowCells(row, orderedHeaders.concat(remainingHeaders).map((header) => header.dataset.column));
+        });
+    }
+
+    reorderRowCells(row, orderedColumns) {
+        const statusCell = row.querySelector('td[data-column="status"]');
+        const actionCell = row.querySelector('td[data-column="actions"]');
+        const cellsByColumn = new Map(
+            Array.from(row.cells)
+                .filter((cell) => cell.dataset.column && cell.dataset.column !== "status" && cell.dataset.column !== "actions")
+                .map((cell) => [cell.dataset.column, cell])
+        );
+
+        if (statusCell) {
+            row.appendChild(statusCell);
+        }
+        orderedColumns.forEach((column) => {
+            const cell = cellsByColumn.get(column);
+            if (cell) {
+                row.appendChild(cell);
+            }
+        });
+        if (actionCell) {
+            row.appendChild(actionCell);
+        }
+    }
+
+    moveColumn(sourceColumn, targetColumn) {
+        const order = this.getCurrentColumnOrder();
+        const sourceIndex = order.indexOf(sourceColumn);
+        const targetIndex = order.indexOf(targetColumn);
+        if (sourceIndex === -1 || targetIndex === -1) {
+            return;
+        }
+
+        order.splice(targetIndex, 0, order.splice(sourceIndex, 1)[0]);
+        this.applyColumnOrder(order);
+        this.saveColumnOrder();
+        this.resort();
     }
 
     sortByColumn(header) {
@@ -111,17 +255,14 @@ class TableSorter {
     }
 
     getColumnIndex(column) {
-        const columnMap = {
-            status: 0,
-            ip: 1,
-            mac: 2,
-            vendor: 3,
-            hostname: 4,
-            open_ports: 5,
-            version: 6,
-            cves: 7,
-        };
-        return columnMap[column] || 0;
+        const headers = Array.from(this.table.querySelectorAll("thead th"));
+        const index = headers.findIndex((header) => header.dataset.column === column);
+        return index === -1 ? 0 : index;
+    }
+
+    getCellByColumn(row, column) {
+        const columnIndex = this.getColumnIndex(column);
+        return row.cells[columnIndex] || null;
     }
 
     updateVisualIndicators(activeHeader) {
@@ -162,6 +303,7 @@ class TableSorter {
     }
 
     resort() {
+        this.applyColumnOrder(this.getCurrentColumnOrder());
         if (this.currentSort.column) {
             const header = this.table.querySelector(
                 `[data-column="${this.currentSort.column}"]`

@@ -51,8 +51,10 @@ function setCardPulsing(id, pulsing) {
 function setHostStatusIndicator(ip, active) {
     const tb = document.querySelector('#discovery-table tbody');
     for (let row of tb.rows) {
-        if (row.cells[1].textContent === ip) {
-            row.cells[0].innerHTML = active
+        const ipCell = window.getDiscoveryTableCell ? window.getDiscoveryTableCell(row, 'ip') : row.cells[1];
+        const statusCell = window.getDiscoveryTableCell ? window.getDiscoveryTableCell(row, 'status') : row.cells[0];
+        if (ipCell?.textContent === ip && statusCell) {
+            statusCell.innerHTML = active
                 ? '<span class="relative flex size-3"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-olive-400 opacity-75"></span><span class="relative inline-flex size-3 rounded-full bg-olive-500"></span></span>'
                 : '';
             break;
@@ -63,7 +65,10 @@ function setHostStatusIndicator(ip, active) {
 function clearAllHostStatusIndicators() {
     const tb = document.querySelector('#discovery-table tbody');
     Array.from(tb.rows).forEach(row => {
-        row.cells[0].innerHTML = '';
+        const statusCell = window.getDiscoveryTableCell ? window.getDiscoveryTableCell(row, 'status') : row.cells[0];
+        if (statusCell) {
+            statusCell.innerHTML = '';
+        }
     });
 }
 

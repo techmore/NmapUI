@@ -53,6 +53,17 @@ def test_template_uses_shared_table_sorter_module():
     assert "window.tableSorter = new TableSorter('discovery-table');" in html
     assert "class TableSorter {" not in html
     assert "window.TableSorter = TableSorter;" in sorter_source
+    assert 'data-column="status"' in html
+    assert 'data-column="actions"' in html
+    assert 'title="Drag to reorder"' in html
+    assert 'this.columnOrderStorageKey = `${tableId}ColumnOrder`;' in sorter_source
+    assert "initializeColumnReordering()" in sorter_source
+    assert "loadColumnOrder()" in sorter_source
+    assert "saveColumnOrder()" in sorter_source
+    assert "moveColumn(sourceColumn, targetColumn)" in sorter_source
+    assert "getCellByColumn(row, column)" in sorter_source
+    assert "window.getDiscoveryTableCell = getDiscoveryTableCell;" in (ROOT / "static" / "js" / "discovery_ui.js").read_text()
+    assert "window.getDiscoveryTableCell ? window.getDiscoveryTableCell(row, 'status')" in (ROOT / "static" / "js" / "scan_runtime.js").read_text()
 
 
 def test_template_uses_site_chrome_module():
