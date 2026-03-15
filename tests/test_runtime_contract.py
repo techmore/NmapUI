@@ -1240,9 +1240,11 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "socket.on('client_state_snapshot'" in report_generation_module
     assert "socket.on('job_status', function(data) {" in report_generation_module
     assert "function syncReportJobVisualState(job)" in report_generation_module
+    assert "function resetReportVisualState()" in report_generation_module
     assert "startReportTimer(job?.started_at || null);" in report_generation_module
     assert "setReportButtonsPulsing(true, chunked);" in report_generation_module
-    assert "setReportButtonsPulsing(false);" in report_generation_module
+    assert "resetReportVisualState();" in report_generation_module
+    assert "window.removeReportProgressCard" in report_generation_module
     assert "document.getElementById('generate-report-btn').addEventListener('click'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert '"chunked": bool(data.get("chunked", True))' in (ROOT / "nmapui" / "handlers" / "scan_jobs.py").read_text()
@@ -1334,6 +1336,7 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="tab-dashboard-btn"' in template
     assert 'id="tab-history-btn"' in template
     assert 'id="tab-reports-btn"' in template
+    assert 'id="reports-badge"' in template
     assert 'id="tab-logs-btn"' in template
     assert 'id="tab-settings-btn"' in template
     assert 'id="history-tab-panel"' in template
@@ -1363,11 +1366,17 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert "initializeAuditLog();" in template
     assert "initializeSettingsTab();" in template
     settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    reports_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
     settings_module_source = (ROOT / "nmapui" / "settings.py").read_text()
     workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
+    report_status_source = (ROOT / "static" / "js" / "report_status.js").read_text()
     assert "settings-profile-scan-only-mode" in settings_source
     assert "settings-profile-excluded-targets" in settings_source
     assert "profile.scan_rules?.scan_only_mode" in settings_source
+    assert "function updateReportsBadge(scans)" in reports_source
+    assert "document.getElementById('reports-badge')" in reports_source
+    assert "loadReportsTab(true);" in reports_source
+    assert "removeReportProgressCard();" in report_status_source
     assert "def get_effective_scan_rules(*, settings_state, target=\"\", customer_id=\"\")" in settings_module_source
     assert "get_effective_scan_rules(" in workflows_source
 

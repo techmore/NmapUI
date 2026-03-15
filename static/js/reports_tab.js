@@ -4,6 +4,29 @@ let historyTabLoaded = false;
 let currentAppTab = 'dashboard';
 let historyCompareBasePath = null;
 
+function updateReportsBadge(scans) {
+    const badge = document.getElementById('reports-badge');
+    if (!badge) {
+        return;
+    }
+
+    const today = new Date().toDateString();
+    const reportsToday = (scans || []).filter((scan) => {
+        if (!scan?.timestamp) {
+            return false;
+        }
+        return new Date(scan.timestamp).toDateString() === today;
+    }).length;
+
+    if (reportsToday > 0) {
+        badge.textContent = reportsToday > 99 ? '99+' : String(reportsToday);
+        badge.classList.remove('hidden');
+        return;
+    }
+
+    badge.classList.add('hidden');
+}
+
 function ensureTabPanelsAreSiblings() {
     const dashboardPanel = document.getElementById('dashboard-tab-panel');
     if (!dashboardPanel || !dashboardPanel.parentElement) {
@@ -333,6 +356,7 @@ function renderReportsTab(scans) {
         return;
     }
 
+    updateReportsBadge(scans);
     list.replaceChildren();
 
     if (!scans.length) {
@@ -462,11 +486,9 @@ function initializeReportsTab() {
     window.addEventListener('report-complete-refresh', () => {
         historyTabLoaded = false;
         reportsTabLoaded = false;
+        loadReportsTab(true);
         if (currentAppTab === 'history') {
             loadHistoryTab(true);
-        }
-        if (currentAppTab === 'reports') {
-            loadReportsTab(true);
         }
     });
 }

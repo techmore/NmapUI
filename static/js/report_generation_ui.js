@@ -7,6 +7,15 @@ let reportGetClientJobs = () => ({ report: { status: 'idle' } });
 let reportGenerationInitialized = false;
 let reportActionPending = false;
 
+function resetReportVisualState() {
+    reportActionPending = false;
+    setReportButtonsPulsing(false);
+    if (typeof window.removeReportProgressCard === 'function') {
+        window.removeReportProgressCard();
+    }
+    stopReportTimer();
+}
+
 function startReportTimer(startedAt = null) {
     const container = document.getElementById('scan-timer-container');
     const display = document.getElementById('scan-timer');
@@ -77,7 +86,7 @@ function syncReportJobVisualState(job) {
     const isRunning = job?.status === 'running' || job?.status === 'cancelling';
     const chunked = !!job?.details?.chunked;
     if (!isRunning) {
-        setReportButtonsPulsing(false);
+        resetReportVisualState();
         return;
     }
 
@@ -135,19 +144,14 @@ function initializeReportGenerationUI(socket, deps) {
             return;
         }
         syncReportJobVisualState(data);
-        if (data.status !== 'running' && data.status !== 'cancelling') {
-            reportActionPending = false;
-        }
     });
 
     socket.on('report_complete', function() {
-        reportActionPending = false;
-        setReportButtonsPulsing(false);
+        resetReportVisualState();
     });
 
     socket.on('report_error', function() {
-        reportActionPending = false;
-        setReportButtonsPulsing(false);
+        resetReportVisualState();
     });
 
     document.getElementById('generate-report-btn').addEventListener('click', function() {
