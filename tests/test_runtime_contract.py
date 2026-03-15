@@ -341,6 +341,17 @@ def test_browser_regression_harness_covers_live_multi_tab_runtime_state():
     assert "app_module.broadcaster.get_subscribers(" in browser_source
 
 
+def test_runtime_info_handler_harness_covers_existing_open_tab_fanout():
+    runtime_info_test_source = (ROOT / "tests" / "test_runtime_info_handlers.py").read_text()
+
+    assert "def build_live_scan_jobs_app():" in runtime_info_test_source
+    assert "def test_start_scan_broadcasts_running_job_status_to_existing_open_tabs(" in runtime_info_test_source
+    assert "def test_generate_report_broadcasts_running_job_status_to_existing_open_tabs(" in runtime_info_test_source
+    assert "register_connection_handlers(" in runtime_info_test_source
+    assert "register_scan_job_handlers(" in runtime_info_test_source
+    assert "build_event_helpers(" in runtime_info_test_source
+
+
 def test_runtime_routes_include_database_export():
     routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
 
