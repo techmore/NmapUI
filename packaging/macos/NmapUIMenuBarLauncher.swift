@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusPollTimer: Timer?
     var hadActiveJob = false
     var completedIndicatorUntil: Date?
+    var lockFileURL: URL?
 
     var appURL: URL {
         URL(string: "http://127.0.0.1:\(runtimePort)")!
@@ -28,6 +29,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if !acquireSingleInstanceLock() {
+            NSApp.terminate(nil)
+            return
+        }
         setupStatusItem()
         startFlask()
     }
@@ -236,6 +241,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         stopFlask(wait: false)
+        releaseSingleInstanceLock()
         statusItem = nil
     }
 
@@ -372,6 +378,52 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: accessibility)
         button.toolTip = detail
+    }
+
+    // MARK: - Single instance lock
+
+    func acquireSingleInstanceLock() -> Bool {
+        let fileManager = FileManager.default
+        let lockDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("NmapUI", isDirectory: true)
+        guard let lockDirectory else { return true }
+
+        do {
+            try fileManager.createDirectory(at: lockDirectory, withIntermediateDirectories: true)
+        } catch {
+            print("Unable to create lock directory: \(error)")
+            return true
+        }
+
+        let lockFile = lockDirectory.appendingPathComponent("nmapui.lock")
+        lockFileURL = lockFile
+
+        if let contents = try? String(contentsOf: lockFile).trimmingCharacters(in: .whitespacesAndNewlines),
+           let pid = Int32(contents),
+           pid > 0,
+           pid != getpid(),
+           kill(pid, 0) == 0 {
+            let alert = NSAlert()
+            alert.messageText = "NmapUI already running"
+            alert.informativeText = "Another instance of NmapUI is already running. Use the existing menu bar icon."
+            alert.addButton(withTitle: "OK")
+            alert.alertStyle = .warning
+            alert.runModal()
+            return false
+        }
+
+        do {
+            try "\(getpid())".write(to: lockFile, atomically: true, encoding: .utf8)
+        } catch {
+            print("Unable to write lock file: \(error)")
+        }
+
+        return true
+    }
+
+    func releaseSingleInstanceLock() {
+        guard let lockFileURL else { return }
+        try? FileManager.default.removeItem(at: lockFileURL)
     }
 }
 
