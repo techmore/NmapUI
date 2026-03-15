@@ -49,6 +49,7 @@ def register_app_handlers(
     startup_state,
     runtime_store,
     get_auto_scan_thread,
+    upload_report_artifacts_to_google_drive,
     get_customer_fingerprinter,
     get_current_customer,
     set_current_customer,
@@ -68,6 +69,10 @@ def register_app_handlers(
     save_settings,
     validate_google_drive_settings,
     validate_remote_sync_settings,
+    get_google_drive_auth_status,
+    build_google_drive_auth_url,
+    exchange_google_drive_auth_code,
+    disconnect_google_drive,
     logger,
 ):
     register_shared_handlers(
@@ -135,6 +140,7 @@ def register_app_handlers(
             settings_state=settings_state,
             startup_state=startup_state,
             get_auto_scan_thread=get_auto_scan_thread,
+            upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
         ),
         customer_handler_deps=build_customer_handler_deps(
             get_customer_fingerprinter=get_customer_fingerprinter,
@@ -175,5 +181,9 @@ def register_app_handlers(
             save_settings=save_settings,
             validate_google_drive=validate_google_drive_settings,
             validate_remote_sync=validate_remote_sync_settings,
+            get_google_drive_auth_status=get_google_drive_auth_status,
+            build_google_drive_auth_url=build_google_drive_auth_url,
+            exchange_google_drive_auth_code=exchange_google_drive_auth_code,
+            disconnect_google_drive=disconnect_google_drive,
         ),
     )

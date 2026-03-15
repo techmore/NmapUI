@@ -339,6 +339,7 @@ def build_core_routes_deps(
     settings_state,
     startup_state,
     get_auto_scan_thread,
+    upload_report_artifacts_to_google_drive,
 ):
     return {
         "build_liveness_payload": build_liveness_payload,
@@ -355,6 +356,7 @@ def build_core_routes_deps(
         "settings_state": settings_state,
         "startup_state": startup_state,
         "get_auto_scan_thread": get_auto_scan_thread,
+        "upload_report_artifacts_to_google_drive": upload_report_artifacts_to_google_drive,
     }
 
 
@@ -364,12 +366,20 @@ def build_settings_routes_deps(
     save_settings,
     validate_google_drive,
     validate_remote_sync,
+    get_google_drive_auth_status,
+    build_google_drive_auth_url,
+    exchange_google_drive_auth_code,
+    disconnect_google_drive,
 ):
     return {
         "settings_state": settings_state,
         "save_settings": save_settings,
         "validate_google_drive": validate_google_drive,
         "validate_remote_sync": validate_remote_sync,
+        "get_google_drive_auth_status": get_google_drive_auth_status,
+        "build_google_drive_auth_url": build_google_drive_auth_url,
+        "exchange_google_drive_auth_code": exchange_google_drive_auth_code,
+        "disconnect_google_drive": disconnect_google_drive,
     }
 
 

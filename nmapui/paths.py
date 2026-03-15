@@ -15,6 +15,7 @@ AUTO_SCAN_SCHEDULER_LOCK_FILE = BASE_DIR / "data" / "auto_scan_scheduler.lock"
 SETTINGS_FILE = BASE_DIR / "data" / "settings.json"
 RUNTIME_DB_FILE = BASE_DIR / "data" / "runtime.sqlite3"
 GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"
+GOOGLE_DRIVE_TOKEN_FILE = BASE_DIR / "data" / "google_drive_tokens.json"
 
 
 def resolve_scan_path(path: str) -> Optional[Path]:

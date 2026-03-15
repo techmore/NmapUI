@@ -4,6 +4,7 @@ from flask import Flask
 from flask_socketio import SocketIO
 
 from nmapui.handlers.auto_scan import register_auto_scan_handlers
+from nmapui.handlers.routes import register_core_routes
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.handlers.settings import register_settings_routes
 from nmapui.settings import normalize_settings_document
@@ -265,9 +266,71 @@ def build_settings_app():
                 "success": True,
                 "status": f"Remote OK:{endpoint}:{api_key}",
             },
+            "get_google_drive_auth_status": lambda: {"configured": True, "connected": False, "status": "Not connected"},
+            "build_google_drive_auth_url": lambda redirect_uri: {"success": True, "auth_url": f"https://example.com/auth?redirect_uri={redirect_uri}"},
+            "exchange_google_drive_auth_code": lambda code, state: {"success": True, "status": "Google Drive connected"},
+            "disconnect_google_drive": lambda: {"success": True, "status": "Google Drive disconnected"},
         },
     )
     return app, settings_state
+
+
+def build_runtime_reports_app(tmp_path, upload_result=None, upload_calls=None):
+    app = Flask(__name__)
+    scans_dir = tmp_path / "scans"
+    scan_dir = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    (scan_dir / "runtime_scan_web.html").write_text("<html><body>runtime html</body></html>")
+    (scan_dir / "runtime_scan_report.pdf").write_bytes(b"%PDF-1.4 runtime")
+    (scan_dir / "runtime_scan.xml").write_text("<nmaprun><host /></nmaprun>")
+
+    class RuntimeStoreStub:
+        def list_report_artifacts(self, customer_id=None):
+            return [
+                {
+                    "scan_path": "Acme/2026-03-14/scan_020000_target",
+                    "customer_id": "cust-123",
+                    "target": "10.0.0.0/24",
+                    "html_path": "Acme/2026-03-14/scan_020000_target/runtime_scan_web.html",
+                    "pdf_path": "Acme/2026-03-14/scan_020000_target/runtime_scan_report.pdf",
+                    "xml_path": "Acme/2026-03-14/scan_020000_target/runtime_scan.xml",
+                    "payload": {
+                        "timestamp": "2026-03-14T02:00:00",
+                        "customer_name": "Acme",
+                        "customer_id": "cust-123",
+                        "target": "10.0.0.0/24",
+                        "status": "completed",
+                        "completed_successfully": True,
+                    },
+                }
+            ]
+
+        def get_report_artifact(self, scan_path):
+            return self.list_report_artifacts()[0]
+
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"ok": True},
+            "build_readiness_payload": lambda **kwargs: ({"ok": True}, 200),
+            "get_app_version": lambda: "v1",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "runtime_store": RuntimeStoreStub(),
+            "scans_dir": scans_dir,
+            "settings_state": {"sync": {"google_drive": {"enabled": True, "folder_id": "folder-123"}}},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+            "upload_report_artifacts_to_google_drive": lambda **kwargs: (
+                upload_calls.append(kwargs) if upload_calls is not None else None
+            ) or (upload_result or {"success": True, "status": "Uploaded 3 file(s) to Google Drive"}),
+        },
+    )
+    return app
 
 
 def test_scan_routes_require_http_basic_auth(tmp_path, monkeypatch):
@@ -836,6 +899,10 @@ def test_settings_routes_save_normalized_payload(monkeypatch):
             ),
             "validate_google_drive": lambda folder_id: {"success": True, "status": "Configured"},
             "validate_remote_sync": lambda endpoint, api_key: {"success": True, "status": "Configured"},
+            "get_google_drive_auth_status": lambda: {"configured": True, "connected": False, "status": "Not connected"},
+            "build_google_drive_auth_url": lambda redirect_uri: {"success": True, "auth_url": "https://example.com/auth"},
+            "exchange_google_drive_auth_code": lambda code, state: {"success": True, "status": "Google Drive connected"},
+            "disconnect_google_drive": lambda: {"success": True, "status": "Google Drive disconnected"},
         },
     )
 
@@ -925,6 +992,48 @@ def test_settings_routes_validate_google_drive(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json() == {"success": True, "status": "Drive OK:folder-123"}
+
+
+def test_settings_routes_expose_google_drive_auth_status(monkeypatch):
+    configure_auth(monkeypatch)
+    app, _ = build_settings_app()
+
+    response = app.test_client().get(
+        "/api/settings/google-drive/status",
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "Not connected"
+
+
+def test_settings_routes_return_google_drive_auth_url(monkeypatch):
+    configure_auth(monkeypatch)
+    app, _ = build_settings_app()
+
+    response = app.test_client().get(
+        "/api/settings/google-drive/auth-url",
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert "https://example.com/auth" in response.get_json()["auth_url"]
+
+
+def test_runtime_reports_can_upload_to_google_drive(monkeypatch, tmp_path):
+    configure_auth(monkeypatch)
+    upload_calls = []
+    app = build_runtime_reports_app(tmp_path, upload_calls=upload_calls)
+
+    response = app.test_client().post(
+        "/api/runtime/reports/Acme/2026-03-14/scan_020000_target/upload/google-drive",
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    assert upload_calls[0]["scan_path"] == "Acme/2026-03-14/scan_020000_target"
+    assert len(upload_calls[0]["file_paths"]) == 3
 
 
 def test_settings_routes_validate_remote_sync(monkeypatch):

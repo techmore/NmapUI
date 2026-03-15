@@ -230,6 +230,7 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
     assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
     assert 'RUNTIME_DB_FILE = BASE_DIR / "data" / "runtime.sqlite3"' in paths_source
     assert 'GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"' in paths_source
+    assert 'GOOGLE_DRIVE_TOKEN_FILE = BASE_DIR / "data" / "google_drive_tokens.json"' in paths_source
     assert '"web_stylesheet": web_stylesheet' in app_composition_source
     assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
 
@@ -311,6 +312,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
 
     assert '@app.route("/api/runtime/logs")' in routes_source
     assert '@app.route("/api/runtime/reports")' in routes_source
+    assert '@app.route("/api/runtime/reports/<path:scan_path>/upload/google-drive", methods=["POST"])' in routes_source
     assert '@app.route("/api/runtime/reports/<path:scan_path>/html")' in routes_source
     assert '@app.route("/api/runtime/reports/<path:scan_path>/pdf")' in routes_source
     assert '@app.route("/api/runtime/reports/<path:scan_path>/xml")' in routes_source
@@ -1188,6 +1190,30 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "socket.on('report_complete', function (data) {" in audit_log_module
     assert "socket.on('update_status', function (data) {" in audit_log_module
     assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module
+
+
+def test_google_drive_integration_contract_exists():
+    settings_handler_source = (ROOT / "nmapui" / "handlers" / "settings.py").read_text()
+    reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
+    settings_tab_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    template = (ROOT / "templates" / "index.html").read_text()
+    google_drive_source = (ROOT / "nmapui" / "google_drive.py").read_text()
+    app_source = (ROOT / "app.py").read_text()
+
+    assert '@app.route("/api/settings/google-drive/status")' in settings_handler_source
+    assert '@app.route("/api/settings/google-drive/auth-url")' in settings_handler_source
+    assert '@app.route("/api/settings/google-drive/callback")' in settings_handler_source
+    assert '@app.route("/api/settings/google-drive/disconnect", methods=["POST"])' in settings_handler_source
+    assert "def build_google_drive_auth_url(" in google_drive_source
+    assert "def exchange_google_drive_auth_code(" in google_drive_source
+    assert "def upload_files_to_google_drive(" in google_drive_source
+    assert "upload_report_artifacts_to_google_drive=lambda" in app_source
+    assert "function uploadReportToGoogleDrive(scanPath)" in reports_tab_source
+    assert "Upload to Drive" in reports_tab_source
+    assert "async function connectGoogleDrive()" in settings_tab_source
+    assert "async function disconnectGoogleDriveAccount()" in settings_tab_source
+    assert 'id="settings-google-drive-connect-btn"' in template
+    assert 'id="settings-google-drive-disconnect-btn"' in template
 
 
 def test_template_does_not_keep_inline_report_generation_block():

@@ -1,6 +1,7 @@
 let settingsTabInitialized = false;
 let settingsTabLoaded = false;
 let settingsState = null;
+let googleDriveAuthStatus = null;
 
 function setSettingsStatus(message, isError = false) {
     const status = document.getElementById('settings-tab-status');
@@ -132,6 +133,20 @@ function setSyncStatus(elementId, message, isError = false) {
         return;
     }
     element.classList.add('text-olive-600');
+}
+
+function updateGoogleDriveAuthButtons() {
+    const connectButton = document.getElementById('settings-google-drive-connect-btn');
+    const disconnectButton = document.getElementById('settings-google-drive-disconnect-btn');
+    if (!connectButton || !disconnectButton) {
+        return;
+    }
+
+    const connected = !!googleDriveAuthStatus?.connected;
+    connectButton.disabled = connected;
+    disconnectButton.disabled = !connected;
+    connectButton.classList.toggle('opacity-50', connected);
+    disconnectButton.classList.toggle('opacity-50', !connected);
 }
 
 function setMaintenanceStatus(message, isError = false) {
@@ -272,6 +287,16 @@ async function loadRuntimeSettingsSummary() {
     syncMaintenanceStatusFromSummary(summary);
 }
 
+async function loadGoogleDriveAuthStatus() {
+    const response = await fetch('/api/settings/google-drive/status');
+    if (!response.ok) {
+        throw new Error(`Failed to load Google Drive status (${response.status})`);
+    }
+    googleDriveAuthStatus = await response.json();
+    setSyncStatus('settings-google-drive-status', googleDriveAuthStatus.status || 'Not connected', false);
+    updateGoogleDriveAuthButtons();
+}
+
 async function loadSettingsTab(force = false) {
     if (settingsTabLoaded && !force) {
         return;
@@ -287,11 +312,43 @@ async function loadSettingsTab(force = false) {
         const state = await response.json();
         fillSettingsForm(state);
         await loadRuntimeSettingsSummary();
+        await loadGoogleDriveAuthStatus();
         settingsTabLoaded = true;
         setSettingsStatus('');
     } catch (error) {
         console.error('Error loading settings:', error);
         setSettingsStatus(error.message || 'Failed to load settings.', true);
+    }
+}
+
+async function connectGoogleDrive() {
+    setSyncStatus('settings-google-drive-status', 'Starting Google Drive authorization...');
+    try {
+        const response = await fetch('/api/settings/google-drive/auth-url');
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.auth_url) {
+            throw new Error(payload.error || `Failed to start Google Drive auth (${response.status})`);
+        }
+        window.open(payload.auth_url, '_blank', 'noopener,noreferrer');
+        setSyncStatus('settings-google-drive-status', 'Google Drive authorization opened in a new tab.');
+    } catch (error) {
+        console.error('Error starting Google Drive auth:', error);
+        setSyncStatus('settings-google-drive-status', error.message || 'Failed to start Google Drive auth.', true);
+    }
+}
+
+async function disconnectGoogleDriveAccount() {
+    setSyncStatus('settings-google-drive-status', 'Disconnecting Google Drive...');
+    try {
+        const response = await fetch('/api/settings/google-drive/disconnect', { method: 'POST' });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Failed to disconnect Google Drive (${response.status})`);
+        }
+        await loadGoogleDriveAuthStatus();
+    } catch (error) {
+        console.error('Error disconnecting Google Drive:', error);
+        setSyncStatus('settings-google-drive-status', error.message || 'Failed to disconnect Google Drive.', true);
     }
 }
 
@@ -471,6 +528,8 @@ function initializeSettingsTab() {
     document.getElementById('add-target-profile-btn')?.addEventListener('click', addTargetProfile);
     document.getElementById('capture-current-target-btn')?.addEventListener('click', captureCurrentTarget);
     document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', testGoogleDriveSettings);
+    document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', connectGoogleDrive);
+    document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', disconnectGoogleDriveAccount);
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', testRemoteSyncSettings);
     document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', runRuntimeBackfill);
     populateProfileCustomerOptions();

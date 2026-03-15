@@ -49,6 +49,7 @@ def register_core_routes(app, deps):
     settings_state = deps["settings_state"]
     startup_state = deps["startup_state"]
     get_auto_scan_thread = deps["get_auto_scan_thread"]
+    upload_report_artifacts_to_google_drive = deps.get("upload_report_artifacts_to_google_drive")
 
     @app.route("/")
     def index():
@@ -216,6 +217,41 @@ def register_core_routes(app, deps):
             download_name=download_name,
             as_attachment=True,
         )
+
+    @app.route("/api/runtime/reports/<path:scan_path>/upload/google-drive", methods=["POST"])
+    @require_auth
+    def runtime_report_google_drive_upload(scan_path):
+        if upload_report_artifacts_to_google_drive is None:
+            return jsonify({"success": False, "error": "Google Drive upload is not configured"}), 400
+
+        artifact = _get_runtime_artifact(runtime_store, scan_path)
+        payload = dict(artifact.get("payload", {}) or {}) if artifact else {}
+        file_paths = []
+        for artifact_key, default_name in (
+            ("html_path", "scan_web.html"),
+            ("pdf_path", "scan_report.pdf"),
+            ("xml_path", "scan.xml"),
+        ):
+            artifact_path = _resolve_artifact_file_path(
+                scans_dir=deps.get("scans_dir"),
+                scan_path=scan_path,
+                stored_path=artifact.get(artifact_key) if artifact else None,
+                default_name=default_name,
+            )
+            if artifact_path.exists():
+                file_paths.append(artifact_path)
+
+        if not file_paths:
+            return jsonify({"success": False, "error": "No report artifacts found for upload"}), 404
+
+        result = upload_report_artifacts_to_google_drive(
+            scan_path=scan_path,
+            file_paths=file_paths,
+            metadata=payload,
+            settings_state=settings_state,
+        )
+        status_code = 200 if result.get("success") else 400
+        return jsonify(result), status_code
 
     @app.route("/api/runtime/history")
     @require_auth

@@ -59,6 +59,23 @@ function createScanActionLink(href, label, newTab = false) {
     return link;
 }
 
+async function uploadReportToGoogleDrive(scanPath) {
+    setTabStatus('reports-tab-status', 'Uploading report artifacts to Google Drive...');
+    try {
+        const response = await fetch(`/api/runtime/reports/${scanPath}/upload/google-drive`, {
+            method: 'POST',
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Drive upload failed (${response.status})`);
+        }
+        setTabStatus('reports-tab-status', payload.status || 'Uploaded to Google Drive.');
+    } catch (error) {
+        console.error('Error uploading report to Google Drive:', error);
+        setTabStatus('reports-tab-status', error.message || 'Drive upload failed.', true);
+    }
+}
+
 function buildRuntimeReportArtifactUrl(scanPath, artifactType) {
     return `/api/runtime/reports/${scanPath}/${artifactType}`;
 }
@@ -245,6 +262,14 @@ function createHistoryCard(scan, options = {}) {
     }
     if (scan.has_xml) {
         actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(scan.path, 'xml'), 'Download XML'));
+    }
+    if (!options.enableCompare && (scan.has_html || scan.has_pdf || scan.has_xml)) {
+        const uploadButton = document.createElement('button');
+        uploadButton.type = 'button';
+        uploadButton.className = 'action-button action-button-secondary action-button-compact';
+        uploadButton.textContent = 'Upload to Drive';
+        uploadButton.addEventListener('click', () => uploadReportToGoogleDrive(scan.path));
+        actions.appendChild(uploadButton);
     }
 
     if (options.enableCompare) {
