@@ -74,9 +74,9 @@ function showReportActions(path) {
         actions.appendChild(link);
     };
 
-    buildLink(`/api/scans/${path}/html`, 'View Report', true);
-    buildLink(`/api/scans/${path}/pdf`, 'Download PDF');
-    buildLink(`/api/scans/${path}/xml`, 'Download XML');
+    buildLink(`/api/runtime/reports/${path}/html`, 'View Report', true);
+    buildLink(`/api/runtime/reports/${path}/pdf`, 'Download PDF');
+    buildLink(`/api/runtime/reports/${path}/xml`, 'Download XML');
     actions.classList.remove('hidden');
 }
 

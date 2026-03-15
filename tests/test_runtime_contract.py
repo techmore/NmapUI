@@ -246,6 +246,9 @@ def test_runtime_logs_route_and_ui_hydration_exist():
 
     assert '@app.route("/api/runtime/logs")' in routes_source
     assert '@app.route("/api/runtime/reports")' in routes_source
+    assert '@app.route("/api/runtime/reports/<path:scan_path>/html")' in routes_source
+    assert '@app.route("/api/runtime/reports/<path:scan_path>/pdf")' in routes_source
+    assert '@app.route("/api/runtime/reports/<path:scan_path>/xml")' in routes_source
     assert '@app.route("/api/runtime/history")' in routes_source
     assert '@app.route("/api/runtime/maintenance/backfill", methods=["POST"])' in routes_source
     assert '@app.route("/api/runtime/history/compare")' in routes_source
@@ -1158,8 +1161,9 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "socket.emit('get_local_ip');" in discovery_module
     assert "function showReportActions(path)" in report_status_module
     assert "function showReportCompleteStatus(data)" in report_status_module
-    assert "buildLink(`/api/scans/${path}/html`, 'View Report', true);" in report_status_module
-    assert "buildLink(`/api/scans/${path}/pdf`, 'Download PDF');" in report_status_module
+    assert "buildLink(`/api/runtime/reports/${path}/html`, 'View Report', true);" in report_status_module
+    assert "buildLink(`/api/runtime/reports/${path}/pdf`, 'Download PDF');" in report_status_module
+    assert "buildLink(`/api/runtime/reports/${path}/xml`, 'Download XML');" in report_status_module
     assert "function initializeReportsTab()" in reports_tab_module
     assert "async function compareHistoryScans(basePath, currentPath)" in reports_tab_module
     assert "/api/runtime/history/compare?base_path=" in reports_tab_module
@@ -1176,7 +1180,9 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "function loadHistoryTab(force = false)" in reports_tab_module
     assert "window.loadSettingsTab()" in reports_tab_module
     assert "window.addEventListener('report-complete-refresh'" in reports_tab_module
-    assert "createScanActionLink(`/api/scans/${scan.path}/html`, 'View Report', true)" in reports_tab_module
+    assert "buildRuntimeReportArtifactUrl(scan.path, 'html')" in reports_tab_module
+    assert "buildRuntimeReportArtifactUrl(scan.path, 'pdf')" in reports_tab_module
+    assert "buildRuntimeReportArtifactUrl(scan.path, 'xml')" in reports_tab_module
     assert "Select Base" in reports_tab_module
     assert "Compare to Base" in reports_tab_module
     assert "async function loadSettingsTab(force = false)" in settings_tab_module

@@ -1,13 +1,40 @@
 from datetime import datetime, timezone
 
-from flask import jsonify, render_template, request
+from flask import jsonify, render_template, request, send_file
 from nmapui.auth import require_auth
+from nmapui.reporting import _resolve_artifact_file_path
 from nmapui.runtime_history import (
     backfill_runtime_history_artifacts,
     build_compare_result,
     build_history_rows,
     normalize_runtime_report_row,
 )
+
+
+def _get_runtime_artifact(runtime_store, scan_path):
+    if runtime_store is None or not hasattr(runtime_store, "get_report_artifact"):
+        return None
+    return runtime_store.get_report_artifact(scan_path)
+
+
+def _send_runtime_artifact(*, runtime_store, scans_dir, scan_path, artifact_key, default_name, download_name=None, as_attachment=False):
+    artifact = _get_runtime_artifact(runtime_store, scan_path)
+    if artifact is None:
+        return "Report artifact not found", 404
+
+    artifact_path = _resolve_artifact_file_path(
+        scans_dir=scans_dir,
+        scan_path=scan_path,
+        stored_path=artifact.get(artifact_key),
+        default_name=default_name,
+    )
+    if not artifact_path.exists():
+        return "Report artifact not found", 404
+
+    kwargs = {"as_attachment": as_attachment}
+    if download_name:
+        kwargs["download_name"] = download_name
+    return send_file(artifact_path, **kwargs)
 
 
 def register_core_routes(app, deps):
@@ -125,6 +152,55 @@ def register_core_routes(app, deps):
             for artifact in runtime_store.list_report_artifacts()
         ]
         return jsonify({"reports": reports})
+
+    @app.route("/api/runtime/reports/<path:scan_path>/html")
+    @require_auth
+    def runtime_report_html(scan_path):
+        return _send_runtime_artifact(
+            runtime_store=runtime_store,
+            scans_dir=deps.get("scans_dir"),
+            scan_path=scan_path,
+            artifact_key="html_path",
+            default_name="scan_web.html",
+        )
+
+    @app.route("/api/runtime/reports/<path:scan_path>/pdf")
+    @require_auth
+    def runtime_report_pdf(scan_path):
+        artifact = _get_runtime_artifact(runtime_store, scan_path)
+        download_name = "Nmap_Audit_Report.pdf"
+        if artifact is not None:
+            download_name = (
+                dict(artifact.get("payload", {}) or {}).get("downloads", {}).get("pdf", download_name)
+            )
+        return _send_runtime_artifact(
+            runtime_store=runtime_store,
+            scans_dir=deps.get("scans_dir"),
+            scan_path=scan_path,
+            artifact_key="pdf_path",
+            default_name="scan_report.pdf",
+            download_name=download_name,
+            as_attachment=True,
+        )
+
+    @app.route("/api/runtime/reports/<path:scan_path>/xml")
+    @require_auth
+    def runtime_report_xml(scan_path):
+        artifact = _get_runtime_artifact(runtime_store, scan_path)
+        download_name = "Nmap_Raw_Data.xml"
+        if artifact is not None:
+            download_name = (
+                dict(artifact.get("payload", {}) or {}).get("downloads", {}).get("xml", download_name)
+            )
+        return _send_runtime_artifact(
+            runtime_store=runtime_store,
+            scans_dir=deps.get("scans_dir"),
+            scan_path=scan_path,
+            artifact_key="xml_path",
+            default_name="scan.xml",
+            download_name=download_name,
+            as_attachment=True,
+        )
 
     @app.route("/api/runtime/history")
     @require_auth

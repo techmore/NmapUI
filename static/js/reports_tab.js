@@ -59,6 +59,10 @@ function createScanActionLink(href, label, newTab = false) {
     return link;
 }
 
+function buildRuntimeReportArtifactUrl(scanPath, artifactType) {
+    return `/api/runtime/reports/${scanPath}/${artifactType}`;
+}
+
 function formatScanTimestamp(scan) {
     const timestamp = scan?.timestamp;
     if (!timestamp) {
@@ -234,13 +238,13 @@ function createHistoryCard(scan, options = {}) {
     actions.className = 'mt-4 flex flex-wrap gap-2';
 
     if (scan.has_html) {
-        actions.appendChild(createScanActionLink(`/api/scans/${scan.path}/html`, 'View Report', true));
+        actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(scan.path, 'html'), 'View Report', true));
     }
     if (scan.has_pdf) {
-        actions.appendChild(createScanActionLink(`/api/scans/${scan.path}/pdf`, 'Download PDF'));
+        actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(scan.path, 'pdf'), 'Download PDF'));
     }
     if (scan.has_xml) {
-        actions.appendChild(createScanActionLink(`/api/scans/${scan.path}/xml`, 'Download XML'));
+        actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(scan.path, 'xml'), 'Download XML'));
     }
 
     if (options.enableCompare) {

@@ -105,6 +105,86 @@ def test_runtime_reports_route_returns_persisted_artifacts(monkeypatch):
     assert payload["reports"][0]["has_pdf"] is True
 
 
+def test_runtime_report_file_routes_serve_persisted_artifacts(monkeypatch, tmp_path):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    scans_dir = tmp_path / "scans"
+    scan_dir = scans_dir / "Acme" / "2026-03-14" / "scan_120000_192.168.222.0_24"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    (scan_dir / "runtime.html").write_text("<html><body>runtime report</body></html>")
+    (scan_dir / "runtime.pdf").write_bytes(b"%PDF-1.4 runtime")
+    (scan_dir / "runtime.xml").write_text("<nmaprun><host /></nmaprun>")
+
+    class RuntimeStoreStub:
+        def get_report_artifact(self, scan_path):
+            if scan_path != "Acme/2026-03-14/scan_120000_192.168.222.0_24":
+                return None
+            return {
+                "scan_path": scan_path,
+                "html_path": "Acme/2026-03-14/scan_120000_192.168.222.0_24/runtime.html",
+                "pdf_path": "Acme/2026-03-14/scan_120000_192.168.222.0_24/runtime.pdf",
+                "xml_path": "Acme/2026-03-14/scan_120000_192.168.222.0_24/runtime.xml",
+                "payload": {
+                    "downloads": {
+                        "pdf": "Acme-runtime.pdf",
+                        "xml": "Acme-runtime.xml",
+                    }
+                },
+            }
+
+        def list_report_artifacts(self, customer_id=None):
+            return []
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
+            "scans_dir": scans_dir,
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    client = app.test_client()
+    headers = {"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()}
+    environ = {"REMOTE_ADDR": "127.0.0.1"}
+
+    html_response = client.get(
+        "/api/runtime/reports/Acme/2026-03-14/scan_120000_192.168.222.0_24/html",
+        headers=headers,
+        environ_overrides=environ,
+    )
+    pdf_response = client.get(
+        "/api/runtime/reports/Acme/2026-03-14/scan_120000_192.168.222.0_24/pdf",
+        headers=headers,
+        environ_overrides=environ,
+    )
+    xml_response = client.get(
+        "/api/runtime/reports/Acme/2026-03-14/scan_120000_192.168.222.0_24/xml",
+        headers=headers,
+        environ_overrides=environ,
+    )
+
+    assert html_response.status_code == 200
+    assert b"runtime report" in html_response.data
+    assert pdf_response.status_code == 200
+    assert "filename=Acme-runtime.pdf" in pdf_response.headers["Content-Disposition"]
+    assert xml_response.status_code == 200
+    assert "filename=Acme-runtime.xml" in xml_response.headers["Content-Disposition"]
+
+
 def test_runtime_history_route_merges_runtime_reports_with_metadata_fallback(monkeypatch, tmp_path):
     monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
     monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")

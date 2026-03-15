@@ -117,7 +117,7 @@ function renderHistoryList(scans) {
 
         if (scan.has_html) {
             buildLink(
-                `/api/scans/${scan.path}/html`,
+                `/api/runtime/reports/${scan.path}/html`,
                 "View HTML",
                 "px-3 py-1 bg-olive-600 text-white rounded text-sm hover:bg-olive-700",
                 true
@@ -125,14 +125,14 @@ function renderHistoryList(scans) {
         }
         if (scan.has_pdf) {
             buildLink(
-                `/api/scans/${scan.path}/pdf`,
+                `/api/runtime/reports/${scan.path}/pdf`,
                 "Download PDF",
                 "px-3 py-1 bg-olive-700 text-white rounded text-sm hover:bg-olive-800"
             );
         }
         if (scan.has_xml) {
             buildLink(
-                `/api/scans/${scan.path}/xml`,
+                `/api/runtime/reports/${scan.path}/xml`,
                 "Download XML",
                 "px-3 py-1 bg-olive-500 text-white rounded text-sm hover:bg-olive-600"
             );
