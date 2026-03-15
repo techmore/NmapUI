@@ -248,6 +248,12 @@ def test_runtime_sqlite_store_schema_exists():
     assert "CREATE TABLE IF NOT EXISTS job_events" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS report_artifacts" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS runtime_logs" in runtime_db_source
+    assert 'SQLITE_BUSY_TIMEOUT_MS = 5000' in runtime_db_source
+    assert 'SQLITE_JOURNAL_MODE = "wal"' in runtime_db_source
+    assert 'conn = sqlite3.connect(self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)' in runtime_db_source
+    assert 'conn.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")' in runtime_db_source
+    assert 'conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")' in runtime_db_source
+    assert 'def get_connection_pragmas(self) -> dict[str, Any]:' in runtime_db_source
     assert "def list_jobs(" in runtime_db_source
     assert "def get_report_artifact(" in runtime_db_source
     assert "def delete_report_artifact(" in runtime_db_source

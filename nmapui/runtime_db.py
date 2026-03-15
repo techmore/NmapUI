@@ -7,6 +7,10 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterator
 
+SQLITE_BUSY_TIMEOUT_MS = 5000
+SQLITE_JOURNAL_MODE = "wal"
+SQLITE_SYNCHRONOUS = "normal"
+
 
 def utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -112,15 +116,36 @@ class RuntimeStateStore:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def _configure_connection(self, conn: sqlite3.Connection) -> sqlite3.Connection:
+        conn.row_factory = sqlite3.Row
+        conn.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")
+        conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        conn.execute(f"PRAGMA synchronous={SQLITE_SYNCHRONOUS}")
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
+
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)
         try:
-            conn.row_factory = sqlite3.Row
+            self._configure_connection(conn)
             yield conn
             conn.commit()
         finally:
             conn.close()
+
+    def get_connection_pragmas(self) -> dict[str, Any]:
+        with self.connect() as conn:
+            journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+            busy_timeout = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+            synchronous = conn.execute("PRAGMA synchronous").fetchone()[0]
+            foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+        return {
+            "journal_mode": journal_mode,
+            "busy_timeout": int(busy_timeout),
+            "synchronous": synchronous,
+            "foreign_keys": int(foreign_keys),
+        }
 
     def initialize(self) -> None:
         with self.connect() as conn:

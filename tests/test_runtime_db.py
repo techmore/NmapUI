@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from nmapui.runtime_db import create_runtime_state_store
+from nmapui.runtime_db import (
+    SQLITE_BUSY_TIMEOUT_MS,
+    SQLITE_JOURNAL_MODE,
+    create_runtime_state_store,
+)
 
 
 def test_runtime_state_store_initializes_schema_and_round_trips_snapshots(tmp_path: Path):
@@ -138,3 +142,14 @@ def test_runtime_state_store_counts_persisted_rows(tmp_path: Path):
     assert store.count_report_artifacts() == 1
     assert store.count_customer_scan_history() == 1
     assert store.count_runtime_logs() == 1
+
+
+def test_runtime_state_store_configures_sqlite_for_concurrent_usage(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    pragmas = store.get_connection_pragmas()
+
+    assert pragmas["journal_mode"] == SQLITE_JOURNAL_MODE
+    assert pragmas["busy_timeout"] == SQLITE_BUSY_TIMEOUT_MS
+    assert pragmas["foreign_keys"] == 1
+    assert pragmas["synchronous"] in (1, "1", "normal")
