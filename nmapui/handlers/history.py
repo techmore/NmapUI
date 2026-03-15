@@ -21,6 +21,19 @@ def register_history_handlers(socketio, deps):
     logger = deps["logger"]
     runtime_store = deps.get("runtime_store")
 
+    def emit_preferred_job_status(target_sid, job_type):
+        owner_sid = broadcaster.find_active_owner(job_type) if broadcaster else None
+        if owner_sid and owner_sid != target_sid:
+            job = job_registry.get(owner_sid, job_type)
+            if job and job.get("status") in {"running", "cancelling"}:
+                emit_to_client(
+                    target_sid,
+                    "job_status",
+                    {**job, "job_type": job_type},
+                )
+                return
+        emit_job_status(target_sid, job_type)
+
     @socketio.on("check_resumable_scan")
     @require_socket_auth()
     def check_resumable_scan_event(data):
@@ -137,8 +150,8 @@ def register_history_handlers(socketio, deps):
     @socketio.on("get_job_status")
     @require_socket_auth()
     def get_job_status_event():
-        emit_job_status(request.sid, "scan")
-        emit_job_status(request.sid, "report")
+        emit_preferred_job_status(request.sid, "scan")
+        emit_preferred_job_status(request.sid, "report")
 
     @socketio.on("cancel_job")
     @require_socket_auth()
