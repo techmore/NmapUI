@@ -331,6 +331,16 @@ def test_runtime_sqlite_store_schema_exists():
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
 
 
+def test_browser_regression_harness_covers_live_multi_tab_runtime_state():
+    browser_source = (ROOT / "tests" / "test_browser_regressions.py").read_text()
+
+    assert "def test_existing_open_tabs_receive_live_report_state(" in browser_source
+    assert "def test_existing_open_tabs_receive_live_scan_state(" in browser_source
+    assert "app_module.emit_job_status(owner_sid, \"report\")" in browser_source
+    assert "app_module.emit_job_status(owner_sid, \"scan\")" in browser_source
+    assert "app_module.broadcaster.get_subscribers(" in browser_source
+
+
 def test_runtime_routes_include_database_export():
     routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
 
