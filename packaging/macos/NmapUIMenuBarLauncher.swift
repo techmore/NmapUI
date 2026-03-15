@@ -9,6 +9,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var hadActiveJob = false
     var completedIndicatorUntil: Date?
     var lockFileURL: URL?
+    var launchedWithPrivileges = false
 
     var appURL: URL {
         URL(string: "http://127.0.0.1:\(runtimePort)")!
@@ -25,7 +26,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var restartItem: NSMenuItem!
 
     var isFlaskRunning: Bool {
-        pythonProcess?.isRunning == true
+        if launchedWithPrivileges {
+            return isLocalPortInUse(runtimePort)
+        }
+        return pythonProcess?.isRunning == true
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -135,19 +139,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         runtimePort = selectedPort
 
+        let allowedOrigins = "http://127.0.0.1:\(runtimePort),http://localhost:\(runtimePort)"
+        startStatusPolling()
+        updateStatusIcon(state: .starting, detail: "Starting NmapUI")
+
+        if startFlaskWithPrivileges(runScriptPath: runScriptPath, allowedOrigins: allowedOrigins) {
+            launchedWithPrivileges = true
+            pythonProcess = nil
+            print("NmapUI started with elevated privileges")
+            return
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [runScriptPath]
         process.currentDirectoryURL = URL(fileURLWithPath: resourcesPath, isDirectory: true)
         var environment = ProcessInfo.processInfo.environment
         environment["NMAPUI_PORT"] = String(runtimePort)
-        environment["NMAPUI_ALLOWED_ORIGINS"] = "http://127.0.0.1:\(runtimePort),http://localhost:\(runtimePort)"
+        environment["NMAPUI_ALLOWED_ORIGINS"] = allowedOrigins
         process.environment = environment
 
         do {
             try process.run()
             pythonProcess = process
-            startStatusPolling()
+            launchedWithPrivileges = false
             updateStatusIcon(state: .starting, detail: "Starting NmapUI")
             print("NmapUI started with PID: \(process.processIdentifier)")
         } catch {
@@ -160,11 +175,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // previous run or if pythonProcess is stale after a crash/restart).
     func stopFlask(wait: Bool = true) {
         stopStatusPolling()
-        if let process = pythonProcess, process.isRunning {
+        if launchedWithPrivileges {
+            stopFlaskWithPrivileges()
+            launchedWithPrivileges = false
+            pythonProcess = nil
+        } else if let process = pythonProcess, process.isRunning {
             process.terminate()
             if wait { process.waitUntilExit() }
+            pythonProcess = nil
         }
-        pythonProcess = nil
 
         // Belt-and-suspenders: kill any app.py that may still be alive
         let pkill = Process()
@@ -378,6 +397,46 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: accessibility)
         button.toolTip = detail
+    }
+
+    // MARK: - Privileged start/stop
+
+    func startFlaskWithPrivileges(runScriptPath: String, allowedOrigins: String) -> Bool {
+        let command = "NMAPUI_PORT=\(runtimePort) NMAPUI_ALLOWED_ORIGINS=\(allowedOrigins) \"\(runScriptPath)\" >/tmp/nmapui-privileged.log 2>&1 &"
+        let appleScript = "do shell script \(appleScriptEscaped(command)) with administrator privileges"
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", appleScript]
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            print("Failed to start privileged NmapUI: \(error)")
+            return false
+        }
+    }
+
+    func stopFlaskWithPrivileges() {
+        let command = "/usr/bin/pkill -f \"/Applications/NmapUI.app/Contents/Resources/app.py\""
+        let appleScript = "do shell script \(appleScriptEscaped(command)) with administrator privileges"
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", appleScript]
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            print("Failed to stop privileged NmapUI: \(error)")
+        }
+    }
+
+    func appleScriptEscaped(_ value: String) -> String {
+        var escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
+        escaped = escaped.replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
     }
 
     // MARK: - Single instance lock
