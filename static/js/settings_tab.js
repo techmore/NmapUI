@@ -81,6 +81,7 @@ function renderRuntimeSummary(summary) {
     }
 
     const maintenanceBackfill = summary.maintenance_backfill || {};
+    const persistedCounts = summary.persisted_counts || {};
     const lastBackfillValue = maintenanceBackfill.last_run_at
         ? `${new Date(maintenanceBackfill.last_run_at).toLocaleString()} (${maintenanceBackfill.last_backfilled || 0})`
         : 'Never';
@@ -91,6 +92,9 @@ function renderRuntimeSummary(summary) {
         ['Scan-only mode', summary.scan_only_mode ? 'Enabled' : 'Disabled'],
         ['Google Drive', summary.google_drive_enabled ? 'Enabled' : 'Disabled'],
         ['Remote sync', summary.remote_sync_enabled ? 'Enabled' : 'Disabled'],
+        ['Reports in DB', String(persistedCounts.report_artifacts || 0)],
+        ['History rows', String(persistedCounts.customer_scan_history || 0)],
+        ['Runtime logs', String(persistedCounts.runtime_logs || 0)],
         ['Last backfill', lastBackfillValue],
     ];
 

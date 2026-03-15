@@ -103,10 +103,22 @@ def register_core_routes(app, deps):
         scan_rules = settings_state.get("scan_rules", {})
         sync = settings_state.get("sync", {})
         maintenance_backfill = {}
+        persisted_counts = {
+            "report_artifacts": 0,
+            "customer_scan_history": 0,
+            "runtime_logs": 0,
+        }
         if runtime_store is not None and hasattr(runtime_store, "get_runtime_snapshot"):
             maintenance_backfill = (
                 runtime_store.get_runtime_snapshot("maintenance_backfill_status") or {}
             )
+        if runtime_store is not None:
+            if hasattr(runtime_store, "count_report_artifacts"):
+                persisted_counts["report_artifacts"] = runtime_store.count_report_artifacts()
+            if hasattr(runtime_store, "count_customer_scan_history"):
+                persisted_counts["customer_scan_history"] = runtime_store.count_customer_scan_history()
+            if hasattr(runtime_store, "count_runtime_logs"):
+                persisted_counts["runtime_logs"] = runtime_store.count_runtime_logs()
         return jsonify(
             {
                 "scan_only_mode": bool(scan_rules.get("scan_only_mode", False)),
@@ -119,6 +131,7 @@ def register_core_routes(app, deps):
                     (sync.get("remote_sync") or {}).get("enabled", False)
                 ),
                 "maintenance_backfill": maintenance_backfill,
+                "persisted_counts": persisted_counts,
             }
         )
 

@@ -56,6 +56,16 @@ def test_runtime_status_route_reports_active_jobs():
 def test_runtime_settings_summary_reports_settings_state():
     app = Flask(__name__)
 
+    class RuntimeStoreStub:
+        def count_report_artifacts(self):
+            return 4
+
+        def count_customer_scan_history(self):
+            return 7
+
+        def count_runtime_logs(self):
+            return 12
+
     register_core_routes(
         app,
         {
@@ -65,6 +75,7 @@ def test_runtime_settings_summary_reports_settings_state():
             "get_default_interface_cached": lambda: "en0",
             "get_versions": lambda: {"app": "v1"},
             "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
             "settings_state": {
                 "target_profiles": [{"id": "1", "name": "HQ", "target": "192.168.1.0/24"}],
                 "scan_rules": {"scan_only_mode": True, "excluded_targets": ["192.168.1.10"]},
@@ -88,4 +99,9 @@ def test_runtime_settings_summary_reports_settings_state():
         "google_drive_enabled": True,
         "remote_sync_enabled": False,
         "maintenance_backfill": {},
+        "persisted_counts": {
+            "report_artifacts": 4,
+            "customer_scan_history": 7,
+            "runtime_logs": 12,
+        },
     }

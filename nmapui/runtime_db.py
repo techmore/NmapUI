@@ -496,6 +496,27 @@ class RuntimeStateStore:
             for row in rows
         ]
 
+    def count_report_artifacts(self) -> int:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM report_artifacts"
+            ).fetchone()
+        return int(row["count"] or 0)
+
+    def count_customer_scan_history(self) -> int:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM customer_scan_history"
+            ).fetchone()
+        return int(row["count"] or 0)
+
+    def count_runtime_logs(self) -> int:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM runtime_logs"
+            ).fetchone()
+        return int(row["count"] or 0)
+
 
 def create_runtime_state_store(db_path: Path) -> RuntimeStateStore:
     store = RuntimeStateStore(db_path)

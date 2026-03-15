@@ -110,3 +110,31 @@ def test_runtime_state_store_tracks_customer_scan_history(tmp_path: Path):
     assert history[0]["id"] == entry_id
     assert history[0]["customer_id"] == "cust-1"
     assert history[0]["payload"]["customer_name"] == "Acme"
+
+
+def test_runtime_state_store_counts_persisted_rows(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    store.upsert_report_artifact(
+        scan_path="Acme/2026-03-14/scan_120000_192.168.1.0_24",
+        customer_id="cust-1",
+        target="192.168.1.0/24",
+        html_path="scan_web.html",
+        pdf_path="scan_report.pdf",
+        xml_path="scan.xml",
+        payload={"status": "completed"},
+    )
+    store.append_customer_scan_history(
+        customer_id="cust-1",
+        payload={"timestamp": "2026-03-14T12:00:00", "customer_id": "cust-1"},
+    )
+    store.append_log(
+        category="runtime",
+        level="INFO",
+        message="Hydrated runtime state",
+        payload={},
+    )
+
+    assert store.count_report_artifacts() == 1
+    assert store.count_customer_scan_history() == 1
+    assert store.count_runtime_logs() == 1

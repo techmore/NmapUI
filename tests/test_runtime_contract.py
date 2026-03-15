@@ -261,6 +261,9 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert 'runtime_store.get_runtime_snapshot("maintenance_backfill_status")' in routes_source
     assert 'runtime_store.upsert_runtime_snapshot(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
+    assert 'runtime_store.count_report_artifacts()' in routes_source
+    assert 'runtime_store.count_customer_scan_history()' in routes_source
+    assert 'runtime_store.count_runtime_logs()' in routes_source
     assert "build_history_rows(" in routes_source
     assert "build_compare_result(" in routes_source
     assert "backfill_runtime_history_artifacts(" in routes_source
@@ -272,6 +275,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert "function refreshPersistedLogs()" in audit_log_source
     assert "function schedulePersistedLogRefresh()" in audit_log_source
     assert "replacePersistedLogs(entries.slice().reverse());" in audit_log_source
+    assert "['Reports in DB', String(persistedCounts.report_artifacts || 0)]" in (ROOT / "static" / "js" / "settings_tab.js").read_text()
     assert "async function fetchReportsForTab()" in reports_tab_source
     assert "fetch('/api/runtime/reports')" in reports_tab_source
     assert "fetch('/api/runtime/history')" in reports_tab_source
