@@ -284,12 +284,20 @@ def test_runtime_sqlite_store_schema_exists():
     assert "CREATE TABLE IF NOT EXISTS job_events" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS report_artifacts" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS runtime_logs" in runtime_db_source
+    assert "RUNTIME_DB_SCHEMA_VERSION = 1" in runtime_db_source
+    assert "SCHEMA_MIGRATIONS: dict[int, tuple[str, ...]] = {" in runtime_db_source
     assert 'SQLITE_BUSY_TIMEOUT_MS = 5000' in runtime_db_source
     assert 'SQLITE_JOURNAL_MODE = "wal"' in runtime_db_source
     assert "SQLITE_WRITE_RETRY_ATTEMPTS = 3" in runtime_db_source
     assert 'conn = sqlite3.connect(self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)' in runtime_db_source
     assert 'conn.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")' in runtime_db_source
     assert 'conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")' in runtime_db_source
+    assert 'return int(conn.execute("PRAGMA user_version").fetchone()[0] or 0)' in runtime_db_source
+    assert 'conn.execute(f"PRAGMA user_version={int(version)}")' in runtime_db_source
+    assert "def get_schema_version(self) -> int:" in runtime_db_source
+    assert "def _migrate(self, conn: sqlite3.Connection) -> None:" in runtime_db_source
+    assert "if current_version > RUNTIME_DB_SCHEMA_VERSION:" in runtime_db_source
+    assert "Missing runtime DB migration for version" in runtime_db_source
     assert "def _run_write(self, operation):" in runtime_db_source
     assert 'if "locked" not in str(exc).lower() and "busy" not in str(exc).lower():' in runtime_db_source
     assert 'def get_connection_pragmas(self) -> dict[str, Any]:' in runtime_db_source

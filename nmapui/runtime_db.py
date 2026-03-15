@@ -14,6 +14,7 @@ SQLITE_JOURNAL_MODE = "wal"
 SQLITE_SYNCHRONOUS = "normal"
 SQLITE_WRITE_RETRY_ATTEMPTS = 3
 SQLITE_WRITE_RETRY_DELAY_SECONDS = 0.05
+RUNTIME_DB_SCHEMA_VERSION = 1
 
 
 def utcnow_iso() -> str:
@@ -114,6 +115,10 @@ SCHEMA_STATEMENTS = (
     """,
 )
 
+SCHEMA_MIGRATIONS: dict[int, tuple[str, ...]] = {
+    1: SCHEMA_STATEMENTS,
+}
+
 
 class RuntimeStateStore:
     def __init__(self, db_path: Path):
@@ -150,6 +155,38 @@ class RuntimeStateStore:
             "synchronous": synchronous,
             "foreign_keys": int(foreign_keys),
         }
+
+    def _get_schema_version(self, conn: sqlite3.Connection) -> int:
+        return int(conn.execute("PRAGMA user_version").fetchone()[0] or 0)
+
+    def _set_schema_version(self, conn: sqlite3.Connection, version: int) -> None:
+        conn.execute(f"PRAGMA user_version={int(version)}")
+
+    def get_schema_version(self) -> int:
+        with self.connect() as conn:
+            return self._get_schema_version(conn)
+
+    def _apply_schema_statements(
+        self,
+        conn: sqlite3.Connection,
+        statements: tuple[str, ...],
+    ) -> None:
+        for statement in statements:
+            conn.execute(statement)
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        current_version = self._get_schema_version(conn)
+        if current_version > RUNTIME_DB_SCHEMA_VERSION:
+            raise RuntimeError(
+                "Runtime DB schema version is newer than this application "
+                f"supports: {current_version} > {RUNTIME_DB_SCHEMA_VERSION}"
+            )
+        for version in range(current_version + 1, RUNTIME_DB_SCHEMA_VERSION + 1):
+            statements = SCHEMA_MIGRATIONS.get(version)
+            if statements is None:
+                raise RuntimeError(f"Missing runtime DB migration for version {version}")
+            self._apply_schema_statements(conn, statements)
+            self._set_schema_version(conn, version)
 
     def export_snapshot(self) -> Path:
         with tempfile.NamedTemporaryFile(
@@ -191,8 +228,7 @@ class RuntimeStateStore:
 
     def initialize(self) -> None:
         def operation(conn):
-            for statement in SCHEMA_STATEMENTS:
-                conn.execute(statement)
+            self._migrate(conn)
         self._run_write(operation)
 
     def upsert_runtime_snapshot(self, key: str, payload: dict[str, Any]) -> None:

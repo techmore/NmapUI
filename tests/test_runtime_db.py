@@ -4,6 +4,7 @@ import sqlite3
 import threading
 
 from nmapui.runtime_db import (
+    RUNTIME_DB_SCHEMA_VERSION,
     SQLITE_BUSY_TIMEOUT_MS,
     SQLITE_JOURNAL_MODE,
     create_runtime_state_store,
@@ -22,6 +23,60 @@ def test_runtime_state_store_initializes_schema_and_round_trips_snapshots(tmp_pa
         "target": "192.168.1.0/24",
         "total_hops": 4,
     }
+
+
+def test_runtime_state_store_sets_schema_version_on_initialize(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    assert store.get_schema_version() == RUNTIME_DB_SCHEMA_VERSION
+
+
+def test_runtime_state_store_upgrades_legacy_schema_version_zero(tmp_path: Path):
+    db_path = tmp_path / "runtime.sqlite3"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE runtime_snapshots (
+                key TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO runtime_snapshots(key, payload_json, updated_at)
+            VALUES (?, ?, ?)
+            """,
+            ("network_key", '{"public_ip": "203.0.113.10"}', "2026-03-15T00:00:00Z"),
+        )
+        conn.execute("PRAGMA user_version=0")
+        conn.commit()
+    finally:
+        conn.close()
+
+    store = create_runtime_state_store(db_path)
+
+    assert store.get_schema_version() == RUNTIME_DB_SCHEMA_VERSION
+    assert store.get_runtime_snapshot("network_key") == {"public_ip": "203.0.113.10"}
+
+
+def test_runtime_state_store_rejects_newer_unknown_schema_version(tmp_path: Path):
+    db_path = tmp_path / "runtime.sqlite3"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(f"PRAGMA user_version={RUNTIME_DB_SCHEMA_VERSION + 1}")
+        conn.commit()
+    finally:
+        conn.close()
+
+    try:
+        create_runtime_state_store(db_path)
+    except RuntimeError as exc:
+        assert "newer than this application supports" in str(exc)
+    else:  # pragma: no cover - defensive failure path only
+        raise AssertionError("Expected runtime store initialization to reject newer schema")
 
 
 def test_runtime_state_store_tracks_jobs_reports_and_logs(tmp_path: Path):
