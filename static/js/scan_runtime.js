@@ -43,6 +43,14 @@ function syncScanJobVisualState(job) {
     }
 
     const isRunning = job?.status === 'running' || job?.status === 'cancelling';
+    if (
+        isRunning
+        && typeof window.resetReportVisualState === 'function'
+        && getClientJobs().report.status !== 'running'
+        && getClientJobs().report.status !== 'cancelling'
+    ) {
+        window.resetReportVisualState();
+    }
     startScanBtn.classList.toggle('card-pulsing', isRunning);
 }
 

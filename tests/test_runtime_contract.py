@@ -1305,6 +1305,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "function syncScanJobVisualState(job)" in scan_runtime_module
     assert "function syncScanVisualStateFromFeedback(message)" in scan_runtime_module
     assert "startScanBtn.classList.toggle('card-pulsing', isRunning);" in scan_runtime_module
+    assert "getClientJobs().report.status !== 'running'" in scan_runtime_module
     assert "window.resetReportVisualState();" in scan_runtime_module
     assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
