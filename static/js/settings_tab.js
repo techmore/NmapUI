@@ -447,6 +447,34 @@ async function runRuntimeBackfill() {
     }
 }
 
+async function exportRuntimeDatabase() {
+    setMaintenanceStatus('Preparing runtime database export...');
+
+    try {
+        const response = await fetch('/api/runtime/export');
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.error || `Runtime database export failed (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const exportUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const contentDisposition = response.headers.get('content-disposition') || '';
+        const match = contentDisposition.match(/filename="?([^"]+)"?/i);
+        link.href = exportUrl;
+        link.download = match?.[1] || 'nmapui-runtime.sqlite3';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(exportUrl);
+        setMaintenanceStatus(`Exported runtime database as ${link.download}.`, false);
+    } catch (error) {
+        console.error('Error exporting runtime database:', error);
+        setMaintenanceStatus(error.message || 'Runtime database export failed.', true);
+    }
+}
+
 function addTargetProfile() {
     const nameInput = document.getElementById('settings-profile-name');
     const targetInput = document.getElementById('settings-profile-target');
@@ -532,8 +560,10 @@ function initializeSettingsTab() {
     document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', disconnectGoogleDriveAccount);
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', testRemoteSyncSettings);
     document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', runRuntimeBackfill);
+    document.getElementById('settings-runtime-export-btn')?.addEventListener('click', exportRuntimeDatabase);
     populateProfileCustomerOptions();
 }
 
 window.loadSettingsTab = loadSettingsTab;
 window.initializeSettingsTab = initializeSettingsTab;
+window.exportRuntimeDatabase = exportRuntimeDatabase;

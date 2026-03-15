@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import sqlite3
 from pathlib import Path
+import tempfile
 import time
 from typing import Any, Iterator
 
@@ -149,6 +150,28 @@ class RuntimeStateStore:
             "synchronous": synchronous,
             "foreign_keys": int(foreign_keys),
         }
+
+    def export_snapshot(self) -> Path:
+        with tempfile.NamedTemporaryFile(
+            prefix="nmapui-runtime-export-",
+            suffix=".sqlite3",
+            delete=False,
+        ) as temp_file:
+            export_path = Path(temp_file.name)
+
+        source_conn = sqlite3.connect(
+            self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000
+        )
+        destination_conn = sqlite3.connect(export_path)
+        try:
+            self._configure_connection(source_conn)
+            source_conn.backup(destination_conn)
+            destination_conn.commit()
+        finally:
+            destination_conn.close()
+            source_conn.close()
+
+        return export_path
 
     def _run_write(self, operation):
         last_error = None

@@ -177,14 +177,24 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'APP_INSTALL_DIR="$SYSTEM_APPLICATIONS_DIR"' in build_script
     assert 'APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"' in build_script
     assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"' in build_script
+    assert 'INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"' in build_script
+    assert 'if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then' in build_script
+    assert 'if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then' in build_script
+    assert 'MIGRATION_SOURCE_DB="$NMAPUI_MIGRATE_DB_FROM"' in build_script
+    assert 'MIGRATION_SOURCE_DB="$INSTALLED_RUNTIME_DB"' in build_script
     assert 'echo "Host architecture: $HOST_ARCH"' in build_script
     assert "<string>$APP_VERSION</string>" in build_script
     assert 'echo "Target: $SWIFT_TARGET"' in build_script
     assert 'echo "Install destination: $INSTALLED_APP_NAME"' in build_script
+    assert 'echo "Database migration enabled"' in build_script
+    assert 'echo "Database migration source: $MIGRATION_SOURCE_DB"' in build_script
     assert '  -target "$SWIFT_TARGET" \\' in build_script
+    assert 'TEMP_MIGRATION_DB="$(mktemp "${TMPDIR:-/tmp}/nmapui-runtime-db.XXXXXX.sqlite3")"' in build_script
+    assert 'cp "$MIGRATION_SOURCE_DB" "$TEMP_MIGRATION_DB"' in build_script
     assert 'mkdir -p "$APP_INSTALL_DIR"' in build_script
     assert 'rm -rf "$INSTALLED_APP_NAME"' in build_script
     assert 'ditto "$APP_NAME" "$INSTALLED_APP_NAME"' in build_script
+    assert 'cp "$TEMP_MIGRATION_DB" "$INSTALLED_RUNTIME_DB"' in build_script
     assert 'if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then' in build_script
     assert 'echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"' in build_script
     assert 'open "$INSTALLED_APP_NAME"' in build_script
@@ -212,6 +222,9 @@ def test_wrapper_docs_reference_current_local_port():
     assert "/Applications" in readme
     assert "~/Applications" in readme
     assert "NMAPUI_APPLICATIONS_DIR" in readme
+    assert "/api/runtime/export" in readme
+    assert "NMAPUI_MIGRATE_DB=1 ./build.sh" in readme
+    assert "NMAPUI_MIGRATE_DB_FROM" in readme
 
 
 def test_pyinstaller_spec_includes_runtime_assets():
@@ -300,6 +313,14 @@ def test_runtime_sqlite_store_schema_exists():
     assert "backfill_runtime_history_artifacts(" in app_source
     assert "customer_fingerprinter.backfill_runtime_scan_history()" in app_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
+
+
+def test_runtime_routes_include_database_export():
+    routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
+
+    assert '@app.route("/api/runtime/export")' in routes_source
+    assert 'download_name=_build_runtime_db_download_name()' in routes_source
+    assert 'mimetype="application/x-sqlite3"' in routes_source
 
 
 def test_runtime_backfill_admin_script_exists():
@@ -1249,6 +1270,10 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "socket.on('report_complete', function (data) {" in audit_log_module
     assert "socket.on('update_status', function (data) {" in audit_log_module
     assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module
+    settings_tab_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    assert "async function exportRuntimeDatabase()" in settings_tab_source
+    assert "fetch('/api/runtime/export')" in settings_tab_source
+    assert "window.exportRuntimeDatabase = exportRuntimeDatabase;" in settings_tab_source
 
 
 def test_google_drive_integration_contract_exists():
@@ -1332,6 +1357,7 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="settings-remote-sync-enabled"' in template
     assert 'id="settings-google-drive-test-btn"' in template
     assert 'id="settings-remote-sync-test-btn"' in template
+    assert 'id="settings-runtime-export-btn"' in template
     assert '<script src="/static/js/reports_tab.js"></script>' in template
     assert '<script src="/static/js/settings_tab.js"></script>' in template
     assert "initializeAuditLog();" in template

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from flask import jsonify, render_template, request, send_file
+from flask import after_this_request, jsonify, render_template, request, send_file
 from nmapui.auth import require_auth
 from nmapui.handlers.scans import delete_scan_artifacts
 from nmapui.reporting import _resolve_artifact_file_path
@@ -16,6 +16,11 @@ def _get_runtime_artifact(runtime_store, scan_path):
     if runtime_store is None or not hasattr(runtime_store, "get_report_artifact"):
         return None
     return runtime_store.get_report_artifact(scan_path)
+
+
+def _build_runtime_db_download_name() -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"nmapui-runtime-{timestamp}.sqlite3"
 
 
 def _send_runtime_artifact(*, runtime_store, scans_dir, scan_path, artifact_key, default_name, download_name=None, as_attachment=False):
@@ -156,6 +161,28 @@ def register_core_routes(app, deps):
                 }
             )
         return jsonify({"entries": []})
+
+    @app.route("/api/runtime/export")
+    @require_auth
+    def runtime_export():
+        if runtime_store is None or not hasattr(runtime_store, "export_snapshot"):
+            return jsonify({"success": False, "error": "Runtime database is not configured"}), 400
+        export_path = runtime_store.export_snapshot()
+
+        @after_this_request
+        def cleanup_export(response):
+            try:
+                export_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return response
+
+        return send_file(
+            export_path,
+            as_attachment=True,
+            download_name=_build_runtime_db_download_name(),
+            mimetype="application/x-sqlite3",
+        )
 
     @app.route("/api/runtime/reports")
     @require_auth

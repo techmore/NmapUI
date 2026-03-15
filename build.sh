@@ -19,6 +19,7 @@ SYSTEM_APPLICATIONS_DIR="/Applications"
 USER_APPLICATIONS_DIR="$HOME/Applications"
 BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
 BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
+TEMP_MIGRATION_DB=""
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 HOST_ARCH="$(uname -m)"
 APP_VERSION="$(tr -d '\r\n' < "$ROOT_DIR/VERSION")"
@@ -49,6 +50,14 @@ else
 fi
 
 INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"
+INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then
+        MIGRATION_SOURCE_DB="$NMAPUI_MIGRATE_DB_FROM"
+    else
+        MIGRATION_SOURCE_DB="$INSTALLED_RUNTIME_DB"
+    fi
+fi
 
 if [[ ! -f "$SRC" ]]; then
     echo "ERROR: Wrapper source file not found: $SRC"
@@ -67,6 +76,11 @@ echo "SDK: $SDK"
 echo "Host architecture: $HOST_ARCH"
 echo "Target: $SWIFT_TARGET"
 echo "Install destination: $INSTALLED_APP_NAME"
+
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    echo "Database migration enabled"
+    echo "Database migration source: $MIGRATION_SOURCE_DB"
+fi
 
 # Compile the Swift binary using the requested format
 swiftc \
@@ -223,10 +237,28 @@ else
     echo "  Workaround: xattr -d com.apple.quarantine \"$APP_NAME\""
 fi
 
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    if [[ ! -f "$MIGRATION_SOURCE_DB" ]]; then
+        echo "ERROR: Database migration source not found: $MIGRATION_SOURCE_DB" >&2
+        exit 1
+    fi
+    TEMP_MIGRATION_DB="$(mktemp "${TMPDIR:-/tmp}/nmapui-runtime-db.XXXXXX.sqlite3")"
+    cp "$MIGRATION_SOURCE_DB" "$TEMP_MIGRATION_DB"
+    echo "Captured runtime database for migration: $TEMP_MIGRATION_DB"
+fi
+
 echo "Installing application bundle..."
 mkdir -p "$APP_INSTALL_DIR"
 rm -rf "$INSTALLED_APP_NAME"
 ditto "$APP_NAME" "$INSTALLED_APP_NAME"
+
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    mkdir -p "$(dirname "$INSTALLED_RUNTIME_DB")"
+    cp "$TEMP_MIGRATION_DB" "$INSTALLED_RUNTIME_DB"
+    rm -f "$TEMP_MIGRATION_DB"
+    echo "Migrated runtime database into installed app: $INSTALLED_RUNTIME_DB"
+fi
+
 echo "Installed application bundle: $INSTALLED_APP_NAME"
 
 # Open the application

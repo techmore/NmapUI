@@ -817,11 +817,16 @@
 
                 <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
                     <h3 class="text-xl font-display italic text-olive-900">Maintenance</h3>
-                    <p class="mt-2 text-sm text-olive-700">Repair or pre-populate the SQLite runtime store from legacy scan metadata without restarting the app.</p>
+                    <p class="mt-2 text-sm text-olive-700">Repair, export, or migrate the SQLite runtime store without losing report, history, or log data.</p>
                     <div class="mt-4 rounded-xl border border-olive-200 bg-white p-4">
-                        <button id="settings-runtime-backfill-btn" type="button" class="action-button action-button-secondary action-button-compact">
-                            Backfill Runtime Store
-                        </button>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="settings-runtime-backfill-btn" type="button" class="action-button action-button-secondary action-button-compact">
+                                Backfill Runtime Store
+                            </button>
+                            <button id="settings-runtime-export-btn" type="button" class="action-button action-button-secondary action-button-compact">
+                                Export Runtime Database
+                            </button>
+                        </div>
                         <p id="settings-maintenance-status" class="mt-2 text-xs text-olive-600">Ready</p>
                     </div>
                 </section>

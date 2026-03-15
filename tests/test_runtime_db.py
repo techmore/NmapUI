@@ -147,6 +147,21 @@ def test_runtime_state_store_counts_persisted_rows(tmp_path: Path):
     assert store.count_runtime_logs() == 1
 
 
+def test_runtime_state_store_exports_consistent_snapshot(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+    store.upsert_runtime_snapshot("network_key", {"public_ip": "203.0.113.10"})
+
+    export_path = store.export_snapshot()
+
+    try:
+        exported_store = create_runtime_state_store(export_path)
+        assert exported_store.get_runtime_snapshot("network_key") == {
+            "public_ip": "203.0.113.10"
+        }
+    finally:
+        export_path.unlink(missing_ok=True)
+
+
 def test_runtime_state_store_configures_sqlite_for_concurrent_usage(tmp_path: Path):
     store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
 

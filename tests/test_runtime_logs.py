@@ -48,6 +48,51 @@ def test_runtime_logs_route_returns_persisted_entries():
     assert payload["entries"][0]["message"] == "Hydrated network topology"
 
 
+def test_runtime_export_route_downloads_sqlite_database(monkeypatch, tmp_path):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    db_path = tmp_path / "runtime.sqlite3"
+    db_path.write_bytes(b"SQLite format 3\x00runtime-test")
+
+    class RuntimeStoreStub:
+        def export_snapshot(self):
+            export_path = tmp_path / "runtime-export.sqlite3"
+            export_path.write_bytes(db_path.read_bytes())
+            return export_path
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    response = app.test_client().get(
+        "/api/runtime/export",
+        headers={"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    assert response.data.startswith(b"SQLite format 3")
+    assert "attachment;" in response.headers["Content-Disposition"]
+    assert "nmapui-runtime-" in response.headers["Content-Disposition"]
+
+
 def test_runtime_reports_route_returns_persisted_artifacts(monkeypatch):
     monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
     monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")

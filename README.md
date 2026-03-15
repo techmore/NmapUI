@@ -90,6 +90,26 @@ Optional overrides:
 ./.venv/bin/python scripts/backfill_runtime_store.py --db-path /tmp/runtime.sqlite3 --scans-dir /tmp/scans
 ```
 
+Export the runtime database from the Settings tab, or download it directly:
+
+```bash
+curl -OJ http://127.0.0.1:9000/api/runtime/export
+```
+
+Migrate an existing runtime database into the newly built menu bar app:
+
+```bash
+NMAPUI_MIGRATE_DB=1 ./build.sh
+```
+
+Optional migration source override:
+
+```bash
+NMAPUI_MIGRATE_DB=1 NMAPUI_MIGRATE_DB_FROM=/path/to/runtime.sqlite3 ./build.sh
+```
+
+If migration is enabled and the source database does not exist, `build.sh` fails before replacing the installed app.
+
 ## Usage
 
 Start the server:
