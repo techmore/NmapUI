@@ -13,19 +13,82 @@ from nmapui.app_events_runtime import (
     run_cancellable_command as run_cancellable_command_runtime,
     update_job_progress as update_job_progress_runtime,
 )
+from nmapui.runtime_log import append_runtime_log
 
 
-def build_event_helpers(*, socketio, job_registry):
+def _log_runtime_event(runtime_store, event, data=None):
+    if runtime_store is None:
+        return
+
+    if event == "scan_feedback":
+        message = data if isinstance(data, str) else (data or {}).get("message", str(data))
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="scan",
+            level="INFO",
+            message=message,
+            payload=data if isinstance(data, dict) else {"message": message},
+        )
+    elif event == "report_complete":
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="report",
+            level="INFO",
+            message="Report generation completed",
+            payload=data or {},
+        )
+    elif event == "report_error":
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="report",
+            level="ERROR",
+            message=(data or {}).get("error", "Report generation failed"),
+            payload=data or {},
+        )
+    elif event == "update_status":
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="update",
+            level="INFO",
+            message=(data or {}).get("message", str(data)),
+            payload=data or {},
+        )
+    elif event == "update_error":
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="update",
+            level="ERROR",
+            message=(data or {}).get("message", str(data)),
+            payload=data or {},
+        )
+
+
+def build_event_helpers(*, socketio, job_registry, runtime_store=None):
     def emit_to_client(sid, event, data=None):
-        return emit_to_client_runtime(socketio=socketio, sid=sid, event=event, data=data)
+        result = emit_to_client_runtime(socketio=socketio, sid=sid, event=event, data=data)
+        _log_runtime_event(runtime_store, event, data)
+        return result
 
     def emit_job_status(sid, job_type):
-        return emit_job_status_runtime(
+        result = emit_job_status_runtime(
             socketio=socketio,
             job_registry=job_registry,
             sid=sid,
             job_type=job_type,
         )
+        job = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="job",
+            level="INFO",
+            message=f"[{job_type}] {job.get('status', 'idle')}",
+            payload={
+                "job_type": job_type,
+                "status": job.get("status", "idle"),
+                "details": dict(job.get("details", {})),
+            },
+        )
+        return result
 
     def update_job_progress(
         sid,

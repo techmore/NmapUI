@@ -14,6 +14,7 @@
     };
     let logsTabInitialized = false;
     let persistedLogsLoaded = false;
+    let persistedRefreshTimer = null;
 
     function timestamp() {
         return new Date().toISOString().replace('T', ' ').slice(0, 23);
@@ -54,12 +55,21 @@
         if (!entry || !entry.message) {
             return;
         }
-        logCount += 1;
         logEntries.push({
             timestamp: entry.created_at || entry.timestamp || timestamp(),
-            level: entry.level || 'info',
+            level: String(entry.level || 'info').toLowerCase(),
             message: String(entry.message),
+            source: entry.source || 'persisted',
         });
+        logCount = logEntries.length;
+    }
+
+    function replacePersistedLogs(entries) {
+        const localEntries = logEntries.filter((entry) => entry.source !== 'persisted');
+        logEntries.length = 0;
+        localEntries.forEach((entry) => logEntries.push(entry));
+        entries.forEach((entry) => appendStructuredLog({ ...entry, source: 'persisted' }));
+        logCount = logEntries.length;
     }
 
     function updateCounts(visibleCount = logCount) {
@@ -174,24 +184,35 @@
             return;
         }
         persistedLogsLoaded = true;
+        refreshPersistedLogs();
+    }
+
+    function refreshPersistedLogs() {
         fetch('/api/runtime/logs?limit=200')
             .then((response) => response.json())
             .then((data) => {
                 const entries = Array.isArray(data?.entries) ? data.entries : [];
-                entries
-                    .slice()
-                    .reverse()
-                    .forEach((entry) => appendStructuredLog(entry));
+                replacePersistedLogs(entries.slice().reverse());
                 renderLogsTab();
             })
             .catch(() => {
             });
     }
 
+    function schedulePersistedLogRefresh() {
+        if (persistedRefreshTimer !== null) {
+            return;
+        }
+        persistedRefreshTimer = setTimeout(function () {
+            persistedRefreshTimer = null;
+            refreshPersistedLogs();
+        }, 300);
+    }
+
     function appendLog(level, message) {
-        logCount += 1;
-        const entry = { timestamp: timestamp(), level, message: String(message) };
+        const entry = { timestamp: timestamp(), level, message: String(message), source: 'local' };
         logEntries.push(entry);
+        logCount = logEntries.length;
 
         const container = document.getElementById('log-entries');
         if (!container) {
@@ -263,11 +284,7 @@
         }
 
         socket.on('scan_feedback', function (data) {
-            const message =
-                typeof data === 'string'
-                    ? data
-                    : `[${data.target || ''}] ${data.message || JSON.stringify(data)}`;
-            appendLog('scan', message);
+            schedulePersistedLogRefresh();
         });
         socket.on('scan_raw_output', function (data) {
             const lines = (data.output || '').split('\n');
@@ -278,25 +295,19 @@
             });
         });
         socket.on('job_status', function (data) {
-            if (!data?.job_type || !data?.status) {
-                return;
-            }
-            appendLog(
-                'job',
-                `[${data.job_type}] ${data.status}${data.details?.message ? ` - ${data.details.message}` : ''}`
-            );
+            schedulePersistedLogRefresh();
         });
         socket.on('report_complete', function (data) {
-            appendLog('report', `Report completed: ${data?.scan_dir || data?.path || 'unknown output'}`);
+            schedulePersistedLogRefresh();
         });
         socket.on('report_error', function (data) {
-            appendLog('error', `Report error: ${data?.error || JSON.stringify(data)}`);
+            schedulePersistedLogRefresh();
         });
         socket.on('update_status', function (data) {
-            appendLog('update', data?.message || JSON.stringify(data));
+            schedulePersistedLogRefresh();
         });
         socket.on('update_error', function (data) {
-            appendLog('error', `Update error: ${data?.message || JSON.stringify(data)}`);
+            schedulePersistedLogRefresh();
         });
         return true;
     }

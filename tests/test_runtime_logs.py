@@ -2,6 +2,7 @@ import subprocess
 
 from flask import Flask
 
+from nmapui.app_bindings import build_event_helpers
 from nmapui.handlers.routes import register_core_routes
 from nmapui.startup_checks import run_startup_checks
 from nmapui.traceroute import run_traceroute
@@ -133,3 +134,32 @@ def test_traceroute_appends_success_runtime_log():
 
     assert entries[-1]["message"] == "Traceroute completed and customer identified"
     assert entries[-1]["category"] == "topology"
+
+
+def test_event_helpers_persist_structured_runtime_logs():
+    entries = []
+
+    class RuntimeStoreStub:
+        def append_log(self, **kwargs):
+            entries.append(kwargs)
+            return len(entries)
+
+    class JobRegistryStub:
+        def get(self, sid, job_type):
+            return {"status": "running", "details": {"target": "192.168.222.0/24"}}
+
+    socketio = type("SocketStub", (), {"emit": lambda self, event, data=None, to=None: None})()
+    helpers = build_event_helpers(
+        socketio=socketio,
+        job_registry=JobRegistryStub(),
+        runtime_store=RuntimeStoreStub(),
+    )
+
+    helpers["emit_to_client"]("sid-1", "scan_feedback", "Running quick scan")
+    helpers["emit_job_status"]("sid-1", "scan")
+    helpers["emit_to_client"]("sid-1", "report_complete", {"path": "scan_report.pdf"})
+
+    assert [entry["category"] for entry in entries] == ["scan", "job", "report"]
+    assert entries[0]["message"] == "Running quick scan"
+    assert entries[1]["payload"]["job_type"] == "scan"
+    assert entries[2]["message"] == "Report generation completed"
