@@ -19,6 +19,12 @@ BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
 BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 HOST_ARCH="$(uname -m)"
+APP_VERSION="$(tr -d '\r\n' < "$ROOT_DIR/VERSION")"
+
+if [[ -z "$APP_VERSION" ]]; then
+    echo "ERROR: VERSION file is empty" >&2
+    exit 1
+fi
 
 if [[ -n "${NMAPUI_SWIFT_TARGET:-}" ]]; then
     SWIFT_TARGET="$NMAPUI_SWIFT_TARGET"
@@ -170,9 +176,9 @@ cat > "$APP_NAME/Contents/Info.plist" << EOF
     <key>CFBundleIdentifier</key>
     <string>com.techmore.nmapuimenubar</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>$APP_VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>$APP_VERSION</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSPrincipalClass</key>

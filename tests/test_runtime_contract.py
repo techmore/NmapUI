@@ -152,6 +152,8 @@ def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 
     assert 'PACKAGING_DIR="$ROOT_DIR/packaging/macos"' in build_script
+    assert 'APP_VERSION="$(tr -d \'\\r\\n\' < "$ROOT_DIR/VERSION")"' in build_script
+    assert 'echo "ERROR: VERSION file is empty" >&2' in build_script
     assert "ROOT_RUNTIME_PY=(" in build_script
     assert "customer_fingerprint_matcher.py" in build_script
     assert "customer_fingerprint_store.py" in build_script
@@ -168,6 +170,7 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'elif [[ "$HOST_ARCH" == "x86_64" ]]; then' in build_script
     assert 'SWIFT_TARGET="x86_64-apple-macosx13.0"' in build_script
     assert 'echo "Host architecture: $HOST_ARCH"' in build_script
+    assert "<string>$APP_VERSION</string>" in build_script
     assert 'echo "Target: $SWIFT_TARGET"' in build_script
     assert '  -target "$SWIFT_TARGET" \\' in build_script
     assert 'if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then' in build_script
