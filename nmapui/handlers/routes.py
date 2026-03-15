@@ -1,6 +1,7 @@
 from flask import jsonify, render_template, request
 from nmapui.auth import require_auth
 from nmapui.runtime_history import (
+    backfill_runtime_history_artifacts,
     build_compare_result,
     build_history_rows,
     normalize_runtime_report_row,
@@ -128,6 +129,18 @@ def register_core_routes(app, deps):
             logger=deps.get("logger"),
         )
         return jsonify({"history": history})
+
+    @app.route("/api/runtime/maintenance/backfill", methods=["POST"])
+    @require_auth
+    def runtime_backfill():
+        backfilled = backfill_runtime_history_artifacts(
+            runtime_store=runtime_store,
+            scans_dir=deps.get("scans_dir"),
+            load_json_document=deps.get("load_json_document"),
+            normalize_scan_metadata_document=deps.get("normalize_scan_metadata_document"),
+            logger=deps.get("logger"),
+        )
+        return jsonify({"success": True, "backfilled": backfilled})
 
     @app.route("/api/runtime/history/compare")
     @require_auth

@@ -247,11 +247,13 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert '@app.route("/api/runtime/logs")' in routes_source
     assert '@app.route("/api/runtime/reports")' in routes_source
     assert '@app.route("/api/runtime/history")' in routes_source
+    assert '@app.route("/api/runtime/maintenance/backfill", methods=["POST"])' in routes_source
     assert '@app.route("/api/runtime/history/compare")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
     assert "build_history_rows(" in routes_source
     assert "build_compare_result(" in routes_source
+    assert "backfill_runtime_history_artifacts(" in routes_source
     assert "iter_scan_metadata_documents(" in runtime_history_source
     assert "runtime_store.upsert_report_artifact(" in runtime_history_source
     assert "runtime_store.get_report_artifact(rel_path)" in runtime_history_source

@@ -269,6 +269,63 @@ def test_backfill_runtime_history_artifacts_populates_missing_runtime_rows(tmp_p
     assert runtime_calls[0]["pdf_path"] == "scan_report.pdf"
 
 
+def test_runtime_backfill_route_runs_authenticated_backfill(monkeypatch, tmp_path):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    scans_dir = tmp_path / "scans"
+    legacy_dir = scans_dir / "Legacy" / "2026-03-13" / "scan_010000_target"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    (legacy_dir / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Legacy","customer_id":"cust-legacy","target":"10.0.0.0/24","status":"failed"}'
+    )
+
+    runtime_calls = []
+
+    class RuntimeStoreStub:
+        def get_report_artifact(self, scan_path):
+            return None
+
+        def upsert_report_artifact(self, **kwargs):
+            runtime_calls.append(kwargs)
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "load_json_document": __import__("persistence").load_json_document,
+            "normalize_scan_metadata_document": __import__("persistence").normalize_scan_metadata_document,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "runtime_store": RuntimeStoreStub(),
+            "scans_dir": scans_dir,
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+            "logger": app.logger,
+        },
+    )
+
+    client = app.test_client()
+    response = client.post(
+        "/api/runtime/maintenance/backfill",
+        headers={"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"success": True, "backfilled": 1}
+    assert runtime_calls[0]["scan_path"] == "Legacy/2026-03-13/scan_010000_target"
+
+
 def test_runtime_history_compare_prefers_runtime_artifact_payloads(monkeypatch):
     monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
     monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
