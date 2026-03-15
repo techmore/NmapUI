@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from pathlib import Path
 
@@ -25,6 +25,57 @@ DEFAULT_AUTO_SCAN_CONFIG = {
 }
 
 AUTO_SCAN_ALLOWED_KEYS = {"enabled", "start_time", "end_time", "last_run"}
+
+
+def _parse_time_of_day(value: str) -> tuple[int, int]:
+    hour_text, minute_text = str(value or "00:00").split(":", 1)
+    return int(hour_text), int(minute_text)
+
+
+def get_next_auto_scan_run(config: dict, *, now: datetime | None = None) -> datetime | None:
+    """Return the next scheduled scan start time for the current auto-scan config."""
+    if not isinstance(config, dict) or not config.get("enabled"):
+        return None
+
+    now = now or datetime.now()
+    start_hour, start_minute = _parse_time_of_day(str(config.get("start_time") or "01:00"))
+    end_hour, end_minute = _parse_time_of_day(str(config.get("end_time") or "06:00"))
+
+    start_today = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+    end_today = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+    if start_today <= end_today:
+        within_window = start_today <= now <= end_today
+    else:
+        within_window = now >= start_today or now <= end_today
+
+    if within_window:
+        return start_today + timedelta(days=1)
+    if now <= start_today:
+        return start_today
+    return start_today + timedelta(days=1)
+
+
+def build_auto_scan_status_payload(
+    config: dict,
+    *,
+    now: datetime | None = None,
+    warning_window_seconds: int = 2 * 60 * 60,
+) -> dict:
+    """Return the canonical auto-scan status payload for API and Socket.IO clients."""
+    payload = dict(config or {})
+    next_run = get_next_auto_scan_run(payload, now=now)
+    if next_run is None:
+        payload["next_run"] = None
+        payload["seconds_until_next_run"] = None
+        payload["warning_active"] = False
+        return payload
+
+    now = now or datetime.now()
+    seconds_until_next_run = max(int((next_run - now).total_seconds()), 0)
+    payload["next_run"] = next_run.isoformat()
+    payload["seconds_until_next_run"] = seconds_until_next_run
+    payload["warning_active"] = 0 < seconds_until_next_run <= warning_window_seconds
+    return payload
 
 
 def load_auto_scan_config(target_config: dict) -> None:

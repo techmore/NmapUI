@@ -8,6 +8,8 @@ from flask_socketio import SocketIO
 
 from nmapui.auto_scan import (
     DEFAULT_AUTO_SCAN_CONFIG,
+    build_auto_scan_status_payload,
+    get_next_auto_scan_run,
     should_run_auto_scan,
     validate_auto_scan_config_update,
 )
@@ -79,6 +81,29 @@ def test_should_run_auto_scan_respects_startup_grace_period():
         )
         is False
     )
+
+
+def test_get_next_auto_scan_run_returns_today_before_window():
+    config = dict(DEFAULT_AUTO_SCAN_CONFIG)
+    config.update({"enabled": True, "start_time": "09:00", "end_time": "17:00"})
+
+    next_run = get_next_auto_scan_run(config, now=datetime(2026, 3, 14, 8, 15))
+
+    assert next_run == datetime(2026, 3, 14, 9, 0)
+
+
+def test_build_auto_scan_status_payload_marks_two_hour_warning_window():
+    config = dict(DEFAULT_AUTO_SCAN_CONFIG)
+    config.update({"enabled": True, "start_time": "09:00", "end_time": "17:00"})
+
+    payload = build_auto_scan_status_payload(
+        config,
+        now=datetime(2026, 3, 14, 7, 30),
+    )
+
+    assert payload["next_run"] == "2026-03-14T09:00:00"
+    assert payload["seconds_until_next_run"] == 5400
+    assert payload["warning_active"] is True
 
 
 def test_validate_auto_scan_config_rejects_invalid_socket_payload():

@@ -4,7 +4,10 @@ import threading
 from flask import jsonify, request
 from flask_socketio import emit
 
-from nmapui.auto_scan import validate_auto_scan_config_update as default_validate_auto_scan_config_update
+from nmapui.auto_scan import (
+    build_auto_scan_status_payload,
+    validate_auto_scan_config_update as default_validate_auto_scan_config_update,
+)
 from nmapui.auth import require_auth, require_socket_auth
 from nmapui.paths import AUTO_SCAN_SCHEDULER_LOCK_FILE
 
@@ -33,13 +36,13 @@ def register_auto_scan_handlers(app, socketio, deps):
 
         auto_scan_config.update(data)
         save_auto_scan_config(auto_scan_config)
-        emit("auto_scan_status", auto_scan_config, broadcast=True)
+        emit("auto_scan_status", build_auto_scan_status_payload(auto_scan_config), broadcast=True)
         logger.info("Auto scan updated: %s", auto_scan_config)
 
     @app.route("/api/auto_scan/status")
     @require_auth
     def get_auto_scan_status():
-        return jsonify(auto_scan_config)
+        return jsonify(build_auto_scan_status_payload(auto_scan_config))
 
     @app.route("/api/auto_scan/update", methods=["POST"])
     @require_auth

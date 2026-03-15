@@ -1,4 +1,5 @@
 from flask import request
+from nmapui.auto_scan import build_auto_scan_status_payload
 
 
 def _load_persisted_source_state(runtime_store):
@@ -97,7 +98,7 @@ def register_connection_handlers(socketio, deps):
             {"last_scan_target": source_state.get("last_scan_target")},
         )
         if auto_scan_config is not None:
-            emit_to_client(new_sid, "auto_scan_status", auto_scan_config)
+            emit_to_client(new_sid, "auto_scan_status", build_auto_scan_status_payload(auto_scan_config))
 
         if owner_sid is None:
             persisted_job = _load_persisted_active_job(runtime_store)

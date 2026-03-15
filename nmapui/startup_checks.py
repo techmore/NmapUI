@@ -122,7 +122,7 @@ def run_startup_checks(deps, quick=False):
 
     tool_versions.set_version("app", get_app_version())
     safe_emit("versions", get_versions())
-    safe_emit("auto_scan_status", auto_scan_config)
+    safe_emit("auto_scan_status", build_auto_scan_status_payload(auto_scan_config))
     append_runtime_log(
         runtime_store=runtime_store,
         category="startup",
@@ -130,3 +130,4 @@ def run_startup_checks(deps, quick=False):
         message="Startup checks completed",
         payload={"dependencies_ok": startup_state.get("dependencies_ok", False)},
     )
+from nmapui.auto_scan import build_auto_scan_status_payload

@@ -4,6 +4,70 @@ let autoScanEndTime = '06:00';
 let autoScanSocket = null;
 let autoScanGetClientJobs = () => ({ report: { status: 'idle' } });
 let autoScanGetLastScanTarget = () => '';
+let autoScanWarningInterval = null;
+
+function formatCountdown(totalSeconds) {
+    const seconds = Math.max(0, Number(totalSeconds) || 0);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+    return [
+        String(hours).padStart(2, '0'),
+        String(minutes).padStart(2, '0'),
+        String(remainingSeconds).padStart(2, '0'),
+    ].join(':');
+}
+
+function stopAutoScanWarningTimer() {
+    if (autoScanWarningInterval) {
+        clearInterval(autoScanWarningInterval);
+        autoScanWarningInterval = null;
+    }
+}
+
+function hideAutoScanWarning() {
+    stopAutoScanWarningTimer();
+    document.getElementById('auto-scan-warning-banner')?.classList.add('hidden');
+}
+
+function renderAutoScanWarning(status) {
+    const banner = document.getElementById('auto-scan-warning-banner');
+    const countdown = document.getElementById('auto-scan-warning-countdown');
+    const nextRun = document.getElementById('auto-scan-warning-next-run');
+    if (!banner || !countdown || !nextRun) {
+        return;
+    }
+
+    if (!status?.warning_active || !status?.next_run) {
+        hideAutoScanWarning();
+        return;
+    }
+
+    const nextRunDate = new Date(status.next_run);
+    if (Number.isNaN(nextRunDate.getTime())) {
+        hideAutoScanWarning();
+        return;
+    }
+
+    const renderTick = () => {
+        const secondsUntilNextRun = Math.max(
+            Math.floor((nextRunDate.getTime() - Date.now()) / 1000),
+            0,
+        );
+        if (secondsUntilNextRun <= 0) {
+            hideAutoScanWarning();
+            return;
+        }
+
+        banner.classList.remove('hidden');
+        countdown.textContent = formatCountdown(secondsUntilNextRun);
+        nextRun.textContent = `Next run ${nextRunDate.toLocaleString()}`;
+    };
+
+    stopAutoScanWarningTimer();
+    renderTick();
+    autoScanWarningInterval = setInterval(renderTick, 1000);
+}
 
 function showAutoScanTimeModal() {
     const modal = document.getElementById('auto-scan-modal');
@@ -129,6 +193,8 @@ function initializeAutoScanUI(socket, deps) {
         } else {
             updateAutoScanWindow(autoScanStartTime, autoScanEndTime, false);
         }
+
+        renderAutoScanWarning(status);
     });
 
     socket.on('auto_scan_error', function(data) {

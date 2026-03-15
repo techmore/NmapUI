@@ -239,6 +239,25 @@ def test_runtime_backfill_admin_script_exists():
     assert "scripts/backfill_runtime_store.py" in readme_source
 
 
+def test_auto_scan_warning_contract_is_runtime_backed():
+    auto_scan_source = (ROOT / "nmapui" / "auto_scan.py").read_text()
+    auto_scan_handler_source = (ROOT / "nmapui" / "handlers" / "auto_scan.py").read_text()
+    connection_source = (ROOT / "nmapui" / "handlers" / "connections.py").read_text()
+    startup_checks_source = (ROOT / "nmapui" / "startup_checks.py").read_text()
+    template = (ROOT / "templates" / "index.html").read_text()
+
+    assert "def get_next_auto_scan_run(" in auto_scan_source
+    assert "def build_auto_scan_status_payload(" in auto_scan_source
+    assert 'payload["next_run"] = next_run.isoformat()' in auto_scan_source
+    assert 'payload["warning_active"] = 0 < seconds_until_next_run <= warning_window_seconds' in auto_scan_source
+    assert "build_auto_scan_status_payload(auto_scan_config)" in auto_scan_handler_source
+    assert "build_auto_scan_status_payload(auto_scan_config)" in connection_source
+    assert "build_auto_scan_status_payload(auto_scan_config)" in startup_checks_source
+    assert 'id="auto-scan-warning-banner"' in template
+    assert 'id="auto-scan-warning-next-run"' in template
+    assert 'id="auto-scan-warning-countdown"' in template
+
+
 def test_runtime_logs_route_and_ui_hydration_exist():
     routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
     audit_log_source = (ROOT / "static" / "js" / "audit_log.js").read_text()
@@ -1091,6 +1110,10 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "let getClientJobs = null;" not in auto_scan_module
     assert "let autoScanGetClientJobs =" in auto_scan_module
     assert "autoScanGetClientJobs = deps?.getClientJobs || window.getClientJobs || autoScanGetClientJobs;" in auto_scan_module
+    assert "let autoScanWarningInterval = null;" in auto_scan_module
+    assert "function renderAutoScanWarning(status)" in auto_scan_module
+    assert "socket.on('auto_scan_status', function(status) {" in auto_scan_module
+    assert "renderAutoScanWarning(status);" in auto_scan_module
     assert "function initializeUpdateModal(socket, deps = {})" in update_modal_module
     assert "const showReportStatus =" in update_modal_module
     assert 'const version = document.getElementById("update-version");' in update_modal_module

@@ -801,7 +801,15 @@ def test_auto_scan_routes_allow_authorized_access(monkeypatch):
     response = client.get("/api/auto_scan/status", headers=basic_auth_header())
 
     assert response.status_code == 200
-    assert response.get_json()["enabled"] is False
+    assert response.get_json() == {
+        "enabled": False,
+        "start_time": "01:00",
+        "end_time": "03:00",
+        "last_run": None,
+        "next_run": None,
+        "seconds_until_next_run": None,
+        "warning_active": False,
+    }
 
 
 def test_settings_routes_require_http_basic_auth(monkeypatch):
