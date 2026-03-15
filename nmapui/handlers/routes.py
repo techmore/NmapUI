@@ -130,6 +130,7 @@ def register_core_routes(app, deps):
                 "remote_sync_enabled": bool(
                     (sync.get("remote_sync") or {}).get("enabled", False)
                 ),
+                "tool_versions": get_versions(),
                 "maintenance_backfill": maintenance_backfill,
                 "persisted_counts": persisted_counts,
             }

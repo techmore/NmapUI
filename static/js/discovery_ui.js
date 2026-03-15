@@ -461,9 +461,12 @@ function initializeDiscoveryUI(socket) {
         const appVersion = data.app || 'v--.--.--.__';
 
         document.getElementById('app-version').textContent = appVersion;
-        document.getElementById('nmap-version').textContent = `Nmap: ${nmapVersion}`;
-        document.getElementById('vulners-version').textContent = `Vulners: ${vulnersVersion}`;
-        document.getElementById('arpscan-version').textContent = `ARP-Scan: ${arpScanVersion}`;
+        const settingsNmapVersion = document.getElementById('settings-nmap-version');
+        const settingsVulnersVersion = document.getElementById('settings-vulners-version');
+        const settingsArpScanVersion = document.getElementById('settings-arpscan-version');
+        if (settingsNmapVersion) settingsNmapVersion.textContent = `Nmap: ${nmapVersion}`;
+        if (settingsVulnersVersion) settingsVulnersVersion.textContent = `Vulners: ${vulnersVersion}`;
+        if (settingsArpScanVersion) settingsArpScanVersion.textContent = `ARP-Scan: ${arpScanVersion}`;
         socket.emit('check_app_updates');
     });
 

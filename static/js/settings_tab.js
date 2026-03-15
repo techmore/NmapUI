@@ -105,6 +105,14 @@ function renderRuntimeSummary(summary) {
         card.innerHTML = `<div class="text-xs font-bold uppercase tracking-widest text-olive-500">${label}</div><div class="mt-1 text-lg font-semibold text-olive-900">${value}</div>`;
         container.appendChild(card);
     });
+
+    const toolVersions = summary.tool_versions || {};
+    const settingsNmapVersion = document.getElementById('settings-nmap-version');
+    const settingsVulnersVersion = document.getElementById('settings-vulners-version');
+    const settingsArpScanVersion = document.getElementById('settings-arpscan-version');
+    if (settingsNmapVersion) settingsNmapVersion.textContent = `Nmap: ${toolVersions.nmap || 'Not found'}`;
+    if (settingsVulnersVersion) settingsVulnersVersion.textContent = `Vulners: ${toolVersions.vulners || 'Not found'}`;
+    if (settingsArpScanVersion) settingsArpScanVersion.textContent = `ARP-Scan: ${toolVersions.arp_scan || 'Not found'}`;
 }
 
 function setSyncStatus(elementId, message, isError = false) {

@@ -95,6 +95,15 @@ def test_template_uses_shared_scan_display_modules():
     assert "window.loadHostsFromStorage = loadHostsFromStorage;" in discovery_source
     assert "window.showHistoricalDataBanner = showHistoricalDataBanner;" in banner_source
     assert "window.showScanSummaryBanner = showScanSummaryBanner;" in banner_source
+    assert 'id="settings-nmap-version"' in html
+    assert 'id="settings-vulners-version"' in html
+    assert 'id="settings-arpscan-version"' in html
+    assert 'id="nmap-version"' not in html
+    assert 'id="vulners-version"' not in html
+    assert 'id="arpscan-version"' not in html
+    assert "settingsNmapVersion.textContent" in discovery_source
+    assert "settingsVulnersVersion.textContent" in discovery_source
+    assert "settingsArpScanVersion.textContent" in discovery_source
 
 
 def test_template_uses_shared_customer_ui_module():
@@ -166,6 +175,13 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
     assert 'PLAYWRIGHT_BROWSERS_PATH="$BUNDLE_PLAYWRIGHT_BROWSERS" python -m playwright install chromium' in build_script
     assert 'export PLAYWRIGHT_BROWSERS_PATH="$(pwd)/playwright-browsers"' in build_script
+    assert "VULNERS_RUNTIME_FILES=(" in build_script
+    assert "nmap-vulners/vulners.nse" in build_script
+    assert "nmap-vulners/http-vulners-regex.nse" in build_script
+    assert "nmap-vulners/http-vulners-regex.json" in build_script
+    assert "nmap-vulners/http-vulners-paths.txt" in build_script
+    assert "nmap-vulners/vulners_enterprise.nse" not in build_script
+    assert "  nmap-vulners \\" not in build_script
 
 
 def test_wrapper_docs_reference_current_local_port():
@@ -189,6 +205,21 @@ def test_pyinstaller_spec_includes_runtime_assets():
     assert "'geventwebsocket'" not in spec
     assert "'weasyprint'" not in spec
     assert "'LSMinimumSystemVersion': '13.0'" in spec
+    assert "vulners_runtime_files = [" in spec
+    assert "vulners.nse" in spec
+    assert "http-vulners-regex.nse" in spec
+    assert "http-vulners-regex.json" in spec
+    assert "http-vulners-paths.txt" in spec
+    assert "vulners_enterprise.nse" not in spec
+
+
+def test_bundle_audit_guide_documents_runtime_asset_choice():
+    guide = (ROOT / "docs" / "guides" / "BUNDLE_AUDIT.md").read_text()
+
+    assert "vulners.nse" in guide
+    assert "http-vulners-regex.nse" in guide
+    assert "vulners_enterprise.nse" in guide
+    assert "Settings tab runtime summary" in guide
 
 
 def test_runtime_uses_separate_web_and_pdf_stylesheets():

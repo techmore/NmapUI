@@ -74,7 +74,7 @@ def test_runtime_settings_summary_reports_settings_state():
             "build_readiness_payload": lambda **kwargs: ({"ok": True}, 200),
             "get_app_version": lambda: "v1",
             "get_default_interface_cached": lambda: "en0",
-            "get_versions": lambda: {"app": "v1"},
+            "get_versions": lambda: {"app": "v1", "nmap": "7.95", "vulners": "runtime-only", "arp_scan": "1.10"},
             "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
             "runtime_store": RuntimeStoreStub(),
             "settings_state": {
@@ -99,6 +99,12 @@ def test_runtime_settings_summary_reports_settings_state():
         "target_profiles_count": 1,
         "google_drive_enabled": True,
         "remote_sync_enabled": False,
+        "tool_versions": {
+            "app": "v1",
+            "nmap": "7.95",
+            "vulners": "runtime-only",
+            "arp_scan": "1.10",
+        },
         "maintenance_backfill": {},
         "persisted_counts": {
             "report_artifacts": 4,

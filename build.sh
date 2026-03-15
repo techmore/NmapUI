@@ -94,12 +94,19 @@ ROOT_RUNTIME_PY=(
   customer_fingerprint_store.py
   persistence.py
 )
+VULNERS_RUNTIME_FILES=(
+  nmap-vulners/LICENSE
+  nmap-vulners/vulners.nse
+  nmap-vulners/http-vulners-regex.nse
+  nmap-vulners/http-vulners-regex.json
+  nmap-vulners/http-vulners-paths.txt
+)
 tar -cf - \
   "${ROOT_RUNTIME_PY[@]}" \
+  "${VULNERS_RUNTIME_FILES[@]}" \
   nmapui \
   templates \
   static \
-  nmap-vulners \
   scripts \
   config \
   requirements.txt \

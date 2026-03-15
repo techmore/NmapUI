@@ -6,6 +6,13 @@ from pathlib import Path
 # depend on the caller's current working directory.
 spec_dir = Path(__file__).resolve().parent
 project_root = spec_dir.parents[1]
+vulners_runtime_files = [
+    (str(project_root / 'nmap-vulners' / 'LICENSE'), 'nmap-vulners'),
+    (str(project_root / 'nmap-vulners' / 'vulners.nse'), 'nmap-vulners'),
+    (str(project_root / 'nmap-vulners' / 'http-vulners-regex.nse'), 'nmap-vulners'),
+    (str(project_root / 'nmap-vulners' / 'http-vulners-regex.json'), 'nmap-vulners'),
+    (str(project_root / 'nmap-vulners' / 'http-vulners-paths.txt'), 'nmap-vulners'),
+]
 
 # Read version from VERSION file
 version_file = project_root / "VERSION"
@@ -27,8 +34,8 @@ a = Analysis(
         (str(project_root / 'VERSION'), '.'),
         (str(project_root / 'nmap-modern.xsl'), '.'),
         (str(project_root / 'nmap-pdf-olive-legacy.xsl'), '.'),
-        # Include nmap-vulners script if present
-        (str(project_root / 'nmap-vulners'), 'nmap-vulners'),
+        # Include only the vulners runtime files required by the supported workflow
+        *vulners_runtime_files,
     ],
     hiddenimports=[
         'engineio.async_drivers.threading',
