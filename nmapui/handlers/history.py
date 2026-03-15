@@ -19,6 +19,7 @@ def register_history_handlers(socketio, deps):
     rate_limiter = deps.get("rate_limiter")
     broadcaster = deps.get("broadcaster")
     logger = deps["logger"]
+    runtime_store = deps.get("runtime_store")
 
     @socketio.on("check_resumable_scan")
     @require_socket_auth()
@@ -36,6 +37,7 @@ def register_history_handlers(socketio, deps):
             scans_dir=scans_dir,
             sanitize_customer_dir_name=sanitize_customer_dir_name,
             max_days=max_days,
+            runtime_store=runtime_store,
         )
 
         if xml_path and metadata:
@@ -77,6 +79,7 @@ def register_history_handlers(socketio, deps):
             scans_dir=scans_dir,
             sanitize_customer_dir_name=sanitize_customer_dir_name,
             max_days=max_days,
+            runtime_store=runtime_store,
         )
 
         if not xml_path:

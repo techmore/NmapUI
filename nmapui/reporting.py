@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from html import escape
 import io
 import logging
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -26,6 +27,17 @@ logger = logging.getLogger(__name__)
 
 def _get_scans_dir_for_scan(scan_dir):
     return scan_dir.parents[2]
+
+
+def _resolve_artifact_file_path(*, scans_dir, scan_path, stored_path, default_name):
+    if stored_path:
+        candidate = Path(str(stored_path))
+        if candidate.is_absolute():
+            return candidate
+        if candidate.name != str(stored_path):
+            return scans_dir / candidate
+        return scans_dir / scan_path / candidate.name
+    return scans_dir / scan_path / default_name
 
 
 def _normalize_asset_ports(asset):
@@ -943,6 +955,7 @@ def get_most_recent_scan_xml(
     scans_dir,
     sanitize_customer_dir_name,
     max_days=7,
+    runtime_store=None,
 ):
     """Find the most recent scan XML file for a customer within max_days."""
     customer = next(
@@ -953,6 +966,41 @@ def get_most_recent_scan_xml(
 
     cutoff_date = datetime.now() - timedelta(days=max_days)
     recent_scans = []
+    if runtime_store is not None:
+        for artifact in runtime_store.list_report_artifacts(customer_id=customer_id):
+            payload = dict(artifact.get("payload", {}) or {})
+            scan_time_str = payload.get("timestamp", "")
+            if not scan_time_str:
+                continue
+            try:
+                scan_time = datetime.fromisoformat(scan_time_str)
+            except ValueError as exc:
+                logger.warning(
+                    "Failed to parse persisted scan timestamp for %s: %s",
+                    artifact.get("scan_path"),
+                    exc,
+                )
+                continue
+            if scan_time < cutoff_date:
+                continue
+
+            xml_path = _resolve_artifact_file_path(
+                scans_dir=scans_dir,
+                scan_path=str(artifact.get("scan_path", "") or ""),
+                stored_path=artifact.get("xml_path"),
+                default_name="scan.xml",
+            )
+            if not xml_path.exists():
+                continue
+
+            recent_scans.append(
+                {
+                    "xml_path": xml_path,
+                    "metadata": normalize_scan_metadata_document(payload),
+                    "scan_time": scan_time,
+                }
+            )
+
     for metadata_file, metadata in iter_scan_metadata_documents(
         scans_dir,
         load_json_document,
@@ -1060,9 +1108,49 @@ def find_latest_saved_scan_for_pdf(
     normalize_scan_metadata_document,
     max_days=30,
     customer_id=None,
+    runtime_store=None,
 ):
     cutoff_date = datetime.now() - timedelta(days=max_days)
     matches = []
+
+    if runtime_store is not None:
+        artifacts = (
+            runtime_store.list_report_artifacts(customer_id=customer_id)
+            if customer_id
+            else runtime_store.list_report_artifacts()
+        )
+        for artifact in artifacts:
+            payload = dict(artifact.get("payload", {}) or {})
+            timestamp = payload.get("timestamp")
+            if not timestamp or payload.get("target") != target:
+                continue
+
+            try:
+                scan_time = datetime.fromisoformat(timestamp)
+            except ValueError:
+                continue
+
+            if scan_time < cutoff_date:
+                continue
+
+            metadata_customer_id = payload.get("customer_id") or str(
+                payload.get("customer_info", {}).get("id", "") or ""
+            )
+            if customer_id and metadata_customer_id and metadata_customer_id != customer_id:
+                continue
+
+            scan_path = str(artifact.get("scan_path", "") or "")
+            scan_dir = scans_dir / scan_path
+            xml_file = _resolve_artifact_file_path(
+                scans_dir=scans_dir,
+                scan_path=scan_path,
+                stored_path=artifact.get("xml_path"),
+                default_name="scan.xml",
+            )
+            if not xml_file.exists():
+                continue
+
+            matches.append((scan_time, scan_dir, xml_file))
 
     for metadata_file, metadata in iter_scan_metadata_documents(
         scans_dir,

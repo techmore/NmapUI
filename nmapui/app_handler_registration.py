@@ -101,6 +101,7 @@ def register_app_handlers(
             broadcaster=broadcaster,
             release_client_state=release_client_state,
             logger=logger,
+            runtime_store=runtime_store,
         ),
         update_handler_deps=build_update_handler_deps(
             check_for_updates=check_for_updates,

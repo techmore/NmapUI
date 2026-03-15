@@ -168,6 +168,7 @@ def build_task_bindings(
                     scans_dir=scans_dir,
                     load_json_document=load_json_document,
                     normalize_scan_metadata_document=normalize_scan_metadata_document,
+                    runtime_store=runtime_store,
                     **kwargs,
                 ),
                 convert_xml_to_html=convert_xml_to_html,

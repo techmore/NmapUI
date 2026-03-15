@@ -276,6 +276,23 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     assert 'base_assets = base_metadata.get("asset_snapshot")' in scans_source
 
 
+def test_history_and_saved_pdf_lookups_accept_runtime_store():
+    reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
+    history_source = (ROOT / "nmapui" / "handlers" / "history.py").read_text()
+    task_bindings_source = (ROOT / "nmapui" / "app_task_bindings.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
+
+    assert "def _resolve_artifact_file_path(*, scans_dir, scan_path, stored_path, default_name):" in reporting_source
+    assert "def get_most_recent_scan_xml(" in reporting_source
+    assert "runtime_store=None" in reporting_source
+    assert "runtime_store.list_report_artifacts(customer_id=customer_id)" in reporting_source
+    assert "def find_latest_saved_scan_for_pdf(" in reporting_source
+    assert "runtime_store=runtime_store" in task_bindings_source
+    assert '"runtime_store": runtime_store' in app_composition_source
+    assert "runtime_store = deps.get(\"runtime_store\")" in history_source
+    assert "runtime_store=runtime_store," in history_source
+
+
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
     pdf_stylesheet = (ROOT / "nmap-pdf-olive-legacy.xsl").read_text()
     web_stylesheet = (ROOT / "nmap-modern.xsl").read_text()

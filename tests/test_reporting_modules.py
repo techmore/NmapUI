@@ -348,6 +348,40 @@ def test_get_most_recent_scan_xml_ignores_invalid_metadata_files(tmp_path):
     assert metadata["customer_id"] == "cust-123"
 
 
+def test_get_most_recent_scan_xml_prefers_runtime_artifacts(tmp_path):
+    scans_dir = tmp_path / "data" / "scans"
+    artifact_dir = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "scan.xml").write_text("<nmaprun/>")
+
+    class RuntimeStoreStub:
+        def list_report_artifacts(self, customer_id=None):
+            assert customer_id == "cust-123"
+            return [
+                {
+                    "scan_path": "Acme/2026-03-14/scan_020000_target",
+                    "xml_path": str(artifact_dir / "scan.xml"),
+                    "payload": {
+                        "customer_id": "cust-123",
+                        "customer_name": "Acme Customer",
+                        "timestamp": "2026-03-14T02:00:00",
+                    },
+                }
+            ]
+
+    xml_path, metadata = get_most_recent_scan_xml(
+        "cust-123",
+        customers=[{"id": "cust-123", "name": "Acme Customer"}],
+        scans_dir=scans_dir,
+        sanitize_customer_dir_name=lambda value: value.replace(" ", "_"),
+        max_days=30,
+        runtime_store=RuntimeStoreStub(),
+    )
+
+    assert xml_path == artifact_dir / "scan.xml"
+    assert metadata["customer_id"] == "cust-123"
+
+
 def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
     scan_dir = tmp_path / "data" / "scans" / "Acme" / "2026-03-14" / "scan_010000_target"
     scan_dir.mkdir(parents=True)
@@ -446,6 +480,41 @@ def test_find_latest_saved_scan_for_pdf_prefers_latest_matching_customer(tmp_pat
 
     assert scan_dir == newer
     assert xml_path == newer / "scan.xml"
+
+
+def test_find_latest_saved_scan_for_pdf_prefers_runtime_artifacts(tmp_path):
+    scans_dir = tmp_path / "data" / "scans"
+    artifact_dir = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "scan.xml").write_text("<nmaprun/>")
+
+    class RuntimeStoreStub:
+        def list_report_artifacts(self, customer_id=None):
+            assert customer_id == "cust-123"
+            return [
+                {
+                    "scan_path": "Acme/2026-03-14/scan_020000_target",
+                    "xml_path": str(artifact_dir / "scan.xml"),
+                    "payload": {
+                        "target": "192.168.1.0/24",
+                        "customer_id": "cust-123",
+                        "timestamp": "2026-03-14T02:00:00",
+                    },
+                }
+            ]
+
+    scan_dir, xml_path = find_latest_saved_scan_for_pdf(
+        "192.168.1.0/24",
+        scans_dir=scans_dir,
+        load_json_document=lambda path, default: json.loads(path.read_text()),
+        normalize_scan_metadata_document=lambda value: value,
+        customer_id="cust-123",
+        max_days=30,
+        runtime_store=RuntimeStoreStub(),
+    )
+
+    assert scan_dir == artifact_dir
+    assert xml_path == artifact_dir / "scan.xml"
 
 
 def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):

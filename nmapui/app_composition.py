@@ -268,6 +268,7 @@ def build_history_handler_deps(
     broadcaster,
     release_client_state,
     logger,
+    runtime_store,
 ):
     return {
         "get_most_recent_scan_xml": get_most_recent_scan_xml,
@@ -283,6 +284,7 @@ def build_history_handler_deps(
         "broadcaster": broadcaster,
         "release_client_state": release_client_state,
         "logger": logger,
+        "runtime_store": runtime_store,
     }
 
 
