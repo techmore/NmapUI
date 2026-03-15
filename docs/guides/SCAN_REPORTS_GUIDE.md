@@ -100,31 +100,40 @@ Each scan in the history shows:
 
 ## API Endpoints
 
-For programmatic access:
+For programmatic access, the runtime-backed APIs are the primary read surface:
 
-### Get All Scans
+### Get Report List
 ```
-GET /api/scans
+GET /api/runtime/reports
 ```
-Returns JSON array of all saved scans with metadata
+Returns completed report rows from the SQLite runtime store.
+
+### Get History List
+```
+GET /api/runtime/history
+```
+Returns history rows, with runtime-store data preferred and legacy metadata fallback when needed.
 
 ### View HTML Report
 ```
-GET /api/scans/<customer>/<date>/<scan_name>/html
+GET /api/runtime/reports/<customer>/<date>/<scan_name>/html
 ```
-Serves the HTML report file
+Serves the HTML report file for a persisted runtime artifact.
 
 ### Download PDF Report
 ```
-GET /api/scans/<customer>/<date>/<scan_name>/pdf
+GET /api/runtime/reports/<customer>/<date>/<scan_name>/pdf
 ```
-Downloads the PDF report file
+Downloads the PDF report file for a persisted runtime artifact.
 
-### Delete Scan
+### Delete History Entry / Scan
 ```
-DELETE /api/scans/<customer>/<date>/<scan_name>
+DELETE /api/runtime/history/<customer>/<date>/<scan_name>
 ```
-Deletes the entire scan folder
+Deletes the scan folder and removes the matching runtime-store artifact row.
+
+### Legacy Compatibility Endpoints
+The older `/api/scans` endpoints still exist as compatibility shims, but the UI now reads from the runtime-backed `/api/runtime/...` routes above.
 
 ## SocketIO Events
 
@@ -243,11 +252,11 @@ cmd = [
 Use the API endpoints to integrate scan reports into your CI/CD pipeline:
 
 ```bash
-# List available scans
-curl http://127.0.0.1:9000/api/scans
+# List runtime-backed reports
+curl http://127.0.0.1:9000/api/runtime/reports
 
 # Download a saved PDF
-curl -o report.pdf http://127.0.0.1:9000/api/scans/CI_Pipeline/2026-01-08/scan_143022_192.168.1.0_24/pdf
+curl -o report.pdf http://127.0.0.1:9000/api/runtime/reports/CI_Pipeline/2026-01-08/scan_143022_192.168.1.0_24/pdf
 ```
 
 ## Tips & Best Practices

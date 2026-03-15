@@ -509,6 +509,7 @@ def test_socket_event_docs_match_current_runtime_contract():
     assert "`update_error` | `S -> C` | `{ message }`" in docs
     assert "`client_state_snapshot` | `S -> C` | `{ last_scan_target?: string }`" in docs
     assert "`update_complete` | `S -> C` | `{ message }`" in docs
+    assert "`file_updated` | `S -> C` | `{ file, action }` for persisted storage updates such as `data/runtime.sqlite3`" in docs
     assert "`scan_results` is intentionally overloaded" in docs
 
     assert '"local_ip": local_ip' in runtime_info
@@ -517,6 +518,18 @@ def test_socket_event_docs_match_current_runtime_contract():
     assert 'emit("update_error", {"message":' in updates
     assert '"client_state_snapshot"' in connections
     assert '@socketio.on("generate_pdf_from_saved")' in scan_jobs
+    assert '"file": "data/runtime.sqlite3"' in (ROOT / "nmapui" / "traceroute.py").read_text()
+
+
+def test_scan_reports_guide_prefers_runtime_apis():
+    guide = (ROOT / "docs" / "guides" / "SCAN_REPORTS_GUIDE.md").read_text()
+
+    assert "GET /api/runtime/reports" in guide
+    assert "GET /api/runtime/history" in guide
+    assert "GET /api/runtime/reports/<customer>/<date>/<scan_name>/html" in guide
+    assert "GET /api/runtime/reports/<customer>/<date>/<scan_name>/pdf" in guide
+    assert "DELETE /api/runtime/history/<customer>/<date>/<scan_name>" in guide
+    assert "The older `/api/scans` endpoints still exist as compatibility shims" in guide
 
 
 def test_update_runtime_uses_manual_download_contract():

@@ -58,7 +58,7 @@ Notes:
 | `report_assigned` | `S -> C` | `{ success, report_path, customer_id, customer_name, message }` |
 | `add_labeled_public_ip` | `C -> S` | `{ customer_id, label, ip_address }` |
 | `labeled_ip_added` | `S -> C` | `{ success, customer_id, label, ip_address, message }` |
-| `file_updated` | `S -> C` | `{ file, action }` |
+| `file_updated` | `S -> C` | `{ file, action }` for persisted storage updates such as `data/runtime.sqlite3` |
 | `get_network_statistics` | `C -> S` | none |
 | `network_statistics` | `S -> C` | `{ total_scans, unique_customers, most_common_customer, average_confidence, recent_scans }` |
 

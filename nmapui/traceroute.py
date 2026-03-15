@@ -191,7 +191,7 @@ def run_traceroute(target="1.1.1.1", *, sid=None, deps):
         )
 
         emit_customer_event(
-            "file_updated", {"file": "data/scan_history.json", "action": "saved"}
+            "file_updated", {"file": "data/runtime.sqlite3", "action": "saved"}
         )
         emit_customer_event(
             "file_updated",
