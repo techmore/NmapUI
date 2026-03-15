@@ -226,6 +226,16 @@ def test_runtime_sqlite_store_schema_exists():
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
 
 
+def test_runtime_backfill_admin_script_exists():
+    script_source = (ROOT / "scripts" / "backfill_runtime_store.py").read_text()
+    readme_source = (ROOT / "README.md").read_text()
+
+    assert "def main():" in script_source
+    assert "backfill_runtime_history_artifacts(" in script_source
+    assert "create_runtime_state_store(" in script_source
+    assert "scripts/backfill_runtime_store.py" in readme_source
+
+
 def test_runtime_logs_route_and_ui_hydration_exist():
     routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
     audit_log_source = (ROOT / "static" / "js" / "audit_log.js").read_text()

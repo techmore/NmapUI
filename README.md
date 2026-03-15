@@ -75,6 +75,20 @@ python app.py
 
 Runtime-only files such as `auto_scan_config.json`, generated scan outputs, local wrapper binaries, and ad hoc scratch directories should stay untracked.
 
+## Admin Commands
+
+Backfill legacy scan metadata into the SQLite runtime store without starting the web app:
+
+```bash
+./.venv/bin/python scripts/backfill_runtime_store.py
+```
+
+Optional overrides:
+
+```bash
+./.venv/bin/python scripts/backfill_runtime_store.py --db-path /tmp/runtime.sqlite3 --scans-dir /tmp/scans
+```
+
 ## Usage
 
 Start the server:
