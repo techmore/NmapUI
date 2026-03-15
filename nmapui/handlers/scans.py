@@ -30,6 +30,17 @@ def _normalize_scan_record_from_runtime_artifact(artifact):
     return payload
 
 
+def _load_artifact_compare_payload(runtime_store, scan_path):
+    if runtime_store is None or not hasattr(runtime_store, "get_report_artifact"):
+        return None
+    artifact = runtime_store.get_report_artifact(scan_path)
+    if artifact is None:
+        return None
+    payload = dict(artifact.get("payload", {}) or {})
+    payload["path"] = scan_path
+    return payload
+
+
 def register_scan_routes(app, deps):
     scans_dir = deps["scans_dir"]
     resolve_scan_path = deps["resolve_scan_path"]
@@ -222,18 +233,21 @@ def register_scan_routes(app, deps):
         if base_dir is None or current_dir is None:
             return jsonify({"success": False, "error": "Invalid scan path"}), 400
 
-        base_metadata_path = base_dir / "metadata.json"
-        current_metadata_path = current_dir / "metadata.json"
-        base_xml = base_dir / "scan.xml"
-        current_xml = current_dir / "scan.xml"
+        base_metadata = _load_artifact_compare_payload(runtime_store, base_path)
+        current_metadata = _load_artifact_compare_payload(runtime_store, current_path)
 
-        if not base_metadata_path.exists() or not current_metadata_path.exists():
-            return jsonify({"success": False, "error": "Scan metadata not found"}), 404
-        if not base_xml.exists() or not current_xml.exists():
-            return jsonify({"success": False, "error": "Scan XML not found"}), 404
-
-        base_metadata = normalize_scan_metadata_document(load_json_document(base_metadata_path, {}))
-        current_metadata = normalize_scan_metadata_document(load_json_document(current_metadata_path, {}))
+        if base_metadata is None:
+            base_metadata_path = base_dir / "metadata.json"
+            if not base_metadata_path.exists():
+                return jsonify({"success": False, "error": "Scan metadata not found"}), 404
+            base_metadata = normalize_scan_metadata_document(load_json_document(base_metadata_path, {}))
+            base_metadata["path"] = base_path
+        if current_metadata is None:
+            current_metadata_path = current_dir / "metadata.json"
+            if not current_metadata_path.exists():
+                return jsonify({"success": False, "error": "Scan metadata not found"}), 404
+            current_metadata = normalize_scan_metadata_document(load_json_document(current_metadata_path, {}))
+            current_metadata["path"] = current_path
 
         if str(base_metadata.get("customer_id", "") or "") != str(current_metadata.get("customer_id", "") or ""):
             return jsonify({"success": False, "error": "Scans must belong to the same customer"}), 400
@@ -241,9 +255,19 @@ def register_scan_routes(app, deps):
             return jsonify({"success": False, "error": "Scans must target the same network"}), 400
 
         try:
+            current_assets = current_metadata.get("asset_snapshot")
+            base_assets = base_metadata.get("asset_snapshot")
+            if not isinstance(current_assets, list) or not isinstance(base_assets, list):
+                base_xml = base_dir / "scan.xml"
+                current_xml = current_dir / "scan.xml"
+                if not base_xml.exists() or not current_xml.exists():
+                    return jsonify({"success": False, "error": "Scan XML not found"}), 404
+                current_assets = parse_scan_xml_for_assets(current_xml)
+                base_assets = parse_scan_xml_for_assets(base_xml)
+
             diff_summary = summarize_asset_differences(
-                parse_scan_xml_for_assets(current_xml),
-                parse_scan_xml_for_assets(base_xml),
+                current_assets,
+                base_assets,
             )
         except Exception as exc:
             logger.error("Error comparing scans %s and %s: %s", base_path, current_path, exc)

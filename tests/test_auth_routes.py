@@ -118,6 +118,63 @@ def build_scan_app_with_runtime_artifacts(tmp_path):
     return app
 
 
+def build_compare_app_with_runtime_artifacts(tmp_path):
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    (scans_dir / "Acme" / "2026-03-13" / "scan_010000_target").mkdir(parents=True, exist_ok=True)
+    (scans_dir / "Acme" / "2026-03-14" / "scan_020000_target").mkdir(parents=True, exist_ok=True)
+
+    class RuntimeStoreStub:
+        def get_report_artifact(self, scan_path):
+            artifacts = {
+                "Acme/2026-03-13/scan_010000_target": {
+                    "scan_path": "Acme/2026-03-13/scan_010000_target",
+                    "payload": {
+                        "timestamp": "2026-03-13T01:00:00",
+                        "customer_name": "Acme",
+                        "customer_id": "cust-123",
+                        "target": "10.0.0.0/24",
+                        "status": "completed",
+                        "asset_snapshot": [
+                            {"ip": "10.0.0.10", "hostname": "", "mac": "", "ports": "80 (http)", "vulnerabilities": []}
+                        ],
+                    },
+                },
+                "Acme/2026-03-14/scan_020000_target": {
+                    "scan_path": "Acme/2026-03-14/scan_020000_target",
+                    "payload": {
+                        "timestamp": "2026-03-14T01:00:00",
+                        "customer_name": "Acme",
+                        "customer_id": "cust-123",
+                        "target": "10.0.0.0/24",
+                        "status": "completed",
+                        "asset_snapshot": [
+                            {"ip": "10.0.0.10", "hostname": "", "mac": "", "ports": "443 (https)", "vulnerabilities": []},
+                            {"ip": "10.0.0.20", "hostname": "", "mac": "", "ports": "", "vulnerabilities": []},
+                        ],
+                    },
+                },
+            }
+            return artifacts.get(scan_path)
+
+        def list_report_artifacts(self, customer_id=None):
+            return []
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+            "runtime_store": RuntimeStoreStub(),
+        },
+    )
+    return app
+
+
 def build_auto_scan_app():
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
@@ -409,6 +466,21 @@ def test_compare_scans_returns_explicit_diff_summary(tmp_path, monkeypatch):
     assert payload["base_scan"]["path"] == "Acme/2026-03-13/scan_010000_target"
     assert payload["current_scan"]["path"] == "Acme/2026-03-14/scan_020000_target"
     assert payload["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+    assert payload["diff_summary"]["added_hosts"] == ["10.0.0.20"]
+    assert payload["diff_summary"]["new_ports"] == ["443 (https)"]
+
+
+def test_compare_scans_prefers_runtime_artifact_asset_snapshots(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = build_compare_app_with_runtime_artifacts(tmp_path)
+
+    response = app.test_client().get(
+        "/api/scans/compare?base_path=Acme/2026-03-13/scan_010000_target&current_path=Acme/2026-03-14/scan_020000_target",
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
     assert payload["diff_summary"]["added_hosts"] == ["10.0.0.20"]
     assert payload["diff_summary"]["new_ports"] == ["443 (https)"]
 

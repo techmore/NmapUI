@@ -161,6 +161,62 @@ def test_save_scan_metadata_persists_report_artifact_record(tmp_path):
     assert runtime_calls[0]["pdf_path"].endswith("scan_report.pdf")
 
 
+def test_save_scan_metadata_persists_asset_snapshot_and_diff_summary_to_report_artifact(tmp_path):
+    scans_root = tmp_path / "data" / "scans"
+    older = scans_root / "Acme" / "2026-03-13" / "scan_010000_target"
+    newer = scans_root / "Acme" / "2026-03-14" / "scan_020000_target"
+    older.mkdir(parents=True)
+    newer.mkdir(parents=True)
+    runtime_calls = []
+
+    class RuntimeStoreStub:
+        def upsert_report_artifact(self, **kwargs):
+            runtime_calls.append(kwargs)
+
+    (older / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host><status state="up"/><address addr="10.0.0.10" addrtype="ipv4"/></host>
+        </nmaprun>
+        """
+    )
+    (newer / "scan.xml").write_text(
+        """
+        <nmaprun>
+          <host><status state="up"/><address addr="10.0.0.10" addrtype="ipv4"/></host>
+          <host><status state="up"/><address addr="10.0.0.20" addrtype="ipv4"/></host>
+        </nmaprun>
+        """
+    )
+
+    save_scan_metadata(
+        older,
+        "Acme Customer",
+        "10.0.0.0/24",
+        {"xml": older / "scan.xml"},
+        network_key={"target": "10.0.0.0/24"},
+        current_customer={"id": "cust-123", "name": "Acme Customer"},
+        start_time=datetime.now() - timedelta(minutes=4),
+        end_time=datetime.now() - timedelta(minutes=3),
+        runtime_store=RuntimeStoreStub(),
+    )
+    save_scan_metadata(
+        newer,
+        "Acme Customer",
+        "10.0.0.0/24",
+        {"xml": newer / "scan.xml"},
+        network_key={"target": "10.0.0.0/24"},
+        current_customer={"id": "cust-123", "name": "Acme Customer"},
+        start_time=datetime.now() - timedelta(minutes=2),
+        end_time=datetime.now(),
+        runtime_store=RuntimeStoreStub(),
+    )
+
+    latest_payload = runtime_calls[-1]["payload"]
+    assert latest_payload["diff_summary"]["baseline_path"] == "Acme/2026-03-13/scan_010000_target"
+    assert latest_payload["asset_snapshot"][1]["ip"] == "10.0.0.20"
+
+
 def test_save_scan_metadata_persists_diff_summary_for_followup_scan(tmp_path):
     scans_root = tmp_path / "data" / "scans"
     older = scans_root / "Acme" / "2026-03-13" / "scan_010000_target"

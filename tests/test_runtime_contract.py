@@ -203,6 +203,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert "CREATE TABLE IF NOT EXISTS report_artifacts" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS runtime_logs" in runtime_db_source
     assert "def list_jobs(" in runtime_db_source
+    assert "def get_report_artifact(" in runtime_db_source
     assert "def append_job_event(" in runtime_db_source
     assert "def list_job_events(" in runtime_db_source
     assert "def create_runtime_state_store" in runtime_db_source
@@ -269,6 +270,10 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     assert "for artifact in runtime_store.list_report_artifacts():" in scans_source
     assert "build_scan_routes_deps(" in app_handler_registration_source
     assert '"runtime_store": runtime_store' in app_composition_source
+    assert "def _load_artifact_compare_payload(runtime_store, scan_path):" in scans_source
+    assert "runtime_store.get_report_artifact(scan_path)" in scans_source
+    assert 'current_assets = current_metadata.get("asset_snapshot")' in scans_source
+    assert 'base_assets = base_metadata.get("asset_snapshot")' in scans_source
 
 
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():

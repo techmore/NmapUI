@@ -292,6 +292,30 @@ class RuntimeStateStore:
             for row in rows
         ]
 
+    def get_report_artifact(self, scan_path: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT scan_path, customer_id, target, html_path, pdf_path, xml_path, payload_json, generated_at, updated_at
+                FROM report_artifacts
+                WHERE scan_path = ?
+                """,
+                (scan_path,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "scan_path": row["scan_path"],
+            "customer_id": row["customer_id"],
+            "target": row["target"],
+            "html_path": row["html_path"],
+            "pdf_path": row["pdf_path"],
+            "xml_path": row["xml_path"],
+            "payload": _json_loads(row["payload_json"]),
+            "generated_at": row["generated_at"],
+            "updated_at": row["updated_at"],
+        }
+
     def append_log(
         self,
         *,

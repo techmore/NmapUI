@@ -54,6 +54,7 @@ def test_runtime_state_store_tracks_jobs_reports_and_logs(tmp_path: Path):
     active_jobs = store.list_jobs(statuses=("running",), limit=10)
     events = store.list_job_events(job_id="job-1", limit=10)
     reports = store.list_report_artifacts(customer_id="cust-1")
+    report = store.get_report_artifact("Acme/2026-03-14/scan_120000_192.168.1.0_24")
     logs = store.get_recent_logs(category="runtime", limit=10)
 
     assert job is not None
@@ -63,6 +64,7 @@ def test_runtime_state_store_tracks_jobs_reports_and_logs(tmp_path: Path):
     assert events[0]["id"] == event_id
     assert events[0]["event_name"] == "scan_feedback"
     assert events[0]["payload"]["message"] == "Generating report"
+    assert report["scan_path"] == "Acme/2026-03-14/scan_120000_192.168.1.0_24"
     assert reports[0]["pdf_path"] == "scan_report.pdf"
     assert reports[0]["payload"]["status"] == "completed"
     assert logs[0]["id"] == log_id

@@ -690,6 +690,21 @@ def persist_report_artifact(
         return
 
     scans_dir = _get_scans_dir_for_scan(scan_dir)
+    normalized_metadata = normalize_scan_metadata_document(metadata)
+    metadata_path = scan_dir / "metadata.json"
+    if metadata_path.exists():
+        normalized_metadata = normalize_scan_metadata_document(
+            load_json_document(metadata_path, normalized_metadata)
+        )
+
+    asset_snapshot = None
+    xml_path = files.get("xml")
+    if xml_path:
+        try:
+            asset_snapshot = parse_scan_xml_for_assets(xml_path)
+        except Exception:
+            asset_snapshot = None
+
     runtime_store.upsert_report_artifact(
         scan_path=str(scan_dir.relative_to(scans_dir)),
         customer_id=str(customer_id or ""),
@@ -697,7 +712,10 @@ def persist_report_artifact(
         html_path=str(files.get("web_html", "") or ""),
         pdf_path=str(files.get("pdf", "") or ""),
         xml_path=str(files.get("xml", "") or ""),
-        payload=normalize_scan_metadata_document(metadata),
+        payload={
+            **normalized_metadata,
+            "asset_snapshot": asset_snapshot,
+        },
     )
 
 
