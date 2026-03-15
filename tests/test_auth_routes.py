@@ -46,6 +46,7 @@ def build_scan_app(tmp_path):
             "load_json_document": load_json_document,
             "normalize_scan_metadata_document": normalize_scan_metadata_document,
             "logger": app.logger,
+            "runtime_store": None,
         },
     )
     return app
@@ -68,6 +69,50 @@ def build_scan_app_with_real_metadata(tmp_path, metadata):
             "load_json_document": load_json_document,
             "normalize_scan_metadata_document": normalize_scan_metadata_document,
             "logger": app.logger,
+            "runtime_store": None,
+        },
+    )
+    return app
+
+
+def build_scan_app_with_runtime_artifacts(tmp_path):
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+
+    class RuntimeStoreStub:
+        def list_report_artifacts(self, customer_id=None):
+            return [
+                {
+                    "scan_path": "Acme/2026-03-14/scan_020000_target",
+                    "customer_id": "cust-123",
+                    "target": "10.0.0.0/24",
+                    "html_path": "/tmp/scan_web.html",
+                    "pdf_path": "/tmp/scan_report.pdf",
+                    "xml_path": "/tmp/scan.xml",
+                    "payload": {
+                        "timestamp": "2026-03-14T02:00:00",
+                        "customer_name": "Acme",
+                        "customer_id": "cust-123",
+                        "target": "10.0.0.0/24",
+                        "status": "completed",
+                        "completed_successfully": True,
+                    },
+                    "generated_at": "2026-03-14T02:00:00",
+                    "updated_at": "2026-03-14T02:00:00",
+                }
+            ]
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+            "runtime_store": RuntimeStoreStub(),
         },
     )
     return app
@@ -143,6 +188,21 @@ def test_scan_routes_allow_authorized_access(tmp_path, monkeypatch):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["scans"][0]["customer_name"] == "Acme"
+
+
+def test_scan_routes_prefer_runtime_report_artifacts(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = build_scan_app_with_runtime_artifacts(tmp_path)
+    client = app.test_client()
+
+    response = client.get("/api/scans", headers=basic_auth_header())
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["scans"][0]["path"] == "Acme/2026-03-14/scan_020000_target"
+    assert payload["scans"][0]["has_html"] is True
+    assert payload["scans"][0]["has_pdf"] is True
+    assert payload["scans"][0]["has_xml"] is True
 
 
 def test_scan_routes_reject_spoofed_local_host_without_loopback_peer(tmp_path, monkeypatch):

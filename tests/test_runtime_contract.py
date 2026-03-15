@@ -214,6 +214,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert 'saved_last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")' in runtime_services_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
     assert "def persist_report_artifact(" in (ROOT / "nmapui" / "reporting.py").read_text()
+    assert "def _normalize_scan_record_from_runtime_artifact(artifact):" in (ROOT / "nmapui" / "handlers" / "scans.py").read_text()
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
 
 
@@ -249,6 +250,17 @@ def test_connection_handler_prefers_sqlite_snapshots_without_active_owner():
     assert 'emit_to_client(new_sid, "job_status", persisted_job)' in connections_source
     assert 'emit_to_client(new_sid, event["event_name"], event["payload"])' in connections_source
     assert "runtime_store=runtime_store" in app_handler_registration_source
+
+
+def test_scan_routes_accept_runtime_store_artifact_reads():
+    scans_source = (ROOT / "nmapui" / "handlers" / "scans.py").read_text()
+    app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
+    app_handler_registration_source = (ROOT / "nmapui" / "app_handler_registration.py").read_text()
+
+    assert "runtime_store = deps.get(\"runtime_store\")" in scans_source
+    assert "for artifact in runtime_store.list_report_artifacts():" in scans_source
+    assert "build_scan_routes_deps(" in app_handler_registration_source
+    assert '"runtime_store": runtime_store' in app_composition_source
 
 
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():

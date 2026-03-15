@@ -85,6 +85,7 @@ def register_app_handlers(
             load_json_document=load_json_document,
             normalize_scan_metadata_document=normalize_scan_metadata_document,
             logger=logger,
+            runtime_store=runtime_store,
         ),
         history_handler_deps=build_history_handler_deps(
             get_most_recent_scan_xml=get_most_recent_scan_xml,

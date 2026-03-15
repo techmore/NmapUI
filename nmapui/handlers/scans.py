@@ -13,17 +13,43 @@ from nmapui.reporting import (
 from persistence import iter_scan_metadata_documents, remove_scan_metadata_index_entry
 
 
+def _normalize_scan_record_from_runtime_artifact(artifact):
+    payload = dict(artifact.get("payload", {}) or {})
+    if "customer_name" not in payload:
+        payload["customer_name"] = payload.get(
+            "customer", payload.get("customer_id", "Unknown")
+        )
+
+    if payload.get("customer_name"):
+        payload["customer_name"] = str(payload["customer_name"]).split(" (")[0]
+
+    payload["path"] = artifact["scan_path"]
+    payload["has_html"] = bool(artifact.get("html_path"))
+    payload["has_pdf"] = bool(artifact.get("pdf_path"))
+    payload["has_xml"] = bool(artifact.get("xml_path"))
+    return payload
+
+
 def register_scan_routes(app, deps):
     scans_dir = deps["scans_dir"]
     resolve_scan_path = deps["resolve_scan_path"]
     load_json_document = deps["load_json_document"]
     normalize_scan_metadata_document = deps["normalize_scan_metadata_document"]
     logger = deps["logger"]
+    runtime_store = deps.get("runtime_store")
 
     @app.route("/api/scans")
     @require_auth
     def list_scans():
         scans = []
+        seen_paths = set()
+
+        if runtime_store is not None:
+            for artifact in runtime_store.list_report_artifacts():
+                scan = _normalize_scan_record_from_runtime_artifact(artifact)
+                scans.append(scan)
+                seen_paths.add(scan["path"])
+
         for metadata_path, data in iter_scan_metadata_documents(
             scans_dir,
             load_json_document,
@@ -40,12 +66,15 @@ def register_scan_routes(app, deps):
 
             rel_path = metadata_path.parent.relative_to(scans_dir)
             data["path"] = str(rel_path)
+            if data["path"] in seen_paths:
+                continue
             data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
                 metadata_path.parent / "scan.html"
             ).exists()
             data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
             data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
             scans.append(data)
+            seen_paths.add(data["path"])
 
         scans.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
         for scan in scans:

@@ -241,6 +241,7 @@ def build_scan_routes_deps(
     load_json_document,
     normalize_scan_metadata_document,
     logger,
+    runtime_store,
 ):
     return {
         "scans_dir": scans_dir,
@@ -248,6 +249,7 @@ def build_scan_routes_deps(
         "load_json_document": load_json_document,
         "normalize_scan_metadata_document": normalize_scan_metadata_document,
         "logger": logger,
+        "runtime_store": runtime_store,
     }
 
 
