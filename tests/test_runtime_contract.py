@@ -1277,6 +1277,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module
     settings_tab_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
     reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
+    customer_ui_source = (ROOT / "static" / "js" / "customer_ui.js").read_text()
     assert "async function exportRuntimeDatabase()" in settings_tab_source
     assert "fetch('/api/runtime/export')" in settings_tab_source
     assert "window.exportRuntimeDatabase = exportRuntimeDatabase;" in settings_tab_source
@@ -1284,6 +1285,11 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "function renderReportsCustomerFilters(scans)" in reports_tab_source
     assert "const container = document.getElementById('reports-customer-filters');" in reports_tab_source
     assert "reportsCustomerFilter = filterValue;" in reports_tab_source
+    assert "let customersTabLoaded = false;" in customer_ui_source
+    assert "function renderCustomersTab(customers)" in customer_ui_source
+    assert "function loadCustomersTab(force = false)" in customer_ui_source
+    assert "socket.emit(customerFormMode === 'edit' ? 'update_customer' : 'add_customer'" in customer_ui_source
+    assert "window.loadCustomersTab = loadCustomersTab;" in customer_ui_source
 
 
 def test_google_drive_integration_contract_exists():
@@ -1345,11 +1351,13 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="tab-history-btn"' in template
     assert 'id="tab-reports-btn"' in template
     assert 'id="reports-badge"' in template
+    assert 'id="tab-customers-btn"' in template
     assert 'id="tab-logs-btn"' in template
     assert 'id="tab-settings-btn"' in template
     assert 'id="history-tab-panel"' in template
     assert 'id="reports-tab-panel"' in template
     assert 'id="reports-customer-filters"' in template
+    assert 'id="customers-tab-panel"' in template
     assert 'id="logs-tab-panel"' in template
     assert 'id="settings-tab-panel"' in template
     assert 'id="history-compare-panel"' in template
@@ -1376,6 +1384,7 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert "initializeSettingsTab();" in template
     settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
     reports_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
+    customer_ui_source = (ROOT / "static" / "js" / "customer_ui.js").read_text()
     settings_module_source = (ROOT / "nmapui" / "settings.py").read_text()
     workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
     report_status_source = (ROOT / "static" / "js" / "report_status.js").read_text()
@@ -1387,6 +1396,11 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert "function updateReportsBadge(scans)" in reports_source
     assert "document.getElementById('reports-badge')" in reports_source
     assert "loadReportsTab(true);" in reports_source
+    assert "document.getElementById('tab-customers-btn')?.addEventListener('click', () => switchAppTab('customers'));" in reports_source
+    assert "loadCustomersTab()" in reports_source
+    assert "id=\"cust-public-ip\"" in template
+    assert "socket.on('customer_updated'" in customer_ui_source
+    assert "@socketio.on(\"update_customer\")" in (ROOT / "nmapui" / "handlers" / "customers.py").read_text()
     assert "removeReportProgressCard();" in report_status_source
     assert "resolve_report_customer_identity(" in runtime_history_source
     assert "build_artifact_downloads(" in runtime_history_source

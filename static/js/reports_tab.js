@@ -72,6 +72,7 @@ function ensureTabPanelsAreSiblings() {
     const panelIds = [
         'history-tab-panel',
         'reports-tab-panel',
+        'customers-tab-panel',
         'logs-tab-panel',
         'settings-tab-panel',
     ];
@@ -476,6 +477,7 @@ function switchAppTab(tabName) {
         dashboard: document.getElementById('dashboard-tab-panel'),
         history: document.getElementById('history-tab-panel'),
         reports: document.getElementById('reports-tab-panel'),
+        customers: document.getElementById('customers-tab-panel'),
         logs: document.getElementById('logs-tab-panel'),
         settings: document.getElementById('settings-tab-panel'),
     };
@@ -487,6 +489,7 @@ function switchAppTab(tabName) {
     setTabButtonState(document.getElementById('tab-dashboard-btn'), tabName === 'dashboard');
     setTabButtonState(document.getElementById('tab-history-btn'), tabName === 'history');
     setTabButtonState(document.getElementById('tab-reports-btn'), tabName === 'reports');
+    setTabButtonState(document.getElementById('tab-customers-btn'), tabName === 'customers');
     setTabButtonState(document.getElementById('tab-logs-btn'), tabName === 'logs');
     setTabButtonState(document.getElementById('tab-settings-btn'), tabName === 'settings');
 
@@ -494,6 +497,8 @@ function switchAppTab(tabName) {
         loadHistoryTab();
     } else if (tabName === 'reports') {
         loadReportsTab();
+    } else if (tabName === 'customers' && typeof window.loadCustomersTab === 'function') {
+        window.loadCustomersTab();
     } else if (tabName === 'settings' && typeof window.loadSettingsTab === 'function') {
         window.loadSettingsTab();
     }
@@ -509,6 +514,7 @@ function initializeReportsTab() {
     document.getElementById('tab-dashboard-btn')?.addEventListener('click', () => switchAppTab('dashboard'));
     document.getElementById('tab-history-btn')?.addEventListener('click', () => switchAppTab('history'));
     document.getElementById('tab-reports-btn')?.addEventListener('click', () => switchAppTab('reports'));
+    document.getElementById('tab-customers-btn')?.addEventListener('click', () => switchAppTab('customers'));
     document.getElementById('tab-logs-btn')?.addEventListener('click', () => switchAppTab('logs'));
     document.getElementById('tab-settings-btn')?.addEventListener('click', () => switchAppTab('settings'));
 
