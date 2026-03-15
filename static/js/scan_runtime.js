@@ -36,6 +36,16 @@ function updateJobButtons() {
     }
 }
 
+function syncScanJobVisualState(job) {
+    const startScanBtn = document.getElementById('start-scan-btn');
+    if (!startScanBtn) {
+        return;
+    }
+
+    const isRunning = job?.status === 'running' || job?.status === 'cancelling';
+    startScanBtn.classList.toggle('card-pulsing', isRunning);
+}
+
 function normalizeFeedbackMessage(msg) {
     if (typeof msg === 'string') return msg;
     if (msg && typeof msg.message === 'string') return msg.message;
@@ -148,6 +158,10 @@ function initializeScanRuntime(socket) {
         if (!data || !data.job_type) return;
         clientJobs[data.job_type] = data;
         updateJobButtons();
+
+        if (data.job_type === 'scan') {
+            syncScanJobVisualState(data);
+        }
 
         if (data.job_type === 'report' && data.status === 'running' && data.details) {
             const message = data.details.message || 'Generating report...';

@@ -62,15 +62,22 @@ class ScanBroadcaster:
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._connected_sids: set[str] = set()
         # job_type -> owner_sid -> frozenset-like mutable set of subscriber sids
         self._subscribers: dict[str, dict[str, set[str]]] = {}
         # job_type -> owner_sid -> list of (event, data) tuples
         self._buffer: dict[str, dict[str, list]] = {}
 
+    def register_client(self, sid: str) -> None:
+        with self._lock:
+            self._connected_sids.add(sid)
+
     def start_job(self, owner_sid: str, job_type: str = "scan") -> None:
         """Call when a scan starts — creates the slot."""
         with self._lock:
-            self._subscribers.setdefault(job_type, {})[owner_sid] = {owner_sid}
+            subscriber_set = set(self._connected_sids) or {owner_sid}
+            subscriber_set.add(owner_sid)
+            self._subscribers.setdefault(job_type, {})[owner_sid] = subscriber_set
             self._buffer.setdefault(job_type, {})[owner_sid] = []
 
     def end_job(self, owner_sid: str, job_type: str = "scan") -> None:
@@ -110,6 +117,7 @@ class ScanBroadcaster:
             for subscriber_map in self._subscribers.values():
                 for subs in subscriber_map.values():
                     subs.discard(sid)
+            self._connected_sids.discard(sid)
 
     def find_active_owner(self, job_type: str = "scan") -> str | None:
         """Return any active job owner sid for the given job type."""

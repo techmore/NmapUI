@@ -519,6 +519,55 @@ def test_connect_hydrates_new_tab_from_sqlite_snapshot_without_active_scan():
     assert emitted[2][2] == {"last_scan_target": "10.10.10.0/24"}
 
 
+def test_connect_normalizes_persisted_last_scan_target_snapshot_dict():
+    observed = {}
+    emitted = []
+
+    class BroadcasterStub:
+        def find_active_owner(self, job_type="scan"):
+            return None
+
+    class RuntimeStoreStub:
+        def get_runtime_snapshot(self, key):
+            snapshots = {
+                "current_customer": {"id": "cust-sqlite", "name": "Persisted Customer", "confidence": 1.0},
+                "network_key": {
+                    "target": "10.10.10.0/24",
+                    "total_hops": 4,
+                    "private_hops": [],
+                    "public_hops": [],
+                    "exit_ip": "8.8.4.4",
+                },
+                "last_scan_target": {"value": "10.10.10.0/24"},
+            }
+            return snapshots.get(key)
+
+    app, socketio = build_connection_app(
+        {
+            "auto_scan_config": {"enabled": False},
+            "broadcaster": BroadcasterStub(),
+            "emit_to_client": lambda sid, event, data=None: emitted.append((sid, event, data)),
+            "get_client_state": lambda sid=None: {
+                "current_customer": {"id": "cust-memory", "name": "Memory Customer", "confidence": 0.4},
+                "network_key": {"target": "192.168.1.0/24", "total_hops": 3, "private_hops": [], "public_hops": [], "exit_ip": "1.1.1.1"},
+                "last_scan_target": "192.168.1.0/24",
+            },
+            "job_registry": type("JobRegistryStub", (), {})(),
+            "logger": Flask(__name__).logger,
+            "runtime_store": RuntimeStoreStub(),
+            "set_current_customer_state": lambda *, value, sid=None: observed.setdefault("customer_state", []).append((sid, value)),
+            "set_network_key_state": lambda *, value, sid=None: observed.setdefault("network_state", []).append((sid, value)),
+            "set_last_scan_target_state": lambda *, value, sid=None: observed.setdefault("target_state", []).append((sid, value)),
+        }
+    )
+
+    client = socketio.test_client(app)
+
+    assert client.is_connected()
+    assert observed["target_state"][0][1] == "10.10.10.0/24"
+    assert emitted[2][2] == {"last_scan_target": "10.10.10.0/24"}
+
+
 def test_connect_emits_persisted_active_job_status_without_active_owner():
     emitted = []
 

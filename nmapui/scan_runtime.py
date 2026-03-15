@@ -47,22 +47,30 @@ def start_scan_task(
     vulners_script,
     runtime_store=None,
 ):
+    wrapped_emit = make_broadcast_emit(
+        owner_sid=sid,
+        broadcaster=broadcaster,
+        emit_to_client=emit_to_client,
+        job_type="scan",
+        runtime_store=runtime_store,
+    )
+    original_run_arp_scan = run_arp_scan
+
     context = build_scan_workflow_context(
         {
             "get_client_state": get_client_state,
             "ensure_job_not_cancelled": ensure_job_not_cancelled,
             "idle_state_manager": idle_state_manager,
             "update_job_progress": update_job_progress,
-            "emit_to_client": make_broadcast_emit(
-                owner_sid=sid,
-                broadcaster=broadcaster,
-                emit_to_client=emit_to_client,
-                job_type="scan",
-                runtime_store=runtime_store,
-            ),
+            "emit_to_client": wrapped_emit,
             "socketio_sleep": socketio_sleep,
             "run_cancellable_command": run_cancellable_command,
-            "run_arp_scan": run_arp_scan,
+            "run_arp_scan": lambda target, interface=None, sid=None: original_run_arp_scan(
+                target,
+                interface=interface,
+                sid=sid,
+                emit_to_client_override=wrapped_emit,
+            ),
             "identify_gateway_firewall_targets": identify_gateway_firewall_targets,
             "start_deep_scan": workflow_start_deep_scan,
             "job_registry": job_registry,

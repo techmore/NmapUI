@@ -1,4 +1,4 @@
-from nmapui.jobs import ClientJobRegistry, RateLimiter
+from nmapui.jobs import ClientJobRegistry, RateLimiter, ScanBroadcaster
 from nmapui.runtime_db import create_runtime_state_store
 
 
@@ -43,3 +43,13 @@ def test_client_job_registry_persists_jobs_to_runtime_store(tmp_path):
     assert persisted["status"] == "completed"
     assert persisted["payload"]["details"]["target"] == "10.0.0.0/24"
     assert persisted["payload"]["details"]["path"] == "scan_report.pdf"
+
+
+def test_scan_broadcaster_subscribes_existing_connected_tabs_when_job_starts():
+    broadcaster = ScanBroadcaster()
+
+    broadcaster.register_client("sid-1")
+    broadcaster.register_client("sid-2")
+    broadcaster.start_job("sid-1", job_type="scan")
+
+    assert broadcaster.get_subscribers("sid-1", job_type="scan") == {"sid-1", "sid-2"}

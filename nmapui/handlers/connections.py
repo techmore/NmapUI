@@ -9,6 +9,8 @@ def _load_persisted_source_state(runtime_store):
     current_customer = runtime_store.get_runtime_snapshot("current_customer")
     network_key = runtime_store.get_runtime_snapshot("network_key")
     last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")
+    if isinstance(last_scan_target, dict):
+        last_scan_target = last_scan_target.get("value")
 
     if current_customer is None and network_key is None and last_scan_target is None:
         return None
@@ -70,6 +72,8 @@ def register_connection_handlers(socketio, deps):
     @socketio.on("connect")
     def on_connect(auth=None):
         new_sid = request.sid
+        if hasattr(broadcaster, "register_client"):
+            broadcaster.register_client(new_sid)
         active_job_type = None
         owner_sid = broadcaster.find_active_owner("scan")
         if owner_sid is not None:

@@ -725,3 +725,48 @@ def test_event_helpers_persist_structured_runtime_logs():
     assert entries[0]["message"] == "Running quick scan"
     assert entries[1]["payload"]["job_type"] == "scan"
     assert entries[2]["message"] == "Report generation completed"
+
+
+def test_event_helpers_broadcast_job_status_to_existing_subscribers():
+    emitted = []
+
+    class BroadcasterStub:
+        def get_subscribers(self, sid, job_type="scan"):
+            assert sid == "sid-1"
+            assert job_type == "report"
+            return {"sid-1", "sid-2"}
+
+    class JobRegistryStub:
+        def get(self, sid, job_type):
+            assert job_type == "report"
+            return {
+                "status": "running",
+                "started_at": "2026-03-14T21:28:07",
+                "details": {"target": "192.168.222.0/24", "chunked": False},
+            }
+
+    class SocketStub:
+        def emit(self, event, data=None, to=None):
+            emitted.append((event, data, to))
+
+    helpers = build_event_helpers(
+        socketio=SocketStub(),
+        job_registry=JobRegistryStub(),
+        broadcaster=BroadcasterStub(),
+        runtime_store=None,
+    )
+
+    helpers["emit_job_status"]("sid-1", "report")
+
+    assert len(emitted) == 2
+    assert {target for _, _, target in emitted} == {"sid-1", "sid-2"}
+    assert all(event == "job_status" for event, _, _ in emitted)
+    assert all(
+        payload == {
+            "status": "running",
+            "started_at": "2026-03-14T21:28:07",
+            "details": {"target": "192.168.222.0/24", "chunked": False},
+            "job_type": "report",
+        }
+        for _, payload, _ in emitted
+    )

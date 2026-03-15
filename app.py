@@ -182,6 +182,7 @@ settings_state = load_settings_state(
 event_helpers = build_event_helpers(
     socketio=socketio,
     job_registry=job_registry,
+    broadcaster=broadcaster,
     runtime_store=runtime_store,
 )
 emit_to_client = event_helpers["emit_to_client"]

@@ -61,7 +61,11 @@ def register_scan_job_handlers(socketio, deps):
         if not job_registry.start(
             request.sid,
             "report",
-            {"target": data.get("target"), "customer_name": data.get("customer_name")},
+            {
+                "target": data.get("target"),
+                "customer_name": data.get("customer_name"),
+                "chunked": bool(data.get("chunked", True)),
+            },
         ):
             emit("report_error", {"error": "A report job is already running for this client"})
             emit_job_status(request.sid, "report")

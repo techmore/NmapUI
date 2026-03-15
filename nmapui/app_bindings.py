@@ -63,29 +63,36 @@ def _log_runtime_event(runtime_store, event, data=None):
         )
 
 
-def build_event_helpers(*, socketio, job_registry, runtime_store=None):
+def build_event_helpers(*, socketio, job_registry, broadcaster=None, runtime_store=None):
     def emit_to_client(sid, event, data=None):
         result = emit_to_client_runtime(socketio=socketio, sid=sid, event=event, data=data)
         _log_runtime_event(runtime_store, event, data)
         return result
 
     def emit_job_status(sid, job_type):
-        result = emit_job_status_runtime(
-            socketio=socketio,
-            job_registry=job_registry,
-            sid=sid,
-            job_type=job_type,
-        )
-        job = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}
+        targets = {sid}
+        if broadcaster is not None and hasattr(broadcaster, "get_subscribers"):
+            targets |= set(broadcaster.get_subscribers(sid, job_type=job_type))
+
+        payload = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}
+        payload["job_type"] = job_type
+        result = None
+        for target_sid in targets:
+            result = emit_to_client_runtime(
+                socketio=socketio,
+                sid=target_sid,
+                event="job_status",
+                data=payload,
+            )
         append_runtime_log(
             runtime_store=runtime_store,
             category="job",
             level="INFO",
-            message=f"[{job_type}] {job.get('status', 'idle')}",
+            message=f"[{job_type}] {payload.get('status', 'idle')}",
             payload={
                 "job_type": job_type,
-                "status": job.get("status", "idle"),
-                "details": dict(job.get("details", {})),
+                "status": payload.get("status", "idle"),
+                "details": dict(payload.get("details", {})),
             },
         )
         return result

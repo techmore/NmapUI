@@ -54,14 +54,14 @@ def build_task_bindings(
     load_json_document,
     normalize_scan_metadata_document,
 ):
-    def run_arp_scan(target, interface=None, sid=None):
+    def run_arp_scan(target, interface=None, sid=None, emit_to_client_override=None):
         return run_arp_scan_runtime(
             target=target,
             interface=interface,
             sid=sid,
             get_default_interface_cached=lambda: default_interface,
             which=which,
-            emit_to_client=emit_to_client,
+            emit_to_client=emit_to_client_override or emit_to_client,
             socketio_emit=socketio.emit,
             socketio_sleep=socketio.sleep,
             run_cancellable_command=run_cancellable_command,

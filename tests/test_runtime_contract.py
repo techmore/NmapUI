@@ -353,8 +353,14 @@ def test_runtime_logs_route_and_ui_hydration_exist():
 def test_connection_handler_prefers_sqlite_snapshots_without_active_owner():
     connections_source = (ROOT / "nmapui" / "handlers" / "connections.py").read_text()
     app_handler_registration_source = (ROOT / "nmapui" / "app_handler_registration.py").read_text()
+    jobs_source = (ROOT / "nmapui" / "jobs.py").read_text()
 
     assert "def _load_persisted_source_state(runtime_store):" in connections_source
+    assert 'if hasattr(broadcaster, "register_client"):' in connections_source
+    assert "broadcaster.register_client(new_sid)" in connections_source
+    assert "self._connected_sids: set[str] = set()" in jobs_source
+    assert "def register_client(self, sid: str) -> None:" in jobs_source
+    assert "subscriber_set = set(self._connected_sids) or {owner_sid}" in jobs_source
     assert "def _load_persisted_active_job(runtime_store):" in connections_source
     assert "def _load_persisted_job_events(runtime_store, job_id):" in connections_source
     assert 'runtime_store.list_jobs(statuses=("running", "cancelling"), limit=1)' in connections_source
@@ -362,6 +368,8 @@ def test_connection_handler_prefers_sqlite_snapshots_without_active_owner():
     assert 'runtime_store.get_runtime_snapshot("current_customer")' in connections_source
     assert 'runtime_store.get_runtime_snapshot("network_key")' in connections_source
     assert 'runtime_store.get_runtime_snapshot("last_scan_target")' in connections_source
+    assert 'if isinstance(last_scan_target, dict):' in connections_source
+    assert 'last_scan_target = last_scan_target.get("value")' in connections_source
     assert "source_state = _load_persisted_source_state(runtime_store) or get_client_state()" in connections_source
     assert 'emit_to_client(new_sid, "job_status", persisted_job)' in connections_source
     assert 'emit_to_client(new_sid, event["event_name"], event["payload"])' in connections_source
@@ -775,6 +783,7 @@ def test_app_delegates_event_and_job_wrappers_to_shared_module():
 
     assert "from nmapui.app_bindings import build_client_state_helpers, build_event_helpers" in app_source
     assert 'event_helpers = build_event_helpers(' in app_source
+    assert "broadcaster=broadcaster," in app_source
     assert 'emit_to_client = event_helpers["emit_to_client"]' in app_source
     assert 'emit_job_status = event_helpers["emit_job_status"]' in app_source
     assert 'update_job_progress = event_helpers["update_job_progress"]' in app_source
@@ -786,6 +795,11 @@ def test_app_delegates_event_and_job_wrappers_to_shared_module():
     assert "safe_emit as safe_emit_runtime" in app_runtime_bindings_source
     assert "def safe_emit(event, data=None):" in app_runtime_bindings_source
     assert "def build_event_helpers(" in app_bindings_source
+    assert "targets = {sid}" in app_bindings_source
+    assert 'targets |= set(broadcaster.get_subscribers(sid, job_type=job_type))' in app_bindings_source
+    assert 'payload = job_registry.get(sid, job_type) or {"status": "idle", "details": {}}' in app_bindings_source
+    assert "for target_sid in targets:" in app_bindings_source
+    assert 'event="job_status"' in app_bindings_source
     assert "return nmapui_emit_to_client(" not in app_source
     assert "return nmapui_run_cancellable_command(" not in app_source
     assert "return nmapui_emit_to_client(socketio, sid, event, data)" in app_events_runtime_source
@@ -1180,10 +1194,13 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "setReportButtonsPulsing(false);" in report_generation_module
     assert "document.getElementById('generate-report-btn').addEventListener('click'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
+    assert '"chunked": bool(data.get("chunked", True))' in (ROOT / "nmapui" / "handlers" / "scan_jobs.py").read_text()
     assert "socket.on('scan_results'" in report_generation_module
     assert "function getLastScanTarget()" in report_generation_module
     assert "let scanRuntimeInitialized = false;" in scan_runtime_module
     assert "if (scanRuntimeInitialized) {" in scan_runtime_module
+    assert "function syncScanJobVisualState(job)" in scan_runtime_module
+    assert "startScanBtn.classList.toggle('card-pulsing', isRunning);" in scan_runtime_module
     assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
     assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module
@@ -1193,6 +1210,12 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "function renderLogsTab()" in audit_log_module
     assert "function initializeLogsTab()" in audit_log_module
     assert "socket.on('job_status', function (data) {" in audit_log_module
+    assert "def run_arp_scan(target, interface=None, sid=None, emit_to_client_override=None):" in (ROOT / "nmapui" / "app_task_bindings.py").read_text()
+    backend_scan_runtime_module = (ROOT / "nmapui" / "scan_runtime.py").read_text()
+    assert "original_run_arp_scan = run_arp_scan" in backend_scan_runtime_module
+    assert "emit_to_client_override=wrapped_emit" in backend_scan_runtime_module
+    assert "if (data.job_type === 'scan') {" in scan_runtime_module
+    assert "syncScanJobVisualState(data);" in scan_runtime_module
     assert "socket.on('report_complete', function (data) {" in audit_log_module
     assert "socket.on('update_status', function (data) {" in audit_log_module
     assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module
