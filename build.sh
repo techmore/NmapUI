@@ -82,6 +82,13 @@ if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
     echo "Database migration source: $MIGRATION_SOURCE_DB"
 fi
 
+# The Swift compiler outputs a binary at $BIN. If a directory exists there
+# (from a previous build or manual artifact), it will cause compilation to fail.
+if [[ -d "$BIN" ]]; then
+    echo "Removing conflicting directory at $BIN"
+    rm -rf "$BIN"
+fi
+
 # Compile the Swift binary using the requested format
 swiftc \
   -sdk "$SDK" \
