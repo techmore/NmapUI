@@ -318,12 +318,12 @@ function renderReportsTab(scans) {
 }
 
 async function fetchScansForTabs() {
-    const response = await fetch('/api/scans');
+    const response = await fetch('/api/runtime/history');
     if (!response.ok) {
-        throw new Error(`Failed to load scans (${response.status})`);
+        throw new Error(`Failed to load history (${response.status})`);
     }
     const data = await response.json();
-    return data.scans || [];
+    return data.history || [];
 }
 
 async function fetchReportsForTab() {

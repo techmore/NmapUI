@@ -104,6 +104,74 @@ def test_runtime_reports_route_returns_persisted_artifacts(monkeypatch):
     assert payload["reports"][0]["has_pdf"] is True
 
 
+def test_runtime_history_route_merges_runtime_reports_with_metadata_fallback(monkeypatch, tmp_path):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    scans_dir = tmp_path / "scans"
+    legacy_dir = scans_dir / "Legacy" / "2026-03-13" / "scan_010000_target"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    (legacy_dir / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Legacy","target":"10.0.0.0/24","status":"failed"}'
+    )
+
+    class RuntimeStoreStub:
+        def list_report_artifacts(self, customer_id=None):
+            return [
+                {
+                    "scan_path": "Acme/2026-03-14/scan_120000_192.168.222.0_24",
+                    "customer_id": "cust-1",
+                    "target": "192.168.222.0/24",
+                    "html_path": "scan_web.html",
+                    "pdf_path": "scan_report.pdf",
+                    "xml_path": "scan.xml",
+                    "payload": {
+                        "timestamp": "2026-03-14T12:00:00",
+                        "customer_name": "Acme",
+                        "status": "completed",
+                    },
+                    "generated_at": "2026-03-14T12:00:00",
+                    "updated_at": "2026-03-14T12:00:00",
+                }
+            ]
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "load_json_document": __import__("persistence").load_json_document,
+            "normalize_scan_metadata_document": __import__("persistence").normalize_scan_metadata_document,
+            "runtime_store": RuntimeStoreStub(),
+            "scans_dir": scans_dir,
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+            "logger": app.logger,
+        },
+    )
+
+    client = app.test_client()
+    response = client.get(
+        "/api/runtime/history",
+        headers={"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["history"][0]["customer_name"] == "Acme"
+    assert any(item["customer_name"] == "Legacy" for item in payload["history"])
+
+
 def test_startup_checks_append_runtime_log_entries():
     entries = []
 

@@ -226,8 +226,10 @@ def test_runtime_logs_route_and_ui_hydration_exist():
 
     assert '@app.route("/api/runtime/logs")' in routes_source
     assert '@app.route("/api/runtime/reports")' in routes_source
+    assert '@app.route("/api/runtime/history")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
+    assert "iter_scan_metadata_documents(" in routes_source
     assert "function loadPersistedLogs()" in audit_log_source
     assert "fetch('/api/runtime/logs?limit=200')" in audit_log_source
     assert "function refreshPersistedLogs()" in audit_log_source
@@ -235,6 +237,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert "replacePersistedLogs(entries.slice().reverse());" in audit_log_source
     assert "async function fetchReportsForTab()" in reports_tab_source
     assert "fetch('/api/runtime/reports')" in reports_tab_source
+    assert "fetch('/api/runtime/history')" in reports_tab_source
     assert "_log_runtime_event(runtime_store, event, data)" in app_bindings_source
     assert 'category="job"' in app_bindings_source
 

@@ -1,5 +1,25 @@
 from flask import jsonify, render_template
 from nmapui.auth import require_auth
+from persistence import iter_scan_metadata_documents
+
+
+def _normalize_runtime_report_row(artifact):
+    payload = dict(artifact.get("payload", {}) or {})
+    customer_name = payload.get(
+        "customer_name",
+        payload.get("customer", payload.get("customer_id", "Unknown")),
+    )
+    if customer_name:
+        customer_name = str(customer_name).split(" (")[0]
+
+    return {
+        **payload,
+        "customer_name": customer_name,
+        "path": artifact["scan_path"],
+        "has_html": bool(artifact.get("html_path")),
+        "has_pdf": bool(artifact.get("pdf_path")),
+        "has_xml": bool(artifact.get("xml_path")),
+    }
 
 
 def register_core_routes(app, deps):
@@ -108,25 +128,52 @@ def register_core_routes(app, deps):
         if runtime_store is None:
             return jsonify({"reports": []})
 
-        reports = []
-        for artifact in runtime_store.list_report_artifacts():
-            payload = dict(artifact.get("payload", {}) or {})
-            customer_name = payload.get(
-                "customer_name",
-                payload.get("customer", payload.get("customer_id", "Unknown")),
-            )
-            if customer_name:
-                customer_name = str(customer_name).split(" (")[0]
-
-            reports.append(
-                {
-                    **payload,
-                    "customer_name": customer_name,
-                    "path": artifact["scan_path"],
-                    "has_html": bool(artifact.get("html_path")),
-                    "has_pdf": bool(artifact.get("pdf_path")),
-                    "has_xml": bool(artifact.get("xml_path")),
-                }
-            )
-
+        reports = [
+            _normalize_runtime_report_row(artifact)
+            for artifact in runtime_store.list_report_artifacts()
+        ]
         return jsonify({"reports": reports})
+
+    @app.route("/api/runtime/history")
+    @require_auth
+    def runtime_history():
+        scans_dir = deps.get("scans_dir")
+        load_json_document = deps.get("load_json_document")
+        normalize_scan_metadata_document = deps.get("normalize_scan_metadata_document")
+        logger = deps.get("logger")
+
+        history = []
+        seen_paths = set()
+
+        if runtime_store is not None:
+            for artifact in runtime_store.list_report_artifacts():
+                row = _normalize_runtime_report_row(artifact)
+                history.append(row)
+                seen_paths.add(row["path"])
+
+        if scans_dir is not None and load_json_document is not None and normalize_scan_metadata_document is not None:
+            for metadata_path, data in iter_scan_metadata_documents(
+                scans_dir,
+                load_json_document,
+                normalize_scan_metadata_document,
+                logger=logger,
+            ):
+                rel_path = str(metadata_path.parent.relative_to(scans_dir))
+                if rel_path in seen_paths:
+                    continue
+                if "customer_name" not in data:
+                    data["customer_name"] = data.get(
+                        "customer", data.get("customer_id", "Unknown")
+                    )
+                if data["customer_name"]:
+                    data["customer_name"] = str(data["customer_name"]).split(" (")[0]
+                data["path"] = rel_path
+                data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
+                    metadata_path.parent / "scan.html"
+                ).exists()
+                data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
+                data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
+                history.append(data)
+
+        history.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
+        return jsonify({"history": history})
