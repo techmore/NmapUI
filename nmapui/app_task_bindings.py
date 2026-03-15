@@ -74,6 +74,7 @@ def build_task_bindings(
         sid=None,
         excluded_targets=None,
         scan_only_mode=False,
+        force_privileged_scan=False,
         emit_to_client_override=None,
     ):
         return run_nmap_with_xml_output_runtime(
@@ -83,6 +84,7 @@ def build_task_bindings(
             sid=sid,
             excluded_targets=excluded_targets,
             scan_only_mode=scan_only_mode,
+            force_privileged_scan=force_privileged_scan,
             vulners_script=vulners_script,
             stylesheet_pdf=stylesheet_pdf,
             emit_to_client=emit_to_client_override or emit_to_client,
