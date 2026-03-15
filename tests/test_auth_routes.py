@@ -118,6 +118,35 @@ def build_scan_app_with_runtime_artifacts(tmp_path):
     return app
 
 
+def build_scan_app_with_runtime_artifact_delete(tmp_path, runtime_calls):
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    scans_dir = tmp_path / "scans"
+    scans_dir.mkdir(parents=True, exist_ok=True)
+    scan_dir = scans_dir / "Acme" / "2026-03-13" / "scan_010000_target"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    (scan_dir / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Acme","customer_id":"cust-1","target":"10.0.0.0/24"}'
+    )
+
+    class RuntimeStoreStub:
+        def delete_report_artifact(self, scan_path):
+            runtime_calls.append(scan_path)
+
+    register_scan_routes(
+        app,
+        {
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": load_json_document,
+            "normalize_scan_metadata_document": normalize_scan_metadata_document,
+            "logger": app.logger,
+            "runtime_store": RuntimeStoreStub(),
+        },
+    )
+    return app
+
+
 def build_compare_app_with_runtime_artifacts(tmp_path):
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
@@ -594,6 +623,23 @@ def test_delete_scan_removes_index_entry(tmp_path, monkeypatch):
     assert delete_response.status_code == 200
     assert delete_response.get_json() == {"success": True}
     assert __import__("json").loads(index_path.read_text())["entries"] == []
+
+
+def test_delete_scan_removes_runtime_artifact(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    runtime_calls = []
+    app = build_scan_app_with_runtime_artifact_delete(tmp_path, runtime_calls)
+    client = app.test_client()
+
+    response = client.delete(
+        "/api/scans/Acme/2026-03-13/scan_010000_target",
+        headers=basic_auth_header(),
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"success": True}
+    assert runtime_calls == ["Acme/2026-03-13/scan_010000_target"]
 
 
 def test_delete_scan_refreshes_successor_diff_summary(tmp_path, monkeypatch):

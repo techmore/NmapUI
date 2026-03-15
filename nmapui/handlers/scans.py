@@ -208,6 +208,8 @@ def register_scan_routes(app, deps):
             metadata = normalize_scan_metadata_document(
                 load_json_document(metadata_path, {})
             ) if metadata_path.exists() else {}
+            if runtime_store is not None and hasattr(runtime_store, "delete_report_artifact"):
+                runtime_store.delete_report_artifact(path)
             shutil.rmtree(scan_dir)
             remove_scan_metadata_index_entry(scans_dir, scan_dir)
             refresh_persisted_diff_summaries(

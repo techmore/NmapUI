@@ -69,3 +69,24 @@ def test_runtime_state_store_tracks_jobs_reports_and_logs(tmp_path: Path):
     assert reports[0]["payload"]["status"] == "completed"
     assert logs[0]["id"] == log_id
     assert logs[0]["message"] == "Hydrated network topology"
+
+
+def test_runtime_state_store_deletes_report_artifacts(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    scan_path = "Acme/2026-03-14/scan_120000_192.168.1.0_24"
+    store.upsert_report_artifact(
+        scan_path=scan_path,
+        customer_id="cust-1",
+        target="192.168.1.0/24",
+        html_path="scan_web.html",
+        pdf_path="scan_report.pdf",
+        xml_path="scan.xml",
+        payload={"status": "completed"},
+    )
+
+    assert store.get_report_artifact(scan_path) is not None
+
+    store.delete_report_artifact(scan_path)
+
+    assert store.get_report_artifact(scan_path) is None

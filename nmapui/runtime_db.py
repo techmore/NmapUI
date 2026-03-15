@@ -316,6 +316,13 @@ class RuntimeStateStore:
             "updated_at": row["updated_at"],
         }
 
+    def delete_report_artifact(self, scan_path: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "DELETE FROM report_artifacts WHERE scan_path = ?",
+                (scan_path,),
+            )
+
     def append_log(
         self,
         *,
