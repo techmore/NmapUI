@@ -258,6 +258,7 @@ def run_nmap_with_xml_output(
     sid=None,
     excluded_targets=None,
     scan_only_mode=False,
+    force_privileged_scan=False,
     vulners_script,
     stylesheet_pdf,
     emit_to_client,
@@ -266,7 +267,10 @@ def run_nmap_with_xml_output(
     run_cancellable_command,
 ):
     """Run nmap with all formats output (-oA)."""
-    scan_technique = get_nmap_scan_technique(force_unprivileged=scan_only_mode)
+    if force_privileged_scan:
+        scan_technique = "-sS"
+    else:
+        scan_technique = get_nmap_scan_technique(force_unprivileged=scan_only_mode)
     excluded_targets = [
         str(item or "").strip() for item in (excluded_targets or []) if str(item or "").strip()
     ]
@@ -301,6 +305,7 @@ def run_nmap_with_xml_output(
         cmd = [
             "nmap",
             scan_technique,
+            "-Pn",
             "-T4",
             "-A",
             "-sC",
@@ -341,6 +346,28 @@ def run_nmap_with_xml_output(
         result = run_cancellable_command(
             cmd, sid=sid, job_type="report" if sid else None, timeout=timeout_seconds
         )
+        if force_privileged_scan and result.returncode != 0 and _is_permission_denied(result):
+            logger.warning("Privileged scan denied; retrying with unprivileged connect scan")
+            if sid:
+                emit_to_client(
+                    sid,
+                    "scan_feedback",
+                    "Privileged scan denied; retrying with unprivileged connect scan",
+                )
+            else:
+                socketio_emit(
+                    "scan_feedback",
+                    "Privileged scan denied; retrying with unprivileged connect scan",
+                )
+            socketio_sleep(0)
+            fallback_cmd = cmd[:]
+            fallback_cmd[1] = "-sT"
+            result = run_cancellable_command(
+                fallback_cmd,
+                sid=sid,
+                job_type="report" if sid else None,
+                timeout=timeout_seconds,
+            )
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()

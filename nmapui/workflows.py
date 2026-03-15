@@ -463,6 +463,7 @@ def generate_report_task(context, sid, data):
                 run_kwargs["excluded_targets"] = excluded_targets
             if scan_only_mode:
                 run_kwargs["scan_only_mode"] = True
+            run_kwargs["force_privileged_scan"] = True
 
             if not run_nmap_with_xml_output(
                 chunk_target,
