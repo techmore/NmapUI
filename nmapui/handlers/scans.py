@@ -4,7 +4,7 @@ import shutil
 
 from flask import jsonify, request, send_file
 from nmapui.auth import require_auth
-from nmapui.reporting import refresh_persisted_diff_summaries
+from nmapui.reporting import _resolve_artifact_file_path, refresh_persisted_diff_summaries
 from nmapui.runtime_history import build_compare_result, build_history_rows
 from persistence import remove_scan_metadata_index_entry
 
@@ -16,6 +16,17 @@ def _load_runtime_artifact_payload(runtime_store, path):
     if artifact is None:
         return None
     return dict(artifact.get("payload", {}) or {})
+
+
+def _resolve_runtime_artifact_path(*, runtime_store, scans_dir, scan_path, stored_path, default_name):
+    if runtime_store is None:
+        return scans_dir / scan_path / default_name
+    return _resolve_artifact_file_path(
+        scans_dir=scans_dir,
+        scan_path=scan_path,
+        stored_path=stored_path,
+        default_name=default_name,
+    )
 
 
 def register_scan_routes(app, deps):
@@ -45,7 +56,14 @@ def register_scan_routes(app, deps):
         if scan_dir is None:
             return "Invalid path", 400
 
-        html_path = scan_dir / "scan_web.html"
+        artifact = runtime_store.get_report_artifact(path) if runtime_store is not None and hasattr(runtime_store, "get_report_artifact") else None
+        html_path = _resolve_runtime_artifact_path(
+            runtime_store=runtime_store,
+            scans_dir=scans_dir,
+            scan_path=path,
+            stored_path=artifact.get("html_path") if artifact else None,
+            default_name="scan_web.html",
+        )
         if not html_path.exists():
             html_path = scan_dir / "scan.html"
         if not html_path.exists():
@@ -59,12 +77,19 @@ def register_scan_routes(app, deps):
         if scan_dir is None:
             return "Invalid path", 400
 
-        pdf_path = scan_dir / "scan_report.pdf"
+        artifact = runtime_store.get_report_artifact(path) if runtime_store is not None and hasattr(runtime_store, "get_report_artifact") else None
+        pdf_path = _resolve_runtime_artifact_path(
+            runtime_store=runtime_store,
+            scans_dir=scans_dir,
+            scan_path=path,
+            stored_path=artifact.get("pdf_path") if artifact else None,
+            default_name="scan_report.pdf",
+        )
         if not pdf_path.exists():
             return "PDF not found", 404
 
         download_name = "Nmap_Audit_Report.pdf"
-        artifact_payload = _load_runtime_artifact_payload(runtime_store, path)
+        artifact_payload = dict(artifact.get("payload", {}) or {}) if artifact else None
         if artifact_payload:
             download_name = artifact_payload.get("downloads", {}).get("pdf", download_name)
         metadata_path = scan_dir / "metadata.json"
@@ -86,12 +111,19 @@ def register_scan_routes(app, deps):
         if scan_dir is None:
             return "Invalid path", 400
 
-        xml_path = scan_dir / "scan.xml"
+        artifact = runtime_store.get_report_artifact(path) if runtime_store is not None and hasattr(runtime_store, "get_report_artifact") else None
+        xml_path = _resolve_runtime_artifact_path(
+            runtime_store=runtime_store,
+            scans_dir=scans_dir,
+            scan_path=path,
+            stored_path=artifact.get("xml_path") if artifact else None,
+            default_name="scan.xml",
+        )
         if not xml_path.exists():
             return "XML not found", 404
 
         download_name = "Nmap_Raw_Data.xml"
-        artifact_payload = _load_runtime_artifact_payload(runtime_store, path)
+        artifact_payload = dict(artifact.get("payload", {}) or {}) if artifact else None
         if artifact_payload:
             download_name = artifact_payload.get("downloads", {}).get("xml", download_name)
         metadata_path = scan_dir / "metadata.json"

@@ -302,6 +302,10 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     assert '"runtime_store": runtime_store' in app_composition_source
     assert "build_compare_result(" in scans_source
     assert "def _load_runtime_artifact_payload(runtime_store, path):" in scans_source
+    assert "def _resolve_runtime_artifact_path(*, runtime_store, scans_dir, scan_path, stored_path, default_name):" in scans_source
+    assert 'stored_path=artifact.get("html_path") if artifact else None,' in scans_source
+    assert 'stored_path=artifact.get("pdf_path") if artifact else None,' in scans_source
+    assert 'stored_path=artifact.get("xml_path") if artifact else None,' in scans_source
     assert 'artifact_payload.get("downloads", {}).get("pdf", download_name)' in scans_source
     assert 'artifact_payload.get("downloads", {}).get("xml", download_name)' in scans_source
     assert "runtime_store.delete_report_artifact(path)" in scans_source

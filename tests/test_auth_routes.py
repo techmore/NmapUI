@@ -80,6 +80,11 @@ def build_scan_app_with_runtime_artifacts(tmp_path):
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
     scans_dir = tmp_path / "scans"
     scans_dir.mkdir(parents=True, exist_ok=True)
+    scan_dir = scans_dir / "Acme" / "2026-03-14" / "scan_020000_target"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    (scan_dir / "runtime_scan_web.html").write_text("<html><body>runtime html</body></html>")
+    (scan_dir / "runtime_scan_report.pdf").write_bytes(b"%PDF-1.4 runtime")
+    (scan_dir / "runtime_scan.xml").write_text("<nmaprun><host /></nmaprun>")
 
     class RuntimeStoreStub:
         def list_report_artifacts(self, customer_id=None):
@@ -88,9 +93,9 @@ def build_scan_app_with_runtime_artifacts(tmp_path):
                     "scan_path": "Acme/2026-03-14/scan_020000_target",
                     "customer_id": "cust-123",
                     "target": "10.0.0.0/24",
-                    "html_path": "/tmp/scan_web.html",
-                    "pdf_path": "/tmp/scan_report.pdf",
-                    "xml_path": "/tmp/scan.xml",
+                    "html_path": "Acme/2026-03-14/scan_020000_target/runtime_scan_web.html",
+                    "pdf_path": "Acme/2026-03-14/scan_020000_target/runtime_scan_report.pdf",
+                    "xml_path": "Acme/2026-03-14/scan_020000_target/runtime_scan.xml",
                     "payload": {
                         "timestamp": "2026-03-14T02:00:00",
                         "customer_name": "Acme",
@@ -324,6 +329,32 @@ def test_scan_download_routes_prefer_runtime_artifact_download_names(tmp_path, m
     assert "filename=Nmap_Audit_Acme_10.0.0.0_24_2026-03-14_020000.pdf" in pdf_response.headers["Content-Disposition"]
     assert xml_response.status_code == 200
     assert "filename=Nmap_Raw_Acme_10.0.0.0_24_2026-03-14_020000.xml" in xml_response.headers["Content-Disposition"]
+
+
+def test_scan_file_routes_prefer_runtime_artifact_paths(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = build_scan_app_with_runtime_artifacts(tmp_path)
+    client = app.test_client()
+
+    html_response = client.get(
+        "/api/scans/Acme/2026-03-14/scan_020000_target/html",
+        headers=basic_auth_header(),
+    )
+    pdf_response = client.get(
+        "/api/scans/Acme/2026-03-14/scan_020000_target/pdf",
+        headers=basic_auth_header(),
+    )
+    xml_response = client.get(
+        "/api/scans/Acme/2026-03-14/scan_020000_target/xml",
+        headers=basic_auth_header(),
+    )
+
+    assert html_response.status_code == 200
+    assert b"runtime html" in html_response.data
+    assert pdf_response.status_code == 200
+    assert pdf_response.data.startswith(b"%PDF-1.4 runtime")
+    assert xml_response.status_code == 200
+    assert b"<host />" in xml_response.data
 
 
 def test_scan_routes_reject_spoofed_local_host_without_loopback_peer(tmp_path, monkeypatch):
