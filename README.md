@@ -131,6 +131,10 @@ The app will:
 
 Open your browser to `http://127.0.0.1:9000`
 
+### Report Copies on Desktop
+
+Enable **Settings → Report Exports → Save reports to Desktop** to copy report artifacts (PDF, HTML, XML, Nmap outputs) into `~/Desktop/nmapui-reports`, preserving the scan folder structure.
+
 ### Quick Start (Skip Checks)
 
 To skip startup dependency checks:
