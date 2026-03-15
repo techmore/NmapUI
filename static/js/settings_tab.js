@@ -34,6 +34,9 @@ function getSettingsFormState() {
                 .map((value) => value.trim())
                 .filter(Boolean),
         },
+        reports: {
+            save_to_desktop: document.getElementById('settings-save-reports-desktop')?.checked || false,
+        },
         sync: {
             google_drive: {
                 enabled: document.getElementById('settings-google-drive-enabled')?.checked || false,
@@ -105,6 +108,7 @@ function renderRuntimeSummary(summary) {
         ['Profiles', String(summary.target_profiles_count || 0)],
         ['Exclusions', String(summary.excluded_targets_count || 0)],
         ['Scan-only mode', summary.scan_only_mode ? 'Enabled' : 'Disabled'],
+        ['Desktop reports', summary.reports_save_to_desktop ? 'Enabled' : 'Disabled'],
         ['Google Drive', summary.google_drive_enabled ? 'Enabled' : 'Disabled'],
         ['Remote sync', summary.remote_sync_enabled ? 'Enabled' : 'Disabled'],
         ['Reports in DB', String(persistedCounts.report_artifacts || 0)],
@@ -268,6 +272,7 @@ function fillSettingsForm(state) {
     settingsState = state;
     document.getElementById('settings-scan-only-mode').checked = !!state.scan_rules?.scan_only_mode;
     document.getElementById('settings-excluded-targets').value = (state.scan_rules?.excluded_targets || []).join('\n');
+    document.getElementById('settings-save-reports-desktop').checked = !!state.reports?.save_to_desktop;
     document.getElementById('settings-profile-scan-only-mode').checked = false;
     document.getElementById('settings-profile-excluded-targets').value = '';
     document.getElementById('settings-google-drive-enabled').checked = !!state.sync?.google_drive?.enabled;

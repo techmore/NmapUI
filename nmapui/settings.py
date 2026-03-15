@@ -19,6 +19,9 @@ DEFAULT_APP_SETTINGS = {
         "scan_only_mode": False,
         "excluded_targets": [],
     },
+    "reports": {
+        "save_to_desktop": False,
+    },
     "sync": {
         "google_drive": {
             "enabled": False,
@@ -163,6 +166,7 @@ def normalize_settings_document(
 ) -> dict[str, Any]:
     document = document if isinstance(document, dict) else {}
     scan_rules = document.get("scan_rules")
+    reports = document.get("reports")
     sync = document.get("sync")
     google_drive = sync.get("google_drive") if isinstance(sync, dict) else {}
     remote_sync = sync.get("remote_sync") if isinstance(sync, dict) else {}
@@ -185,6 +189,9 @@ def normalize_settings_document(
             "excluded_targets": _normalize_string_list(
                 (scan_rules or {}).get("excluded_targets", [])
             ),
+        },
+        "reports": {
+            "save_to_desktop": bool((reports or {}).get("save_to_desktop", False)),
         },
         "sync": {
             "google_drive": {
