@@ -1228,7 +1228,8 @@ def test_report_runtime_replays_nmap_feedback_through_broadcaster():
 
     assert "emit_to_client_override=None" in task_bindings_source
     assert "emit_to_client=emit_to_client_override or emit_to_client" in task_bindings_source
-    assert '"run_nmap_with_xml_output": lambda *args, **kwargs: deps["run_nmap_with_xml_output"](' in report_runtime_source
+    assert 'original_run_nmap_with_xml_output = deps["run_nmap_with_xml_output"]' in report_runtime_source
+    assert '"run_nmap_with_xml_output": lambda *args, **kwargs: original_run_nmap_with_xml_output(' in report_runtime_source
     assert "emit_to_client_override=wrapped_emit" in report_runtime_source
 
 
