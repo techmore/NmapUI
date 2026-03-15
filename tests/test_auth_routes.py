@@ -7,7 +7,12 @@ from nmapui.handlers.auto_scan import register_auto_scan_handlers
 from nmapui.handlers.routes import register_core_routes
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.handlers.settings import register_settings_routes
-from nmapui.settings import normalize_settings_document
+from nmapui.settings import (
+    load_remote_sync_secret,
+    load_settings_state,
+    normalize_settings_document,
+    save_settings_state,
+)
 from persistence import load_json_document, normalize_scan_metadata_document
 
 
@@ -250,7 +255,7 @@ def build_settings_app():
         "scan_rules": {"scan_only_mode": False, "excluded_targets": []},
         "sync": {
             "google_drive": {"enabled": False, "folder_id": "", "status": "Not configured"},
-            "remote_sync": {"enabled": False, "endpoint": "", "api_key": "", "status": "Not configured"},
+            "remote_sync": {"enabled": False, "endpoint": "", "api_key": "", "api_key_configured": False, "status": "Not configured"},
         },
     }
     register_settings_routes(
@@ -938,7 +943,8 @@ def test_settings_routes_save_normalized_payload(monkeypatch):
     assert payload["settings"]["target_profiles"][0]["scan_rules"]["excluded_targets"] == []
     assert payload["settings"]["scan_rules"]["scan_only_mode"] is True
     assert payload["settings"]["scan_rules"]["excluded_targets"] == ["192.168.1.10", "192.168.1.11"]
-    assert payload["settings"]["sync"]["remote_sync"]["api_key"] == "secret"
+    assert payload["settings"]["sync"]["remote_sync"]["api_key"] == ""
+    assert payload["settings"]["sync"]["remote_sync"]["api_key_configured"] is True
 
 
 def test_settings_routes_preserve_profile_level_scan_rule_overrides(monkeypatch):
@@ -1051,6 +1057,88 @@ def test_settings_routes_validate_remote_sync(monkeypatch):
         "success": True,
         "status": "Remote OK:https://pilot.example/api:secret",
     }
+
+
+def test_save_settings_state_moves_remote_sync_secret_out_of_settings_json(tmp_path):
+    settings_path = tmp_path / "settings.json"
+    secret_path = tmp_path / "remote_sync_secret.json"
+    secret_key_path = tmp_path / "remote_sync_secret.key"
+
+    saved = save_settings_state(
+        settings_path=settings_path,
+        save_json_document=lambda path, payload: path.write_text(__import__("json").dumps(payload, indent=2)),
+        settings_state={
+            "sync": {
+                "google_drive": {"enabled": False, "folder_id": "", "status": "Not configured"},
+                "remote_sync": {
+                    "enabled": True,
+                    "endpoint": "https://pilot.example/api",
+                    "api_key": "secret-token",
+                    "status": "Configured",
+                },
+            }
+        },
+        remote_sync_secret_path=secret_path,
+        remote_sync_secret_key_path=secret_key_path,
+    )
+
+    persisted = __import__("json").loads(settings_path.read_text())
+    assert persisted["sync"]["remote_sync"]["api_key"] == ""
+    assert persisted["sync"]["remote_sync"]["api_key_configured"] is True
+    assert saved["sync"]["remote_sync"]["api_key"] == ""
+    assert load_remote_sync_secret(secret_path=secret_path, key_path=secret_key_path) == "secret-token"
+
+
+def test_load_settings_state_redacts_remote_sync_secret_but_preserves_configured_flag(tmp_path):
+    settings_path = tmp_path / "settings.json"
+    secret_path = tmp_path / "remote_sync_secret.json"
+    secret_key_path = tmp_path / "remote_sync_secret.key"
+    settings_path.write_text(
+        __import__("json").dumps(
+            {
+                "schema_version": 1,
+                "target_profiles": [],
+                "scan_rules": {"scan_only_mode": False, "excluded_targets": []},
+                "sync": {
+                    "google_drive": {"enabled": False, "folder_id": "", "status": "Not configured"},
+                    "remote_sync": {
+                        "enabled": True,
+                        "endpoint": "https://pilot.example/api",
+                        "api_key": "",
+                        "status": "Configured",
+                    },
+                },
+            },
+            indent=2,
+        )
+    )
+    save_settings_state(
+        settings_path=settings_path,
+        save_json_document=lambda path, payload: path.write_text(__import__("json").dumps(payload, indent=2)),
+        settings_state={
+            "sync": {
+                "google_drive": {"enabled": False, "folder_id": "", "status": "Not configured"},
+                "remote_sync": {
+                    "enabled": True,
+                    "endpoint": "https://pilot.example/api",
+                    "api_key": "secret-token",
+                    "status": "Configured",
+                },
+            }
+        },
+        remote_sync_secret_path=secret_path,
+        remote_sync_secret_key_path=secret_key_path,
+    )
+
+    loaded = load_settings_state(
+        settings_path=settings_path,
+        load_json_document=lambda path, default: __import__("json").loads(path.read_text()),
+        remote_sync_secret_path=secret_path,
+        remote_sync_secret_key_path=secret_key_path,
+    )
+
+    assert loaded["sync"]["remote_sync"]["api_key"] == ""
+    assert loaded["sync"]["remote_sync"]["api_key_configured"] is True
 
 
 def test_http_auth_rejects_builtin_default_credentials_by_default(tmp_path, monkeypatch):

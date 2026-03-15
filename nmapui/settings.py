@@ -1,11 +1,16 @@
 from copy import deepcopy
+import json
+import os
 from pathlib import Path
 from typing import Any
 import uuid
 from urllib.parse import urlparse
 
+from cryptography.fernet import Fernet, InvalidToken
+
 
 SETTINGS_SCHEMA_VERSION = 1
+ENCRYPTED_REMOTE_SYNC_SCHEMA_VERSION = 1
 DEFAULT_APP_SETTINGS = {
     "schema_version": SETTINGS_SCHEMA_VERSION,
     "target_profiles": [],
@@ -22,12 +27,85 @@ DEFAULT_APP_SETTINGS = {
         "remote_sync": {
             "enabled": False,
             "endpoint": "",
-            "api_key": "",
             "api_key_configured": False,
             "status": "Not configured",
         },
     },
 }
+
+
+def _set_owner_only_permissions(path: Path) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def _load_or_create_encryption_key(key_path: Path) -> bytes:
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    if key_path.exists():
+        key = key_path.read_bytes().strip()
+        _set_owner_only_permissions(key_path)
+        return key
+
+    key = Fernet.generate_key()
+    tmp_path = key_path.with_suffix(f"{key_path.suffix}.tmp")
+    tmp_path.write_bytes(key)
+    tmp_path.replace(key_path)
+    _set_owner_only_permissions(key_path)
+    return key
+
+
+def load_remote_sync_secret(*, secret_path: Path, key_path: Path) -> str:
+    if not secret_path.exists():
+        return ""
+
+    try:
+        payload = json.loads(secret_path.read_text())
+    except Exception:
+        return ""
+
+    ciphertext = str((payload or {}).get("ciphertext", "") or "").strip()
+    if not ciphertext:
+        return ""
+
+    try:
+        key = _load_or_create_encryption_key(key_path)
+        decrypted = Fernet(key).decrypt(ciphertext.encode("utf-8"))
+    except (InvalidToken, ValueError, OSError):
+        return ""
+
+    return str(decrypted.decode("utf-8")).strip()
+
+
+def save_remote_sync_secret(*, secret_path: Path, key_path: Path, api_key: str) -> None:
+    api_key = str(api_key or "").strip()
+    if not api_key:
+        clear_remote_sync_secret(secret_path=secret_path, key_path=key_path)
+        return
+
+    key = _load_or_create_encryption_key(key_path)
+    encrypted_payload = Fernet(key).encrypt(api_key.encode("utf-8")).decode("utf-8")
+    secret_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = secret_path.with_suffix(f"{secret_path.suffix}.tmp")
+    tmp_path.write_text(
+        json.dumps(
+            {
+                "schema_version": ENCRYPTED_REMOTE_SYNC_SCHEMA_VERSION,
+                "ciphertext": encrypted_payload,
+            },
+            indent=2,
+        )
+    )
+    tmp_path.replace(secret_path)
+    _set_owner_only_permissions(secret_path)
+
+
+def clear_remote_sync_secret(*, secret_path: Path, key_path: Path) -> None:
+    if secret_path.exists():
+        secret_path.unlink()
+    if key_path.exists():
+        key_path.unlink()
 
 
 def _normalize_string_list(values: Any) -> list[str]:
@@ -66,7 +144,11 @@ def normalize_target_profile(profile: Any) -> dict[str, Any]:
     }
 
 
-def normalize_settings_document(document: Any) -> dict[str, Any]:
+def normalize_settings_document(
+    document: Any,
+    *,
+    remote_sync_api_key_configured: bool | None = None,
+) -> dict[str, Any]:
     document = document if isinstance(document, dict) else {}
     scan_rules = document.get("scan_rules")
     sync = document.get("sync")
@@ -103,9 +185,11 @@ def normalize_settings_document(document: Any) -> dict[str, Any]:
             "remote_sync": {
                 "enabled": bool((remote_sync or {}).get("enabled", False)),
                 "endpoint": str((remote_sync or {}).get("endpoint", "") or "").strip(),
-                "api_key": str((remote_sync or {}).get("api_key", "") or "").strip(),
-                "api_key_configured": bool(
-                    str((remote_sync or {}).get("api_key", "") or "").strip()
+                "api_key": "",
+                "api_key_configured": (
+                    bool(remote_sync_api_key_configured)
+                    if remote_sync_api_key_configured is not None
+                    else bool(str((remote_sync or {}).get("api_key", "") or "").strip())
                 ),
                 "status": str(
                     (remote_sync or {}).get("status", "Not configured") or "Not configured"
@@ -115,14 +199,72 @@ def normalize_settings_document(document: Any) -> dict[str, Any]:
     }
 
 
-def load_settings_state(*, settings_path, load_json_document) -> dict[str, Any]:
-    return normalize_settings_document(
-        load_json_document(settings_path, deepcopy(DEFAULT_APP_SETTINGS))
+def load_settings_state(
+    *,
+    settings_path,
+    load_json_document,
+    remote_sync_secret_path: Path | None = None,
+    remote_sync_secret_key_path: Path | None = None,
+) -> dict[str, Any]:
+    raw_document = load_json_document(settings_path, deepcopy(DEFAULT_APP_SETTINGS))
+    remote_sync = (raw_document or {}).get("sync", {}).get("remote_sync", {})
+    legacy_api_key = str((remote_sync or {}).get("api_key", "") or "").strip()
+    stored_api_key = ""
+    if remote_sync_secret_path is not None and remote_sync_secret_key_path is not None:
+        stored_api_key = load_remote_sync_secret(
+            secret_path=remote_sync_secret_path,
+            key_path=remote_sync_secret_key_path,
+        )
+        if legacy_api_key and not stored_api_key:
+            save_remote_sync_secret(
+                secret_path=remote_sync_secret_path,
+                key_path=remote_sync_secret_key_path,
+                api_key=legacy_api_key,
+            )
+            stored_api_key = legacy_api_key
+
+    normalized = normalize_settings_document(
+        raw_document,
+        remote_sync_api_key_configured=bool(stored_api_key or legacy_api_key),
     )
+    if legacy_api_key:
+        normalized["sync"]["remote_sync"]["api_key"] = ""
+    return normalized
 
 
-def save_settings_state(*, settings_path, save_json_document, settings_state) -> dict[str, Any]:
-    normalized = normalize_settings_document(settings_state)
+def save_settings_state(
+    *,
+    settings_path,
+    save_json_document,
+    settings_state,
+    remote_sync_secret_path: Path | None = None,
+    remote_sync_secret_key_path: Path | None = None,
+) -> dict[str, Any]:
+    raw_remote_sync = (settings_state or {}).get("sync", {}).get("remote_sync", {})
+    incoming_api_key = str((raw_remote_sync or {}).get("api_key", "") or "").strip()
+    existing_api_key = ""
+    if remote_sync_secret_path is not None and remote_sync_secret_key_path is not None:
+        existing_api_key = load_remote_sync_secret(
+            secret_path=remote_sync_secret_path,
+            key_path=remote_sync_secret_key_path,
+        )
+        if incoming_api_key:
+            save_remote_sync_secret(
+                secret_path=remote_sync_secret_path,
+                key_path=remote_sync_secret_key_path,
+                api_key=incoming_api_key,
+            )
+        elif existing_api_key:
+            save_remote_sync_secret(
+                secret_path=remote_sync_secret_path,
+                key_path=remote_sync_secret_key_path,
+                api_key=existing_api_key,
+            )
+
+    normalized = normalize_settings_document(
+        settings_state,
+        remote_sync_api_key_configured=bool(incoming_api_key or existing_api_key),
+    )
     save_json_document(settings_path, normalized)
     return normalized
 

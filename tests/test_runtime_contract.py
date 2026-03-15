@@ -267,6 +267,8 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
     assert 'GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"' in paths_source
     assert 'GOOGLE_DRIVE_TOKEN_FILE = BASE_DIR / "data" / "google_drive_tokens.json"' in paths_source
     assert 'GOOGLE_DRIVE_TOKEN_KEY_FILE = BASE_DIR / "data" / "google_drive_tokens.key"' in paths_source
+    assert 'REMOTE_SYNC_SECRET_FILE = BASE_DIR / "data" / "remote_sync_secret.json"' in paths_source
+    assert 'REMOTE_SYNC_SECRET_KEY_FILE = BASE_DIR / "data" / "remote_sync_secret.key"' in paths_source
     assert '"web_stylesheet": web_stylesheet' in app_composition_source
     assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
 
@@ -1327,12 +1329,18 @@ def test_google_drive_integration_contract_exists():
     assert "file_path.read_bytes()" not in google_drive_source
     assert "upload_report_artifacts_to_google_drive=lambda" in app_source
     assert "key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE" in app_source
+    assert "load_remote_sync_secret(" in app_source
+    assert "REMOTE_SYNC_SECRET_FILE" in app_source
     assert "function uploadReportToGoogleDrive(scanPath)" in reports_tab_source
     assert "Upload to Drive" in reports_tab_source
     assert "async function connectGoogleDrive()" in settings_tab_source
     assert "async function disconnectGoogleDriveAccount()" in settings_tab_source
     assert 'id="settings-google-drive-connect-btn"' in template
     assert 'id="settings-google-drive-disconnect-btn"' in template
+    settings_source = (ROOT / "nmapui" / "settings.py").read_text()
+    assert "def load_remote_sync_secret(*, secret_path: Path, key_path: Path) -> str:" in settings_source
+    assert "def save_remote_sync_secret(*, secret_path: Path, key_path: Path, api_key: str) -> None:" in settings_source
+    assert '"api_key": ""' in settings_source
 
 
 def test_report_runtime_replays_nmap_feedback_through_broadcaster():

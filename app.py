@@ -61,6 +61,8 @@ from nmapui.paths import (
     GOOGLE_DRIVE_CREDENTIALS_FILE,
     GOOGLE_DRIVE_TOKEN_KEY_FILE,
     GOOGLE_DRIVE_TOKEN_FILE,
+    REMOTE_SYNC_SECRET_FILE,
+    REMOTE_SYNC_SECRET_KEY_FILE,
     RUNTIME_DB_FILE,
     SCANS_DIR,
     SETTINGS_FILE,
@@ -104,6 +106,7 @@ from nmapui.scanning import (
     split_subnet_into_chunks,
 )
 from nmapui.settings import (
+    load_remote_sync_secret,
     load_settings_state,
     save_settings_state,
     validate_google_drive_settings,
@@ -178,6 +181,8 @@ client_state_registry = runtime_services["client_state_registry"]
 settings_state = load_settings_state(
     settings_path=SETTINGS_FILE,
     load_json_document=load_json_document,
+    remote_sync_secret_path=REMOTE_SYNC_SECRET_FILE,
+    remote_sync_secret_key_path=REMOTE_SYNC_SECRET_KEY_FILE,
 )
 
 event_helpers = build_event_helpers(
@@ -348,6 +353,8 @@ register_app_handlers(
         settings_path=SETTINGS_FILE,
         save_json_document=save_json_document,
         settings_state=payload,
+        remote_sync_secret_path=REMOTE_SYNC_SECRET_FILE,
+        remote_sync_secret_key_path=REMOTE_SYNC_SECRET_KEY_FILE,
     ),
     validate_google_drive_settings=lambda *, folder_id: validate_google_drive_settings(
         folder_id=folder_id,
@@ -379,7 +386,11 @@ register_app_handlers(
     ),
     validate_remote_sync_settings=lambda *, endpoint, api_key: validate_remote_sync_settings(
         endpoint=endpoint,
-        api_key=api_key,
+        api_key=api_key
+        or load_remote_sync_secret(
+            secret_path=REMOTE_SYNC_SECRET_FILE,
+            key_path=REMOTE_SYNC_SECRET_KEY_FILE,
+        ),
         requests_module=requests,
     ),
     logger=logger,
