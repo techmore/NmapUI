@@ -5,7 +5,7 @@ A lightweight macOS menu bar application that launches the bundled NmapUI server
 ## Features
 
 - Network icon in the menu bar
-- Opens NmapUI at `http://127.0.0.1:9000`
+- Opens NmapUI on a local loopback URL, defaulting to `http://127.0.0.1:9000`
 - Starts and stops the bundled Python app process
 - Runs as a menu bar app with no dock icon
 - Uses a single supported Swift entrypoint: `NmapUIMenuBarLauncher.swift`
@@ -39,9 +39,9 @@ The app appears as a network icon in the menu bar. Use the menu to start, stop, 
 
 1. Creates a menu bar item with a network icon.
 2. Starts the bundled `run.sh` helper from the app bundle resources.
-3. Opens the browser at `http://127.0.0.1:9000`.
+3. Opens the browser at the selected local runtime URL.
 4. Terminates the child process on quit.
 
 ## Support Contract
 
-Only `NmapUIMenuBarLauncher.swift` is supported. Older popover and relay prototypes have been removed from the tracked build path so the wrapper release flow and port contract stay deterministic.
+Only `NmapUIMenuBarLauncher.swift` is supported. Older popover and relay prototypes have been removed from the tracked build path so the wrapper release flow and port contract stay deterministic. The built bundle is installed as `NmapUI.app`.

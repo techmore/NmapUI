@@ -8,6 +8,7 @@ from nmapui.app_runtime import (
     execute_auto_scan as execute_auto_scan_runtime,
     start_auto_scan_thread as start_auto_scan_thread_runtime,
 )
+from nmapui.auto_scan_runtime import execute_auto_monitor_rule as execute_auto_monitor_rule_runtime
 from nmapui.app_events_runtime import safe_emit as safe_emit_runtime
 from nmapui.traceroute_runtime import (
     build_traceroute_deps,
@@ -119,6 +120,7 @@ def build_traceroute_bindings(
 def build_runtime_bindings(
     *,
     build_execute_auto_scan_deps,
+    build_execute_auto_monitor_rule_deps,
     auto_scan_config,
     get_current_customer,
     get_last_scan_target,
@@ -134,6 +136,13 @@ def build_runtime_bindings(
     startup_grace_seconds,
     current_assignment_loader,
     set_current_customer,
+    settings_state,
+    save_settings,
+    job_registry,
+    emit_job_status,
+    set_current_customer_state,
+    set_last_scan_target_state,
+    generate_report_task_provider,
 ):
     def safe_emit(event, data=None):
         return safe_emit_runtime(event, data)
@@ -153,6 +162,24 @@ def build_runtime_bindings(
             )
         )
 
+    def execute_auto_monitor_rule(rule):
+        return execute_auto_monitor_rule_runtime(
+            deps=build_execute_auto_monitor_rule_deps(
+                rule=rule,
+                logger=logger,
+                network_key=get_network_key(),
+                rate_limiter=rate_limiter,
+                validate_target=validate_target,
+                job_registry=job_registry,
+                emit_job_status=emit_job_status,
+                generate_report_task=generate_report_task_provider(),
+                set_current_customer_state=set_current_customer_state,
+                set_last_scan_target_state=set_last_scan_target_state,
+                settings_state=settings_state,
+                save_settings=save_settings,
+            )
+        )
+
     thread_ref = {"thread": auto_scan_thread}
 
     def start_auto_scan_thread():
@@ -160,10 +187,12 @@ def build_runtime_bindings(
             auto_scan_thread=thread_ref["thread"],
             socketio=socketio,
             auto_scan_config=auto_scan_config,
+            settings_state=settings_state,
             should_run_auto_scan=should_run_auto_scan,
             startup_at=startup_at,
             startup_grace_seconds=startup_grace_seconds,
             execute_auto_scan=execute_auto_scan,
+            execute_auto_monitor_rule=execute_auto_monitor_rule,
             logger=logger,
         )
         return thread_ref["thread"]
@@ -177,6 +206,7 @@ def build_runtime_bindings(
     return {
         "safe_emit": safe_emit,
         "execute_auto_scan": execute_auto_scan,
+        "execute_auto_monitor_rule": execute_auto_monitor_rule,
         "start_auto_scan_thread": start_auto_scan_thread,
         "get_auto_scan_thread": get_auto_scan_thread,
         "load_current_assignment": load_current_assignment,

@@ -9,7 +9,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  unit-tests:
+    name: Unit And Contract Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +21,66 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
-      - name: Run tests
+      - name: Run unit and contract suite
         run: pytest -q
+
+  browser-regressions:
+    name: Browser Regressions
+    runs-on: ubuntu-latest
+    env:
+      NMAPUI_RUN_BROWSER_REGRESSION: "1"
+      NMAPUI_TRUST_LOCAL_UI: "true"
+      NMAPUI_ALLOW_UNSAFE_WERKZEUG: "true"
+      NMAPUI_DEBUG: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Run browser regression suite
+        run: pytest -q tests/test_browser_regressions.py
+      - name: Upload browser regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-regression-diagnostics
+          path: |
+            logs
+            data
+            .pytest_cache
+          if-no-files-found: ignore
+
+  packaged-smoke:
+    name: Packaged App Smoke
+    runs-on: macos-latest
+    env:
+      NMAPUI_RUN_PACKAGED_SMOKE: "1"
+      NMAPUI_SKIP_OPEN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run packaged smoke suite
+        run: pytest -q tests/test_packaged_app_smoke.py
+      - name: Upload packaged smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-smoke-diagnostics
+          path: |
+            NmapUI.app
+            logs
+            data
+            .pytest_cache
+          if-no-files-found: ignore

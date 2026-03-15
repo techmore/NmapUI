@@ -45,9 +45,9 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
    ./build.sh
    ```
 
-   `build.sh` will automatically run `install.sh` if dependencies haven't been set up yet. After a successful build, look for the network icon in your macOS menu bar. The app serves NmapUI at `http://127.0.0.1:9000`.
+   `build.sh` will automatically run `install.sh` if dependencies haven't been set up yet. After a successful build, look for the network icon in your macOS menu bar. The app serves NmapUI on a local loopback URL, defaulting to `http://127.0.0.1:9000` and falling back to the next available local port if needed.
    The wrapper target is selected automatically from your host architecture (`arm64` or `x86_64`). Override it explicitly with `NMAPUI_SWIFT_TARGET` if needed.
-   The completed `NmapUIMenuBar.app` is installed into `/Applications` when writable, otherwise `~/Applications`, replacing any existing install. Override the destination explicitly with `NMAPUI_APPLICATIONS_DIR`.
+   The completed `NmapUI.app` is installed into `/Applications` when writable, otherwise `~/Applications`, replacing any existing install. Override the destination explicitly with `NMAPUI_APPLICATIONS_DIR`.
 
    > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 
@@ -130,6 +130,10 @@ The app will:
 5. Start the web server
 
 Open your browser to `http://127.0.0.1:9000`
+
+### Report Copies on Desktop
+
+Enable **Settings → Report Exports → Save reports to Desktop** to copy report artifacts (PDF, HTML, XML, Nmap outputs) into `~/Desktop/nmapui-reports`, preserving the scan folder structure.
 
 ### Quick Start (Skip Checks)
 

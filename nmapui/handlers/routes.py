@@ -112,6 +112,7 @@ def register_core_routes(app, deps):
     @app.route("/api/runtime/settings-summary")
     def runtime_settings_summary():
         scan_rules = settings_state.get("scan_rules", {})
+        reports = settings_state.get("reports", {})
         sync = settings_state.get("sync", {})
         maintenance_backfill = {}
         maintenance_retention = {}
@@ -139,6 +140,7 @@ def register_core_routes(app, deps):
                 "scan_only_mode": bool(scan_rules.get("scan_only_mode", False)),
                 "excluded_targets_count": len(scan_rules.get("excluded_targets", [])),
                 "target_profiles_count": len(settings_state.get("target_profiles", [])),
+                "reports_save_to_desktop": bool(reports.get("save_to_desktop", False)),
                 "google_drive_enabled": bool(
                     (sync.get("google_drive") or {}).get("enabled", False)
                 ),

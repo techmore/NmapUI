@@ -788,6 +788,63 @@
                         </div>
                     </div>
                 </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Report Exports</h3>
+                    <p class="mt-2 text-sm text-olive-700">Keep a copy of each report outside the app bundle for easy access.</p>
+                    <div class="mt-4 space-y-4">
+                        <label class="flex items-start gap-3 rounded-xl border border-olive-200 bg-white px-4 py-3">
+                            <input id="settings-save-reports-desktop" type="checkbox" class="mt-1 size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-olive-900">Save reports to Desktop</span>
+                                <span class="block text-sm text-olive-700">Copy report artifacts into a Desktop folder named <span class="font-semibold">nmapui-reports</span>.</span>
+                            </span>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Auto-monitor Defaults</h3>
+                    <p class="mt-2 text-sm text-olive-700">Define the default schedule used when you enable auto-monitoring for a customer.</p>
+                    <div class="mt-4 grid gap-4 md:grid-cols-2">
+                        <label class="flex items-start gap-3 rounded-xl border border-olive-200 bg-white px-4 py-3 md:col-span-2">
+                            <input id="settings-auto-monitor-enabled-by-default" type="checkbox" class="mt-1 size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-olive-900">Enable new customer rules by default</span>
+                                <span class="block text-sm text-olive-700">If disabled, new customer monitor rules start in a saved but paused state.</span>
+                            </span>
+                        </label>
+                        <div>
+                            <label for="settings-auto-monitor-recurrence" class="block text-sm font-medium text-olive-800">Recurrence</label>
+                            <select id="settings-auto-monitor-recurrence" class="form-control form-control-md mt-1">
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="biweekly">Bi-weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="settings-auto-monitor-day" class="block text-sm font-medium text-olive-800">Weekday Anchor</label>
+                            <select id="settings-auto-monitor-day" class="form-control form-control-md mt-1">
+                                <option value="monday">Monday</option>
+                                <option value="tuesday">Tuesday</option>
+                                <option value="wednesday">Wednesday</option>
+                                <option value="thursday">Thursday</option>
+                                <option value="friday">Friday</option>
+                                <option value="saturday">Saturday</option>
+                                <option value="sunday">Sunday</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="settings-auto-monitor-time" class="block text-sm font-medium text-olive-800">Run Time</label>
+                            <input id="settings-auto-monitor-time" type="time" class="form-control form-control-md mt-1">
+                        </div>
+                        <div class="rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-700 md:col-span-2">
+                            New customer rules default to <span class="font-semibold text-olive-900">Complete + PDF</span>. Existing customer-specific rules can still override the inherited schedule from the Customers tab.
+                        </div>
+                    </div>
+                </section>
             </div>
 
             <div class="space-y-6">

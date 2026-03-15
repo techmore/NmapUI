@@ -11,7 +11,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_BUNDLE = ROOT / "NmapUIMenuBar.app"
+APP_BUNDLE = ROOT / "NmapUI.app"
 RUN_SCRIPT = APP_BUNDLE / "Contents" / "Resources" / "run.sh"
 
 

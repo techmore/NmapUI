@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from .auto_monitor import normalize_auto_monitor_settings
 
 SETTINGS_SCHEMA_VERSION = 1
 ENCRYPTED_REMOTE_SYNC_SCHEMA_VERSION = 1
@@ -17,6 +18,9 @@ DEFAULT_APP_SETTINGS = {
     "scan_rules": {
         "scan_only_mode": False,
         "excluded_targets": [],
+    },
+    "reports": {
+        "save_to_desktop": False,
     },
     "sync": {
         "google_drive": {
@@ -30,6 +34,16 @@ DEFAULT_APP_SETTINGS = {
             "api_key_configured": False,
             "status": "Not configured",
         },
+    },
+    "auto_monitor": {
+        "defaults": {
+            "enabled_by_default": False,
+            "recurrence": "weekly",
+            "day_of_week": "sunday",
+            "time": "01:00",
+            "scan_mode": "complete_pdf",
+        },
+        "rules": [],
     },
 }
 
@@ -148,9 +162,11 @@ def normalize_settings_document(
     document: Any,
     *,
     remote_sync_api_key_configured: bool | None = None,
+    customer_name_lookup=None,
 ) -> dict[str, Any]:
     document = document if isinstance(document, dict) else {}
     scan_rules = document.get("scan_rules")
+    reports = document.get("reports")
     sync = document.get("sync")
     google_drive = sync.get("google_drive") if isinstance(sync, dict) else {}
     remote_sync = sync.get("remote_sync") if isinstance(sync, dict) else {}
@@ -174,6 +190,9 @@ def normalize_settings_document(
                 (scan_rules or {}).get("excluded_targets", [])
             ),
         },
+        "reports": {
+            "save_to_desktop": bool((reports or {}).get("save_to_desktop", False)),
+        },
         "sync": {
             "google_drive": {
                 "enabled": bool((google_drive or {}).get("enabled", False)),
@@ -196,6 +215,10 @@ def normalize_settings_document(
                 ).strip(),
             },
         },
+        "auto_monitor": normalize_auto_monitor_settings(
+            document.get("auto_monitor", {}),
+            customer_name_lookup=customer_name_lookup,
+        ),
     }
 
 
