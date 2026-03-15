@@ -3,6 +3,65 @@ let reportsTabLoaded = false;
 let historyTabLoaded = false;
 let currentAppTab = 'dashboard';
 let historyCompareBasePath = null;
+let reportsCustomerFilter = 'all';
+let historyViewMode = 'current';
+
+function updateReportsBadge(scans) {
+    const badge = document.getElementById('reports-badge');
+    if (!badge) {
+        return;
+    }
+
+    const today = new Date().toDateString();
+    const reportsToday = (scans || []).filter((scan) => {
+        if (!scan?.timestamp) {
+            return false;
+        }
+        return new Date(scan.timestamp).toDateString() === today;
+    }).length;
+
+    if (reportsToday > 0) {
+        badge.textContent = reportsToday > 99 ? '99+' : String(reportsToday);
+        badge.classList.remove('hidden');
+        return;
+    }
+
+    badge.classList.add('hidden');
+}
+
+function renderReportsCustomerFilters(scans) {
+    const container = document.getElementById('reports-customer-filters');
+    if (!container) {
+        return;
+    }
+
+    const customerNames = Array.from(
+        new Set(
+            (scans || [])
+                .map((scan) => String(scan?.customer_name || '').trim())
+                .filter(Boolean)
+        )
+    ).sort((left, right) => left.localeCompare(right));
+
+    container.replaceChildren();
+
+    const filters = ['all', ...customerNames];
+    filters.forEach((filterValue) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'action-button action-button-secondary action-button-compact';
+        const active = reportsCustomerFilter === filterValue;
+        button.classList.toggle('action-button-primary', active);
+        button.classList.toggle('text-olive-700', !active);
+        button.classList.toggle('hover:bg-olive-100', !active);
+        button.textContent = filterValue === 'all' ? 'All Customers' : filterValue;
+        button.addEventListener('click', () => {
+            reportsCustomerFilter = filterValue;
+            renderReportsTab(scans);
+        });
+        container.appendChild(button);
+    });
+}
 
 function ensureTabPanelsAreSiblings() {
     const dashboardPanel = document.getElementById('dashboard-tab-panel');
@@ -14,6 +73,7 @@ function ensureTabPanelsAreSiblings() {
     const panelIds = [
         'history-tab-panel',
         'reports-tab-panel',
+        'customers-tab-panel',
         'logs-tab-panel',
         'settings-tab-panel',
     ];
@@ -90,6 +150,149 @@ function formatScanTimestamp(scan) {
 
 function renderCompareStatus(message, isError = false) {
     setTabStatus('history-compare-status', message, isError);
+}
+
+function getCurrentHistoryContext() {
+    const customerSelect = document.getElementById('current-customer');
+    const customerId = String(
+        customerSelect?.value || window.currentMatchedCustomerId || ''
+    ).trim();
+    const targetInput = document.getElementById('scan-target');
+    const target = String(
+        targetInput?.value || (typeof window.getLastScanTarget === 'function' ? window.getLastScanTarget() : '') || ''
+    ).trim();
+
+    return {
+        customer_id: customerId,
+        target,
+        hasContext: Boolean(customerId || target),
+    };
+}
+
+function filterScansToCurrentContext(scans) {
+    const context = getCurrentHistoryContext();
+    if (!context.hasContext) {
+        return scans;
+    }
+
+    if (context.customer_id) {
+        const customerMatches = scans.filter(
+            (scan) => String(scan.customer_id || '') === context.customer_id
+        );
+        if (customerMatches.length) {
+            return customerMatches;
+        }
+    }
+
+    if (context.target) {
+        const targetMatches = scans.filter(
+            (scan) => String(scan.target || '') === context.target
+        );
+        if (targetMatches.length) {
+            return targetMatches;
+        }
+    }
+
+    return [];
+}
+
+function buildTimelineLabels(scans, latestPath) {
+    const nextChangeByBaseline = new Map();
+    scans.forEach((scan) => {
+        const baselinePath = scan.diff_summary?.baseline_path;
+        if (baselinePath && scan.diff_summary?.has_changes) {
+            nextChangeByBaseline.set(baselinePath, scan);
+        }
+    });
+
+    return new Map(
+        scans.map((scan) => {
+            if (scan.path === latestPath) {
+                return [
+                    scan.path,
+                    {
+                        label: 'Latest current-context scan',
+                        tone: 'olive',
+                    },
+                ];
+            }
+
+            const nextChangedScan = nextChangeByBaseline.get(scan.path);
+            if (nextChangedScan) {
+                return [
+                    scan.path,
+                    {
+                        label: `Changed in next scan on ${formatScanTimestamp(nextChangedScan)}`,
+                        tone: 'amber',
+                    },
+                ];
+            }
+
+            return [
+                scan.path,
+                {
+                    label: 'Earlier current-context scan',
+                    tone: 'slate',
+                },
+            ];
+        })
+    );
+}
+
+function renderHistoryContextPanel(scans) {
+    const panel = document.getElementById('history-context-panel');
+    if (!panel) {
+        return;
+    }
+
+    const context = getCurrentHistoryContext();
+    if (!scans.length || !context.hasContext) {
+        panel.replaceChildren();
+        panel.classList.add('hidden');
+        return;
+    }
+
+    const latestScan = scans[0];
+    const card = document.createElement('div');
+    const assetCount = Array.isArray(latestScan.asset_snapshot) ? latestScan.asset_snapshot.length : null;
+    const diffSummary = latestScan.diff_summary;
+    card.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <div class="text-[11px] font-black uppercase tracking-widest text-olive-500">Current Network Audit</div>
+                <h3 class="mt-2 text-2xl font-display italic text-olive-950">${latestScan.customer_name || 'Unknown'}</h3>
+                <p class="mt-1 text-sm text-olive-700">Target: <span class="font-mono">${latestScan.target || '--'}</span></p>
+                <p class="mt-1 text-sm text-olive-600">Latest scan: ${formatScanTimestamp(latestScan)}</p>
+                <p class="mt-2 text-sm text-olive-700">${assetCount !== null ? `${assetCount} asset(s) in the saved snapshot.` : 'Asset snapshot unavailable for this saved scan.'}</p>
+                <p class="mt-1 text-sm text-olive-700">${diffSummary?.has_changes ? 'Changes detected since the previous scan.' : 'No recorded changes since the previous scan.'}</p>
+            </div>
+        </div>
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'mt-4 flex flex-wrap gap-2';
+    if (latestScan.has_html) {
+        actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(latestScan.path, 'html'), 'View HTML Report', true));
+    }
+    if (latestScan.has_pdf) {
+        actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(latestScan.path, 'pdf'), 'Download PDF'));
+    }
+    if (latestScan.has_xml) {
+        actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(latestScan.path, 'xml'), 'Download XML'));
+    }
+    card.appendChild(actions);
+
+    if (diffSummary?.has_changes && typeof window.createHistoryDiffSummary === 'function') {
+        const diffCard = window.createHistoryDiffSummary(diffSummary);
+        if (diffCard) {
+            diffCard.classList.remove('mt-3');
+            diffCard.classList.add('mt-4');
+            card.appendChild(diffCard);
+        }
+    }
+
+    panel.replaceChildren(card);
+    panel.classList.remove('hidden');
 }
 
 function renderHistoryCompareResult(payload) {
@@ -235,6 +438,18 @@ function createHistoryCard(scan, options = {}) {
     target.innerHTML = `Target: <span class="font-mono">${scan.target || '--'}</span>`;
     card.appendChild(target);
 
+    if (options.timelineLabel) {
+        const timeline = document.createElement('p');
+        const toneClasses = {
+            olive: 'text-olive-700 bg-olive-100 border-olive-200',
+            amber: 'text-amber-800 bg-amber-50 border-amber-200',
+            slate: 'text-slate-700 bg-slate-100 border-slate-200',
+        };
+        timeline.className = `mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-widest ${toneClasses[options.timelineTone || 'olive'] || toneClasses.olive}`;
+        timeline.textContent = options.timelineLabel;
+        card.appendChild(timeline);
+    }
+
     if (scan.status && scan.status !== 'completed') {
         const status = document.createElement('p');
         status.className = 'mt-2 text-sm font-medium text-amber-700';
@@ -315,15 +530,32 @@ function renderHistoryTab(scans) {
     }
 
     list.replaceChildren();
+    const contextScans = filterScansToCurrentContext(scans);
+    const usingCurrentContext = historyViewMode === 'current';
+    const visibleScans = usingCurrentContext ? contextScans : scans;
+    renderHistoryContextPanel(usingCurrentContext ? contextScans : []);
 
-    if (!scans.length) {
+    if (!visibleScans.length) {
         setTabStatus('history-tab-status', 'No scan history found yet.');
         return;
     }
 
-    setTabStatus('history-tab-status', '');
-    scans.forEach((scan) => {
-        list.appendChild(createHistoryCard(scan, { enableCompare: true }));
+    const timelineLabels = buildTimelineLabels(visibleScans, visibleScans[0]?.path);
+    setTabStatus(
+        'history-tab-status',
+        usingCurrentContext
+            ? `Showing ${visibleScans.length} scan(s) for the current network context.`
+            : ''
+    );
+    visibleScans.forEach((scan) => {
+        const timeline = timelineLabels.get(scan.path) || {};
+        list.appendChild(
+            createHistoryCard(scan, {
+                enableCompare: true,
+                timelineLabel: timeline.label,
+                timelineTone: timeline.tone,
+            })
+        );
     });
 }
 
@@ -333,15 +565,20 @@ function renderReportsTab(scans) {
         return;
     }
 
+    updateReportsBadge(scans);
+    renderReportsCustomerFilters(scans);
+    const filteredScans = reportsCustomerFilter === 'all'
+        ? scans
+        : scans.filter((scan) => scan.customer_name === reportsCustomerFilter);
     list.replaceChildren();
 
-    if (!scans.length) {
+    if (!filteredScans.length) {
         setTabStatus('reports-tab-status', 'No completed reports found yet.');
         return;
     }
 
     setTabStatus('reports-tab-status', '');
-    scans.forEach((scan) => {
+    filteredScans.forEach((scan) => {
         list.appendChild(createHistoryCard(scan));
     });
 }
@@ -413,6 +650,7 @@ function switchAppTab(tabName) {
         dashboard: document.getElementById('dashboard-tab-panel'),
         history: document.getElementById('history-tab-panel'),
         reports: document.getElementById('reports-tab-panel'),
+        customers: document.getElementById('customers-tab-panel'),
         logs: document.getElementById('logs-tab-panel'),
         settings: document.getElementById('settings-tab-panel'),
     };
@@ -424,13 +662,18 @@ function switchAppTab(tabName) {
     setTabButtonState(document.getElementById('tab-dashboard-btn'), tabName === 'dashboard');
     setTabButtonState(document.getElementById('tab-history-btn'), tabName === 'history');
     setTabButtonState(document.getElementById('tab-reports-btn'), tabName === 'reports');
+    setTabButtonState(document.getElementById('tab-customers-btn'), tabName === 'customers');
     setTabButtonState(document.getElementById('tab-logs-btn'), tabName === 'logs');
     setTabButtonState(document.getElementById('tab-settings-btn'), tabName === 'settings');
+    document.getElementById('history-focus-current-btn')?.classList.toggle('action-button-primary', historyViewMode === 'current');
+    document.getElementById('history-focus-all-btn')?.classList.toggle('action-button-primary', historyViewMode === 'all');
 
     if (tabName === 'history') {
         loadHistoryTab();
     } else if (tabName === 'reports') {
         loadReportsTab();
+    } else if (tabName === 'customers' && typeof window.loadCustomersTab === 'function') {
+        window.loadCustomersTab();
     } else if (tabName === 'settings' && typeof window.loadSettingsTab === 'function') {
         window.loadSettingsTab();
     }
@@ -446,10 +689,21 @@ function initializeReportsTab() {
     document.getElementById('tab-dashboard-btn')?.addEventListener('click', () => switchAppTab('dashboard'));
     document.getElementById('tab-history-btn')?.addEventListener('click', () => switchAppTab('history'));
     document.getElementById('tab-reports-btn')?.addEventListener('click', () => switchAppTab('reports'));
+    document.getElementById('tab-customers-btn')?.addEventListener('click', () => switchAppTab('customers'));
     document.getElementById('tab-logs-btn')?.addEventListener('click', () => switchAppTab('logs'));
     document.getElementById('tab-settings-btn')?.addEventListener('click', () => switchAppTab('settings'));
 
     document.getElementById('refresh-history-tab-btn')?.addEventListener('click', () => {
+        historyTabLoaded = false;
+        loadHistoryTab(true);
+    });
+    document.getElementById('history-focus-current-btn')?.addEventListener('click', () => {
+        historyViewMode = 'current';
+        historyTabLoaded = false;
+        loadHistoryTab(true);
+    });
+    document.getElementById('history-focus-all-btn')?.addEventListener('click', () => {
+        historyViewMode = 'all';
         historyTabLoaded = false;
         loadHistoryTab(true);
     });
@@ -462,11 +716,9 @@ function initializeReportsTab() {
     window.addEventListener('report-complete-refresh', () => {
         historyTabLoaded = false;
         reportsTabLoaded = false;
+        loadReportsTab(true);
         if (currentAppTab === 'history') {
             loadHistoryTab(true);
-        }
-        if (currentAppTab === 'reports') {
-            loadReportsTab(true);
         }
     });
 }

@@ -1,14 +1,18 @@
 from datetime import datetime, timezone
 
-from flask import jsonify, render_template, request, send_file
+from flask import after_this_request, jsonify, render_template, request, send_file
 from nmapui.auth import require_auth
 from nmapui.handlers.scans import delete_scan_artifacts
-from nmapui.reporting import _resolve_artifact_file_path
+from nmapui.reporting import _resolve_artifact_file_path, build_artifact_downloads
 from nmapui.runtime_history import (
     backfill_runtime_history_artifacts,
     build_compare_result,
     build_history_rows,
     normalize_runtime_report_row,
+)
+from nmapui.runtime_db import (
+    DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+    DEFAULT_RUNTIME_LOG_RETENTION,
 )
 
 
@@ -16,6 +20,11 @@ def _get_runtime_artifact(runtime_store, scan_path):
     if runtime_store is None or not hasattr(runtime_store, "get_report_artifact"):
         return None
     return runtime_store.get_report_artifact(scan_path)
+
+
+def _build_runtime_db_download_name() -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"nmapui-runtime-{timestamp}.sqlite3"
 
 
 def _send_runtime_artifact(*, runtime_store, scans_dir, scan_path, artifact_key, default_name, download_name=None, as_attachment=False):
@@ -50,6 +59,7 @@ def register_core_routes(app, deps):
     startup_state = deps["startup_state"]
     get_auto_scan_thread = deps["get_auto_scan_thread"]
     upload_report_artifacts_to_google_drive = deps.get("upload_report_artifacts_to_google_drive")
+    customer_fingerprinter = deps.get("customer_fingerprinter")
 
     @app.route("/")
     def index():
@@ -104,6 +114,7 @@ def register_core_routes(app, deps):
         scan_rules = settings_state.get("scan_rules", {})
         sync = settings_state.get("sync", {})
         maintenance_backfill = {}
+        maintenance_retention = {}
         persisted_counts = {
             "report_artifacts": 0,
             "customer_scan_history": 0,
@@ -112,6 +123,9 @@ def register_core_routes(app, deps):
         if runtime_store is not None and hasattr(runtime_store, "get_runtime_snapshot"):
             maintenance_backfill = (
                 runtime_store.get_runtime_snapshot("maintenance_backfill_status") or {}
+            )
+            maintenance_retention = (
+                runtime_store.get_runtime_snapshot("maintenance_retention_status") or {}
             )
         if runtime_store is not None:
             if hasattr(runtime_store, "count_report_artifacts"):
@@ -133,6 +147,7 @@ def register_core_routes(app, deps):
                 ),
                 "tool_versions": get_versions(),
                 "maintenance_backfill": maintenance_backfill,
+                "maintenance_retention": maintenance_retention,
                 "persisted_counts": persisted_counts,
             }
         )
@@ -157,6 +172,28 @@ def register_core_routes(app, deps):
             )
         return jsonify({"entries": []})
 
+    @app.route("/api/runtime/export")
+    @require_auth
+    def runtime_export():
+        if runtime_store is None or not hasattr(runtime_store, "export_snapshot"):
+            return jsonify({"success": False, "error": "Runtime database is not configured"}), 400
+        export_path = runtime_store.export_snapshot()
+
+        @after_this_request
+        def cleanup_export(response):
+            try:
+                export_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return response
+
+        return send_file(
+            export_path,
+            as_attachment=True,
+            download_name=_build_runtime_db_download_name(),
+            mimetype="application/x-sqlite3",
+        )
+
     @app.route("/api/runtime/reports")
     @require_auth
     def runtime_reports():
@@ -164,7 +201,10 @@ def register_core_routes(app, deps):
             return jsonify({"reports": []})
 
         reports = [
-            normalize_runtime_report_row(artifact)
+            normalize_runtime_report_row(
+                artifact,
+                customer_fingerprinter=customer_fingerprinter,
+            )
             for artifact in runtime_store.list_report_artifacts()
         ]
         return jsonify({"reports": reports})
@@ -186,9 +226,10 @@ def register_core_routes(app, deps):
         artifact = _get_runtime_artifact(runtime_store, scan_path)
         download_name = "Nmap_Audit_Report.pdf"
         if artifact is not None:
-            download_name = (
-                dict(artifact.get("payload", {}) or {}).get("downloads", {}).get("pdf", download_name)
-            )
+            download_name = build_artifact_downloads(
+                dict(artifact.get("payload", {}) or {}),
+                customer_fingerprinter=customer_fingerprinter,
+            ).get("pdf", download_name)
         return _send_runtime_artifact(
             runtime_store=runtime_store,
             scans_dir=deps.get("scans_dir"),
@@ -205,9 +246,10 @@ def register_core_routes(app, deps):
         artifact = _get_runtime_artifact(runtime_store, scan_path)
         download_name = "Nmap_Raw_Data.xml"
         if artifact is not None:
-            download_name = (
-                dict(artifact.get("payload", {}) or {}).get("downloads", {}).get("xml", download_name)
-            )
+            download_name = build_artifact_downloads(
+                dict(artifact.get("payload", {}) or {}),
+                customer_fingerprinter=customer_fingerprinter,
+            ).get("xml", download_name)
         return _send_runtime_artifact(
             runtime_store=runtime_store,
             scans_dir=deps.get("scans_dir"),
@@ -262,6 +304,7 @@ def register_core_routes(app, deps):
             load_json_document=deps.get("load_json_document"),
             normalize_scan_metadata_document=deps.get("normalize_scan_metadata_document"),
             logger=deps.get("logger"),
+            customer_fingerprinter=customer_fingerprinter,
         )
         return jsonify({"history": history})
 
@@ -303,6 +346,45 @@ def register_core_routes(app, deps):
                 "success": True,
                 "backfilled": backfilled,
                 "last_run_at": last_run_at,
+            }
+        )
+
+    @app.route("/api/runtime/maintenance/retention", methods=["POST"])
+    @require_auth
+    def runtime_retention():
+        if runtime_store is None or not hasattr(runtime_store, "apply_retention_policies"):
+            return jsonify({"success": False, "error": "Runtime database is not configured"}), 400
+
+        payload = request.get_json(silent=True) or {}
+        runtime_logs_keep_latest = payload.get(
+            "runtime_logs_keep_latest",
+            DEFAULT_RUNTIME_LOG_RETENTION,
+        )
+        customer_history_keep_latest = payload.get(
+            "customer_history_keep_latest",
+            DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+        )
+        compact = bool(payload.get("compact", True))
+
+        result = runtime_store.apply_retention_policies(
+            runtime_logs_keep_latest=runtime_logs_keep_latest,
+            customer_history_keep_latest=customer_history_keep_latest,
+            compact=compact,
+        )
+        last_run_at = datetime.now(timezone.utc).isoformat()
+        retention_snapshot = {
+            "last_run_at": last_run_at,
+            **result,
+        }
+        if hasattr(runtime_store, "upsert_runtime_snapshot"):
+            runtime_store.upsert_runtime_snapshot(
+                "maintenance_retention_status",
+                retention_snapshot,
+            )
+        return jsonify(
+            {
+                "success": True,
+                **retention_snapshot,
             }
         )
 

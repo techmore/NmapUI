@@ -15,10 +15,19 @@ PACKAGING_DIR="$ROOT_DIR/packaging/macos"
 SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"
 BIN="$ROOT_DIR/NmapUIMenuBar"
 APP_NAME="$ROOT_DIR/NmapUIMenuBar.app"
+SYSTEM_APPLICATIONS_DIR="/Applications"
+USER_APPLICATIONS_DIR="$HOME/Applications"
 BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
 BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
+TEMP_MIGRATION_DB=""
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 HOST_ARCH="$(uname -m)"
+APP_VERSION="$(tr -d '\r\n' < "$ROOT_DIR/VERSION")"
+
+if [[ -z "$APP_VERSION" ]]; then
+    echo "ERROR: VERSION file is empty" >&2
+    exit 1
+fi
 
 if [[ -n "${NMAPUI_SWIFT_TARGET:-}" ]]; then
     SWIFT_TARGET="$NMAPUI_SWIFT_TARGET"
@@ -30,6 +39,24 @@ else
     echo "ERROR: Unsupported macOS architecture: $HOST_ARCH" >&2
     echo "Set NMAPUI_SWIFT_TARGET explicitly if you know the correct target." >&2
     exit 1
+fi
+
+if [[ -n "${NMAPUI_APPLICATIONS_DIR:-}" ]]; then
+    APP_INSTALL_DIR="$NMAPUI_APPLICATIONS_DIR"
+elif [[ -d "$SYSTEM_APPLICATIONS_DIR" && -w "$SYSTEM_APPLICATIONS_DIR" ]]; then
+    APP_INSTALL_DIR="$SYSTEM_APPLICATIONS_DIR"
+else
+    APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"
+fi
+
+INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"
+INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then
+        MIGRATION_SOURCE_DB="$NMAPUI_MIGRATE_DB_FROM"
+    else
+        MIGRATION_SOURCE_DB="$INSTALLED_RUNTIME_DB"
+    fi
 fi
 
 if [[ ! -f "$SRC" ]]; then
@@ -48,6 +75,12 @@ echo "Source: $SRC"
 echo "SDK: $SDK"
 echo "Host architecture: $HOST_ARCH"
 echo "Target: $SWIFT_TARGET"
+echo "Install destination: $INSTALLED_APP_NAME"
+
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    echo "Database migration enabled"
+    echo "Database migration source: $MIGRATION_SOURCE_DB"
+fi
 
 # Compile the Swift binary using the requested format
 swiftc \
@@ -170,9 +203,9 @@ cat > "$APP_NAME/Contents/Info.plist" << EOF
     <key>CFBundleIdentifier</key>
     <string>com.techmore.nmapuimenubar</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>$APP_VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>$APP_VERSION</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSPrincipalClass</key>
@@ -204,12 +237,36 @@ else
     echo "  Workaround: xattr -d com.apple.quarantine \"$APP_NAME\""
 fi
 
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    if [[ ! -f "$MIGRATION_SOURCE_DB" ]]; then
+        echo "ERROR: Database migration source not found: $MIGRATION_SOURCE_DB" >&2
+        exit 1
+    fi
+    TEMP_MIGRATION_DB="$(mktemp "${TMPDIR:-/tmp}/nmapui-runtime-db.XXXXXX.sqlite3")"
+    cp "$MIGRATION_SOURCE_DB" "$TEMP_MIGRATION_DB"
+    echo "Captured runtime database for migration: $TEMP_MIGRATION_DB"
+fi
+
+echo "Installing application bundle..."
+mkdir -p "$APP_INSTALL_DIR"
+rm -rf "$INSTALLED_APP_NAME"
+ditto "$APP_NAME" "$INSTALLED_APP_NAME"
+
+if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
+    mkdir -p "$(dirname "$INSTALLED_RUNTIME_DB")"
+    cp "$TEMP_MIGRATION_DB" "$INSTALLED_RUNTIME_DB"
+    rm -f "$TEMP_MIGRATION_DB"
+    echo "Migrated runtime database into installed app: $INSTALLED_RUNTIME_DB"
+fi
+
+echo "Installed application bundle: $INSTALLED_APP_NAME"
+
 # Open the application
 if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then
     echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"
 else
     echo "Opening the application..."
-    open "$APP_NAME"
+    open "$INSTALLED_APP_NAME"
 fi
 
 echo "Done! The NmapUI Menu Bar application is now running."

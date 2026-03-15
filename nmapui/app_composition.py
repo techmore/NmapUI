@@ -242,6 +242,7 @@ def build_scan_routes_deps(
     normalize_scan_metadata_document,
     logger,
     runtime_store,
+    customer_fingerprinter,
 ):
     return {
         "scans_dir": scans_dir,
@@ -250,6 +251,7 @@ def build_scan_routes_deps(
         "normalize_scan_metadata_document": normalize_scan_metadata_document,
         "logger": logger,
         "runtime_store": runtime_store,
+        "customer_fingerprinter": customer_fingerprinter,
     }
 
 
@@ -340,6 +342,7 @@ def build_core_routes_deps(
     startup_state,
     get_auto_scan_thread,
     upload_report_artifacts_to_google_drive,
+    customer_fingerprinter,
 ):
     return {
         "build_liveness_payload": build_liveness_payload,
@@ -357,6 +360,7 @@ def build_core_routes_deps(
         "startup_state": startup_state,
         "get_auto_scan_thread": get_auto_scan_thread,
         "upload_report_artifacts_to_google_drive": upload_report_artifacts_to_google_drive,
+        "customer_fingerprinter": customer_fingerprinter,
     }
 
 

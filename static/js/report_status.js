@@ -104,6 +104,7 @@ function showReportStatus(message, type) {
 }
 
 function showReportCompleteStatus(data) {
+    removeReportProgressCard();
     showReportStatus(window.formatReportCompleteMessage(data), 'success');
     showReportActions(data?.path);
 }

@@ -282,6 +282,12 @@ def test_second_tab_replays_active_report_state(browser_server, playwright_brows
             page.wait_for_function(
                 "() => document.getElementById('report-status-text').textContent.includes('Generating report')"
             )
+            page.wait_for_function(
+                "() => document.getElementById('generate-report-btn').classList.contains('card-pulsing')"
+            )
+            page.wait_for_function(
+                "() => !document.getElementById('start-scan-btn').classList.contains('card-pulsing')"
+            )
     finally:
         app_module.broadcaster.end_job(owner_sid, job_type="report")
         app_module.job_registry.complete(owner_sid, "report", status="completed")
@@ -341,8 +347,126 @@ def test_second_tab_replays_active_scan_state(browser_server, playwright_browser
             page.wait_for_function(
                 "() => document.getElementById('feedback-container').textContent.includes('Running quick scan on 198.51.100.0/24')"
             )
+            page.wait_for_function(
+                "() => document.getElementById('start-scan-btn').classList.contains('card-pulsing')"
+            )
+            page.wait_for_function(
+                "() => !document.getElementById('generate-report-btn').classList.contains('card-pulsing')"
+            )
     finally:
         app_module.broadcaster.end_job(owner_sid, job_type="scan")
         app_module.job_registry.complete(owner_sid, "scan", status="completed")
         owner_client.disconnect()
+        context.close()
+
+
+def test_existing_open_tabs_receive_live_report_state(browser_server, playwright_browser):
+    app_module = browser_server["app_module"]
+    browser = playwright_browser
+    context = browser.new_context()
+    first_page = context.new_page()
+    second_page = context.new_page()
+
+    try:
+        for page in (first_page, second_page):
+            page.goto(browser_server["base_url"], wait_until="networkidle")
+            page.locator("#scan-target").wait_for()
+
+        owner_client = app_module.socketio.test_client(app_module.app)
+        owner_sid = _get_socket_sid(owner_client)
+        try:
+            app_module.set_last_scan_target_state(value="198.51.100.0/24", sid=owner_sid)
+            app_module.job_registry.start(
+                owner_sid,
+                "report",
+                {
+                    "message": "Generating report...",
+                    "target": "198.51.100.0/24",
+                    "chunked": False,
+                },
+            )
+            app_module.broadcaster.start_job(owner_sid, job_type="report")
+            app_module.emit_job_status(owner_sid, "report")
+            for subscriber_sid in app_module.broadcaster.get_subscribers(
+                owner_sid,
+                job_type="report",
+            ):
+                app_module.emit_to_client(
+                    subscriber_sid,
+                    "scan_feedback",
+                    {
+                        "message": "Generating report...",
+                        "target": "198.51.100.0/24",
+                    },
+                )
+
+            for page in (first_page, second_page):
+                page.wait_for_function(
+                    "() => document.getElementById('generate-report-btn').classList.contains('card-pulsing')"
+                )
+                page.wait_for_function(
+                    "() => !document.getElementById('start-scan-btn').classList.contains('card-pulsing')"
+                )
+                page.wait_for_function(
+                    "() => document.getElementById('report-status-text').textContent.includes('Generating report')"
+                )
+        finally:
+            app_module.broadcaster.end_job(owner_sid, job_type="report")
+            app_module.job_registry.complete(owner_sid, "report", status="completed")
+            owner_client.disconnect()
+    finally:
+        context.close()
+
+
+def test_existing_open_tabs_receive_live_scan_state(browser_server, playwright_browser):
+    app_module = browser_server["app_module"]
+    browser = playwright_browser
+    context = browser.new_context()
+    first_page = context.new_page()
+    second_page = context.new_page()
+
+    try:
+        for page in (first_page, second_page):
+            page.goto(browser_server["base_url"], wait_until="networkidle")
+            page.locator("#scan-target").wait_for()
+
+        owner_client = app_module.socketio.test_client(app_module.app)
+        owner_sid = _get_socket_sid(owner_client)
+        try:
+            app_module.set_last_scan_target_state(value="198.51.100.0/24", sid=owner_sid)
+            app_module.job_registry.start(
+                owner_sid,
+                "scan",
+                {
+                    "message": "Running quick scan on 198.51.100.0/24",
+                    "target": "198.51.100.0/24",
+                },
+            )
+            app_module.broadcaster.start_job(owner_sid, job_type="scan")
+            app_module.emit_job_status(owner_sid, "scan")
+            for subscriber_sid in app_module.broadcaster.get_subscribers(
+                owner_sid,
+                job_type="scan",
+            ):
+                app_module.emit_to_client(
+                    subscriber_sid,
+                    "scan_feedback",
+                    "Running quick scan on 198.51.100.0/24",
+                )
+
+            for page in (first_page, second_page):
+                page.wait_for_function(
+                    "() => document.getElementById('start-scan-btn').classList.contains('card-pulsing')"
+                )
+                page.wait_for_function(
+                    "() => !document.getElementById('generate-report-btn').classList.contains('card-pulsing')"
+                )
+                page.wait_for_function(
+                    "() => document.getElementById('feedback-container').textContent.includes('Running quick scan on 198.51.100.0/24')"
+                )
+        finally:
+            app_module.broadcaster.end_job(owner_sid, job_type="scan")
+            app_module.job_registry.complete(owner_sid, "scan", status="completed")
+            owner_client.disconnect()
+    finally:
         context.close()

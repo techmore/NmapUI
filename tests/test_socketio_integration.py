@@ -21,7 +21,7 @@ def configure_auth(monkeypatch, username="scanner", password="secret-pass"):
     monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
 
 
-def build_history_app(job_registry, release_client_state=None):
+def build_history_app(job_registry, release_client_state=None, broadcaster=None):
     app = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
 
@@ -58,6 +58,7 @@ def build_history_app(job_registry, release_client_state=None):
             "job_registry": job_registry,
             "emit_to_client": emit_to_client,
             "release_client_state": release_client_state,
+            "broadcaster": broadcaster,
             "logger": app.logger,
         },
     )
@@ -126,6 +127,41 @@ def test_get_job_status_reports_only_the_current_client_jobs(monkeypatch):
         {"name": "job_status", "args": [{"job_type": "scan", "status": "idle", "details": {}}], "namespace": "/"},
         {"name": "job_status", "args": [{"job_type": "report", "status": "running", "details": {"target": "10.0.1.0/24"}}], "namespace": "/"},
     ]
+
+
+def test_get_job_status_prefers_active_owner_state_for_new_tab(monkeypatch):
+    configure_auth(monkeypatch)
+    registry = ClientJobRegistry()
+    owner_sid = {"value": None}
+
+    class BroadcasterStub:
+        def find_active_owner(self, job_type="scan"):
+            if job_type == "scan":
+                return owner_sid["value"]
+            return None
+
+    app, socketio = build_history_app(registry, broadcaster=BroadcasterStub())
+    headers = basic_auth_header()
+    client_a = socketio.test_client(app, headers=headers)
+    client_b = socketio.test_client(app, headers=headers)
+    owner_sid["value"] = get_socket_sid(client_a)
+    _sid_b = get_socket_sid(client_b)
+
+    registry.start(owner_sid["value"], "scan", {"target": "10.0.0.0/24"})
+
+    client_b.emit("get_job_status")
+
+    client_b_events = [event for event in client_b.get_received() if event["name"] == "job_status"]
+
+    assert client_b_events[0]["name"] == "job_status"
+    assert client_b_events[0]["args"][0]["job_type"] == "scan"
+    assert client_b_events[0]["args"][0]["status"] == "running"
+    assert client_b_events[0]["args"][0]["details"] == {"target": "10.0.0.0/24"}
+    assert client_b_events[1] == {
+        "name": "job_status",
+        "args": [{"job_type": "report", "status": "idle", "details": {}}],
+        "namespace": "/",
+    }
 
 
 def test_disconnect_marks_only_that_clients_running_jobs(monkeypatch):

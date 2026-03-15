@@ -152,6 +152,8 @@ def test_wrapper_contract_uses_single_supported_launcher():
     build_script = (ROOT / "build.sh").read_text()
 
     assert 'PACKAGING_DIR="$ROOT_DIR/packaging/macos"' in build_script
+    assert 'APP_VERSION="$(tr -d \'\\r\\n\' < "$ROOT_DIR/VERSION")"' in build_script
+    assert 'echo "ERROR: VERSION file is empty" >&2' in build_script
     assert "ROOT_RUNTIME_PY=(" in build_script
     assert "customer_fingerprint_matcher.py" in build_script
     assert "customer_fingerprint_store.py" in build_script
@@ -167,11 +169,35 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'SWIFT_TARGET="arm64-apple-macosx13.0"' in build_script
     assert 'elif [[ "$HOST_ARCH" == "x86_64" ]]; then' in build_script
     assert 'SWIFT_TARGET="x86_64-apple-macosx13.0"' in build_script
+    assert 'SYSTEM_APPLICATIONS_DIR="/Applications"' in build_script
+    assert 'USER_APPLICATIONS_DIR="$HOME/Applications"' in build_script
+    assert 'if [[ -n "${NMAPUI_APPLICATIONS_DIR:-}" ]]; then' in build_script
+    assert 'APP_INSTALL_DIR="$NMAPUI_APPLICATIONS_DIR"' in build_script
+    assert 'elif [[ -d "$SYSTEM_APPLICATIONS_DIR" && -w "$SYSTEM_APPLICATIONS_DIR" ]]; then' in build_script
+    assert 'APP_INSTALL_DIR="$SYSTEM_APPLICATIONS_DIR"' in build_script
+    assert 'APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"' in build_script
+    assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"' in build_script
+    assert 'INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"' in build_script
+    assert 'if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then' in build_script
+    assert 'if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then' in build_script
+    assert 'MIGRATION_SOURCE_DB="$NMAPUI_MIGRATE_DB_FROM"' in build_script
+    assert 'MIGRATION_SOURCE_DB="$INSTALLED_RUNTIME_DB"' in build_script
     assert 'echo "Host architecture: $HOST_ARCH"' in build_script
+    assert "<string>$APP_VERSION</string>" in build_script
     assert 'echo "Target: $SWIFT_TARGET"' in build_script
+    assert 'echo "Install destination: $INSTALLED_APP_NAME"' in build_script
+    assert 'echo "Database migration enabled"' in build_script
+    assert 'echo "Database migration source: $MIGRATION_SOURCE_DB"' in build_script
     assert '  -target "$SWIFT_TARGET" \\' in build_script
+    assert 'TEMP_MIGRATION_DB="$(mktemp "${TMPDIR:-/tmp}/nmapui-runtime-db.XXXXXX.sqlite3")"' in build_script
+    assert 'cp "$MIGRATION_SOURCE_DB" "$TEMP_MIGRATION_DB"' in build_script
+    assert 'mkdir -p "$APP_INSTALL_DIR"' in build_script
+    assert 'rm -rf "$INSTALLED_APP_NAME"' in build_script
+    assert 'ditto "$APP_NAME" "$INSTALLED_APP_NAME"' in build_script
+    assert 'cp "$TEMP_MIGRATION_DB" "$INSTALLED_RUNTIME_DB"' in build_script
     assert 'if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then' in build_script
     assert 'echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"' in build_script
+    assert 'open "$INSTALLED_APP_NAME"' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
@@ -191,7 +217,14 @@ def test_wrapper_docs_reference_current_local_port():
         source = (ROOT / doc_name).read_text()
         assert "127.0.0.1:9000" in source
         assert "localhost:9999" not in source
-    assert "NMAPUI_SWIFT_TARGET" in (ROOT / "README.md").read_text()
+    readme = (ROOT / "README.md").read_text()
+    assert "NMAPUI_SWIFT_TARGET" in readme
+    assert "/Applications" in readme
+    assert "~/Applications" in readme
+    assert "NMAPUI_APPLICATIONS_DIR" in readme
+    assert "/api/runtime/export" in readme
+    assert "NMAPUI_MIGRATE_DB=1 ./build.sh" in readme
+    assert "NMAPUI_MIGRATE_DB_FROM" in readme
 
 
 def test_pyinstaller_spec_includes_runtime_assets():
@@ -233,6 +266,9 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
     assert 'RUNTIME_DB_FILE = BASE_DIR / "data" / "runtime.sqlite3"' in paths_source
     assert 'GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"' in paths_source
     assert 'GOOGLE_DRIVE_TOKEN_FILE = BASE_DIR / "data" / "google_drive_tokens.json"' in paths_source
+    assert 'GOOGLE_DRIVE_TOKEN_KEY_FILE = BASE_DIR / "data" / "google_drive_tokens.key"' in paths_source
+    assert 'REMOTE_SYNC_SECRET_FILE = BASE_DIR / "data" / "remote_sync_secret.json"' in paths_source
+    assert 'REMOTE_SYNC_SECRET_KEY_FILE = BASE_DIR / "data" / "remote_sync_secret.key"' in paths_source
     assert '"web_stylesheet": web_stylesheet' in app_composition_source
     assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
 
@@ -248,11 +284,34 @@ def test_runtime_sqlite_store_schema_exists():
     assert "CREATE TABLE IF NOT EXISTS job_events" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS report_artifacts" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS runtime_logs" in runtime_db_source
+    assert "RUNTIME_DB_SCHEMA_VERSION = 1" in runtime_db_source
+    assert "DEFAULT_RUNTIME_LOG_RETENTION = 5000" in runtime_db_source
+    assert "DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION = 2000" in runtime_db_source
+    assert "SCHEMA_MIGRATIONS: dict[int, tuple[str, ...]] = {" in runtime_db_source
+    assert 'SQLITE_BUSY_TIMEOUT_MS = 5000' in runtime_db_source
+    assert 'SQLITE_JOURNAL_MODE = "wal"' in runtime_db_source
+    assert "SQLITE_WRITE_RETRY_ATTEMPTS = 3" in runtime_db_source
+    assert 'conn = sqlite3.connect(self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)' in runtime_db_source
+    assert 'conn.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")' in runtime_db_source
+    assert 'conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")' in runtime_db_source
+    assert 'return int(conn.execute("PRAGMA user_version").fetchone()[0] or 0)' in runtime_db_source
+    assert 'conn.execute(f"PRAGMA user_version={int(version)}")' in runtime_db_source
+    assert "def get_schema_version(self) -> int:" in runtime_db_source
+    assert "def _migrate(self, conn: sqlite3.Connection) -> None:" in runtime_db_source
+    assert "if current_version > RUNTIME_DB_SCHEMA_VERSION:" in runtime_db_source
+    assert "Missing runtime DB migration for version" in runtime_db_source
+    assert "def _run_write(self, operation):" in runtime_db_source
+    assert 'if "locked" not in str(exc).lower() and "busy" not in str(exc).lower():' in runtime_db_source
+    assert 'def get_connection_pragmas(self) -> dict[str, Any]:' in runtime_db_source
     assert "def list_jobs(" in runtime_db_source
     assert "def get_report_artifact(" in runtime_db_source
     assert "def delete_report_artifact(" in runtime_db_source
     assert "def append_job_event(" in runtime_db_source
     assert "def list_job_events(" in runtime_db_source
+    assert "def prune_runtime_logs(" in runtime_db_source
+    assert "def prune_customer_scan_history(" in runtime_db_source
+    assert "def compact_database(self) -> dict[str, int]:" in runtime_db_source
+    assert "def apply_retention_policies(" in runtime_db_source
     assert "def create_runtime_state_store" in runtime_db_source
     assert "runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)" in app_source
     assert '"runtime_store": runtime_store' in runtime_services_source
@@ -262,7 +321,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert 'saved_last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")' in runtime_services_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
     assert "def persist_report_artifact(" in (ROOT / "nmapui" / "reporting.py").read_text()
-    assert "def normalize_runtime_report_row(artifact):" in runtime_history_source
+    assert "def normalize_runtime_report_row(artifact, *, customer_fingerprinter=None):" in runtime_history_source
     assert "def build_history_rows(" in runtime_history_source
     assert "def build_compare_result(" in runtime_history_source
     assert "def _backfill_runtime_artifact(" in runtime_history_source
@@ -270,6 +329,37 @@ def test_runtime_sqlite_store_schema_exists():
     assert "backfill_runtime_history_artifacts(" in app_source
     assert "customer_fingerprinter.backfill_runtime_scan_history()" in app_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
+
+
+def test_browser_regression_harness_covers_live_multi_tab_runtime_state():
+    browser_source = (ROOT / "tests" / "test_browser_regressions.py").read_text()
+
+    assert "def test_existing_open_tabs_receive_live_report_state(" in browser_source
+    assert "def test_existing_open_tabs_receive_live_scan_state(" in browser_source
+    assert "app_module.emit_job_status(owner_sid, \"report\")" in browser_source
+    assert "app_module.emit_job_status(owner_sid, \"scan\")" in browser_source
+    assert "app_module.broadcaster.get_subscribers(" in browser_source
+
+
+def test_runtime_info_handler_harness_covers_existing_open_tab_fanout():
+    runtime_info_test_source = (ROOT / "tests" / "test_runtime_info_handlers.py").read_text()
+
+    assert "def build_live_scan_jobs_app():" in runtime_info_test_source
+    assert "def test_start_scan_broadcasts_running_job_status_to_existing_open_tabs(" in runtime_info_test_source
+    assert "def test_generate_report_broadcasts_running_job_status_to_existing_open_tabs(" in runtime_info_test_source
+    assert "register_connection_handlers(" in runtime_info_test_source
+    assert "register_scan_job_handlers(" in runtime_info_test_source
+    assert "build_event_helpers(" in runtime_info_test_source
+
+
+def test_runtime_routes_include_database_export():
+    routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
+
+    assert '@app.route("/api/runtime/export")' in routes_source
+    assert 'download_name=_build_runtime_db_download_name()' in routes_source
+    assert 'mimetype="application/x-sqlite3"' in routes_source
+    assert 'customer_fingerprinter = deps.get("customer_fingerprinter")' in routes_source
+    assert 'customer_fingerprinter=customer_fingerprinter' in routes_source
 
 
 def test_runtime_backfill_admin_script_exists():
@@ -321,14 +411,17 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert '@app.route("/api/runtime/history")' in routes_source
     assert '@app.route("/api/runtime/history/<path:scan_path>", methods=["DELETE"])' in routes_source
     assert '@app.route("/api/runtime/maintenance/backfill", methods=["POST"])' in routes_source
+    assert '@app.route("/api/runtime/maintenance/retention", methods=["POST"])' in routes_source
     assert '@app.route("/api/runtime/history/compare")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
     assert 'runtime_store.get_runtime_snapshot("maintenance_backfill_status")' in routes_source
+    assert 'runtime_store.get_runtime_snapshot("maintenance_retention_status")' in routes_source
     assert 'runtime_store.upsert_runtime_snapshot(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
     assert 'runtime_store.count_report_artifacts()' in routes_source
     assert 'runtime_store.count_customer_scan_history()' in routes_source
     assert 'runtime_store.count_runtime_logs()' in routes_source
+    assert "runtime_store.apply_retention_policies(" in routes_source
     assert "build_history_rows(" in routes_source
     assert "build_compare_result(" in routes_source
     assert "backfill_runtime_history_artifacts(" in routes_source
@@ -396,11 +489,12 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     assert 'stored_path=artifact.get("html_path") if artifact else None,' in scans_source
     assert 'stored_path=artifact.get("pdf_path") if artifact else None,' in scans_source
     assert 'stored_path=artifact.get("xml_path") if artifact else None,' in scans_source
-    assert 'artifact_payload.get("downloads", {}).get("pdf", download_name)' in scans_source
-    assert 'artifact_payload.get("downloads", {}).get("xml", download_name)' in scans_source
+    assert 'build_artifact_downloads(' in scans_source
+    assert 'customer_fingerprinter = deps.get("customer_fingerprinter")' in scans_source
+    assert 'build_artifact_downloads(' in scans_source
     assert "runtime_store.delete_report_artifact(path)" in scans_source
     assert "def delete_scan_artifacts(" in scans_source
-    assert "def build_artifact_downloads(metadata):" in reporting_source
+    assert "def build_artifact_downloads(metadata, *, customer_fingerprinter=None):" in reporting_source
     assert '"downloads": build_artifact_downloads(normalized_metadata),' in reporting_source
 
 
@@ -1189,9 +1283,20 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "socket.on('client_state_snapshot'" in report_generation_module
     assert "socket.on('job_status', function(data) {" in report_generation_module
     assert "function syncReportJobVisualState(job)" in report_generation_module
+    assert "function syncReportVisualStateFromFeedback(message)" in report_generation_module
+    assert "function resetReportVisualState()" in report_generation_module
+    assert "let reportHideTimer = null;" in report_generation_module
     assert "startReportTimer(job?.started_at || null);" in report_generation_module
+    assert "clearTimeout(reportHideTimer);" in report_generation_module
     assert "setReportButtonsPulsing(true, chunked);" in report_generation_module
-    assert "setReportButtonsPulsing(false);" in report_generation_module
+    assert "reportGetClientJobs().scan.status !== 'running'" in report_generation_module
+    assert "window.syncScanJobVisualState({ status: 'completed' });" in report_generation_module
+    assert "window.resetReportVisualState = resetReportVisualState;" in report_generation_module
+    assert "normalized.includes('generating report for ')" in report_generation_module
+    assert "window.syncReportVisualStateFromFeedback = syncReportVisualStateFromFeedback;" in report_generation_module
+    assert "resetReportVisualState();" in report_generation_module
+    assert "window.removeReportProgressCard" in report_generation_module
+    assert "feedbackBox.innerHTML = ''" not in report_generation_module
     assert "document.getElementById('generate-report-btn').addEventListener('click'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert '"chunked": bool(data.get("chunked", True))' in (ROOT / "nmapui" / "handlers" / "scan_jobs.py").read_text()
@@ -1200,7 +1305,11 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "let scanRuntimeInitialized = false;" in scan_runtime_module
     assert "if (scanRuntimeInitialized) {" in scan_runtime_module
     assert "function syncScanJobVisualState(job)" in scan_runtime_module
+    assert "function syncScanVisualStateFromFeedback(message)" in scan_runtime_module
     assert "startScanBtn.classList.toggle('card-pulsing', isRunning);" in scan_runtime_module
+    assert "getClientJobs().report.status !== 'running'" in scan_runtime_module
+    assert "window.resetReportVisualState();" in scan_runtime_module
+    assert "window.syncScanJobVisualState = syncScanJobVisualState;" in scan_runtime_module
     assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
     assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module
@@ -1216,9 +1325,30 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "emit_to_client_override=wrapped_emit" in backend_scan_runtime_module
     assert "if (data.job_type === 'scan') {" in scan_runtime_module
     assert "syncScanJobVisualState(data);" in scan_runtime_module
+    assert "syncScanVisualStateFromFeedback(message);" in scan_runtime_module
     assert "socket.on('report_complete', function (data) {" in audit_log_module
     assert "socket.on('update_status', function (data) {" in audit_log_module
     assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module
+    settings_tab_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
+    customer_ui_source = (ROOT / "static" / "js" / "customer_ui.js").read_text()
+    assert "async function exportRuntimeDatabase()" in settings_tab_source
+    assert "fetch('/api/runtime/export')" in settings_tab_source
+    assert "window.exportRuntimeDatabase = exportRuntimeDatabase;" in settings_tab_source
+    assert "let reportsCustomerFilter = 'all';" in reports_tab_source
+    assert "let historyViewMode = 'current';" in reports_tab_source
+    assert "function renderReportsCustomerFilters(scans)" in reports_tab_source
+    assert "function getCurrentHistoryContext()" in reports_tab_source
+    assert "function filterScansToCurrentContext(scans)" in reports_tab_source
+    assert "function renderHistoryContextPanel(scans)" in reports_tab_source
+    assert "function buildTimelineLabels(scans, latestPath)" in reports_tab_source
+    assert "const container = document.getElementById('reports-customer-filters');" in reports_tab_source
+    assert "reportsCustomerFilter = filterValue;" in reports_tab_source
+    assert "let customersTabLoaded = false;" in customer_ui_source
+    assert "function renderCustomersTab(customers)" in customer_ui_source
+    assert "function loadCustomersTab(force = false)" in customer_ui_source
+    assert "socket.emit(customerFormMode === 'edit' ? 'update_customer' : 'add_customer'" in customer_ui_source
+    assert "window.loadCustomersTab = loadCustomersTab;" in customer_ui_source
 
 
 def test_google_drive_integration_contract_exists():
@@ -1236,13 +1366,26 @@ def test_google_drive_integration_contract_exists():
     assert "def build_google_drive_auth_url(" in google_drive_source
     assert "def exchange_google_drive_auth_code(" in google_drive_source
     assert "def upload_files_to_google_drive(" in google_drive_source
+    assert "from cryptography.fernet import Fernet, InvalidToken" in google_drive_source
+    assert 'ENCRYPTED_TOKEN_SCHEMA_VERSION = 1' in google_drive_source
+    assert "def _load_or_create_encryption_key(key_path: Path) -> bytes:" in google_drive_source
+    assert '\"ciphertext\"' in google_drive_source
+    assert 'with file_path.open("rb") as file_handle:' in google_drive_source
+    assert "file_path.read_bytes()" not in google_drive_source
     assert "upload_report_artifacts_to_google_drive=lambda" in app_source
+    assert "key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE" in app_source
+    assert "load_remote_sync_secret(" in app_source
+    assert "REMOTE_SYNC_SECRET_FILE" in app_source
     assert "function uploadReportToGoogleDrive(scanPath)" in reports_tab_source
     assert "Upload to Drive" in reports_tab_source
     assert "async function connectGoogleDrive()" in settings_tab_source
     assert "async function disconnectGoogleDriveAccount()" in settings_tab_source
     assert 'id="settings-google-drive-connect-btn"' in template
     assert 'id="settings-google-drive-disconnect-btn"' in template
+    settings_source = (ROOT / "nmapui" / "settings.py").read_text()
+    assert "def load_remote_sync_secret(*, secret_path: Path, key_path: Path) -> str:" in settings_source
+    assert "def save_remote_sync_secret(*, secret_path: Path, key_path: Path, api_key: str) -> None:" in settings_source
+    assert '"api_key": ""' in settings_source
 
 
 def test_report_runtime_replays_nmap_feedback_through_broadcaster():
@@ -1272,10 +1415,17 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="tab-dashboard-btn"' in template
     assert 'id="tab-history-btn"' in template
     assert 'id="tab-reports-btn"' in template
+    assert 'id="reports-badge"' in template
+    assert 'id="tab-customers-btn"' in template
     assert 'id="tab-logs-btn"' in template
     assert 'id="tab-settings-btn"' in template
     assert 'id="history-tab-panel"' in template
+    assert 'id="history-focus-current-btn"' in template
+    assert 'id="history-focus-all-btn"' in template
+    assert 'id="history-context-panel"' in template
     assert 'id="reports-tab-panel"' in template
+    assert 'id="reports-customer-filters"' in template
+    assert 'id="customers-tab-panel"' in template
     assert 'id="logs-tab-panel"' in template
     assert 'id="settings-tab-panel"' in template
     assert 'id="history-compare-panel"' in template
@@ -1295,16 +1445,38 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="settings-remote-sync-enabled"' in template
     assert 'id="settings-google-drive-test-btn"' in template
     assert 'id="settings-remote-sync-test-btn"' in template
+    assert 'id="settings-runtime-export-btn"' in template
     assert '<script src="/static/js/reports_tab.js"></script>' in template
     assert '<script src="/static/js/settings_tab.js"></script>' in template
     assert "initializeAuditLog();" in template
     assert "initializeSettingsTab();" in template
     settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    reports_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
+    customer_ui_source = (ROOT / "static" / "js" / "customer_ui.js").read_text()
     settings_module_source = (ROOT / "nmapui" / "settings.py").read_text()
     workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
+    report_status_source = (ROOT / "static" / "js" / "report_status.js").read_text()
+    runtime_history_source = (ROOT / "nmapui" / "runtime_history.py").read_text()
+    reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
     assert "settings-profile-scan-only-mode" in settings_source
     assert "settings-profile-excluded-targets" in settings_source
     assert "profile.scan_rules?.scan_only_mode" in settings_source
+    assert "function updateReportsBadge(scans)" in reports_source
+    assert "document.getElementById('reports-badge')" in reports_source
+    assert "loadReportsTab(true);" in reports_source
+    assert "document.getElementById('tab-customers-btn')?.addEventListener('click', () => switchAppTab('customers'));" in reports_source
+    assert "document.getElementById('history-focus-current-btn')?.addEventListener('click'" in reports_source
+    assert "document.getElementById('history-focus-all-btn')?.addEventListener('click'" in reports_source
+    assert "Showing ${visibleScans.length} scan(s) for the current network context." in reports_source
+    assert "loadCustomersTab()" in reports_source
+    assert "id=\"cust-public-ip\"" in template
+    assert "socket.on('customer_updated'" in customer_ui_source
+    assert "@socketio.on(\"update_customer\")" in (ROOT / "nmapui" / "handlers" / "customers.py").read_text()
+    assert "removeReportProgressCard();" in report_status_source
+    assert "resolve_report_customer_identity(" in runtime_history_source
+    assert "build_artifact_downloads(" in runtime_history_source
+    assert "def resolve_report_customer_identity(metadata, *, customer_fingerprinter=None):" in reporting_source
+    assert "def build_artifact_downloads(metadata, *, customer_fingerprinter=None):" in reporting_source
     assert "def get_effective_scan_rules(*, settings_state, target=\"\", customer_id=\"\")" in settings_module_source
     assert "get_effective_scan_rules(" in workflows_source
 
@@ -1323,6 +1495,7 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
         cwd=ROOT,
     text=True,
     )
+    live_template = (ROOT / "templates" / "index.html").read_text()
     discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
     report_status_module = (ROOT / "static" / "js" / "report_status.js").read_text()
     reports_tab_module = (ROOT / "static" / "js" / "reports_tab.js").read_text()
@@ -1369,6 +1542,7 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "async function testGoogleDriveSettings()" in settings_tab_module
     assert "async function testRemoteSyncSettings()" in settings_tab_module
     assert "async function runRuntimeBackfill()" in settings_tab_module
+    assert "async function runRuntimeRetention()" in settings_tab_module
     assert "function addTargetProfile()" in settings_tab_module
     assert "function applyProfileToDashboard(profile)" in settings_tab_module
     assert "setSyncStatus('settings-google-drive-status'" in settings_tab_module
@@ -1376,12 +1550,15 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "setMaintenanceStatus('Running runtime backfill...')" in settings_tab_module
     assert "function syncMaintenanceStatusFromSummary(summary)" in settings_tab_module
     assert "const lastBackfillValue =" in settings_tab_module
+    assert "const lastRetentionValue =" in settings_tab_module
     assert "fetch('/api/settings/validate/google-drive'" in settings_tab_module
     assert "fetch('/api/settings/validate/remote-sync'" in settings_tab_module
     assert "fetch('/api/runtime/maintenance/backfill'" in settings_tab_module
+    assert "fetch('/api/runtime/maintenance/retention'" in settings_tab_module
     assert "window.initializeSettingsTab = initializeSettingsTab;" in settings_tab_module
     assert "window.loadSettingsTab = loadSettingsTab;" in settings_tab_module
     assert 'id="settings-runtime-backfill-btn"' in template
+    assert 'id="settings-runtime-retention-btn"' in live_template
     assert 'id="settings-maintenance-status"' in template
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template

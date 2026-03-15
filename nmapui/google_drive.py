@@ -1,10 +1,13 @@
 import base64
 import hashlib
 import json
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
+
+from cryptography.fernet import Fernet, InvalidToken
 
 
 GOOGLE_DRIVE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -12,6 +15,7 @@ GOOGLE_DRIVE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_DRIVE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 GOOGLE_DRIVE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink"
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+ENCRYPTED_TOKEN_SCHEMA_VERSION = 1
 
 
 def _load_json_file(path: Path, default):
@@ -30,6 +34,45 @@ def _save_json_file(path: Path, payload: dict) -> None:
     tmp_path.replace(path)
 
 
+def _set_owner_only_permissions(path: Path) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def _load_or_create_encryption_key(key_path: Path) -> bytes:
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    if key_path.exists():
+        key = key_path.read_bytes().strip()
+        _set_owner_only_permissions(key_path)
+        return key
+
+    key = Fernet.generate_key()
+    tmp_path = key_path.with_suffix(f"{key_path.suffix}.tmp")
+    tmp_path.write_bytes(key)
+    tmp_path.replace(key_path)
+    _set_owner_only_permissions(key_path)
+    return key
+
+
+def _load_encrypted_token_payload(token_path: Path, key_path: Path):
+    if not token_path.exists():
+        return None
+    payload = _load_json_file(token_path, {})
+    if not isinstance(payload, dict) or "ciphertext" not in payload:
+        return None
+
+    ciphertext = payload.get("ciphertext")
+    if not ciphertext:
+        return {}
+
+    key = _load_or_create_encryption_key(key_path)
+    decrypted = Fernet(key).decrypt(str(ciphertext).encode("utf-8"))
+    decoded = json.loads(decrypted.decode("utf-8"))
+    return decoded if isinstance(decoded, dict) else {}
+
+
 def load_google_drive_credentials(credentials_path: Path) -> dict:
     payload = _load_json_file(credentials_path, {})
     if "installed" in payload:
@@ -39,24 +82,49 @@ def load_google_drive_credentials(credentials_path: Path) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-def load_google_drive_token_state(token_path: Path) -> dict:
+def load_google_drive_token_state(token_path: Path, key_path: Path | None = None) -> dict:
+    key_path = key_path or token_path.with_suffix(".key")
+    try:
+        encrypted_payload = _load_encrypted_token_payload(token_path, key_path)
+    except InvalidToken:
+        return {}
+    if encrypted_payload is not None:
+        return encrypted_payload
+
     payload = _load_json_file(token_path, {})
-    return payload if isinstance(payload, dict) else {}
-
-
-def save_google_drive_token_state(token_path: Path, payload: dict) -> dict:
-    _save_json_file(token_path, payload)
+    if not isinstance(payload, dict):
+        return {}
+    if payload:
+        save_google_drive_token_state(token_path, payload, key_path=key_path)
     return payload
 
 
-def clear_google_drive_token_state(token_path: Path) -> None:
+def save_google_drive_token_state(token_path: Path, payload: dict, key_path: Path | None = None) -> dict:
+    key_path = key_path or token_path.with_suffix(".key")
+    key = _load_or_create_encryption_key(key_path)
+    encrypted_payload = Fernet(key).encrypt(json.dumps(payload).encode("utf-8")).decode("utf-8")
+    _save_json_file(
+        token_path,
+        {
+            "schema_version": ENCRYPTED_TOKEN_SCHEMA_VERSION,
+            "ciphertext": encrypted_payload,
+        },
+    )
+    _set_owner_only_permissions(token_path)
+    return payload
+
+
+def clear_google_drive_token_state(token_path: Path, key_path: Path | None = None) -> None:
     if token_path.exists():
         token_path.unlink()
+    key_path = key_path or token_path.with_suffix(".key")
+    if key_path.exists():
+        key_path.unlink()
 
 
-def build_google_drive_auth_status(*, credentials_path: Path, token_path: Path) -> dict:
+def build_google_drive_auth_status(*, credentials_path: Path, token_path: Path, key_path: Path | None = None) -> dict:
     credentials = load_google_drive_credentials(credentials_path)
-    token_state = load_google_drive_token_state(token_path)
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
     has_refresh_token = bool(token_state.get("refresh_token"))
     has_access_token = bool(token_state.get("access_token"))
     expires_at = token_state.get("expires_at")
@@ -81,6 +149,7 @@ def build_google_drive_auth_url(
     *,
     credentials_path: Path,
     token_path: Path,
+    key_path: Path | None = None,
     redirect_uri: str,
 ) -> dict:
     credentials = load_google_drive_credentials(credentials_path)
@@ -93,14 +162,14 @@ def build_google_drive_auth_url(
     state = secrets.token_urlsafe(24)
     code_verifier = _build_code_verifier()
     code_challenge = _build_code_challenge(code_verifier)
-    token_state = load_google_drive_token_state(token_path)
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
     token_state["pending_auth"] = {
         "state": state,
         "code_verifier": code_verifier,
         "redirect_uri": redirect_uri,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    save_google_drive_token_state(token_path, token_state)
+    save_google_drive_token_state(token_path, token_state, key_path=key_path)
 
     query = urlencode(
         {
@@ -123,12 +192,13 @@ def exchange_google_drive_auth_code(
     *,
     credentials_path: Path,
     token_path: Path,
+    key_path: Path | None = None,
     code: str,
     state: str,
     requests_module,
 ) -> dict:
     credentials = load_google_drive_credentials(credentials_path)
-    token_state = load_google_drive_token_state(token_path)
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
     pending_auth = token_state.get("pending_auth") or {}
     if not pending_auth or pending_auth.get("state") != state:
         return {"success": False, "error": "Invalid or expired Google Drive auth state."}
@@ -160,7 +230,7 @@ def exchange_google_drive_auth_code(
         }
     )
     token_state.pop("pending_auth", None)
-    save_google_drive_token_state(token_path, token_state)
+    save_google_drive_token_state(token_path, token_state, key_path=key_path)
     return {"success": True, "status": "Google Drive connected"}
 
 
@@ -179,9 +249,10 @@ def ensure_google_drive_access_token(
     *,
     credentials_path: Path,
     token_path: Path,
+    key_path: Path | None = None,
     requests_module,
 ) -> str:
-    token_state = load_google_drive_token_state(token_path)
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
     access_token = token_state.get("access_token")
     if access_token and not _token_is_expired(token_state):
         return access_token
@@ -213,16 +284,17 @@ def ensure_google_drive_access_token(
             "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
         }
     )
-    save_google_drive_token_state(token_path, token_state)
+    save_google_drive_token_state(token_path, token_state, key_path=key_path)
     return token_state["access_token"]
 
 
 def disconnect_google_drive(
     *,
     token_path: Path,
+    key_path: Path | None = None,
     requests_module,
 ) -> dict:
-    token_state = load_google_drive_token_state(token_path)
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
     token = token_state.get("refresh_token") or token_state.get("access_token")
     if token:
         try:
@@ -233,7 +305,7 @@ def disconnect_google_drive(
             )
         except Exception:
             pass
-    clear_google_drive_token_state(token_path)
+    clear_google_drive_token_state(token_path, key_path=key_path)
     return {"success": True, "status": "Google Drive disconnected"}
 
 
@@ -241,6 +313,7 @@ def upload_files_to_google_drive(
     *,
     credentials_path: Path,
     token_path: Path,
+    key_path: Path | None = None,
     file_paths: list[Path],
     folder_id: str,
     requests_module,
@@ -248,6 +321,7 @@ def upload_files_to_google_drive(
     access_token = ensure_google_drive_access_token(
         credentials_path=credentials_path,
         token_path=token_path,
+        key_path=key_path,
         requests_module=requests_module,
     )
     uploaded = []
@@ -255,21 +329,22 @@ def upload_files_to_google_drive(
         metadata = {"name": file_path.name}
         if folder_id:
             metadata["parents"] = [folder_id]
-        multipart = (
-            json.dumps(metadata).encode("utf-8"),
-            file_path.read_bytes(),
-        )
-        response = requests_module.post(
-            GOOGLE_DRIVE_UPLOAD_ENDPOINT,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-            files={
-                "metadata": ("metadata.json", multipart[0], "application/json; charset=UTF-8"),
-                "file": (file_path.name, multipart[1], "application/octet-stream"),
-            },
-            timeout=30,
-        )
+        with file_path.open("rb") as file_handle:
+            response = requests_module.post(
+                GOOGLE_DRIVE_UPLOAD_ENDPOINT,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                },
+                files={
+                    "metadata": (
+                        "metadata.json",
+                        json.dumps(metadata).encode("utf-8"),
+                        "application/json; charset=UTF-8",
+                    ),
+                    "file": (file_path.name, file_handle, "application/octet-stream"),
+                },
+                timeout=30,
+            )
         payload = response.json()
         if response.status_code >= 400:
             raise RuntimeError(payload.get("error", {}).get("message") or f"Drive upload failed for {file_path.name}.")

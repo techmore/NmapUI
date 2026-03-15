@@ -169,6 +169,79 @@ def test_get_customer_info_supports_sid_scoped_network_key_provider(monkeypatch)
     assert observed["network_key"]["sid"]
 
 
+def test_update_customer_persists_public_ip_metadata(monkeypatch):
+    configure_auth(monkeypatch)
+    saved = {"called": False}
+    logger = Flask(__name__).logger
+    existing_customer = {
+        "id": "cust-1",
+        "name": "Acme Customer",
+        "description": "Old description",
+        "confidence": 0.7,
+        "networks": {
+            "public_ip": "dynamic",
+            "public_ips": [],
+            "private_ranges": [],
+            "exit_ips": "dynamic",
+            "gateway_pattern": "",
+        },
+        "fingerprints": [{"type": "direct", "hop_count": "2-10"}],
+        "metadata": {"location": "Unknown"},
+    }
+    customer_fingerprinter = type(
+        "FingerprinterStub",
+        (),
+        {
+            "customers": [existing_customer],
+            "unknown_customer": {"id": "unknown", "name": "Unknown Network"},
+            "customer_traceroutes": {},
+            "get_customer_by_id": lambda self, customer_id: existing_customer if customer_id == "cust-1" else None,
+        },
+    )()
+
+    app, socketio = build_customer_app(
+        {
+            "get_customer_fingerprinter": lambda: customer_fingerprinter,
+            "network_key": {},
+            "get_current_customer": lambda: {"id": "cust-1", "name": "Acme Customer", "confidence": 1.0},
+            "set_current_customer": lambda value: None,
+            "merge_customer_metadata": lambda customer, saved_customer: customer,
+            "save_current_assignment": lambda: None,
+            "save_customers_config": lambda: saved.__setitem__("called", True),
+            "normalize_scan_metadata_document": lambda value: value,
+            "load_json_document": lambda path, default: default,
+            "save_json_document": lambda path, value: None,
+            "logger": logger,
+        },
+    )
+
+    client = socketio.test_client(app, headers=basic_auth_header())
+    client.emit(
+        "update_customer",
+        {
+            "customer_id": "cust-1",
+            "id": "cust-1",
+            "name": "Acme HQ",
+            "description": "Updated description",
+            "public_ip": "203.0.113.10",
+            "private_ranges": "192.168.1.0/24",
+            "exit_ips": "1.1.1.1,8.8.8.8",
+            "gateway_pattern": "192.168.1.1",
+            "location": "NYC",
+            "connection_type": "vpn",
+            "hop_count": "3-5",
+        },
+    )
+    received = client.get_received()
+
+    assert saved["called"] is True
+    assert existing_customer["name"] == "Acme HQ"
+    assert existing_customer["networks"]["public_ip"] == "203.0.113.10"
+    assert "203.0.113.10" in existing_customer["networks"]["public_ips"]
+    assert existing_customer["metadata"]["location"] == "NYC"
+    assert any(event["name"] == "customer_updated" for event in received)
+
+
 def test_customer_handlers_reject_unauthorized_socket_client(monkeypatch):
     configure_auth(monkeypatch)
     state = {"current_customer": {"id": "unknown", "name": "Unknown Network", "confidence": 0.0}}
