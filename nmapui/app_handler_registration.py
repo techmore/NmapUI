@@ -129,6 +129,7 @@ def register_app_handlers(
             job_registry=job_registry,
             load_json_document=load_json_document,
             normalize_scan_metadata_document=normalize_scan_metadata_document,
+            resolve_scan_path=resolve_scan_path,
             runtime_store=runtime_store,
             scans_dir=scans_dir,
             settings_state=settings_state,

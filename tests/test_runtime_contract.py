@@ -224,10 +224,12 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     audit_log_source = (ROOT / "static" / "js" / "audit_log.js").read_text()
     app_bindings_source = (ROOT / "nmapui" / "app_bindings.py").read_text()
     reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
+    history_modal_source = (ROOT / "static" / "js" / "history_modal.js").read_text()
 
     assert '@app.route("/api/runtime/logs")' in routes_source
     assert '@app.route("/api/runtime/reports")' in routes_source
     assert '@app.route("/api/runtime/history")' in routes_source
+    assert '@app.route("/api/runtime/history/compare")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
     assert "iter_scan_metadata_documents(" in routes_source
@@ -239,6 +241,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert "async function fetchReportsForTab()" in reports_tab_source
     assert "fetch('/api/runtime/reports')" in reports_tab_source
     assert "fetch('/api/runtime/history')" in reports_tab_source
+    assert 'fetch("/api/runtime/history")' in history_modal_source
     assert "_log_runtime_event(runtime_store, event, data)" in app_bindings_source
     assert 'category="job"' in app_bindings_source
 
@@ -1125,6 +1128,7 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "buildLink(`/api/scans/${path}/pdf`, 'Download PDF');" in report_status_module
     assert "function initializeReportsTab()" in reports_tab_module
     assert "async function compareHistoryScans(basePath, currentPath)" in reports_tab_module
+    assert "/api/runtime/history/compare?base_path=" in reports_tab_module
     assert "function createHistoryDetailBlock(scan)" in reports_tab_module
     assert "function ensureTabPanelsAreSiblings()" in reports_tab_module
     assert "panel.parentElement !== dashboardPanel" in reports_tab_module

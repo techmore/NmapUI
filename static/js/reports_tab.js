@@ -159,7 +159,7 @@ async function compareHistoryScans(basePath, currentPath) {
     renderCompareStatus('Comparing selected scans...');
     try {
         const response = await fetch(
-            `/api/scans/compare?base_path=${encodeURIComponent(basePath)}&current_path=${encodeURIComponent(currentPath)}`
+            `/api/runtime/history/compare?base_path=${encodeURIComponent(basePath)}&current_path=${encodeURIComponent(currentPath)}`
         );
         if (!response.ok) {
             const payload = await response.json().catch(() => ({}));

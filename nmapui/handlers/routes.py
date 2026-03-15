@@ -1,5 +1,6 @@
-from flask import jsonify, render_template
+from flask import jsonify, render_template, request
 from nmapui.auth import require_auth
+from nmapui.reporting import parse_scan_xml_for_assets, summarize_asset_differences
 from persistence import iter_scan_metadata_documents
 
 
@@ -20,6 +21,37 @@ def _normalize_runtime_report_row(artifact):
         "has_pdf": bool(artifact.get("pdf_path")),
         "has_xml": bool(artifact.get("xml_path")),
     }
+
+
+def _load_runtime_compare_payload(
+    *,
+    runtime_store,
+    resolve_scan_path,
+    load_json_document,
+    normalize_scan_metadata_document,
+    scan_path,
+):
+    if runtime_store is not None and hasattr(runtime_store, "get_report_artifact"):
+        artifact = runtime_store.get_report_artifact(scan_path)
+        if artifact is not None:
+            payload = dict(artifact.get("payload", {}) or {})
+            payload["path"] = scan_path
+            return payload
+
+    if resolve_scan_path is None:
+        return None
+
+    scan_dir = resolve_scan_path(scan_path)
+    if scan_dir is None:
+        return None
+
+    metadata_path = scan_dir / "metadata.json"
+    if not metadata_path.exists():
+        return None
+
+    payload = normalize_scan_metadata_document(load_json_document(metadata_path, {}))
+    payload["path"] = scan_path
+    return payload
 
 
 def register_core_routes(app, deps):
@@ -104,8 +136,6 @@ def register_core_routes(app, deps):
     def runtime_logs():
         category = None
         if runtime_store is not None:
-            from flask import request
-
             category = request.args.get("category") or None
             limit_value = request.args.get("limit", "200")
             try:
@@ -177,3 +207,70 @@ def register_core_routes(app, deps):
 
         history.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
         return jsonify({"history": history})
+
+    @app.route("/api/runtime/history/compare")
+    @require_auth
+    def runtime_history_compare():
+        resolve_scan_path = deps.get("resolve_scan_path")
+        load_json_document = deps.get("load_json_document")
+        normalize_scan_metadata_document = deps.get("normalize_scan_metadata_document")
+
+        base_path = str(request.args.get("base_path", "") or "").strip()
+        current_path = str(request.args.get("current_path", "") or "").strip()
+        if not base_path or not current_path:
+            return jsonify({"success": False, "error": "Both base_path and current_path are required"}), 400
+
+        base_metadata = _load_runtime_compare_payload(
+            runtime_store=runtime_store,
+            resolve_scan_path=resolve_scan_path,
+            load_json_document=load_json_document,
+            normalize_scan_metadata_document=normalize_scan_metadata_document,
+            scan_path=base_path,
+        )
+        current_metadata = _load_runtime_compare_payload(
+            runtime_store=runtime_store,
+            resolve_scan_path=resolve_scan_path,
+            load_json_document=load_json_document,
+            normalize_scan_metadata_document=normalize_scan_metadata_document,
+            scan_path=current_path,
+        )
+
+        if base_metadata is None or current_metadata is None:
+            return jsonify({"success": False, "error": "Scan metadata not found"}), 404
+
+        if str(base_metadata.get("customer_id", "") or "") != str(current_metadata.get("customer_id", "") or ""):
+            return jsonify({"success": False, "error": "Scans must belong to the same customer"}), 400
+        if str(base_metadata.get("target", "") or "") != str(current_metadata.get("target", "") or ""):
+            return jsonify({"success": False, "error": "Scans must target the same network"}), 400
+
+        try:
+            base_assets = base_metadata.get("asset_snapshot")
+            current_assets = current_metadata.get("asset_snapshot")
+
+            if not isinstance(base_assets, list) or not isinstance(current_assets, list):
+                if resolve_scan_path is None:
+                    return jsonify({"success": False, "error": "Compare data unavailable"}), 404
+
+                base_dir = resolve_scan_path(base_path)
+                current_dir = resolve_scan_path(current_path)
+                if base_dir is None or current_dir is None:
+                    return jsonify({"success": False, "error": "Invalid scan path"}), 400
+
+                base_xml = base_dir / "scan.xml"
+                current_xml = current_dir / "scan.xml"
+                if not base_xml.exists() or not current_xml.exists():
+                    return jsonify({"success": False, "error": "Scan XML not found"}), 404
+
+                base_assets = parse_scan_xml_for_assets(base_xml)
+                current_assets = parse_scan_xml_for_assets(current_xml)
+
+            diff_summary = summarize_asset_differences(current_assets, base_assets)
+            return jsonify(
+                {
+                    "base_scan": base_metadata,
+                    "current_scan": current_metadata,
+                    "diff_summary": diff_summary,
+                }
+            )
+        except Exception as exc:
+            return jsonify({"success": False, "error": f"Failed to compare scans: {exc}"}), 500

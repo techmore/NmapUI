@@ -197,10 +197,10 @@ async function loadScanHistory(isInitialLoad = false) {
     }
 
     try {
-        const response = await fetch("/api/scans");
+        const response = await fetch("/api/runtime/history");
         const data = await response.json();
 
-        let scans = data.scans || [];
+        let scans = data.history || [];
         populateCustomerFilter(scans, customerFilter);
 
         const activeFilter = filter.value;

@@ -172,6 +172,76 @@ def test_runtime_history_route_merges_runtime_reports_with_metadata_fallback(mon
     assert any(item["customer_name"] == "Legacy" for item in payload["history"])
 
 
+def test_runtime_history_compare_prefers_runtime_artifact_payloads(monkeypatch):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    class RuntimeStoreStub:
+        def get_report_artifact(self, scan_path):
+            payloads = {
+                "Acme/2026-03-14/base": {
+                    "scan_path": "Acme/2026-03-14/base",
+                    "payload": {
+                        "customer_id": "cust-1",
+                        "target": "192.168.222.0/24",
+                        "asset_snapshot": [{"ip": "192.168.222.10", "ports": "80 (http)", "vulnerabilities": []}],
+                        "timestamp": "2026-03-14T11:00:00",
+                    },
+                },
+                "Acme/2026-03-14/current": {
+                    "scan_path": "Acme/2026-03-14/current",
+                    "payload": {
+                        "customer_id": "cust-1",
+                        "target": "192.168.222.0/24",
+                        "asset_snapshot": [{"ip": "192.168.222.10", "ports": "80 (http), 443 (https)", "vulnerabilities": []}],
+                        "timestamp": "2026-03-14T12:00:00",
+                    },
+                },
+            }
+            return payloads.get(scan_path)
+
+        def list_report_artifacts(self, customer_id=None):
+            return []
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "load_json_document": lambda *args, **kwargs: {},
+            "normalize_scan_metadata_document": lambda payload: payload,
+            "resolve_scan_path": lambda path: None,
+            "runtime_store": RuntimeStoreStub(),
+            "scans_dir": None,
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+            "logger": app.logger,
+        },
+    )
+
+    client = app.test_client()
+    response = client.get(
+        "/api/runtime/history/compare?base_path=Acme/2026-03-14/base&current_path=Acme/2026-03-14/current",
+        headers={"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["base_scan"]["path"] == "Acme/2026-03-14/base"
+    assert payload["current_scan"]["path"] == "Acme/2026-03-14/current"
+    assert payload["diff_summary"]["new_ports"] == ["443 (https)"]
+
+
 def test_startup_checks_append_runtime_log_entries():
     entries = []
 
