@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from nmapui.auto_monitor import normalize_auto_monitor_settings
 
 AUTO_SCAN_SID = "__auto_scan__"
 
@@ -53,3 +54,94 @@ def execute_auto_scan(*, deps):
     except Exception as exc:
         logger.error("Auto scan failed: %s", exc)
         safe_emit("auto_scan_error", {"error": str(exc)})
+
+
+def execute_auto_monitor_rule(*, deps):
+    rule = deps["rule"]
+    logger = deps["logger"]
+    network_key = deps["network_key"]
+    rate_limiter = deps["rate_limiter"]
+    validate_target = deps["validate_target"]
+    job_registry = deps["job_registry"]
+    emit_job_status = deps["emit_job_status"]
+    generate_report_task = deps["generate_report_task"]
+    set_current_customer_state = deps["set_current_customer_state"]
+    set_last_scan_target_state = deps["set_last_scan_target_state"]
+    settings_state = deps["settings_state"]
+    save_settings = deps["save_settings"]
+
+    target = str(
+        rule.get("target") or rule.get("public_ip") or network_key.get("cidr") or ""
+    ).strip()
+    if not target:
+        logger.warning("Auto-monitor rule %s has no target", rule.get("id"))
+        return
+
+    is_valid, error_msg = validate_target(target)
+    if not is_valid:
+        logger.warning(
+            "Auto-monitor target invalid for rule %s: %s",
+            rule.get("id"),
+            error_msg,
+        )
+        return
+
+    can_scan, rate_msg = rate_limiter.can_scan(AUTO_SCAN_SID)
+    if not can_scan:
+        logger.warning(
+            "Auto-monitor rate limited for rule %s: %s",
+            rule.get("id"),
+            rate_msg,
+        )
+        return
+
+    if not job_registry.start(
+        AUTO_SCAN_SID,
+        "report",
+        {
+            "target": target,
+            "customer_name": rule.get("customer_name"),
+            "chunked": False,
+            "auto_monitor_rule_id": rule.get("id"),
+        },
+    ):
+        logger.info(
+            "Skipping auto-monitor rule %s because a report job is already running",
+            rule.get("id"),
+        )
+        return
+
+    rate_limiter.record_scan(AUTO_SCAN_SID)
+    set_current_customer_state(
+        {
+            "id": rule.get("customer_id", "unknown"),
+            "name": rule.get("customer_name", "Unknown"),
+            "confidence": 1.0,
+            "metadata": {"auto_monitor": True, "rule_id": rule.get("id")},
+        },
+        sid=AUTO_SCAN_SID,
+    )
+    set_last_scan_target_state(target, sid=AUTO_SCAN_SID)
+    emit_job_status(AUTO_SCAN_SID, "report")
+    generate_report_task(
+        AUTO_SCAN_SID,
+        {
+            "target": target,
+            "customer_name": rule.get("customer_name", "Unknown"),
+            "chunked": False,
+            "auto_scan": True,
+            "auto_monitor": True,
+            "auto_monitor_rule_id": rule.get("id"),
+        },
+    )
+
+    auto_monitor = normalize_auto_monitor_settings(
+        (settings_state or {}).get("auto_monitor", {})
+    )
+    for entry in auto_monitor.get("rules", []):
+        if entry.get("id") == rule.get("id"):
+            entry["last_run"] = datetime.now().isoformat()
+            entry["updated_at"] = entry["last_run"]
+            break
+    settings_state["auto_monitor"] = auto_monitor
+    save_settings(settings_state)

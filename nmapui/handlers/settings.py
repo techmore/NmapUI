@@ -1,5 +1,6 @@
 from flask import jsonify, request
 
+from nmapui.auto_monitor import build_auto_monitor_rule_status
 from nmapui.auth import require_auth
 from nmapui.settings import normalize_settings_document
 
@@ -9,6 +10,7 @@ def register_settings_routes(app, deps):
     save_settings = deps["save_settings"]
     validate_google_drive = deps["validate_google_drive"]
     validate_remote_sync = deps["validate_remote_sync"]
+    get_customer_name = deps.get("get_customer_name")
     get_google_drive_auth_status = deps["get_google_drive_auth_status"]
     build_google_drive_auth_url = deps["build_google_drive_auth_url"]
     exchange_google_drive_auth_code = deps["exchange_google_drive_auth_code"]
@@ -17,7 +19,12 @@ def register_settings_routes(app, deps):
     @app.route("/api/settings")
     @require_auth
     def get_settings():
-        return jsonify(normalize_settings_document(settings_state))
+        return jsonify(
+            normalize_settings_document(
+                settings_state,
+                customer_name_lookup=get_customer_name,
+            )
+        )
 
     @app.route("/api/settings", methods=["POST"])
     @require_auth
@@ -30,6 +37,24 @@ def register_settings_routes(app, deps):
         settings_state.clear()
         settings_state.update(normalized)
         return jsonify({"success": True, "settings": normalized})
+
+    @app.route("/api/settings/auto-monitor")
+    @require_auth
+    def get_auto_monitor_settings():
+        normalized = normalize_settings_document(
+            settings_state,
+            customer_name_lookup=get_customer_name,
+        )
+        auto_monitor = normalized.get("auto_monitor", {})
+        return jsonify(
+            {
+                "defaults": auto_monitor.get("defaults", {}),
+                "rules": [
+                    build_auto_monitor_rule_status(rule)
+                    for rule in auto_monitor.get("rules", [])
+                ],
+            }
+        )
 
     @app.route("/api/settings/validate/google-drive", methods=["POST"])
     @require_auth

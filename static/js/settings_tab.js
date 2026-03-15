@@ -47,6 +47,16 @@ function getSettingsFormState() {
                 status: document.getElementById('settings-remote-sync-status')?.textContent || 'Not configured',
             },
         },
+        auto_monitor: {
+            defaults: {
+                enabled_by_default: document.getElementById('settings-auto-monitor-enabled-by-default')?.checked || false,
+                recurrence: document.getElementById('settings-auto-monitor-recurrence')?.value || 'weekly',
+                day_of_week: document.getElementById('settings-auto-monitor-day')?.value || 'sunday',
+                time: document.getElementById('settings-auto-monitor-time')?.value || '01:00',
+                scan_mode: 'complete_pdf',
+            },
+            rules: settingsState?.auto_monitor?.rules || [],
+        },
     };
 }
 
@@ -267,6 +277,10 @@ function fillSettingsForm(state) {
     document.getElementById('settings-remote-sync-endpoint').value = state.sync?.remote_sync?.endpoint || '';
     document.getElementById('settings-remote-sync-api-key').value = state.sync?.remote_sync?.api_key || '';
     document.getElementById('settings-remote-sync-status').textContent = state.sync?.remote_sync?.status || 'Not configured';
+    document.getElementById('settings-auto-monitor-enabled-by-default').checked = !!state.auto_monitor?.defaults?.enabled_by_default;
+    document.getElementById('settings-auto-monitor-recurrence').value = state.auto_monitor?.defaults?.recurrence || 'weekly';
+    document.getElementById('settings-auto-monitor-day').value = state.auto_monitor?.defaults?.day_of_week || 'sunday';
+    document.getElementById('settings-auto-monitor-time').value = state.auto_monitor?.defaults?.time || '01:00';
     populateProfileCustomerOptions();
     renderTargetProfiles(state.target_profiles || []);
 }
@@ -544,6 +558,16 @@ function addTargetProfile() {
         target_profiles: [],
         scan_rules: { scan_only_mode: false, excluded_targets: [] },
         sync: { google_drive: {}, remote_sync: {} },
+        auto_monitor: {
+            defaults: {
+                enabled_by_default: false,
+                recurrence: 'weekly',
+                day_of_week: 'sunday',
+                time: '01:00',
+                scan_mode: 'complete_pdf',
+            },
+            rules: [],
+        },
     };
 
     settingsState.target_profiles = settingsState.target_profiles || [];

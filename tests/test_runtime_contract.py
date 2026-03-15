@@ -120,6 +120,24 @@ def test_template_uses_shared_customer_ui_module():
     assert "window.initializeCustomerUI = initializeCustomerUI;" in customer_source
     assert "window.addCustomer = () => {" in customer_source
     assert "window.assignCustomer = () => {" in customer_source
+    assert "loadAutoMonitorSettings()" in customer_source
+    assert "saveAutoMonitorRule(customer, updates)" in customer_source
+    assert "customer-auto-monitor-recurrence" in customer_source
+    assert "Save Auto-monitor" in customer_source
+
+
+def test_settings_tab_includes_auto_monitor_defaults():
+    html = (ROOT / "templates" / "index.html").read_text()
+    settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+
+    assert "Auto-monitor Defaults" in html
+    assert 'id="settings-auto-monitor-recurrence"' in html
+    assert 'id="settings-auto-monitor-day"' in html
+    assert 'id="settings-auto-monitor-time"' in html
+    assert 'id="settings-auto-monitor-enabled-by-default"' in html
+    assert "auto_monitor: {" in settings_source
+    assert "settings-auto-monitor-recurrence" in settings_source
+    assert "settings-auto-monitor-time" in settings_source
 
 
 def test_template_uses_shared_report_status_module():

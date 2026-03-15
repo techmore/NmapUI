@@ -30,6 +30,7 @@ from nmapui.app_runtime_bindings import (
 from nmapui.app_task_bindings import build_task_bindings
 from nmapui.app_bindings import build_client_state_helpers, build_event_helpers
 from nmapui.app_composition import (
+    build_execute_auto_monitor_rule_deps,
     build_execute_auto_scan_deps,
     build_startup_check_deps,
 )
@@ -243,6 +244,7 @@ DEFAULT_INTERFACE = get_default_interface_impl(ni, logger)
 
 runtime_bindings = build_runtime_bindings(
     build_execute_auto_scan_deps=build_execute_auto_scan_deps,
+    build_execute_auto_monitor_rule_deps=build_execute_auto_monitor_rule_deps,
     auto_scan_config=auto_scan_config,
     get_current_customer=lambda: current_customer,
     get_last_scan_target=lambda: last_scan_target,
@@ -258,6 +260,19 @@ runtime_bindings = build_runtime_bindings(
     startup_grace_seconds=AUTO_SCAN_STARTUP_GRACE_SECONDS,
     current_assignment_loader=state_bindings["load_current_assignment"],
     set_current_customer=lambda value: globals().__setitem__("current_customer", value),
+    settings_state=settings_state,
+    save_settings=lambda payload: save_settings_state(
+        settings_path=SETTINGS_FILE,
+        save_json_document=save_json_document,
+        settings_state=payload,
+        remote_sync_secret_path=REMOTE_SYNC_SECRET_FILE,
+        remote_sync_secret_key_path=REMOTE_SYNC_SECRET_KEY_FILE,
+    ),
+    job_registry=job_registry,
+    emit_job_status=emit_job_status,
+    set_current_customer_state=set_current_customer_state,
+    set_last_scan_target_state=set_last_scan_target_state,
+    generate_report_task_provider=lambda: generate_report_task,
 )
 execute_auto_scan = runtime_bindings["execute_auto_scan"]
 load_current_assignment = runtime_bindings["load_current_assignment"]
@@ -316,6 +331,13 @@ register_app_handlers(
     get_app_version=get_app_version,
     get_default_interface_cached=lambda: DEFAULT_INTERFACE,
     settings_state=settings_state,
+    save_settings=lambda payload: save_settings_state(
+        settings_path=SETTINGS_FILE,
+        save_json_document=save_json_document,
+        settings_state=payload,
+        remote_sync_secret_path=REMOTE_SYNC_SECRET_FILE,
+        remote_sync_secret_key_path=REMOTE_SYNC_SECRET_KEY_FILE,
+    ),
     startup_state=startup_state,
     runtime_store=runtime_store,
     get_auto_scan_thread=runtime_bindings["get_auto_scan_thread"],
@@ -350,13 +372,6 @@ register_app_handlers(
     start_scan_task=lambda sid, target: start_scan_task(sid, target),
     generate_report_task=lambda sid, data: generate_report_task(sid, data),
     generate_pdf_from_saved_task=lambda sid, data: generate_pdf_from_saved_task(sid, data),
-    save_settings=lambda payload: save_settings_state(
-        settings_path=SETTINGS_FILE,
-        save_json_document=save_json_document,
-        settings_state=payload,
-        remote_sync_secret_path=REMOTE_SYNC_SECRET_FILE,
-        remote_sync_secret_key_path=REMOTE_SYNC_SECRET_KEY_FILE,
-    ),
     validate_google_drive_settings=lambda *, folder_id: validate_google_drive_settings(
         folder_id=folder_id,
         credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
@@ -384,6 +399,9 @@ register_app_handlers(
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
         key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         requests_module=requests,
+    ),
+    get_customer_name=lambda customer_id: (
+        (customer_fingerprinter.get_customer_by_id(customer_id) or {}).get("name", "")
     ),
     validate_remote_sync_settings=lambda *, endpoint, api_key: validate_remote_sync_settings(
         endpoint=endpoint,
