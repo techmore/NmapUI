@@ -1,11 +1,23 @@
 let lastScanTarget = '';
 let lastScanResults = {};
 let reportTimerInterval = null;
+let reportHideTimer = null;
 let reportStartTime = 0;
 let reportSocket = null;
 let reportGetClientJobs = () => ({ report: { status: 'idle' } });
 let reportGenerationInitialized = false;
 let reportActionPending = false;
+let inferredReportMode = null;
+
+function resetReportVisualState() {
+    reportActionPending = false;
+    inferredReportMode = null;
+    setReportButtonsPulsing(false);
+    if (typeof window.removeReportProgressCard === 'function') {
+        window.removeReportProgressCard();
+    }
+    stopReportTimer();
+}
 
 function startReportTimer(startedAt = null) {
     const container = document.getElementById('scan-timer-container');
@@ -14,6 +26,10 @@ function startReportTimer(startedAt = null) {
 
     container.classList.remove('hidden');
     feedbackBox.classList.add('card-pulsing');
+    if (reportHideTimer) {
+        clearTimeout(reportHideTimer);
+        reportHideTimer = null;
+    }
     const startedAtMillis = startedAt ? Date.parse(startedAt) : Number.NaN;
     reportStartTime = Number.isNaN(startedAtMillis) ? Date.now() : startedAtMillis;
 
@@ -43,10 +59,12 @@ function stopReportTimer() {
 
     feedbackBox.classList.remove('card-pulsing');
 
-    setTimeout(() => {
+    if (reportHideTimer) {
+        clearTimeout(reportHideTimer);
+    }
+    reportHideTimer = setTimeout(() => {
         timerContainer.classList.add('hidden');
-        feedbackBox.innerHTML = '';
-        feedbackBox.parentElement.classList.add('hidden');
+        reportHideTimer = null;
     }, 5000);
 }
 
@@ -77,13 +95,58 @@ function syncReportJobVisualState(job) {
     const isRunning = job?.status === 'running' || job?.status === 'cancelling';
     const chunked = !!job?.details?.chunked;
     if (!isRunning) {
-        setReportButtonsPulsing(false);
+        resetReportVisualState();
         return;
+    }
+
+    if (
+        typeof window.syncScanJobVisualState === 'function'
+        && reportGetClientJobs().scan.status !== 'running'
+        && reportGetClientJobs().scan.status !== 'cancelling'
+    ) {
+        window.syncScanJobVisualState({ status: 'completed' });
     }
 
     reportActionPending = true;
     setReportButtonsPulsing(true, chunked);
     startReportTimer(job?.started_at || null);
+}
+
+function syncReportVisualStateFromFeedback(message) {
+    if (typeof message !== 'string' || !message) {
+        return;
+    }
+
+    const normalized = message.toLowerCase();
+    if (
+        !normalized.includes('generating report for ')
+        && !normalized.includes('processing chunk')
+        && !normalized.includes('starting nmap comprehensive scan')
+        && !normalized.includes('running a single comprehensive scan without chunking')
+    ) {
+        return;
+    }
+
+    if (normalized.includes('without chunking')) {
+        inferredReportMode = 'complete';
+    } else if (normalized.includes('chunked')) {
+        inferredReportMode = 'chunked';
+    }
+
+    if (
+        reportGetClientJobs().report.status === 'running'
+        || reportGetClientJobs().report.status === 'cancelling'
+        || reportGetClientJobs().scan.status === 'running'
+        || reportGetClientJobs().scan.status === 'cancelling'
+    ) {
+        return;
+    }
+
+    reportActionPending = true;
+    setReportButtonsPulsing(true, inferredReportMode === 'chunked');
+    if (!reportTimerInterval) {
+        startReportTimer();
+    }
 }
 
 function getReportRequestContext() {
@@ -135,19 +198,14 @@ function initializeReportGenerationUI(socket, deps) {
             return;
         }
         syncReportJobVisualState(data);
-        if (data.status !== 'running' && data.status !== 'cancelling') {
-            reportActionPending = false;
-        }
     });
 
     socket.on('report_complete', function() {
-        reportActionPending = false;
-        setReportButtonsPulsing(false);
+        resetReportVisualState();
     });
 
     socket.on('report_error', function() {
-        reportActionPending = false;
-        setReportButtonsPulsing(false);
+        resetReportVisualState();
     });
 
     document.getElementById('generate-report-btn').addEventListener('click', function() {
@@ -207,4 +265,6 @@ window.setLastScanTarget = setLastScanTarget;
 window.getLastScanTarget = getLastScanTarget;
 window.updateLastScanResults = updateLastScanResults;
 window.syncReportJobVisualState = syncReportJobVisualState;
+window.syncReportVisualStateFromFeedback = syncReportVisualStateFromFeedback;
+window.resetReportVisualState = resetReportVisualState;
 window.initializeReportGenerationUI = initializeReportGenerationUI;

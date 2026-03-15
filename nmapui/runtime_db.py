@@ -5,7 +5,18 @@ from datetime import datetime, timezone
 import json
 import sqlite3
 from pathlib import Path
+import tempfile
+import time
 from typing import Any, Iterator
+
+SQLITE_BUSY_TIMEOUT_MS = 5000
+SQLITE_JOURNAL_MODE = "wal"
+SQLITE_SYNCHRONOUS = "normal"
+SQLITE_WRITE_RETRY_ATTEMPTS = 3
+SQLITE_WRITE_RETRY_DELAY_SECONDS = 0.05
+RUNTIME_DB_SCHEMA_VERSION = 1
+DEFAULT_RUNTIME_LOG_RETENTION = 5000
+DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION = 2000
 
 
 def utcnow_iso() -> str:
@@ -106,30 +117,131 @@ SCHEMA_STATEMENTS = (
     """,
 )
 
+SCHEMA_MIGRATIONS: dict[int, tuple[str, ...]] = {
+    1: SCHEMA_STATEMENTS,
+}
+
 
 class RuntimeStateStore:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def _configure_connection(self, conn: sqlite3.Connection) -> sqlite3.Connection:
+        conn.row_factory = sqlite3.Row
+        conn.execute(f"PRAGMA journal_mode={SQLITE_JOURNAL_MODE}")
+        conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        conn.execute(f"PRAGMA synchronous={SQLITE_SYNCHRONOUS}")
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
+
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000)
         try:
-            conn.row_factory = sqlite3.Row
+            self._configure_connection(conn)
             yield conn
             conn.commit()
         finally:
             conn.close()
 
-    def initialize(self) -> None:
+    def get_connection_pragmas(self) -> dict[str, Any]:
         with self.connect() as conn:
-            for statement in SCHEMA_STATEMENTS:
-                conn.execute(statement)
+            journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+            busy_timeout = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+            synchronous = conn.execute("PRAGMA synchronous").fetchone()[0]
+            foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+        return {
+            "journal_mode": journal_mode,
+            "busy_timeout": int(busy_timeout),
+            "synchronous": synchronous,
+            "foreign_keys": int(foreign_keys),
+        }
+
+    def _get_schema_version(self, conn: sqlite3.Connection) -> int:
+        return int(conn.execute("PRAGMA user_version").fetchone()[0] or 0)
+
+    def _set_schema_version(self, conn: sqlite3.Connection, version: int) -> None:
+        conn.execute(f"PRAGMA user_version={int(version)}")
+
+    def get_schema_version(self) -> int:
+        with self.connect() as conn:
+            return self._get_schema_version(conn)
+
+    def _apply_schema_statements(
+        self,
+        conn: sqlite3.Connection,
+        statements: tuple[str, ...],
+    ) -> None:
+        for statement in statements:
+            conn.execute(statement)
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        current_version = self._get_schema_version(conn)
+        if current_version > RUNTIME_DB_SCHEMA_VERSION:
+            raise RuntimeError(
+                "Runtime DB schema version is newer than this application "
+                f"supports: {current_version} > {RUNTIME_DB_SCHEMA_VERSION}"
+            )
+        for version in range(current_version + 1, RUNTIME_DB_SCHEMA_VERSION + 1):
+            statements = SCHEMA_MIGRATIONS.get(version)
+            if statements is None:
+                raise RuntimeError(f"Missing runtime DB migration for version {version}")
+            self._apply_schema_statements(conn, statements)
+            self._set_schema_version(conn, version)
+
+    def export_snapshot(self) -> Path:
+        with tempfile.NamedTemporaryFile(
+            prefix="nmapui-runtime-export-",
+            suffix=".sqlite3",
+            delete=False,
+        ) as temp_file:
+            export_path = Path(temp_file.name)
+
+        source_conn = sqlite3.connect(
+            self.db_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1000
+        )
+        destination_conn = sqlite3.connect(export_path)
+        try:
+            self._configure_connection(source_conn)
+            source_conn.backup(destination_conn)
+            destination_conn.commit()
+        finally:
+            destination_conn.close()
+            source_conn.close()
+
+        return export_path
+
+    def get_database_file_size(self) -> int:
+        try:
+            return int(self.db_path.stat().st_size)
+        except OSError:
+            return 0
+
+    def _run_write(self, operation):
+        last_error = None
+        for attempt in range(SQLITE_WRITE_RETRY_ATTEMPTS):
+            try:
+                with self.connect() as conn:
+                    return operation(conn)
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() and "busy" not in str(exc).lower():
+                    raise
+                last_error = exc
+                if attempt == SQLITE_WRITE_RETRY_ATTEMPTS - 1:
+                    raise
+                time.sleep(SQLITE_WRITE_RETRY_DELAY_SECONDS * (attempt + 1))
+        if last_error is not None:
+            raise last_error
+
+    def initialize(self) -> None:
+        def operation(conn):
+            self._migrate(conn)
+        self._run_write(operation)
 
     def upsert_runtime_snapshot(self, key: str, payload: dict[str, Any]) -> None:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 """
                 INSERT INTO runtime_snapshots(key, payload_json, updated_at)
@@ -140,6 +252,7 @@ class RuntimeStateStore:
                 """,
                 (key, _json_dumps(payload), now),
             )
+        self._run_write(operation)
 
     def get_runtime_snapshot(self, key: str) -> dict[str, Any] | None:
         with self.connect() as conn:
@@ -161,7 +274,7 @@ class RuntimeStateStore:
         payload: dict[str, Any],
     ) -> None:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 """
                 INSERT INTO jobs(job_id, owner_sid, job_type, status, payload_json, created_at, updated_at)
@@ -175,6 +288,7 @@ class RuntimeStateStore:
                 """,
                 (job_id, owner_sid, job_type, status, _json_dumps(payload), now, now),
             )
+        self._run_write(operation)
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
@@ -248,7 +362,7 @@ class RuntimeStateStore:
         payload: dict[str, Any],
     ) -> None:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 """
                 INSERT INTO report_artifacts(
@@ -277,6 +391,7 @@ class RuntimeStateStore:
                     now,
                 ),
             )
+        self._run_write(operation)
 
     def list_report_artifacts(self, *, customer_id: str | None = None) -> list[dict[str, Any]]:
         query = """
@@ -330,11 +445,12 @@ class RuntimeStateStore:
         }
 
     def delete_report_artifact(self, scan_path: str) -> None:
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 "DELETE FROM report_artifacts WHERE scan_path = ?",
                 (scan_path,),
             )
+        self._run_write(operation)
 
     def append_log(
         self,
@@ -345,7 +461,7 @@ class RuntimeStateStore:
         payload: dict[str, Any] | None = None,
     ) -> int:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             cursor = conn.execute(
                 """
                 INSERT INTO runtime_logs(category, level, message, payload_json, created_at)
@@ -354,6 +470,7 @@ class RuntimeStateStore:
                 (category, level, message, _json_dumps(payload), now),
             )
             return int(cursor.lastrowid)
+        return self._run_write(operation)
 
     def append_job_event(
         self,
@@ -366,7 +483,7 @@ class RuntimeStateStore:
         max_events: int = 200,
     ) -> int:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             cursor = conn.execute(
                 """
                 INSERT INTO job_events(job_id, owner_sid, job_type, event_name, payload_json, created_at)
@@ -388,6 +505,7 @@ class RuntimeStateStore:
                 (job_id, job_id, max_events),
             )
             return int(cursor.lastrowid)
+        return self._run_write(operation)
 
     def list_job_events(
         self,
@@ -457,7 +575,7 @@ class RuntimeStateStore:
     ) -> int:
         now = utcnow_iso()
         timestamp = str(payload.get("timestamp", "") or now)
-        with self.connect() as conn:
+        def operation(conn):
             cursor = conn.execute(
                 """
                 INSERT INTO customer_scan_history(customer_id, timestamp, payload_json, created_at)
@@ -466,6 +584,7 @@ class RuntimeStateStore:
                 (customer_id, timestamp, _json_dumps(payload), now),
             )
             return int(cursor.lastrowid)
+        return self._run_write(operation)
 
     def list_customer_scan_history(
         self,
@@ -516,6 +635,126 @@ class RuntimeStateStore:
                 "SELECT COUNT(*) AS count FROM runtime_logs"
             ).fetchone()
         return int(row["count"] or 0)
+
+    def prune_runtime_logs(
+        self,
+        *,
+        keep_latest: int = DEFAULT_RUNTIME_LOG_RETENTION,
+    ) -> int:
+        keep_latest = max(0, int(keep_latest))
+
+        def operation(conn):
+            before = int(
+                conn.execute("SELECT COUNT(*) AS count FROM runtime_logs").fetchone()[0]
+                or 0
+            )
+            if keep_latest == 0:
+                conn.execute("DELETE FROM runtime_logs")
+            else:
+                conn.execute(
+                    """
+                    DELETE FROM runtime_logs
+                    WHERE id NOT IN (
+                        SELECT id FROM runtime_logs
+                        ORDER BY id DESC
+                        LIMIT ?
+                    )
+                    """,
+                    (keep_latest,),
+                )
+            after = int(
+                conn.execute("SELECT COUNT(*) AS count FROM runtime_logs").fetchone()[0]
+                or 0
+            )
+            return max(0, before - after)
+
+        return int(self._run_write(operation) or 0)
+
+    def prune_customer_scan_history(
+        self,
+        *,
+        keep_latest: int = DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+    ) -> int:
+        keep_latest = max(0, int(keep_latest))
+
+        def operation(conn):
+            before = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM customer_scan_history"
+                ).fetchone()[0]
+                or 0
+            )
+            if keep_latest == 0:
+                conn.execute("DELETE FROM customer_scan_history")
+            else:
+                conn.execute(
+                    """
+                    DELETE FROM customer_scan_history
+                    WHERE id NOT IN (
+                        SELECT id FROM customer_scan_history
+                        ORDER BY timestamp DESC, id DESC
+                        LIMIT ?
+                    )
+                    """,
+                    (keep_latest,),
+                )
+            after = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM customer_scan_history"
+                ).fetchone()[0]
+                or 0
+            )
+            return max(0, before - after)
+
+        return int(self._run_write(operation) or 0)
+
+    def compact_database(self) -> dict[str, int]:
+        before_bytes = self.get_database_file_size()
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=SQLITE_BUSY_TIMEOUT_MS / 1000,
+            isolation_level=None,
+        )
+        try:
+            self._configure_connection(conn)
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("VACUUM")
+        finally:
+            conn.close()
+        after_bytes = self.get_database_file_size()
+        return {
+            "before_bytes": before_bytes,
+            "after_bytes": after_bytes,
+        }
+
+    def apply_retention_policies(
+        self,
+        *,
+        runtime_logs_keep_latest: int = DEFAULT_RUNTIME_LOG_RETENTION,
+        customer_history_keep_latest: int = DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+        compact: bool = True,
+    ) -> dict[str, Any]:
+        deleted_runtime_logs = self.prune_runtime_logs(
+            keep_latest=runtime_logs_keep_latest
+        )
+        deleted_customer_scan_history = self.prune_customer_scan_history(
+            keep_latest=customer_history_keep_latest
+        )
+        compact_result = (
+            self.compact_database()
+            if compact
+            else {
+                "before_bytes": self.get_database_file_size(),
+                "after_bytes": self.get_database_file_size(),
+            }
+        )
+        return {
+            "deleted_runtime_logs": deleted_runtime_logs,
+            "deleted_customer_scan_history": deleted_customer_scan_history,
+            "runtime_logs_keep_latest": max(0, int(runtime_logs_keep_latest)),
+            "customer_history_keep_latest": max(0, int(customer_history_keep_latest)),
+            **compact_result,
+        }
 
 
 def create_runtime_state_store(db_path: Path) -> RuntimeStateStore:

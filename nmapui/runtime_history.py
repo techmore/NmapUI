@@ -1,23 +1,31 @@
 from nmapui.reporting import (
+    build_artifact_downloads,
     find_previous_scan_metadata,
     parse_scan_xml_for_assets,
+    resolve_report_customer_identity,
     summarize_asset_differences,
 )
 from persistence import iter_scan_metadata_documents
 
 
-def normalize_runtime_report_row(artifact):
+def normalize_runtime_report_row(artifact, *, customer_fingerprinter=None):
     payload = dict(artifact.get("payload", {}) or {})
-    customer_name = payload.get(
-        "customer_name",
-        payload.get("customer", payload.get("customer_id", "Unknown")),
+    resolved_identity = resolve_report_customer_identity(
+        payload,
+        customer_fingerprinter=customer_fingerprinter,
     )
-    if customer_name:
-        customer_name = str(customer_name).split(" (")[0]
+    customer_name = resolved_identity["customer_name"]
+    customer_id = resolved_identity["customer_id"]
+    downloads = build_artifact_downloads(
+        payload,
+        customer_fingerprinter=customer_fingerprinter,
+    )
 
     return {
         **payload,
         "customer_name": customer_name,
+        "customer_id": customer_id,
+        "downloads": downloads,
         "path": artifact["scan_path"],
         "has_html": bool(artifact.get("html_path")),
         "has_pdf": bool(artifact.get("pdf_path")),
@@ -91,13 +99,17 @@ def build_history_rows(
     load_json_document,
     normalize_scan_metadata_document,
     logger,
+    customer_fingerprinter=None,
 ):
     history = []
     seen_paths = set()
 
     if runtime_store is not None:
         for artifact in runtime_store.list_report_artifacts():
-            row = normalize_runtime_report_row(artifact)
+            row = normalize_runtime_report_row(
+                artifact,
+                customer_fingerprinter=customer_fingerprinter,
+            )
             history.append(row)
             seen_paths.add(row["path"])
 
@@ -119,8 +131,16 @@ def build_history_rows(
                 data["customer_name"] = data.get(
                     "customer", data.get("customer_id", "Unknown")
                 )
-            if data["customer_name"]:
-                data["customer_name"] = str(data["customer_name"]).split(" (")[0]
+            resolved_identity = resolve_report_customer_identity(
+                data,
+                customer_fingerprinter=customer_fingerprinter,
+            )
+            data["customer_name"] = resolved_identity["customer_name"]
+            data["customer_id"] = resolved_identity["customer_id"]
+            data["downloads"] = build_artifact_downloads(
+                data,
+                customer_fingerprinter=customer_fingerprinter,
+            )
             data["path"] = rel_path
             data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
                 metadata_path.parent / "scan.html"

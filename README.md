@@ -47,6 +47,7 @@ A web-based GUI for Nmap network scanning with real-time results, CVE detection,
 
    `build.sh` will automatically run `install.sh` if dependencies haven't been set up yet. After a successful build, look for the network icon in your macOS menu bar. The app serves NmapUI at `http://127.0.0.1:9000`.
    The wrapper target is selected automatically from your host architecture (`arm64` or `x86_64`). Override it explicitly with `NMAPUI_SWIFT_TARGET` if needed.
+   The completed `NmapUIMenuBar.app` is installed into `/Applications` when writable, otherwise `~/Applications`, replacing any existing install. Override the destination explicitly with `NMAPUI_APPLICATIONS_DIR`.
 
    > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 
@@ -88,6 +89,26 @@ Optional overrides:
 ```bash
 ./.venv/bin/python scripts/backfill_runtime_store.py --db-path /tmp/runtime.sqlite3 --scans-dir /tmp/scans
 ```
+
+Export the runtime database from the Settings tab, or download it directly:
+
+```bash
+curl -OJ http://127.0.0.1:9000/api/runtime/export
+```
+
+Migrate an existing runtime database into the newly built menu bar app:
+
+```bash
+NMAPUI_MIGRATE_DB=1 ./build.sh
+```
+
+Optional migration source override:
+
+```bash
+NMAPUI_MIGRATE_DB=1 NMAPUI_MIGRATE_DB_FROM=/path/to/runtime.sqlite3 ./build.sh
+```
+
+If migration is enabled and the source database does not exist, `build.sh` fails before replacing the installed app.
 
 ## Usage
 

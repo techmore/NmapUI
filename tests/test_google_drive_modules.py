@@ -1,10 +1,15 @@
 from pathlib import Path
+import json
+import os
 
 from nmapui.google_drive import (
     build_google_drive_auth_status,
     build_google_drive_auth_url,
+    clear_google_drive_token_state,
     ensure_google_drive_access_token,
     exchange_google_drive_auth_code,
+    load_google_drive_token_state,
+    save_google_drive_token_state,
     upload_files_to_google_drive,
 )
 
@@ -19,31 +24,41 @@ def write_credentials(path: Path):
 def test_build_google_drive_auth_url_persists_pending_state(tmp_path):
     credentials_path = tmp_path / "credentials.json"
     token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
     write_credentials(credentials_path)
 
     result = build_google_drive_auth_url(
         credentials_path=credentials_path,
         token_path=token_path,
+        key_path=key_path,
         redirect_uri="http://127.0.0.1:9000/api/settings/google-drive/callback",
     )
 
     assert result["success"] is True
     assert "accounts.google.com" in result["auth_url"]
-    token_state = __import__("json").loads(token_path.read_text())
+    token_file_payload = json.loads(token_path.read_text())
+    assert "ciphertext" in token_file_payload
+    assert "pending_auth" not in token_file_payload
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
     assert token_state["pending_auth"]["state"]
     assert token_state["pending_auth"]["code_verifier"]
+    assert key_path.exists()
+    assert oct(token_path.stat().st_mode & 0o777) == "0o600"
+    assert oct(key_path.stat().st_mode & 0o777) == "0o600"
 
 
 def test_exchange_google_drive_auth_code_saves_tokens(tmp_path):
     credentials_path = tmp_path / "credentials.json"
     token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
     write_credentials(credentials_path)
     auth_result = build_google_drive_auth_url(
         credentials_path=credentials_path,
         token_path=token_path,
+        key_path=key_path,
         redirect_uri="http://127.0.0.1:9000/api/settings/google-drive/callback",
     )
-    token_state = __import__("json").loads(token_path.read_text())
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
 
     class ResponseStub:
         status_code = 200
@@ -66,6 +81,7 @@ def test_exchange_google_drive_auth_code_saves_tokens(tmp_path):
     result = exchange_google_drive_auth_code(
         credentials_path=credentials_path,
         token_path=token_path,
+        key_path=key_path,
         code="code-123",
         state=token_state["pending_auth"]["state"],
         requests_module=RequestsStub,
@@ -73,18 +89,22 @@ def test_exchange_google_drive_auth_code_saves_tokens(tmp_path):
 
     assert auth_result["success"] is True
     assert result == {"success": True, "status": "Google Drive connected"}
-    saved = __import__("json").loads(token_path.read_text())
+    saved = load_google_drive_token_state(token_path, key_path=key_path)
     assert saved["access_token"] == "access-123"
     assert saved["refresh_token"] == "refresh-456"
     assert "pending_auth" not in saved
+    assert "access-123" not in token_path.read_text()
 
 
 def test_ensure_google_drive_access_token_refreshes_expired_token(tmp_path):
     credentials_path = tmp_path / "credentials.json"
     token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
     write_credentials(credentials_path)
-    token_path.write_text(
-        '{"refresh_token":"refresh-456","access_token":"stale","expires_at":"2020-01-01T00:00:00+00:00"}'
+    save_google_drive_token_state(
+        token_path,
+        {"refresh_token": "refresh-456", "access_token": "stale", "expires_at": "2020-01-01T00:00:00+00:00"},
+        key_path=key_path,
     )
 
     class ResponseStub:
@@ -103,6 +123,7 @@ def test_ensure_google_drive_access_token_refreshes_expired_token(tmp_path):
     token = ensure_google_drive_access_token(
         credentials_path=credentials_path,
         token_path=token_path,
+        key_path=key_path,
         requests_module=RequestsStub,
     )
 
@@ -112,9 +133,14 @@ def test_ensure_google_drive_access_token_refreshes_expired_token(tmp_path):
 def test_upload_files_to_google_drive_posts_each_file(tmp_path):
     credentials_path = tmp_path / "credentials.json"
     token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
     file_path = tmp_path / "report.pdf"
     write_credentials(credentials_path)
-    token_path.write_text('{"access_token":"access-123","expires_at":"2099-01-01T00:00:00+00:00"}')
+    save_google_drive_token_state(
+        token_path,
+        {"access_token": "access-123", "expires_at": "2099-01-01T00:00:00+00:00"},
+        key_path=key_path,
+    )
     file_path.write_bytes(b"pdf-data")
     uploaded_names = []
 
@@ -131,11 +157,14 @@ def test_upload_files_to_google_drive_posts_each_file(tmp_path):
         @staticmethod
         def post(url, headers=None, files=None, timeout=None):
             uploaded_names.append(files["file"][0])
+            assert hasattr(files["file"][1], "read")
+            assert not isinstance(files["file"][1], (bytes, bytearray))
             return ResponseStub(files["file"][0])
 
     result = upload_files_to_google_drive(
         credentials_path=credentials_path,
         token_path=token_path,
+        key_path=key_path,
         file_paths=[file_path],
         folder_id="folder-123",
         requests_module=RequestsStub,
@@ -145,16 +174,101 @@ def test_upload_files_to_google_drive_posts_each_file(tmp_path):
     assert uploaded_names == ["report.pdf"]
 
 
+def test_upload_files_to_google_drive_does_not_use_read_bytes(tmp_path):
+    credentials_path = tmp_path / "credentials.json"
+    token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
+    file_path = tmp_path / "report.pdf"
+    write_credentials(credentials_path)
+    save_google_drive_token_state(
+        token_path,
+        {"access_token": "access-123", "expires_at": "2099-01-01T00:00:00+00:00"},
+        key_path=key_path,
+    )
+    file_path.write_bytes(b"pdf-data")
+
+    original_read_bytes = Path.read_bytes
+
+    def fail_read_bytes(self):
+        if self == file_path:
+            raise AssertionError("upload path should stream files instead of calling read_bytes()")
+        return original_read_bytes(self)
+
+    Path.read_bytes = fail_read_bytes
+    try:
+        class ResponseStub:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"id": "id-report.pdf", "name": "report.pdf"}
+
+        class RequestsStub:
+            @staticmethod
+            def post(url, headers=None, files=None, timeout=None):
+                assert hasattr(files["file"][1], "read")
+                return ResponseStub()
+
+        result = upload_files_to_google_drive(
+            credentials_path=credentials_path,
+            token_path=token_path,
+            key_path=key_path,
+            file_paths=[file_path],
+            folder_id="folder-123",
+            requests_module=RequestsStub,
+        )
+    finally:
+        Path.read_bytes = original_read_bytes
+
+    assert result["success"] is True
+
+
 def test_build_google_drive_auth_status_reports_connected_token(tmp_path):
     credentials_path = tmp_path / "credentials.json"
     token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
     write_credentials(credentials_path)
-    token_path.write_text('{"refresh_token":"refresh-456"}')
+    save_google_drive_token_state(
+        token_path,
+        {"refresh_token": "refresh-456"},
+        key_path=key_path,
+    )
 
     status = build_google_drive_auth_status(
         credentials_path=credentials_path,
         token_path=token_path,
+        key_path=key_path,
     )
 
     assert status["configured"] is True
     assert status["connected"] is True
+
+
+def test_load_google_drive_token_state_migrates_plaintext_file(tmp_path):
+    token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
+    plaintext = {"refresh_token": "refresh-456", "access_token": "access-123"}
+    token_path.write_text(json.dumps(plaintext))
+
+    loaded = load_google_drive_token_state(token_path, key_path=key_path)
+
+    assert loaded == plaintext
+    persisted = json.loads(token_path.read_text())
+    assert "ciphertext" in persisted
+    assert "access-123" not in token_path.read_text()
+    assert key_path.exists()
+
+
+def test_clear_google_drive_token_state_removes_token_and_key(tmp_path):
+    token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
+    save_google_drive_token_state(
+        token_path,
+        {"refresh_token": "refresh-456"},
+        key_path=key_path,
+    )
+
+    clear_google_drive_token_state(token_path, key_path=key_path)
+
+    assert not token_path.exists()
+    assert not key_path.exists()

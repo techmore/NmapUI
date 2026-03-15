@@ -172,6 +172,92 @@ def register_customer_handlers(socketio, deps):
         except Exception as exc:
             emit("customer_error", f"Failed to add customer: {str(exc)}")
 
+    @socketio.on("update_customer")
+    @require_socket_auth()
+    def update_customer_event(data):
+        try:
+            customer_fingerprinter = get_customer_fingerprinter()
+            customer_id = data.get("customer_id", "").strip() or data.get("id", "").strip()
+            if not customer_id:
+                emit("customer_error", "Customer ID is required")
+                return
+
+            existing_customer = customer_fingerprinter.get_customer_by_id(customer_id)
+            if not existing_customer:
+                emit("customer_error", f"Customer '{customer_id}' not found")
+                return
+
+            existing_customer["name"] = data.get("name", existing_customer.get("name", "")).strip()
+            existing_customer["id"] = data.get("id", existing_customer.get("id", "")).strip()
+            existing_customer["description"] = data.get("description", existing_customer.get("description", "")).strip()
+            existing_customer["confidence"] = float(data.get("confidence", existing_customer.get("confidence", 0.7)))
+
+            networks = existing_customer.setdefault("networks", {})
+            networks["public_ip"] = data.get("public_ip", networks.get("public_ip", "dynamic")).strip() or "dynamic"
+            public_ip_value = data.get("public_ip", "").strip()
+            if public_ip_value:
+                public_ips = networks.setdefault("public_ips", [])
+                if public_ip_value not in public_ips:
+                    public_ips.append(public_ip_value)
+            networks["private_ranges"] = [
+                r.strip() for r in data.get("private_ranges", "").split(",") if r.strip()
+            ]
+            networks["exit_ips"] = [
+                e.strip() for e in data.get("exit_ips", "").split(",") if e.strip()
+            ] or "dynamic"
+            networks["gateway_pattern"] = data.get("gateway_pattern", networks.get("gateway_pattern", "")).strip()
+
+            metadata = existing_customer.setdefault("metadata", {})
+            metadata["location"] = data.get("location", metadata.get("location", "Unknown")).strip()
+            metadata["connection_type"] = [data.get("connection_type", "direct").strip()]
+            metadata["isp"] = data.get("isp", metadata.get("isp", "Unknown")).strip()
+            metadata["network_size"] = data.get("network_size", metadata.get("network_size", "medium")).strip()
+            metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+
+            fingerprints = existing_customer.setdefault("fingerprints", [{}])
+            if not fingerprints:
+                fingerprints.append({})
+            fingerprints[0].update(
+                {
+                    "type": data.get("connection_type", fingerprints[0].get("type", "direct")).strip(),
+                    "description": f"{data.get('connection_type', fingerprints[0].get('type', 'direct')).strip()} connection",
+                    "hop_count": data.get("hop_count", fingerprints[0].get("hop_count", "2-10")).strip(),
+                    "private_hop_pattern": [
+                        {
+                            "ip_pattern": data.get("gateway_pattern", networks.get("gateway_pattern", "192.168.1.1")).strip(),
+                            "is_private": True,
+                            "position": 1,
+                        }
+                    ],
+                    "public_exit_pattern": [
+                        {
+                            "ip_pattern": data.get("exit_pattern", "*.*.*.*").strip(),
+                            "is_private": False,
+                            "position": 2,
+                        }
+                    ],
+                    "latency_profile": {
+                        "first_hop": data.get("first_hop_latency", "<5ms").strip(),
+                        "exit_hop": data.get("exit_hop_latency", "5-100ms").strip(),
+                        "total_time": data.get("total_latency", "<200ms").strip(),
+                    },
+                }
+            )
+
+            save_customers_config()
+            emit(
+                "customer_updated",
+                {
+                    "success": True,
+                    "customer": existing_customer,
+                    "message": f"Updated customer '{existing_customer['name']}'",
+                },
+            )
+        except ValueError as exc:
+            emit("customer_error", f"Invalid data format: {str(exc)}")
+        except Exception as exc:
+            emit("customer_error", f"Failed to update customer: {str(exc)}")
+
     @socketio.on("assign_customer")
     @require_socket_auth()
     def assign_customer_event(data):

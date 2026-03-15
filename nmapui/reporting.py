@@ -40,6 +40,39 @@ def _resolve_artifact_file_path(*, scans_dir, scan_path, stored_path, default_na
     return scans_dir / scan_path / default_name
 
 
+def resolve_report_customer_identity(metadata, *, customer_fingerprinter=None):
+    normalized_metadata = normalize_scan_metadata_document(metadata or {})
+    customer_id = str(normalized_metadata.get("customer_id", "") or "").strip()
+    customer_name = str(
+        normalized_metadata.get(
+            "customer_name",
+            normalized_metadata.get("customer", normalized_metadata.get("customer_id", "Unknown")),
+        )
+        or "Unknown"
+    ).split(" (")[0]
+
+    if customer_fingerprinter is not None:
+        if customer_id:
+            customer = customer_fingerprinter.get_customer_by_id(customer_id)
+            if customer and customer.get("name"):
+                customer_name = str(customer.get("name")).split(" (")[0]
+        network_key = normalized_metadata.get("network_key")
+        if isinstance(network_key, dict):
+            matched_customer, confidence = customer_fingerprinter.match_customer(network_key)
+            if matched_customer and confidence > 0:
+                matched_name = str(matched_customer.get("name", "") or "").split(" (")[0]
+                matched_id = str(matched_customer.get("id", "") or "")
+                if matched_name and matched_name not in ("Unknown", "Unassigned", "Unknown Network"):
+                    customer_name = matched_name
+                if matched_id:
+                    customer_id = matched_id
+
+    return {
+        "customer_id": customer_id,
+        "customer_name": customer_name or "Unknown",
+    }
+
+
 def _normalize_asset_ports(asset):
     ports = set()
     for item in (asset.get("ports") or "").split(","):
@@ -689,11 +722,34 @@ def save_scan_metadata(
     )
 
 
-def build_artifact_downloads(metadata):
-    customer = str(metadata.get("customer_name", "Unknown") or "Unknown").split(" (")[0]
+def build_artifact_downloads(metadata, *, customer_fingerprinter=None):
+    resolved_identity = resolve_report_customer_identity(
+        metadata,
+        customer_fingerprinter=customer_fingerprinter,
+    )
+    customer = resolved_identity["customer_name"]
     target = str(metadata.get("target", "scan") or "scan").replace("/", "_")
-    date_str = str(metadata.get("date", datetime.now().strftime("%Y-%m-%d")) or datetime.now().strftime("%Y-%m-%d"))
-    time_str = str(metadata.get("time", "000000") or "000000").replace(":", "")
+    timestamp_value = str(metadata.get("timestamp", "") or "").strip()
+    parsed_timestamp = None
+    if timestamp_value:
+        try:
+            parsed_timestamp = datetime.fromisoformat(timestamp_value)
+        except ValueError:
+            parsed_timestamp = None
+    date_str = str(
+        metadata.get(
+            "date",
+            parsed_timestamp.strftime("%Y-%m-%d") if parsed_timestamp else datetime.now().strftime("%Y-%m-%d"),
+        )
+        or (parsed_timestamp.strftime("%Y-%m-%d") if parsed_timestamp else datetime.now().strftime("%Y-%m-%d"))
+    )
+    time_str = str(
+        metadata.get(
+            "time",
+            parsed_timestamp.strftime("%H%M%S") if parsed_timestamp else "000000",
+        )
+        or (parsed_timestamp.strftime("%H%M%S") if parsed_timestamp else "000000")
+    ).replace(":", "")
     safe_cust = re.sub(r"[^\w\-]", "_", customer)
     safe_target = re.sub(r"[^\w\.]", "_", target)
     return {

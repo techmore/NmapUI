@@ -1,9 +1,11 @@
 from flask import Flask
 from flask_socketio import SocketIO
 
+from nmapui.app_bindings import build_event_helpers
 from nmapui.handlers.connections import register_connection_handlers
 from nmapui.handlers.runtime_info import register_runtime_info_handlers
 from nmapui.handlers.scan_jobs import register_scan_job_handlers
+from nmapui.jobs import ClientJobRegistry, ScanBroadcaster
 
 
 def basic_auth_header(username="scanner", password="secret-pass"):
@@ -32,6 +34,68 @@ def build_scan_jobs_app(deps):
     socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
     register_scan_job_handlers(socketio, deps)
     return app, socketio
+
+
+def build_live_scan_jobs_app():
+    app = Flask(__name__)
+    socketio = SocketIO(app, cors_allowed_origins="*", test_mode=True)
+    broadcaster = ScanBroadcaster()
+    job_registry = ClientJobRegistry()
+    event_helpers = build_event_helpers(
+        socketio=socketio,
+        job_registry=job_registry,
+        broadcaster=broadcaster,
+        runtime_store=None,
+    )
+    observed = {"background_tasks": []}
+
+    def record_background_task(fn, *args):
+        observed["background_tasks"].append((getattr(fn, "__name__", str(fn)), args))
+        return None
+
+    socketio.start_background_task = record_background_task
+
+    register_connection_handlers(
+        socketio,
+        {
+            "auto_scan_config": None,
+            "broadcaster": broadcaster,
+            "emit_to_client": event_helpers["emit_to_client"],
+            "get_client_state": lambda sid=None: {
+                "current_customer": {"id": "unknown", "name": "Unknown Network", "confidence": 0.0},
+                "network_key": {"target": "1.1.1.1", "total_hops": 0, "private_hops": [], "public_hops": [], "exit_ip": None},
+                "last_scan_target": None,
+            },
+            "job_registry": job_registry,
+            "logger": app.logger,
+            "set_current_customer_state": lambda *, value, sid=None: None,
+            "set_last_scan_target_state": lambda *, value, sid=None: None,
+            "set_network_key_state": lambda *, value, sid=None: None,
+        },
+    )
+    register_scan_job_handlers(
+        socketio,
+        {
+            "validate_target": lambda target: (True, None),
+            "rate_limiter": type(
+                "RateLimiterStub",
+                (),
+                {
+                    "can_scan": lambda self, sid=None: (True, None),
+                    "record_scan": lambda self, sid=None: None,
+                },
+            )(),
+            "job_registry": job_registry,
+            "emit_job_status": event_helpers["emit_job_status"],
+            "set_last_scan_target_state": lambda *, value, sid=None: None,
+            "start_scan_task": lambda sid, target: None,
+            "generate_report_task": lambda sid, data: None,
+            "generate_pdf_from_saved_task": lambda sid, data: None,
+            "broadcaster": broadcaster,
+        },
+    )
+
+    return app, socketio, observed
 
 
 def build_connection_app(deps):
@@ -357,6 +421,79 @@ def test_connect_replays_active_scan_events_to_new_tab():
         (observed["subscribe"][1], "scan_feedback", "Scanning..."),
         (observed["subscribe"][1], "scan_progress", {"pct": 50}),
     ]
+
+
+def test_start_scan_broadcasts_running_job_status_to_existing_open_tabs(monkeypatch):
+    configure_auth(monkeypatch)
+    app, socketio, observed = build_live_scan_jobs_app()
+    client_a = socketio.test_client(app, headers=basic_auth_header())
+    client_b = socketio.test_client(app, headers=basic_auth_header())
+
+    client_a.get_received()
+    client_b.get_received()
+
+    client_a.emit("start_scan", "192.168.1.0/24")
+
+    received_a = client_a.get_received()
+    received_b = client_b.get_received()
+
+    assert any(
+        event["name"] == "job_status"
+        and event["args"][0]["job_type"] == "scan"
+        and event["args"][0]["status"] == "running"
+        for event in received_a
+    )
+    assert any(
+        event["name"] == "job_status"
+        and event["args"][0]["job_type"] == "scan"
+        and event["args"][0]["status"] == "running"
+        for event in received_b
+    )
+    assert len(observed["background_tasks"]) == 1
+    assert observed["background_tasks"][0][1][1] == "192.168.1.0/24"
+
+
+def test_generate_report_broadcasts_running_job_status_to_existing_open_tabs(monkeypatch):
+    configure_auth(monkeypatch)
+    app, socketio, observed = build_live_scan_jobs_app()
+    client_a = socketio.test_client(app, headers=basic_auth_header())
+    client_b = socketio.test_client(app, headers=basic_auth_header())
+
+    client_a.get_received()
+    client_b.get_received()
+
+    client_a.emit(
+        "generate_report",
+        {
+            "target": "192.168.1.0/24",
+            "customer_name": "Acme",
+            "chunked": False,
+        },
+    )
+
+    received_a = client_a.get_received()
+    received_b = client_b.get_received()
+
+    assert any(
+        event["name"] == "job_status"
+        and event["args"][0]["job_type"] == "report"
+        and event["args"][0]["status"] == "running"
+        and event["args"][0]["details"].get("chunked") is False
+        for event in received_a
+    )
+    assert any(
+        event["name"] == "job_status"
+        and event["args"][0]["job_type"] == "report"
+        and event["args"][0]["status"] == "running"
+        and event["args"][0]["details"].get("chunked") is False
+        for event in received_b
+    )
+    assert len(observed["background_tasks"]) == 1
+    assert observed["background_tasks"][0][1][1] == {
+        "target": "192.168.1.0/24",
+        "customer_name": "Acme",
+        "chunked": False,
+    }
 
 
 def test_connect_replays_active_report_events_to_new_tab():

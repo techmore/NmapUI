@@ -82,9 +82,13 @@ function renderRuntimeSummary(summary) {
     }
 
     const maintenanceBackfill = summary.maintenance_backfill || {};
+    const maintenanceRetention = summary.maintenance_retention || {};
     const persistedCounts = summary.persisted_counts || {};
     const lastBackfillValue = maintenanceBackfill.last_run_at
         ? `${new Date(maintenanceBackfill.last_run_at).toLocaleString()} (${maintenanceBackfill.last_backfilled || 0})`
+        : 'Never';
+    const lastRetentionValue = maintenanceRetention.last_run_at
+        ? `${new Date(maintenanceRetention.last_run_at).toLocaleString()} (${maintenanceRetention.deleted_runtime_logs || 0} logs, ${maintenanceRetention.deleted_customer_scan_history || 0} history)`
         : 'Never';
 
     const cards = [
@@ -97,6 +101,7 @@ function renderRuntimeSummary(summary) {
         ['History rows', String(persistedCounts.customer_scan_history || 0)],
         ['Runtime logs', String(persistedCounts.runtime_logs || 0)],
         ['Last backfill', lastBackfillValue],
+        ['Last retention', lastRetentionValue],
     ];
 
     container.replaceChildren();
@@ -268,6 +273,13 @@ function fillSettingsForm(state) {
 
 function syncMaintenanceStatusFromSummary(summary) {
     const maintenanceBackfill = summary?.maintenance_backfill || {};
+    const maintenanceRetention = summary?.maintenance_retention || {};
+    if (maintenanceRetention.last_run_at) {
+        setMaintenanceStatus(
+            `Last retention: ${new Date(maintenanceRetention.last_run_at).toLocaleString()} (${maintenanceRetention.deleted_runtime_logs || 0} log(s), ${maintenanceRetention.deleted_customer_scan_history || 0} history row(s)).`
+        );
+        return;
+    }
     if (maintenanceBackfill.last_run_at) {
         setMaintenanceStatus(
             `Last backfill: ${new Date(maintenanceBackfill.last_run_at).toLocaleString()} (${maintenanceBackfill.last_backfilled || 0} artifact(s)).`
@@ -447,6 +459,66 @@ async function runRuntimeBackfill() {
     }
 }
 
+async function exportRuntimeDatabase() {
+    setMaintenanceStatus('Preparing runtime database export...');
+
+    try {
+        const response = await fetch('/api/runtime/export');
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.error || `Runtime database export failed (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const exportUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const contentDisposition = response.headers.get('content-disposition') || '';
+        const match = contentDisposition.match(/filename="?([^"]+)"?/i);
+        link.href = exportUrl;
+        link.download = match?.[1] || 'nmapui-runtime.sqlite3';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(exportUrl);
+        setMaintenanceStatus(`Exported runtime database as ${link.download}.`, false);
+    } catch (error) {
+        console.error('Error exporting runtime database:', error);
+        setMaintenanceStatus(error.message || 'Runtime database export failed.', true);
+    }
+}
+
+async function runRuntimeRetention() {
+    setMaintenanceStatus('Pruning runtime logs/history and compacting the database...');
+
+    try {
+        const response = await fetch('/api/runtime/maintenance/retention', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                runtime_logs_keep_latest: 5000,
+                customer_history_keep_latest: 2000,
+                compact: true,
+            }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Runtime retention failed (${response.status})`);
+        }
+
+        setMaintenanceStatus(
+            `Pruned ${payload.deleted_runtime_logs || 0} log(s), ${payload.deleted_customer_scan_history || 0} history row(s), compacted DB to ${payload.after_bytes || 0} bytes.`,
+            false
+        );
+        await loadRuntimeSettingsSummary();
+        if (typeof window.loadLogsTab === 'function') {
+            window.loadLogsTab();
+        }
+    } catch (error) {
+        console.error('Error running runtime retention:', error);
+        setMaintenanceStatus(error.message || 'Runtime retention failed.', true);
+    }
+}
+
 function addTargetProfile() {
     const nameInput = document.getElementById('settings-profile-name');
     const targetInput = document.getElementById('settings-profile-target');
@@ -532,8 +604,11 @@ function initializeSettingsTab() {
     document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', disconnectGoogleDriveAccount);
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', testRemoteSyncSettings);
     document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', runRuntimeBackfill);
+    document.getElementById('settings-runtime-retention-btn')?.addEventListener('click', runRuntimeRetention);
+    document.getElementById('settings-runtime-export-btn')?.addEventListener('click', exportRuntimeDatabase);
     populateProfileCustomerOptions();
 }
 
 window.loadSettingsTab = loadSettingsTab;
 window.initializeSettingsTab = initializeSettingsTab;
+window.exportRuntimeDatabase = exportRuntimeDatabase;
