@@ -49,6 +49,41 @@ def _backfill_runtime_artifact(runtime_store, scan_path, metadata, metadata_path
     )
 
 
+def backfill_runtime_history_artifacts(
+    *,
+    runtime_store,
+    scans_dir,
+    load_json_document,
+    normalize_scan_metadata_document,
+    logger,
+):
+    if (
+        runtime_store is None
+        or scans_dir is None
+        or load_json_document is None
+        or normalize_scan_metadata_document is None
+    ):
+        return 0
+
+    backfilled = 0
+    for metadata_path, data in iter_scan_metadata_documents(
+        scans_dir,
+        load_json_document,
+        normalize_scan_metadata_document,
+        logger=logger,
+    ):
+        rel_path = str(metadata_path.parent.relative_to(scans_dir))
+        if (
+            hasattr(runtime_store, "get_report_artifact")
+            and runtime_store.get_report_artifact(rel_path) is not None
+        ):
+            continue
+        _backfill_runtime_artifact(runtime_store, rel_path, data, metadata_path)
+        backfilled += 1
+
+    return backfilled
+
+
 def build_history_rows(
     *,
     runtime_store,

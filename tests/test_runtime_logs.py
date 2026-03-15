@@ -5,6 +5,7 @@ from flask import Flask
 
 from nmapui.app_bindings import build_event_helpers
 from nmapui.handlers.routes import register_core_routes
+from nmapui.runtime_history import backfill_runtime_history_artifacts
 from nmapui.startup_checks import run_startup_checks
 from nmapui.traceroute import run_traceroute
 
@@ -235,6 +236,37 @@ def test_runtime_history_route_backfills_legacy_metadata_into_runtime_store(monk
     assert runtime_calls[0]["target"] == "10.0.0.0/24"
     assert runtime_calls[0]["xml_path"] == "scan.xml"
     assert runtime_calls[0]["payload"]["status"] == "failed"
+
+
+def test_backfill_runtime_history_artifacts_populates_missing_runtime_rows(tmp_path):
+    scans_dir = tmp_path / "scans"
+    legacy_dir = scans_dir / "Legacy" / "2026-03-13" / "scan_010000_target"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    (legacy_dir / "metadata.json").write_text(
+        '{"timestamp":"2026-03-13T01:00:00","customer_name":"Legacy","customer_id":"cust-legacy","target":"10.0.0.0/24","status":"failed"}'
+    )
+    (legacy_dir / "scan_report.pdf").write_bytes(b"%PDF-1.4")
+
+    runtime_calls = []
+
+    class RuntimeStoreStub:
+        def get_report_artifact(self, scan_path):
+            return None
+
+        def upsert_report_artifact(self, **kwargs):
+            runtime_calls.append(kwargs)
+
+    backfilled = backfill_runtime_history_artifacts(
+        runtime_store=RuntimeStoreStub(),
+        scans_dir=scans_dir,
+        load_json_document=__import__("persistence").load_json_document,
+        normalize_scan_metadata_document=__import__("persistence").normalize_scan_metadata_document,
+        logger=None,
+    )
+
+    assert backfilled == 1
+    assert runtime_calls[0]["scan_path"] == "Legacy/2026-03-13/scan_010000_target"
+    assert runtime_calls[0]["pdf_path"] == "scan_report.pdf"
 
 
 def test_runtime_history_compare_prefers_runtime_artifact_payloads(monkeypatch):

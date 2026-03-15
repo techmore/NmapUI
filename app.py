@@ -72,6 +72,7 @@ from nmapui.runtime import (
     get_app_version,
 )
 from nmapui.runtime_db import create_runtime_state_store
+from nmapui.runtime_history import backfill_runtime_history_artifacts
 from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
 from nmapui.state import merge_customer_metadata
@@ -134,6 +135,13 @@ idle_state_manager = IdleStateManager(
 # Global customer fingerprinter
 customer_fingerprinter = CustomerFingerprinter()
 runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)
+backfill_runtime_history_artifacts(
+    runtime_store=runtime_store,
+    scans_dir=SCANS_DIR,
+    load_json_document=load_json_document,
+    normalize_scan_metadata_document=normalize_scan_metadata_document,
+    logger=logger,
+)
 runtime_services = create_runtime_services(
     default_auto_scan_config=DEFAULT_AUTO_SCAN_CONFIG,
     rate_limiter_cls=PerClientRateLimiter,
