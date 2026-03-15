@@ -13,7 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
 PACKAGING_DIR="$ROOT_DIR/packaging/macos"
 SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"
-BIN="$ROOT_DIR/NmapUI"
+BUILD_DIR="$ROOT_DIR/.build"
+BIN="$BUILD_DIR/NmapUI"
 APP_NAME="$ROOT_DIR/NmapUI.app"
 SYSTEM_APPLICATIONS_DIR="/Applications"
 USER_APPLICATIONS_DIR="$HOME/Applications"
@@ -64,6 +65,9 @@ if [[ ! -f "$SRC" ]]; then
     exit 1
 fi
 
+# Ensure build output doesn't collide with the nmapui package on case-insensitive filesystems.
+mkdir -p "$BUILD_DIR"
+
 # Run install.sh if .venv doesn't exist yet
 if [[ ! -d "$ROOT_DIR/.venv" && ! -d "$ROOT_DIR/venv" ]]; then
     echo "No virtual environment found — running install.sh first..."
@@ -82,10 +86,10 @@ if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
     echo "Database migration source: $MIGRATION_SOURCE_DB"
 fi
 
-# The Swift compiler outputs a binary at $BIN. If a directory exists there
+# The Swift compiler outputs a binary at $BIN. If a file or directory exists there
 # (from a previous build or manual artifact), it will cause compilation to fail.
-if [[ -d "$BIN" ]]; then
-    echo "Removing conflicting directory at $BIN"
+if [[ -e "$BIN" ]]; then
+    echo "Removing conflicting build output at $BIN"
     rm -rf "$BIN"
 fi
 
