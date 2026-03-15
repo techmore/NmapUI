@@ -247,6 +247,11 @@ class CustomerFingerprinter:
         }
 
         try:
+            if self.runtime_store is not None and hasattr(self.runtime_store, "append_customer_scan_history"):
+                self.runtime_store.append_customer_scan_history(
+                    customer_id=scan_result.get("customer_id"),
+                    payload=scan_result,
+                )
             max_entries = indexing_config.get("max_entries", 500)
             self.scan_history_store.append_entry(
                 storage_path,
@@ -331,7 +336,21 @@ class CustomerFingerprinter:
         limit: int = 50,
     ) -> List[Dict]:
         if self.runtime_store is None or not hasattr(self.runtime_store, "list_report_artifacts"):
-            return []
+            if self.runtime_store is None or not hasattr(self.runtime_store, "list_customer_scan_history"):
+                return []
+
+        if hasattr(self.runtime_store, "list_customer_scan_history"):
+            try:
+                rows = self.runtime_store.list_customer_scan_history(
+                    customer_id=customer_id,
+                    limit=limit,
+                )
+            except Exception as exc:
+                logger.error(f"Error loading customer scan history from runtime store: {exc}")
+                rows = []
+
+            if rows:
+                return [dict(row.get("payload", {}) or {}) for row in rows]
 
         try:
             artifacts = self.runtime_store.list_report_artifacts(customer_id=customer_id)

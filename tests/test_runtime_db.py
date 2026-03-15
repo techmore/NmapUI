@@ -90,3 +90,23 @@ def test_runtime_state_store_deletes_report_artifacts(tmp_path: Path):
     store.delete_report_artifact(scan_path)
 
     assert store.get_report_artifact(scan_path) is None
+
+
+def test_runtime_state_store_tracks_customer_scan_history(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    entry_id = store.append_customer_scan_history(
+        customer_id="cust-1",
+        payload={
+            "timestamp": "2026-03-14T12:00:00",
+            "customer_id": "cust-1",
+            "customer_name": "Acme",
+            "confidence_score": 1.0,
+        },
+    )
+
+    history = store.list_customer_scan_history(customer_id="cust-1", limit=10)
+
+    assert history[0]["id"] == entry_id
+    assert history[0]["customer_id"] == "cust-1"
+    assert history[0]["payload"]["customer_name"] == "Acme"

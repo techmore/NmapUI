@@ -70,6 +70,20 @@ def test_get_scan_history_prefers_runtime_store(tmp_path):
     fingerprinter = build_fingerprinter(tmp_path)
 
     class RuntimeStoreStub:
+        def list_customer_scan_history(self, customer_id=None, limit=50):
+            return [
+                {
+                    "payload": {
+                        "timestamp": "2026-03-14T12:00:00",
+                        "customer_id": "cust-1",
+                        "customer_name": "Acme",
+                        "scan_path": "runtime/customer-history",
+                        "has_pdf": False,
+                        "source": "runtime_store",
+                    }
+                }
+            ]
+
         def list_report_artifacts(self, customer_id=None):
             return [
                 {
@@ -94,6 +108,27 @@ def test_get_scan_history_prefers_runtime_store(tmp_path):
 
     assert len(history) == 1
     assert history[0]["customer_name"] == "Acme"
-    assert history[0]["scan_path"] == "Acme/2026-03-14/scan_120000_target"
-    assert history[0]["has_pdf"] is True
+    assert history[0]["scan_path"] == "runtime/customer-history"
     assert history[0]["source"] == "runtime_store"
+
+
+def test_save_scan_result_persists_runtime_customer_history(tmp_path):
+    fingerprinter = build_fingerprinter(tmp_path)
+    calls = []
+
+    class RuntimeStoreStub:
+        def append_customer_scan_history(self, *, customer_id, payload):
+            calls.append((customer_id, payload))
+            return 1
+
+    fingerprinter.set_runtime_store(RuntimeStoreStub())
+    fingerprinter.save_scan_result(
+        sample_network(),
+        {"id": "cust-1", "name": "Acme"},
+        0.95,
+    )
+
+    assert calls
+    assert calls[0][0] == "cust-1"
+    assert calls[0][1]["customer_name"] == "Acme"
+    assert calls[0][1]["confidence_score"] == 0.95

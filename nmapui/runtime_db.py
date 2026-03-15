@@ -91,6 +91,19 @@ SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS idx_runtime_logs_category_created
     ON runtime_logs(category, created_at DESC)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS customer_scan_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id TEXT,
+        timestamp TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_customer_scan_history_customer_timestamp
+    ON customer_scan_history(customer_id, timestamp DESC)
+    """,
 )
 
 
@@ -430,6 +443,53 @@ class RuntimeStateStore:
                 "category": row["category"],
                 "level": row["level"],
                 "message": row["message"],
+                "payload": _json_loads(row["payload_json"]),
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+    def append_customer_scan_history(
+        self,
+        *,
+        customer_id: str | None,
+        payload: dict[str, Any],
+    ) -> int:
+        now = utcnow_iso()
+        timestamp = str(payload.get("timestamp", "") or now)
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO customer_scan_history(customer_id, timestamp, payload_json, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (customer_id, timestamp, _json_dumps(payload), now),
+            )
+            return int(cursor.lastrowid)
+
+    def list_customer_scan_history(
+        self,
+        *,
+        customer_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        query = """
+            SELECT id, customer_id, timestamp, payload_json, created_at
+            FROM customer_scan_history
+        """
+        params: list[Any] = []
+        if customer_id:
+            query += " WHERE customer_id = ?"
+            params.append(customer_id)
+        query += " ORDER BY timestamp DESC, id DESC LIMIT ?"
+        params.append(limit)
+        with self.connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "customer_id": row["customer_id"],
+                "timestamp": row["timestamp"],
                 "payload": _json_loads(row["payload_json"]),
                 "created_at": row["created_at"],
             }
