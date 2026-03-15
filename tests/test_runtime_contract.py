@@ -140,6 +140,20 @@ def test_settings_tab_includes_auto_monitor_defaults():
     assert "settings-auto-monitor-time" in settings_source
 
 
+def test_ci_workflow_covers_browser_and_packaged_smoke_jobs():
+    ci_source = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
+    assert "unit-tests:" in ci_source
+    assert "browser-regressions:" in ci_source
+    assert "packaged-smoke:" in ci_source
+    assert 'NMAPUI_RUN_BROWSER_REGRESSION: "1"' in ci_source
+    assert 'NMAPUI_RUN_PACKAGED_SMOKE: "1"' in ci_source
+    assert "python -m playwright install --with-deps chromium" in ci_source
+    assert "pytest -q tests/test_browser_regressions.py" in ci_source
+    assert "pytest -q tests/test_packaged_app_smoke.py" in ci_source
+    assert "actions/upload-artifact@v4" in ci_source
+
+
 def test_template_uses_shared_report_status_module():
     html = (ROOT / "templates" / "index.html").read_text()
     report_status_source = (ROOT / "static" / "js" / "report_status.js").read_text()
