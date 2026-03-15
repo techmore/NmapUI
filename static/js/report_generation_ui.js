@@ -7,22 +7,28 @@ let reportGetClientJobs = () => ({ report: { status: 'idle' } });
 let reportGenerationInitialized = false;
 let reportActionPending = false;
 
-function startReportTimer() {
+function startReportTimer(startedAt = null) {
     const container = document.getElementById('scan-timer-container');
     const display = document.getElementById('scan-timer');
     const feedbackBox = document.getElementById('feedback-container');
 
     container.classList.remove('hidden');
     feedbackBox.classList.add('card-pulsing');
-    reportStartTime = Date.now();
+    const startedAtMillis = startedAt ? Date.parse(startedAt) : Number.NaN;
+    reportStartTime = Number.isNaN(startedAtMillis) ? Date.now() : startedAtMillis;
 
-    if (reportTimerInterval) clearInterval(reportTimerInterval);
-
-    reportTimerInterval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - reportStartTime) / 1000);
+    const renderElapsed = () => {
+        const elapsed = Math.max(Math.floor((Date.now() - reportStartTime) / 1000), 0);
         const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
         const secs = (elapsed % 60).toString().padStart(2, '0');
         display.textContent = `${mins}:${secs}`;
+    };
+
+    if (reportTimerInterval) clearInterval(reportTimerInterval);
+    renderElapsed();
+
+    reportTimerInterval = setInterval(() => {
+        renderElapsed();
     }, 1000);
 }
 
@@ -54,6 +60,30 @@ function getLastScanTarget() {
 
 function updateLastScanResults(key, data) {
     lastScanResults[key] = data;
+}
+
+function setReportButtonsPulsing(active, chunked = false) {
+    const completeButton = document.getElementById('generate-report-btn');
+    const chunkedButton = document.getElementById('chunked-scan-btn');
+    if (completeButton) {
+        completeButton.classList.toggle('card-pulsing', active && !chunked);
+    }
+    if (chunkedButton) {
+        chunkedButton.classList.toggle('card-pulsing', active && chunked);
+    }
+}
+
+function syncReportJobVisualState(job) {
+    const isRunning = job?.status === 'running' || job?.status === 'cancelling';
+    const chunked = !!job?.details?.chunked;
+    if (!isRunning) {
+        setReportButtonsPulsing(false);
+        return;
+    }
+
+    reportActionPending = true;
+    setReportButtonsPulsing(true, chunked);
+    startReportTimer(job?.started_at || null);
 }
 
 function getReportRequestContext() {
@@ -104,6 +134,7 @@ function initializeReportGenerationUI(socket, deps) {
         if (data?.job_type !== 'report') {
             return;
         }
+        syncReportJobVisualState(data);
         if (data.status !== 'running' && data.status !== 'cancelling') {
             reportActionPending = false;
         }
@@ -111,10 +142,12 @@ function initializeReportGenerationUI(socket, deps) {
 
     socket.on('report_complete', function() {
         reportActionPending = false;
+        setReportButtonsPulsing(false);
     });
 
     socket.on('report_error', function() {
         reportActionPending = false;
+        setReportButtonsPulsing(false);
     });
 
     document.getElementById('generate-report-btn').addEventListener('click', function() {
@@ -129,7 +162,7 @@ function initializeReportGenerationUI(socket, deps) {
         }
 
         reportActionPending = true;
-        this.classList.add('card-pulsing');
+        setReportButtonsPulsing(true, false);
         startReportTimer();
 
         reportSocket.emit('generate_report', {
@@ -152,7 +185,7 @@ function initializeReportGenerationUI(socket, deps) {
         }
 
         reportActionPending = true;
-        this.classList.add('card-pulsing');
+        setReportButtonsPulsing(true, true);
         startReportTimer();
 
         reportSocket.emit('generate_report', {
@@ -173,4 +206,5 @@ window.stopReportTimer = stopReportTimer;
 window.setLastScanTarget = setLastScanTarget;
 window.getLastScanTarget = getLastScanTarget;
 window.updateLastScanResults = updateLastScanResults;
+window.syncReportJobVisualState = syncReportJobVisualState;
 window.initializeReportGenerationUI = initializeReportGenerationUI;
