@@ -222,6 +222,7 @@ def test_wrapper_docs_reference_current_local_port():
     for doc_name in ("README.md", "packaging/macos/README.md", "packaging/macos/SETUP.md"):
         source = (ROOT / doc_name).read_text()
         assert "127.0.0.1:9000" in source
+        assert "selected local runtime URL" in source or "local loopback URL" in source
         assert "localhost:9999" not in source
     readme = (ROOT / "README.md").read_text()
     assert "NMAPUI_SWIFT_TARGET" in readme
@@ -753,7 +754,14 @@ def test_runtime_status_route_and_menu_bar_indicator_contract():
     assert '"has_active_jobs": bool(active_jobs)' in jobs_source
     assert '"job_registry": job_registry' in composition_source
     assert "job_registry=job_registry," in app_source
-    assert 'let runtimeStatusURL = URL(string: "http://127.0.0.1:9000/api/runtime/status")!' in launcher_source
+    assert "var runtimePort = 9000" in launcher_source
+    assert 'var appURL: URL {' in launcher_source
+    assert 'URL(string: "http://127.0.0.1:\\(runtimePort)")!' in launcher_source
+    assert 'var runtimeStatusURL: URL {' in launcher_source
+    assert 'URL(string: "http://127.0.0.1:\\(runtimePort)/api/runtime/status")!' in launcher_source
+    assert 'environment["NMAPUI_PORT"] = String(runtimePort)' in launcher_source
+    assert 'environment["NMAPUI_ALLOWED_ORIGINS"] = "http://127.0.0.1:\\(runtimePort),http://localhost:\\(runtimePort)"' in launcher_source
+    assert "pickAvailableRuntimePort" in launcher_source
     assert "startStatusPolling()" in launcher_source
     assert "pollRuntimeStatus()" in launcher_source
     assert "Recent scan or report completed" in launcher_source
@@ -809,13 +817,10 @@ def test_app_startup_checks_quick_mode_executes_successfully():
 
 
 def test_app_runtime_uses_bootstrap_origin_and_server_policy():
-    app_source = subprocess.check_output(
-        ["git", "show", ":app.py"],
-        cwd=ROOT,
-        text=True,
-    )
+    app_source = (ROOT / "app.py").read_text()
 
-    assert 'allowed_origins = get_allowed_origins()' in app_source
+    assert 'runtime_options = build_runtime_options(sys.argv)' in app_source
+    assert 'allowed_origins = get_allowed_origins(port=runtime_options["port"])' in app_source
     assert 'SocketIO(app, cors_allowed_origins=allowed_origins)' in app_source
     assert 'CORS(app, resources={r"/api/*": {"origins": allowed_origins}})' in app_source
     assert "run_server_runtime(" in app_source
@@ -946,7 +951,8 @@ def test_app_delegates_startup_checks_to_shared_module():
     assert "thread_ref[\"thread\"] = start_auto_scan_thread_runtime(" in app_runtime_bindings_source
     assert "def configure_root_logging(*, base_dir):" in app_runtime_source
     assert "def run_server(" in app_runtime_source
-    assert "runtime_options = build_runtime_options(argv or sys_module.argv)" in app_runtime_source
+    assert "runtime_options = runtime_options or build_runtime_options(argv or sys_module.argv)" in app_runtime_source
+    assert 'if runtime_options.get("port_auto_selected"):' in app_runtime_source
     assert "run_socketio_server(socketio, app, runtime_options)" in app_runtime_source
     assert "run_startup_checks(deps, quick=quick)" in app_runtime_source
     assert "handler_start_auto_scan_thread(" in app_runtime_source

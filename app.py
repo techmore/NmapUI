@@ -128,7 +128,8 @@ configure_root_logging_runtime(base_dir=BASE_DIR)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-allowed_origins = get_allowed_origins()
+runtime_options = build_runtime_options(sys.argv)
+allowed_origins = get_allowed_origins(port=runtime_options["port"])
 socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
@@ -473,6 +474,7 @@ def startup_checks(quick=False):
 def run_server(argv=None):
     run_server_runtime(
         argv=argv,
+        runtime_options=runtime_options if argv is None else build_runtime_options(argv),
         build_runtime_options=build_runtime_options,
         log_auth_posture=log_auth_posture,
         startup_checks=startup_checks,

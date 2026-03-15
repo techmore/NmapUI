@@ -4,7 +4,7 @@ This guide documents the supported macOS wrapper implementation for launching th
 
 ## Supported Wrapper Source
 
-Use [NmapUIMenuBarLauncher.swift](/Users/techmore/projects/NmapUI/packaging/macos/NmapUIMenuBarLauncher.swift) as the only supported source file. It launches the bundled `run.sh` helper and opens `http://127.0.0.1:9000`.
+Use [NmapUIMenuBarLauncher.swift](/Users/techmore/projects/NmapUI/packaging/macos/NmapUIMenuBarLauncher.swift) as the only supported source file. It launches the bundled `run.sh` helper and opens the selected local runtime URL, defaulting to `http://127.0.0.1:9000`.
 
 ## Build and Run
 
@@ -21,7 +21,7 @@ Use [NmapUIMenuBarLauncher.swift](/Users/techmore/projects/NmapUI/packaging/maco
 
 ## Development Contract
 
-- The wrapper opens `http://127.0.0.1:9000`
+- The wrapper opens the selected local runtime URL and defaults to `http://127.0.0.1:9000`
 - The wrapper source of truth is `NmapUIMenuBarLauncher.swift`
 - Older `9999` popover examples are deprecated and removed from the supported path
 
@@ -39,10 +39,12 @@ Replace `"network"` with any SF Symbol name.
 
 ### Changing the Target URL
 
-Modify this line in [NmapUIMenuBarLauncher.swift](/Users/techmore/projects/NmapUI/packaging/macos/NmapUIMenuBarLauncher.swift):
+Modify the `appURL` computed property in [NmapUIMenuBarLauncher.swift](/Users/techmore/projects/NmapUI/packaging/macos/NmapUIMenuBarLauncher.swift):
 
 ```swift
-let appURL = URL(string: "http://127.0.0.1:9000")!
+var appURL: URL {
+    URL(string: "http://127.0.0.1:\\(runtimePort)")!
+}
 ```
 
 ## Removed Prototype

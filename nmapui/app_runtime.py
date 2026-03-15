@@ -70,6 +70,7 @@ def configure_root_logging(*, base_dir):
 def run_server(
     *,
     argv=None,
+    runtime_options=None,
     build_runtime_options,
     log_auth_posture,
     startup_checks,
@@ -79,8 +80,14 @@ def run_server(
     app,
     sys_module,
 ):
-    runtime_options = build_runtime_options(argv or sys_module.argv)
+    runtime_options = runtime_options or build_runtime_options(argv or sys_module.argv)
     quick_mode = runtime_options["quick_mode"]
+    if runtime_options.get("port_auto_selected"):
+        logging.getLogger(__name__).warning(
+            "Default runtime port %s was unavailable; using %s instead",
+            runtime_options.get("requested_port"),
+            runtime_options["port"],
+        )
 
     log_auth_posture()
     startup_checks(quick=quick_mode)

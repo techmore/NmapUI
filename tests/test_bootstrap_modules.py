@@ -1,10 +1,12 @@
 from nmapui.bootstrap import (
+    DEFAULT_RUNTIME_PORT,
     begin_startup_state,
     build_runtime_options,
     create_web_app,
     complete_startup_state,
     get_allowed_origins,
     run_socketio_server,
+    select_runtime_port,
 )
 
 
@@ -20,6 +22,8 @@ def test_build_runtime_options_uses_env_and_argv(monkeypatch):
         "quick_mode": True,
         "host": "0.0.0.0",
         "port": 9100,
+        "requested_port": 9100,
+        "port_auto_selected": False,
         "debug": True,
         "allow_unsafe_werkzeug": True,
     }
@@ -29,8 +33,8 @@ def test_get_allowed_origins_defaults_to_local_ui_hosts(monkeypatch):
     monkeypatch.delenv("NMAPUI_ALLOWED_ORIGINS", raising=False)
 
     assert get_allowed_origins() == [
-        "http://127.0.0.1:9000",
-        "http://localhost:9000",
+        f"http://127.0.0.1:{DEFAULT_RUNTIME_PORT}",
+        f"http://localhost:{DEFAULT_RUNTIME_PORT}",
     ]
 
 
@@ -44,6 +48,36 @@ def test_get_allowed_origins_uses_environment_allowlist(monkeypatch):
         "https://scanner.example.com",
         "https://ops.example.com",
     ]
+
+
+def test_get_allowed_origins_uses_selected_port_when_not_explicitly_configured(monkeypatch):
+    monkeypatch.delenv("NMAPUI_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.delenv("NMAPUI_PORT", raising=False)
+
+    assert get_allowed_origins(port=9101) == [
+        "http://127.0.0.1:9101",
+        "http://localhost:9101",
+    ]
+
+
+def test_select_runtime_port_falls_back_when_default_port_is_busy(monkeypatch):
+    monkeypatch.setattr(
+        "nmapui.bootstrap._is_port_available",
+        lambda host, port: port == 9001,
+    )
+
+    assert select_runtime_port("127.0.0.1", 9000, explicit=False) == 9001
+
+
+def test_select_runtime_port_rejects_busy_explicit_port(monkeypatch):
+    monkeypatch.setattr("nmapui.bootstrap._is_port_available", lambda host, port: False)
+
+    try:
+        select_runtime_port("127.0.0.1", 9100, explicit=True)
+    except RuntimeError as exc:
+        assert "9100" in str(exc)
+    else:  # pragma: no cover - defensive failure path only
+        raise AssertionError("Expected explicit busy port selection to fail")
 
 
 def test_begin_startup_state_resets_transient_fields():
@@ -107,9 +141,9 @@ def test_create_web_app_initializes_flask_and_socketio():
     bootstrap.Flask = FlaskStub
     bootstrap.SocketIO = SocketIOStub
     bootstrap.CORS = cors_stub
-    bootstrap.get_allowed_origins = lambda: ["https://scanner.example.com"]
+    bootstrap.get_allowed_origins = lambda *, port=None: ["https://scanner.example.com"]
     try:
-        app, socketio = create_web_app("nmapui.app")
+        app, socketio = create_web_app("nmapui.app", port=9102)
     finally:
         bootstrap.Flask = original_flask
         bootstrap.SocketIO = original_socketio

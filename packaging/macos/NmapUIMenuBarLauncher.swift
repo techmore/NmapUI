@@ -1,13 +1,21 @@
 import Cocoa
+import Darwin
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    let appURL = URL(string: "http://127.0.0.1:9000")!
-    let runtimeStatusURL = URL(string: "http://127.0.0.1:9000/api/runtime/status")!
+    var runtimePort = 9000
     var statusItem: NSStatusItem!
     var pythonProcess: Process?
     var statusPollTimer: Timer?
     var hadActiveJob = false
     var completedIndicatorUntil: Date?
+
+    var appURL: URL {
+        URL(string: "http://127.0.0.1:\(runtimePort)")!
+    }
+
+    var runtimeStatusURL: URL {
+        URL(string: "http://127.0.0.1:\(runtimePort)/api/runtime/status")!
+    }
 
     // Menu items that need dynamic state updates
     var openItem: NSMenuItem!
@@ -73,6 +81,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Flask lifecycle
 
+    func isLocalPortInUse(_ port: Int) -> Bool {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return true }
+        defer { close(fd) }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.stride)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = UInt16(port).bigEndian
+        let convertResult = withUnsafeMutablePointer(to: &address.sin_addr) {
+            inet_pton(AF_INET, "127.0.0.1", $0)
+        }
+        guard convertResult == 1 else { return true }
+
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.stride))
+            }
+        }
+        return result == 0
+    }
+
+    func pickAvailableRuntimePort(startingAt startPort: Int = 9000, attempts: Int = 20) -> Int? {
+        for candidate in startPort..<(startPort + attempts) {
+            if !isLocalPortInUse(candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
     func startFlask() {
         guard !isFlaskRunning else { return }
 
@@ -85,10 +124,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
+        guard let selectedPort = pickAvailableRuntimePort() else {
+            updateStatusIcon(state: .error, detail: "No local runtime port available")
+            return
+        }
+        runtimePort = selectedPort
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [runScriptPath]
         process.currentDirectoryURL = URL(fileURLWithPath: resourcesPath, isDirectory: true)
+        var environment = ProcessInfo.processInfo.environment
+        environment["NMAPUI_PORT"] = String(runtimePort)
+        environment["NMAPUI_ALLOWED_ORIGINS"] = "http://127.0.0.1:\(runtimePort),http://localhost:\(runtimePort)"
+        process.environment = environment
 
         do {
             try process.run()
@@ -123,7 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatusIcon(state: .idle, detail: "NmapUI stopped")
     }
 
-    // Poll localhost:9000 until Flask responds (or timeout), then open browser
+    // Poll the selected localhost port until Flask responds (or timeout), then open browser
     func waitForFlaskThenOpen(timeout: TimeInterval = 15) {
         DispatchQueue.global(qos: .userInitiated).async {
             let deadline = Date().addingTimeInterval(timeout)

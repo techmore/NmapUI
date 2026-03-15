@@ -271,5 +271,5 @@ fi
 
 echo "Done! The NmapUI application is now running."
 echo "Look for the network icon in your menu bar."
-echo "Use the menu to open http://127.0.0.1:9000 or control the bundled app process."
+echo "Use the menu to open the selected local NmapUI URL or control the bundled app process."
 echo "Menu options: Open NmapUI, Start NmapUI, Stop NmapUI, Quit, Uninstall"
