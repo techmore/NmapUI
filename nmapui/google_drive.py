@@ -329,21 +329,22 @@ def upload_files_to_google_drive(
         metadata = {"name": file_path.name}
         if folder_id:
             metadata["parents"] = [folder_id]
-        multipart = (
-            json.dumps(metadata).encode("utf-8"),
-            file_path.read_bytes(),
-        )
-        response = requests_module.post(
-            GOOGLE_DRIVE_UPLOAD_ENDPOINT,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-            files={
-                "metadata": ("metadata.json", multipart[0], "application/json; charset=UTF-8"),
-                "file": (file_path.name, multipart[1], "application/octet-stream"),
-            },
-            timeout=30,
-        )
+        with file_path.open("rb") as file_handle:
+            response = requests_module.post(
+                GOOGLE_DRIVE_UPLOAD_ENDPOINT,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                },
+                files={
+                    "metadata": (
+                        "metadata.json",
+                        json.dumps(metadata).encode("utf-8"),
+                        "application/json; charset=UTF-8",
+                    ),
+                    "file": (file_path.name, file_handle, "application/octet-stream"),
+                },
+                timeout=30,
+            )
         payload = response.json()
         if response.status_code >= 400:
             raise RuntimeError(payload.get("error", {}).get("message") or f"Drive upload failed for {file_path.name}.")

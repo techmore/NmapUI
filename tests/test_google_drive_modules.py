@@ -157,6 +157,8 @@ def test_upload_files_to_google_drive_posts_each_file(tmp_path):
         @staticmethod
         def post(url, headers=None, files=None, timeout=None):
             uploaded_names.append(files["file"][0])
+            assert hasattr(files["file"][1], "read")
+            assert not isinstance(files["file"][1], (bytes, bytearray))
             return ResponseStub(files["file"][0])
 
     result = upload_files_to_google_drive(
@@ -170,6 +172,55 @@ def test_upload_files_to_google_drive_posts_each_file(tmp_path):
 
     assert result["success"] is True
     assert uploaded_names == ["report.pdf"]
+
+
+def test_upload_files_to_google_drive_does_not_use_read_bytes(tmp_path):
+    credentials_path = tmp_path / "credentials.json"
+    token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
+    file_path = tmp_path / "report.pdf"
+    write_credentials(credentials_path)
+    save_google_drive_token_state(
+        token_path,
+        {"access_token": "access-123", "expires_at": "2099-01-01T00:00:00+00:00"},
+        key_path=key_path,
+    )
+    file_path.write_bytes(b"pdf-data")
+
+    original_read_bytes = Path.read_bytes
+
+    def fail_read_bytes(self):
+        if self == file_path:
+            raise AssertionError("upload path should stream files instead of calling read_bytes()")
+        return original_read_bytes(self)
+
+    Path.read_bytes = fail_read_bytes
+    try:
+        class ResponseStub:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"id": "id-report.pdf", "name": "report.pdf"}
+
+        class RequestsStub:
+            @staticmethod
+            def post(url, headers=None, files=None, timeout=None):
+                assert hasattr(files["file"][1], "read")
+                return ResponseStub()
+
+        result = upload_files_to_google_drive(
+            credentials_path=credentials_path,
+            token_path=token_path,
+            key_path=key_path,
+            file_paths=[file_path],
+            folder_id="folder-123",
+            requests_module=RequestsStub,
+        )
+    finally:
+        Path.read_bytes = original_read_bytes
+
+    assert result["success"] is True
 
 
 def test_build_google_drive_auth_status_reports_connected_token(tmp_path):

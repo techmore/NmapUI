@@ -1253,6 +1253,8 @@ def test_google_drive_integration_contract_exists():
     assert 'ENCRYPTED_TOKEN_SCHEMA_VERSION = 1' in google_drive_source
     assert "def _load_or_create_encryption_key(key_path: Path) -> bytes:" in google_drive_source
     assert '\"ciphertext\"' in google_drive_source
+    assert 'with file_path.open("rb") as file_handle:' in google_drive_source
+    assert "file_path.read_bytes()" not in google_drive_source
     assert "upload_report_artifacts_to_google_drive=lambda" in app_source
     assert "key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE" in app_source
     assert "function uploadReportToGoogleDrive(scanPath)" in reports_tab_source
