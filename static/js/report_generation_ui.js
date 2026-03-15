@@ -1,6 +1,7 @@
 let lastScanTarget = '';
 let lastScanResults = {};
 let reportTimerInterval = null;
+let reportHideTimer = null;
 let reportStartTime = 0;
 let reportSocket = null;
 let reportGetClientJobs = () => ({ report: { status: 'idle' } });
@@ -25,6 +26,10 @@ function startReportTimer(startedAt = null) {
 
     container.classList.remove('hidden');
     feedbackBox.classList.add('card-pulsing');
+    if (reportHideTimer) {
+        clearTimeout(reportHideTimer);
+        reportHideTimer = null;
+    }
     const startedAtMillis = startedAt ? Date.parse(startedAt) : Number.NaN;
     reportStartTime = Number.isNaN(startedAtMillis) ? Date.now() : startedAtMillis;
 
@@ -54,10 +59,12 @@ function stopReportTimer() {
 
     feedbackBox.classList.remove('card-pulsing');
 
-    setTimeout(() => {
+    if (reportHideTimer) {
+        clearTimeout(reportHideTimer);
+    }
+    reportHideTimer = setTimeout(() => {
         timerContainer.classList.add('hidden');
-        feedbackBox.innerHTML = '';
-        feedbackBox.parentElement.classList.add('hidden');
+        reportHideTimer = null;
     }, 5000);
 }
 

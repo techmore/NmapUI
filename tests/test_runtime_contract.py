@@ -1264,13 +1264,16 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "function syncReportJobVisualState(job)" in report_generation_module
     assert "function syncReportVisualStateFromFeedback(message)" in report_generation_module
     assert "function resetReportVisualState()" in report_generation_module
+    assert "let reportHideTimer = null;" in report_generation_module
     assert "startReportTimer(job?.started_at || null);" in report_generation_module
+    assert "clearTimeout(reportHideTimer);" in report_generation_module
     assert "setReportButtonsPulsing(true, chunked);" in report_generation_module
     assert "window.resetReportVisualState = resetReportVisualState;" in report_generation_module
     assert "normalized.includes('generating report for ')" in report_generation_module
     assert "window.syncReportVisualStateFromFeedback = syncReportVisualStateFromFeedback;" in report_generation_module
     assert "resetReportVisualState();" in report_generation_module
     assert "window.removeReportProgressCard" in report_generation_module
+    assert "feedbackBox.innerHTML = ''" not in report_generation_module
     assert "document.getElementById('generate-report-btn').addEventListener('click'" in report_generation_module
     assert "document.getElementById('chunked-scan-btn')?.addEventListener('click'" in report_generation_module
     assert '"chunked": bool(data.get("chunked", True))' in (ROOT / "nmapui" / "handlers" / "scan_jobs.py").read_text()
