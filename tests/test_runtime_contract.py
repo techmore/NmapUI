@@ -1247,6 +1247,8 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "function resetReportVisualState()" in report_generation_module
     assert "startReportTimer(job?.started_at || null);" in report_generation_module
     assert "setReportButtonsPulsing(true, chunked);" in report_generation_module
+    assert "window.resetReportVisualState = resetReportVisualState;" in report_generation_module
+    assert "normalized.includes('generating report for ')" in report_generation_module
     assert "window.syncReportVisualStateFromFeedback = syncReportVisualStateFromFeedback;" in report_generation_module
     assert "resetReportVisualState();" in report_generation_module
     assert "window.removeReportProgressCard" in report_generation_module
@@ -1260,7 +1262,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "function syncScanJobVisualState(job)" in scan_runtime_module
     assert "function syncScanVisualStateFromFeedback(message)" in scan_runtime_module
     assert "startScanBtn.classList.toggle('card-pulsing', isRunning);" in scan_runtime_module
-    assert "window.syncReportVisualStateFromFeedback(message);" in scan_runtime_module
+    assert "window.resetReportVisualState();" in scan_runtime_module
     assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
     assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module

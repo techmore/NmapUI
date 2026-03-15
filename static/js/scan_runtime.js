@@ -52,24 +52,14 @@ function syncScanVisualStateFromFeedback(message) {
     }
 
     if (
-        message.includes('Running a single comprehensive scan without chunking')
-        || message.includes('Processing chunk')
-        || message.includes('Generating report for ')
-        || message.includes('Starting nmap comprehensive scan')
-        || message.includes('Scan started at ')
-    ) {
-        if (typeof window.syncReportVisualStateFromFeedback === 'function') {
-            window.syncReportVisualStateFromFeedback(message);
-        }
-        return;
-    }
-
-    if (
         message.includes('quick scan')
         || message.includes('deep scan')
         || message.includes('ARP scan')
         || message.includes('Starting scan')
     ) {
+        if (typeof window.resetReportVisualState === 'function') {
+            window.resetReportVisualState();
+        }
         syncScanJobVisualState({ status: 'running' });
     }
 }

@@ -103,7 +103,12 @@ function syncReportVisualStateFromFeedback(message) {
     }
 
     const normalized = message.toLowerCase();
-    if (!normalized.includes('report') && !normalized.includes('comprehensive scan')) {
+    if (
+        !normalized.includes('generating report for ')
+        && !normalized.includes('processing chunk')
+        && !normalized.includes('starting nmap comprehensive scan')
+        && !normalized.includes('running a single comprehensive scan without chunking')
+    ) {
         return;
     }
 
@@ -241,4 +246,5 @@ window.getLastScanTarget = getLastScanTarget;
 window.updateLastScanResults = updateLastScanResults;
 window.syncReportJobVisualState = syncReportJobVisualState;
 window.syncReportVisualStateFromFeedback = syncReportVisualStateFromFeedback;
+window.resetReportVisualState = resetReportVisualState;
 window.initializeReportGenerationUI = initializeReportGenerationUI;
