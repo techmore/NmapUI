@@ -202,6 +202,60 @@ def test_runtime_state_store_counts_persisted_rows(tmp_path: Path):
     assert store.count_runtime_logs() == 1
 
 
+def test_runtime_state_store_prunes_runtime_logs_and_customer_history(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    for index in range(6):
+        store.append_log(
+            category="runtime",
+            level="INFO",
+            message=f"log-{index}",
+            payload={"index": index},
+        )
+        store.append_customer_scan_history(
+            customer_id="cust-1",
+            payload={"timestamp": f"2026-03-14T12:00:0{index}", "index": index},
+        )
+
+    deleted_logs = store.prune_runtime_logs(keep_latest=3)
+    deleted_history = store.prune_customer_scan_history(keep_latest=2)
+
+    assert deleted_logs == 3
+    assert deleted_history == 4
+    assert store.count_runtime_logs() == 3
+    assert store.count_customer_scan_history() == 2
+
+
+def test_runtime_state_store_applies_retention_policies_and_compacts(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+
+    for index in range(4):
+        store.append_log(
+            category="runtime",
+            level="INFO",
+            message=f"log-{index}",
+            payload={"index": index},
+        )
+        store.append_customer_scan_history(
+            customer_id="cust-1",
+            payload={"timestamp": f"2026-03-14T12:00:0{index}", "index": index},
+        )
+
+    result = store.apply_retention_policies(
+        runtime_logs_keep_latest=2,
+        customer_history_keep_latest=1,
+        compact=True,
+    )
+
+    assert result["deleted_runtime_logs"] == 2
+    assert result["deleted_customer_scan_history"] == 3
+    assert result["runtime_logs_keep_latest"] == 2
+    assert result["customer_history_keep_latest"] == 1
+    assert result["before_bytes"] >= result["after_bytes"] >= 0
+    assert store.count_runtime_logs() == 2
+    assert store.count_customer_scan_history() == 1
+
+
 def test_runtime_state_store_exports_consistent_snapshot(tmp_path: Path):
     store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
     store.upsert_runtime_snapshot("network_key", {"public_ip": "203.0.113.10"})

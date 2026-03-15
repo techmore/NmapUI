@@ -106,6 +106,7 @@ def test_runtime_settings_summary_reports_settings_state():
             "arp_scan": "1.10",
         },
         "maintenance_backfill": {},
+        "maintenance_retention": {},
         "persisted_counts": {
             "report_artifacts": 4,
             "customer_scan_history": 7,

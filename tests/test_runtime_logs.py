@@ -575,6 +575,51 @@ def test_runtime_settings_summary_includes_backfill_status():
     assert payload["maintenance_backfill"]["last_run_at"] == "2026-03-14T21:00:00+00:00"
 
 
+def test_runtime_settings_summary_includes_retention_status():
+    class RuntimeStoreStub:
+        def get_runtime_snapshot(self, key):
+            if key == "maintenance_retention_status":
+                return {
+                    "last_run_at": "2026-03-14T22:00:00+00:00",
+                    "deleted_runtime_logs": 25,
+                    "deleted_customer_scan_history": 8,
+                    "after_bytes": 4096,
+                }
+            return None
+
+        def count_report_artifacts(self):
+            return 1
+
+        def count_customer_scan_history(self):
+            return 2
+
+        def count_runtime_logs(self):
+            return 3
+
+    app = Flask(__name__)
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
+            "settings_state": {"scan_rules": {}, "sync": {}, "target_profiles": []},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    payload = app.test_client().get("/api/runtime/settings-summary").get_json()
+
+    assert payload["maintenance_retention"]["deleted_runtime_logs"] == 25
+    assert payload["maintenance_retention"]["deleted_customer_scan_history"] == 8
+    assert payload["maintenance_retention"]["after_bytes"] == 4096
+
+
 def test_runtime_backfill_route_requires_auth(monkeypatch, tmp_path):
     monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
     monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
@@ -605,6 +650,113 @@ def test_runtime_backfill_route_requires_auth(monkeypatch, tmp_path):
     )
 
     response = app.test_client().post("/api/runtime/maintenance/backfill")
+
+    assert response.status_code == 401
+
+
+def test_runtime_retention_route_prunes_and_persists_status(monkeypatch):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    retention_calls = []
+    snapshot_calls = []
+
+    class RuntimeStoreStub:
+        def apply_retention_policies(
+            self,
+            *,
+            runtime_logs_keep_latest,
+            customer_history_keep_latest,
+            compact,
+        ):
+            retention_calls.append(
+                {
+                    "runtime_logs_keep_latest": runtime_logs_keep_latest,
+                    "customer_history_keep_latest": customer_history_keep_latest,
+                    "compact": compact,
+                }
+            )
+            return {
+                "deleted_runtime_logs": 12,
+                "deleted_customer_scan_history": 5,
+                "runtime_logs_keep_latest": runtime_logs_keep_latest,
+                "customer_history_keep_latest": customer_history_keep_latest,
+                "before_bytes": 8192,
+                "after_bytes": 4096,
+            }
+
+        def upsert_runtime_snapshot(self, key, payload):
+            snapshot_calls.append((key, payload))
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    response = app.test_client().post(
+        "/api/runtime/maintenance/retention",
+        json={
+            "runtime_logs_keep_latest": 300,
+            "customer_history_keep_latest": 120,
+            "compact": True,
+        },
+        headers={"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["deleted_runtime_logs"] == 12
+    assert payload["deleted_customer_scan_history"] == 5
+    assert payload["after_bytes"] == 4096
+    assert retention_calls[0]["runtime_logs_keep_latest"] == 300
+    assert retention_calls[0]["customer_history_keep_latest"] == 120
+    assert retention_calls[0]["compact"] is True
+    assert snapshot_calls[0][0] == "maintenance_retention_status"
+    assert snapshot_calls[0][1]["deleted_runtime_logs"] == 12
+
+
+def test_runtime_retention_route_requires_auth(monkeypatch):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": object(),
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    response = app.test_client().post("/api/runtime/maintenance/retention")
 
     assert response.status_code == 401
 

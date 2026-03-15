@@ -10,6 +10,10 @@ from nmapui.runtime_history import (
     build_history_rows,
     normalize_runtime_report_row,
 )
+from nmapui.runtime_db import (
+    DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+    DEFAULT_RUNTIME_LOG_RETENTION,
+)
 
 
 def _get_runtime_artifact(runtime_store, scan_path):
@@ -110,6 +114,7 @@ def register_core_routes(app, deps):
         scan_rules = settings_state.get("scan_rules", {})
         sync = settings_state.get("sync", {})
         maintenance_backfill = {}
+        maintenance_retention = {}
         persisted_counts = {
             "report_artifacts": 0,
             "customer_scan_history": 0,
@@ -118,6 +123,9 @@ def register_core_routes(app, deps):
         if runtime_store is not None and hasattr(runtime_store, "get_runtime_snapshot"):
             maintenance_backfill = (
                 runtime_store.get_runtime_snapshot("maintenance_backfill_status") or {}
+            )
+            maintenance_retention = (
+                runtime_store.get_runtime_snapshot("maintenance_retention_status") or {}
             )
         if runtime_store is not None:
             if hasattr(runtime_store, "count_report_artifacts"):
@@ -139,6 +147,7 @@ def register_core_routes(app, deps):
                 ),
                 "tool_versions": get_versions(),
                 "maintenance_backfill": maintenance_backfill,
+                "maintenance_retention": maintenance_retention,
                 "persisted_counts": persisted_counts,
             }
         )
@@ -337,6 +346,45 @@ def register_core_routes(app, deps):
                 "success": True,
                 "backfilled": backfilled,
                 "last_run_at": last_run_at,
+            }
+        )
+
+    @app.route("/api/runtime/maintenance/retention", methods=["POST"])
+    @require_auth
+    def runtime_retention():
+        if runtime_store is None or not hasattr(runtime_store, "apply_retention_policies"):
+            return jsonify({"success": False, "error": "Runtime database is not configured"}), 400
+
+        payload = request.get_json(silent=True) or {}
+        runtime_logs_keep_latest = payload.get(
+            "runtime_logs_keep_latest",
+            DEFAULT_RUNTIME_LOG_RETENTION,
+        )
+        customer_history_keep_latest = payload.get(
+            "customer_history_keep_latest",
+            DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+        )
+        compact = bool(payload.get("compact", True))
+
+        result = runtime_store.apply_retention_policies(
+            runtime_logs_keep_latest=runtime_logs_keep_latest,
+            customer_history_keep_latest=customer_history_keep_latest,
+            compact=compact,
+        )
+        last_run_at = datetime.now(timezone.utc).isoformat()
+        retention_snapshot = {
+            "last_run_at": last_run_at,
+            **result,
+        }
+        if hasattr(runtime_store, "upsert_runtime_snapshot"):
+            runtime_store.upsert_runtime_snapshot(
+                "maintenance_retention_status",
+                retention_snapshot,
+            )
+        return jsonify(
+            {
+                "success": True,
+                **retention_snapshot,
             }
         )
 

@@ -15,6 +15,8 @@ SQLITE_SYNCHRONOUS = "normal"
 SQLITE_WRITE_RETRY_ATTEMPTS = 3
 SQLITE_WRITE_RETRY_DELAY_SECONDS = 0.05
 RUNTIME_DB_SCHEMA_VERSION = 1
+DEFAULT_RUNTIME_LOG_RETENTION = 5000
+DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION = 2000
 
 
 def utcnow_iso() -> str:
@@ -209,6 +211,12 @@ class RuntimeStateStore:
             source_conn.close()
 
         return export_path
+
+    def get_database_file_size(self) -> int:
+        try:
+            return int(self.db_path.stat().st_size)
+        except OSError:
+            return 0
 
     def _run_write(self, operation):
         last_error = None
@@ -627,6 +635,126 @@ class RuntimeStateStore:
                 "SELECT COUNT(*) AS count FROM runtime_logs"
             ).fetchone()
         return int(row["count"] or 0)
+
+    def prune_runtime_logs(
+        self,
+        *,
+        keep_latest: int = DEFAULT_RUNTIME_LOG_RETENTION,
+    ) -> int:
+        keep_latest = max(0, int(keep_latest))
+
+        def operation(conn):
+            before = int(
+                conn.execute("SELECT COUNT(*) AS count FROM runtime_logs").fetchone()[0]
+                or 0
+            )
+            if keep_latest == 0:
+                conn.execute("DELETE FROM runtime_logs")
+            else:
+                conn.execute(
+                    """
+                    DELETE FROM runtime_logs
+                    WHERE id NOT IN (
+                        SELECT id FROM runtime_logs
+                        ORDER BY id DESC
+                        LIMIT ?
+                    )
+                    """,
+                    (keep_latest,),
+                )
+            after = int(
+                conn.execute("SELECT COUNT(*) AS count FROM runtime_logs").fetchone()[0]
+                or 0
+            )
+            return max(0, before - after)
+
+        return int(self._run_write(operation) or 0)
+
+    def prune_customer_scan_history(
+        self,
+        *,
+        keep_latest: int = DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+    ) -> int:
+        keep_latest = max(0, int(keep_latest))
+
+        def operation(conn):
+            before = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM customer_scan_history"
+                ).fetchone()[0]
+                or 0
+            )
+            if keep_latest == 0:
+                conn.execute("DELETE FROM customer_scan_history")
+            else:
+                conn.execute(
+                    """
+                    DELETE FROM customer_scan_history
+                    WHERE id NOT IN (
+                        SELECT id FROM customer_scan_history
+                        ORDER BY timestamp DESC, id DESC
+                        LIMIT ?
+                    )
+                    """,
+                    (keep_latest,),
+                )
+            after = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM customer_scan_history"
+                ).fetchone()[0]
+                or 0
+            )
+            return max(0, before - after)
+
+        return int(self._run_write(operation) or 0)
+
+    def compact_database(self) -> dict[str, int]:
+        before_bytes = self.get_database_file_size()
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=SQLITE_BUSY_TIMEOUT_MS / 1000,
+            isolation_level=None,
+        )
+        try:
+            self._configure_connection(conn)
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("VACUUM")
+        finally:
+            conn.close()
+        after_bytes = self.get_database_file_size()
+        return {
+            "before_bytes": before_bytes,
+            "after_bytes": after_bytes,
+        }
+
+    def apply_retention_policies(
+        self,
+        *,
+        runtime_logs_keep_latest: int = DEFAULT_RUNTIME_LOG_RETENTION,
+        customer_history_keep_latest: int = DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
+        compact: bool = True,
+    ) -> dict[str, Any]:
+        deleted_runtime_logs = self.prune_runtime_logs(
+            keep_latest=runtime_logs_keep_latest
+        )
+        deleted_customer_scan_history = self.prune_customer_scan_history(
+            keep_latest=customer_history_keep_latest
+        )
+        compact_result = (
+            self.compact_database()
+            if compact
+            else {
+                "before_bytes": self.get_database_file_size(),
+                "after_bytes": self.get_database_file_size(),
+            }
+        )
+        return {
+            "deleted_runtime_logs": deleted_runtime_logs,
+            "deleted_customer_scan_history": deleted_customer_scan_history,
+            "runtime_logs_keep_latest": max(0, int(runtime_logs_keep_latest)),
+            "customer_history_keep_latest": max(0, int(customer_history_keep_latest)),
+            **compact_result,
+        }
 
 
 def create_runtime_state_store(db_path: Path) -> RuntimeStateStore:

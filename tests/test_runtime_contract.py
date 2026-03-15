@@ -285,6 +285,8 @@ def test_runtime_sqlite_store_schema_exists():
     assert "CREATE TABLE IF NOT EXISTS report_artifacts" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS runtime_logs" in runtime_db_source
     assert "RUNTIME_DB_SCHEMA_VERSION = 1" in runtime_db_source
+    assert "DEFAULT_RUNTIME_LOG_RETENTION = 5000" in runtime_db_source
+    assert "DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION = 2000" in runtime_db_source
     assert "SCHEMA_MIGRATIONS: dict[int, tuple[str, ...]] = {" in runtime_db_source
     assert 'SQLITE_BUSY_TIMEOUT_MS = 5000' in runtime_db_source
     assert 'SQLITE_JOURNAL_MODE = "wal"' in runtime_db_source
@@ -306,6 +308,10 @@ def test_runtime_sqlite_store_schema_exists():
     assert "def delete_report_artifact(" in runtime_db_source
     assert "def append_job_event(" in runtime_db_source
     assert "def list_job_events(" in runtime_db_source
+    assert "def prune_runtime_logs(" in runtime_db_source
+    assert "def prune_customer_scan_history(" in runtime_db_source
+    assert "def compact_database(self) -> dict[str, int]:" in runtime_db_source
+    assert "def apply_retention_policies(" in runtime_db_source
     assert "def create_runtime_state_store" in runtime_db_source
     assert "runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)" in app_source
     assert '"runtime_store": runtime_store' in runtime_services_source
@@ -384,14 +390,17 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert '@app.route("/api/runtime/history")' in routes_source
     assert '@app.route("/api/runtime/history/<path:scan_path>", methods=["DELETE"])' in routes_source
     assert '@app.route("/api/runtime/maintenance/backfill", methods=["POST"])' in routes_source
+    assert '@app.route("/api/runtime/maintenance/retention", methods=["POST"])' in routes_source
     assert '@app.route("/api/runtime/history/compare")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
     assert 'runtime_store.get_runtime_snapshot("maintenance_backfill_status")' in routes_source
+    assert 'runtime_store.get_runtime_snapshot("maintenance_retention_status")' in routes_source
     assert 'runtime_store.upsert_runtime_snapshot(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
     assert 'runtime_store.count_report_artifacts()' in routes_source
     assert 'runtime_store.count_customer_scan_history()' in routes_source
     assert 'runtime_store.count_runtime_logs()' in routes_source
+    assert "runtime_store.apply_retention_policies(" in routes_source
     assert "build_history_rows(" in routes_source
     assert "build_compare_result(" in routes_source
     assert "backfill_runtime_history_artifacts(" in routes_source
@@ -1458,6 +1467,7 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
         cwd=ROOT,
     text=True,
     )
+    live_template = (ROOT / "templates" / "index.html").read_text()
     discovery_module = (ROOT / "static" / "js" / "discovery_ui.js").read_text()
     report_status_module = (ROOT / "static" / "js" / "report_status.js").read_text()
     reports_tab_module = (ROOT / "static" / "js" / "reports_tab.js").read_text()
@@ -1504,6 +1514,7 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "async function testGoogleDriveSettings()" in settings_tab_module
     assert "async function testRemoteSyncSettings()" in settings_tab_module
     assert "async function runRuntimeBackfill()" in settings_tab_module
+    assert "async function runRuntimeRetention()" in settings_tab_module
     assert "function addTargetProfile()" in settings_tab_module
     assert "function applyProfileToDashboard(profile)" in settings_tab_module
     assert "setSyncStatus('settings-google-drive-status'" in settings_tab_module
@@ -1511,12 +1522,15 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "setMaintenanceStatus('Running runtime backfill...')" in settings_tab_module
     assert "function syncMaintenanceStatusFromSummary(summary)" in settings_tab_module
     assert "const lastBackfillValue =" in settings_tab_module
+    assert "const lastRetentionValue =" in settings_tab_module
     assert "fetch('/api/settings/validate/google-drive'" in settings_tab_module
     assert "fetch('/api/settings/validate/remote-sync'" in settings_tab_module
     assert "fetch('/api/runtime/maintenance/backfill'" in settings_tab_module
+    assert "fetch('/api/runtime/maintenance/retention'" in settings_tab_module
     assert "window.initializeSettingsTab = initializeSettingsTab;" in settings_tab_module
     assert "window.loadSettingsTab = loadSettingsTab;" in settings_tab_module
     assert 'id="settings-runtime-backfill-btn"' in template
+    assert 'id="settings-runtime-retention-btn"' in live_template
     assert 'id="settings-maintenance-status"' in template
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
