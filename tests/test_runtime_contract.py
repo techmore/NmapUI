@@ -196,6 +196,7 @@ def test_runtime_sqlite_store_schema_exists():
     runtime_db_source = (ROOT / "nmapui" / "runtime_db.py").read_text()
     app_source = (ROOT / "app.py").read_text()
     runtime_services_source = (ROOT / "nmapui" / "runtime_services.py").read_text()
+    runtime_history_source = (ROOT / "nmapui" / "runtime_history.py").read_text()
 
     assert "CREATE TABLE IF NOT EXISTS runtime_snapshots" in runtime_db_source
     assert "CREATE TABLE IF NOT EXISTS jobs" in runtime_db_source
@@ -216,7 +217,9 @@ def test_runtime_sqlite_store_schema_exists():
     assert 'saved_last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")' in runtime_services_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
     assert "def persist_report_artifact(" in (ROOT / "nmapui" / "reporting.py").read_text()
-    assert "def _normalize_scan_record_from_runtime_artifact(artifact):" in (ROOT / "nmapui" / "handlers" / "scans.py").read_text()
+    assert "def normalize_runtime_report_row(artifact):" in runtime_history_source
+    assert "def build_history_rows(" in runtime_history_source
+    assert "def build_compare_result(" in runtime_history_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
 
 
@@ -226,6 +229,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     app_bindings_source = (ROOT / "nmapui" / "app_bindings.py").read_text()
     reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
     history_modal_source = (ROOT / "static" / "js" / "history_modal.js").read_text()
+    runtime_history_source = (ROOT / "nmapui" / "runtime_history.py").read_text()
 
     assert '@app.route("/api/runtime/logs")' in routes_source
     assert '@app.route("/api/runtime/reports")' in routes_source
@@ -233,7 +237,9 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert '@app.route("/api/runtime/history/compare")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
-    assert "iter_scan_metadata_documents(" in routes_source
+    assert "build_history_rows(" in routes_source
+    assert "build_compare_result(" in routes_source
+    assert "iter_scan_metadata_documents(" in runtime_history_source
     assert "function loadPersistedLogs()" in audit_log_source
     assert "fetch('/api/runtime/logs?limit=200')" in audit_log_source
     assert "function refreshPersistedLogs()" in audit_log_source
@@ -271,14 +277,11 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     app_handler_registration_source = (ROOT / "nmapui" / "app_handler_registration.py").read_text()
 
     assert "runtime_store = deps.get(\"runtime_store\")" in scans_source
-    assert "for artifact in runtime_store.list_report_artifacts():" in scans_source
+    assert "build_history_rows(" in scans_source
     assert "build_scan_routes_deps(" in app_handler_registration_source
     assert '"runtime_store": runtime_store' in app_composition_source
-    assert "def _load_artifact_compare_payload(runtime_store, scan_path):" in scans_source
-    assert "runtime_store.get_report_artifact(scan_path)" in scans_source
+    assert "build_compare_result(" in scans_source
     assert "runtime_store.delete_report_artifact(path)" in scans_source
-    assert 'current_assets = current_metadata.get("asset_snapshot")' in scans_source
-    assert 'base_assets = base_metadata.get("asset_snapshot")' in scans_source
 
 
 def test_history_and_saved_pdf_lookups_accept_runtime_store():

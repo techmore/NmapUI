@@ -4,41 +4,9 @@ import shutil
 
 from flask import jsonify, request, send_file
 from nmapui.auth import require_auth
-from nmapui.reporting import (
-    find_previous_scan_metadata,
-    parse_scan_xml_for_assets,
-    refresh_persisted_diff_summaries,
-    summarize_asset_differences,
-)
-from persistence import iter_scan_metadata_documents, remove_scan_metadata_index_entry
-
-
-def _normalize_scan_record_from_runtime_artifact(artifact):
-    payload = dict(artifact.get("payload", {}) or {})
-    if "customer_name" not in payload:
-        payload["customer_name"] = payload.get(
-            "customer", payload.get("customer_id", "Unknown")
-        )
-
-    if payload.get("customer_name"):
-        payload["customer_name"] = str(payload["customer_name"]).split(" (")[0]
-
-    payload["path"] = artifact["scan_path"]
-    payload["has_html"] = bool(artifact.get("html_path"))
-    payload["has_pdf"] = bool(artifact.get("pdf_path"))
-    payload["has_xml"] = bool(artifact.get("xml_path"))
-    return payload
-
-
-def _load_artifact_compare_payload(runtime_store, scan_path):
-    if runtime_store is None or not hasattr(runtime_store, "get_report_artifact"):
-        return None
-    artifact = runtime_store.get_report_artifact(scan_path)
-    if artifact is None:
-        return None
-    payload = dict(artifact.get("payload", {}) or {})
-    payload["path"] = scan_path
-    return payload
+from nmapui.reporting import refresh_persisted_diff_summaries
+from nmapui.runtime_history import build_compare_result, build_history_rows
+from persistence import remove_scan_metadata_index_entry
 
 
 def register_scan_routes(app, deps):
@@ -52,70 +20,13 @@ def register_scan_routes(app, deps):
     @app.route("/api/scans")
     @require_auth
     def list_scans():
-        scans = []
-        seen_paths = set()
-
-        if runtime_store is not None:
-            for artifact in runtime_store.list_report_artifacts():
-                scan = _normalize_scan_record_from_runtime_artifact(artifact)
-                scans.append(scan)
-                seen_paths.add(scan["path"])
-
-        for metadata_path, data in iter_scan_metadata_documents(
-            scans_dir,
-            load_json_document,
-            normalize_scan_metadata_document,
+        scans = build_history_rows(
+            runtime_store=runtime_store,
+            scans_dir=scans_dir,
+            load_json_document=load_json_document,
+            normalize_scan_metadata_document=normalize_scan_metadata_document,
             logger=logger,
-        ):
-            if "customer_name" not in data:
-                data["customer_name"] = data.get(
-                    "customer", data.get("customer_id", "Unknown")
-                )
-
-            if data["customer_name"]:
-                data["customer_name"] = data["customer_name"].split(" (")[0]
-
-            rel_path = metadata_path.parent.relative_to(scans_dir)
-            data["path"] = str(rel_path)
-            if data["path"] in seen_paths:
-                continue
-            data["has_html"] = (metadata_path.parent / "scan_web.html").exists() or (
-                metadata_path.parent / "scan.html"
-            ).exists()
-            data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
-            data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
-            scans.append(data)
-            seen_paths.add(data["path"])
-
-        scans.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
-        for scan in scans:
-            if scan.get("diff_summary") is not None:
-                continue
-
-            previous = find_previous_scan_metadata(scan, scans)
-            if previous is None:
-                continue
-
-            current_xml = scans_dir / scan["path"] / "scan.xml"
-            previous_xml = scans_dir / previous["path"] / "scan.xml"
-            if not current_xml.exists() or not previous_xml.exists():
-                continue
-
-            try:
-                diff_summary = summarize_asset_differences(
-                    parse_scan_xml_for_assets(current_xml),
-                    parse_scan_xml_for_assets(previous_xml),
-                )
-            except Exception as exc:
-                logger.error("Error building diff summary for %s: %s", scan["path"], exc)
-                continue
-
-            if diff_summary.get("has_changes"):
-                scan["diff_summary"] = {
-                    **diff_summary,
-                    "baseline_path": previous["path"],
-                    "baseline_timestamp": previous.get("timestamp", ""),
-                }
+        )
         return jsonify({"scans": scans})
 
     @app.route("/api/scans/<path:path>/html")
@@ -230,72 +141,14 @@ def register_scan_routes(app, deps):
         if not base_path or not current_path:
             return jsonify({"success": False, "error": "Both base_path and current_path are required"}), 400
 
-        base_dir = resolve_scan_path(base_path)
-        current_dir = resolve_scan_path(current_path)
-        if base_dir is None or current_dir is None:
-            return jsonify({"success": False, "error": "Invalid scan path"}), 400
-
-        base_metadata = _load_artifact_compare_payload(runtime_store, base_path)
-        current_metadata = _load_artifact_compare_payload(runtime_store, current_path)
-
-        if base_metadata is None:
-            base_metadata_path = base_dir / "metadata.json"
-            if not base_metadata_path.exists():
-                return jsonify({"success": False, "error": "Scan metadata not found"}), 404
-            base_metadata = normalize_scan_metadata_document(load_json_document(base_metadata_path, {}))
-            base_metadata["path"] = base_path
-        if current_metadata is None:
-            current_metadata_path = current_dir / "metadata.json"
-            if not current_metadata_path.exists():
-                return jsonify({"success": False, "error": "Scan metadata not found"}), 404
-            current_metadata = normalize_scan_metadata_document(load_json_document(current_metadata_path, {}))
-            current_metadata["path"] = current_path
-
-        if str(base_metadata.get("customer_id", "") or "") != str(current_metadata.get("customer_id", "") or ""):
-            return jsonify({"success": False, "error": "Scans must belong to the same customer"}), 400
-        if str(base_metadata.get("target", "") or "") != str(current_metadata.get("target", "") or ""):
-            return jsonify({"success": False, "error": "Scans must target the same network"}), 400
-
-        try:
-            current_assets = current_metadata.get("asset_snapshot")
-            base_assets = base_metadata.get("asset_snapshot")
-            if not isinstance(current_assets, list) or not isinstance(base_assets, list):
-                base_xml = base_dir / "scan.xml"
-                current_xml = current_dir / "scan.xml"
-                if not base_xml.exists() or not current_xml.exists():
-                    return jsonify({"success": False, "error": "Scan XML not found"}), 404
-                current_assets = parse_scan_xml_for_assets(current_xml)
-                base_assets = parse_scan_xml_for_assets(base_xml)
-
-            diff_summary = summarize_asset_differences(
-                current_assets,
-                base_assets,
-            )
-        except Exception as exc:
-            logger.error("Error comparing scans %s and %s: %s", base_path, current_path, exc)
-            return jsonify({"success": False, "error": "Failed to compare scans"}), 500
-
-        return jsonify(
-            {
-                "success": True,
-                "base_scan": {
-                    "path": base_path,
-                    "timestamp": base_metadata.get("timestamp"),
-                    "customer_name": base_metadata.get("customer_name"),
-                    "target": base_metadata.get("target"),
-                    "status": base_metadata.get("status"),
-                },
-                "current_scan": {
-                    "path": current_path,
-                    "timestamp": current_metadata.get("timestamp"),
-                    "customer_name": current_metadata.get("customer_name"),
-                    "target": current_metadata.get("target"),
-                    "status": current_metadata.get("status"),
-                },
-                "diff_summary": {
-                    **diff_summary,
-                    "baseline_path": base_path,
-                    "baseline_timestamp": base_metadata.get("timestamp", ""),
-                },
-            }
+        payload, error, status_code = build_compare_result(
+            runtime_store=runtime_store,
+            resolve_scan_path=resolve_scan_path,
+            load_json_document=load_json_document,
+            normalize_scan_metadata_document=normalize_scan_metadata_document,
+            base_path=base_path,
+            current_path=current_path,
         )
+        if payload is None:
+            return jsonify({"success": False, "error": error}), status_code
+        return jsonify({"success": True, **payload})
