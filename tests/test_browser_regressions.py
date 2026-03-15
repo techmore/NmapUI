@@ -282,6 +282,9 @@ def test_second_tab_replays_active_report_state(browser_server, playwright_brows
             page.wait_for_function(
                 "() => document.getElementById('report-status-text').textContent.includes('Generating report')"
             )
+            page.wait_for_function(
+                "() => document.getElementById('generate-report-btn').classList.contains('card-pulsing')"
+            )
     finally:
         app_module.broadcaster.end_job(owner_sid, job_type="report")
         app_module.job_registry.complete(owner_sid, "report", status="completed")
@@ -340,6 +343,9 @@ def test_second_tab_replays_active_scan_state(browser_server, playwright_browser
             )
             page.wait_for_function(
                 "() => document.getElementById('feedback-container').textContent.includes('Running quick scan on 198.51.100.0/24')"
+            )
+            page.wait_for_function(
+                "() => document.getElementById('start-scan-btn').classList.contains('card-pulsing')"
             )
     finally:
         app_module.broadcaster.end_job(owner_sid, job_type="scan")

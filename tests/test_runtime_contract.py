@@ -1243,9 +1243,11 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "socket.on('client_state_snapshot'" in report_generation_module
     assert "socket.on('job_status', function(data) {" in report_generation_module
     assert "function syncReportJobVisualState(job)" in report_generation_module
+    assert "function syncReportVisualStateFromFeedback(message)" in report_generation_module
     assert "function resetReportVisualState()" in report_generation_module
     assert "startReportTimer(job?.started_at || null);" in report_generation_module
     assert "setReportButtonsPulsing(true, chunked);" in report_generation_module
+    assert "window.syncReportVisualStateFromFeedback = syncReportVisualStateFromFeedback;" in report_generation_module
     assert "resetReportVisualState();" in report_generation_module
     assert "window.removeReportProgressCard" in report_generation_module
     assert "document.getElementById('generate-report-btn').addEventListener('click'" in report_generation_module
@@ -1256,7 +1258,9 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "let scanRuntimeInitialized = false;" in scan_runtime_module
     assert "if (scanRuntimeInitialized) {" in scan_runtime_module
     assert "function syncScanJobVisualState(job)" in scan_runtime_module
+    assert "function syncScanVisualStateFromFeedback(message)" in scan_runtime_module
     assert "startScanBtn.classList.toggle('card-pulsing', isRunning);" in scan_runtime_module
+    assert "window.syncReportVisualStateFromFeedback(message);" in scan_runtime_module
     assert "const showReportStatus = window.showReportStatus || (() => {});" in scan_runtime_module
     assert "const updateReportProgress = window.updateReportProgress || (() => {});" in scan_runtime_module
     assert "const dimExistingRows = window.dimExistingRows || (() => {});" in scan_runtime_module
@@ -1272,6 +1276,7 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "emit_to_client_override=wrapped_emit" in backend_scan_runtime_module
     assert "if (data.job_type === 'scan') {" in scan_runtime_module
     assert "syncScanJobVisualState(data);" in scan_runtime_module
+    assert "syncScanVisualStateFromFeedback(message);" in scan_runtime_module
     assert "socket.on('report_complete', function (data) {" in audit_log_module
     assert "socket.on('update_status', function (data) {" in audit_log_module
     assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module

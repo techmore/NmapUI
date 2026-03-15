@@ -6,9 +6,11 @@ let reportSocket = null;
 let reportGetClientJobs = () => ({ report: { status: 'idle' } });
 let reportGenerationInitialized = false;
 let reportActionPending = false;
+let inferredReportMode = null;
 
 function resetReportVisualState() {
     reportActionPending = false;
+    inferredReportMode = null;
     setReportButtonsPulsing(false);
     if (typeof window.removeReportProgressCard === 'function') {
         window.removeReportProgressCard();
@@ -93,6 +95,33 @@ function syncReportJobVisualState(job) {
     reportActionPending = true;
     setReportButtonsPulsing(true, chunked);
     startReportTimer(job?.started_at || null);
+}
+
+function syncReportVisualStateFromFeedback(message) {
+    if (typeof message !== 'string' || !message) {
+        return;
+    }
+
+    const normalized = message.toLowerCase();
+    if (!normalized.includes('report') && !normalized.includes('comprehensive scan')) {
+        return;
+    }
+
+    if (normalized.includes('without chunking')) {
+        inferredReportMode = 'complete';
+    } else if (normalized.includes('chunked')) {
+        inferredReportMode = 'chunked';
+    }
+
+    if (reportGetClientJobs().report.status === 'running') {
+        return;
+    }
+
+    reportActionPending = true;
+    setReportButtonsPulsing(true, inferredReportMode === 'chunked');
+    if (!reportTimerInterval) {
+        startReportTimer();
+    }
 }
 
 function getReportRequestContext() {
@@ -211,4 +240,5 @@ window.setLastScanTarget = setLastScanTarget;
 window.getLastScanTarget = getLastScanTarget;
 window.updateLastScanResults = updateLastScanResults;
 window.syncReportJobVisualState = syncReportJobVisualState;
+window.syncReportVisualStateFromFeedback = syncReportVisualStateFromFeedback;
 window.initializeReportGenerationUI = initializeReportGenerationUI;

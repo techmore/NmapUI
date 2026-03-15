@@ -46,6 +46,34 @@ function syncScanJobVisualState(job) {
     startScanBtn.classList.toggle('card-pulsing', isRunning);
 }
 
+function syncScanVisualStateFromFeedback(message) {
+    if (typeof message !== 'string' || !message) {
+        return;
+    }
+
+    if (
+        message.includes('Running a single comprehensive scan without chunking')
+        || message.includes('Processing chunk')
+        || message.includes('Generating report for ')
+        || message.includes('Starting nmap comprehensive scan')
+        || message.includes('Scan started at ')
+    ) {
+        if (typeof window.syncReportVisualStateFromFeedback === 'function') {
+            window.syncReportVisualStateFromFeedback(message);
+        }
+        return;
+    }
+
+    if (
+        message.includes('quick scan')
+        || message.includes('deep scan')
+        || message.includes('ARP scan')
+        || message.includes('Starting scan')
+    ) {
+        syncScanJobVisualState({ status: 'running' });
+    }
+}
+
 function normalizeFeedbackMessage(msg) {
     if (typeof msg === 'string') return msg;
     if (msg && typeof msg.message === 'string') return msg.message;
@@ -103,6 +131,7 @@ function initializeScanRuntime(socket) {
     socket.on('quick_scan_complete', () => {
         console.log('Quick scan complete - stopping pulse');
         setCardPulsing('quick-scan-card', false);
+        syncScanJobVisualState({ status: 'completed' });
     });
 
     socket.on('arp_scan_start', () => {
@@ -132,6 +161,7 @@ function initializeScanRuntime(socket) {
     socket.on('deep_scan_complete', () => {
         console.log('All deep scans complete - stopping pulse');
         setCardPulsing('deep-scan-card', false);
+        syncScanJobVisualState({ status: 'completed' });
         clearAllHostStatusIndicators();
         saveHostsToStorage();
         const reloadButton = document.getElementById('reload-last-scan-btn');
@@ -147,6 +177,7 @@ function initializeScanRuntime(socket) {
             console.log('Suppressed recovery feedback in container');
             return;
         }
+        syncScanVisualStateFromFeedback(message);
         const container = document.getElementById('feedback-container');
         container.parentElement.classList.remove('hidden');
         const paragraph = document.createElement('p');
@@ -176,6 +207,9 @@ function initializeScanRuntime(socket) {
 
     socket.on('job_cancelled', function(data) {
         if (!data || !data.message) return;
+        if (data.job_type === 'scan') {
+            syncScanJobVisualState({ status: 'completed' });
+        }
         showReportStatus(data.message, 'info');
     });
 
@@ -188,6 +222,7 @@ function initializeScanRuntime(socket) {
     socket.on('scan_error', function(message) {
         const text = typeof message === 'string' ? message : (message?.error || 'Scan failed');
         console.error('Scan error:', text);
+        syncScanJobVisualState({ status: 'completed' });
         showReportStatus(text, 'error');
     });
 
