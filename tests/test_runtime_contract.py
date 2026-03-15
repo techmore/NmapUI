@@ -222,14 +222,19 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     routes_source = (ROOT / "nmapui" / "handlers" / "routes.py").read_text()
     audit_log_source = (ROOT / "static" / "js" / "audit_log.js").read_text()
     app_bindings_source = (ROOT / "nmapui" / "app_bindings.py").read_text()
+    reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
 
     assert '@app.route("/api/runtime/logs")' in routes_source
+    assert '@app.route("/api/runtime/reports")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
+    assert "runtime_store.list_report_artifacts()" in routes_source
     assert "function loadPersistedLogs()" in audit_log_source
     assert "fetch('/api/runtime/logs?limit=200')" in audit_log_source
     assert "function refreshPersistedLogs()" in audit_log_source
     assert "function schedulePersistedLogRefresh()" in audit_log_source
     assert "replacePersistedLogs(entries.slice().reverse());" in audit_log_source
+    assert "async function fetchReportsForTab()" in reports_tab_source
+    assert "fetch('/api/runtime/reports')" in reports_tab_source
     assert "_log_runtime_event(runtime_store, event, data)" in app_bindings_source
     assert 'category="job"' in app_bindings_source
 

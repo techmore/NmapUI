@@ -326,6 +326,15 @@ async function fetchScansForTabs() {
     return data.scans || [];
 }
 
+async function fetchReportsForTab() {
+    const response = await fetch('/api/runtime/reports');
+    if (!response.ok) {
+        throw new Error(`Failed to load reports (${response.status})`);
+    }
+    const data = await response.json();
+    return data.reports || [];
+}
+
 async function loadHistoryTab(force = false) {
     if (historyTabLoaded && !force) {
         return;
@@ -349,8 +358,8 @@ async function loadReportsTab(force = false) {
 
     setTabStatus('reports-tab-status', 'Loading reports...');
     try {
-        const scans = await fetchScansForTabs();
-        renderReportsTab(scans.filter((scan) => scan.has_html || scan.has_pdf || scan.has_xml));
+        const reports = await fetchReportsForTab();
+        renderReportsTab(reports.filter((scan) => scan.has_html || scan.has_pdf || scan.has_xml));
         reportsTabLoaded = true;
     } catch (error) {
         console.error('Error loading reports tab:', error);

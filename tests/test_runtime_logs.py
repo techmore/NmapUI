@@ -1,3 +1,4 @@
+import base64
 import subprocess
 
 from flask import Flask
@@ -44,6 +45,63 @@ def test_runtime_logs_route_returns_persisted_entries():
 
     assert response.status_code == 200
     assert payload["entries"][0]["message"] == "Hydrated network topology"
+
+
+def test_runtime_reports_route_returns_persisted_artifacts(monkeypatch):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    class RuntimeStoreStub:
+        def list_report_artifacts(self, customer_id=None):
+            return [
+                {
+                    "scan_path": "Acme/2026-03-14/scan_120000_192.168.222.0_24",
+                    "customer_id": "cust-1",
+                    "target": "192.168.222.0/24",
+                    "html_path": "scan_web.html",
+                    "pdf_path": "scan_report.pdf",
+                    "xml_path": "scan.xml",
+                    "payload": {
+                        "timestamp": "2026-03-14T12:00:00",
+                        "customer_name": "Acme",
+                        "status": "completed",
+                    },
+                    "generated_at": "2026-03-14T12:00:00",
+                    "updated_at": "2026-03-14T12:00:00",
+                }
+            ]
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    client = app.test_client()
+    response = client.get(
+        "/api/runtime/reports",
+        headers={"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["reports"][0]["path"] == "Acme/2026-03-14/scan_120000_192.168.222.0_24"
+    assert payload["reports"][0]["has_pdf"] is True
 
 
 def test_startup_checks_append_runtime_log_entries():

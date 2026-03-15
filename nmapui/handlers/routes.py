@@ -1,4 +1,5 @@
 from flask import jsonify, render_template
+from nmapui.auth import require_auth
 
 
 def register_core_routes(app, deps):
@@ -100,3 +101,32 @@ def register_core_routes(app, deps):
                 }
             )
         return jsonify({"entries": []})
+
+    @app.route("/api/runtime/reports")
+    @require_auth
+    def runtime_reports():
+        if runtime_store is None:
+            return jsonify({"reports": []})
+
+        reports = []
+        for artifact in runtime_store.list_report_artifacts():
+            payload = dict(artifact.get("payload", {}) or {})
+            customer_name = payload.get(
+                "customer_name",
+                payload.get("customer", payload.get("customer_id", "Unknown")),
+            )
+            if customer_name:
+                customer_name = str(customer_name).split(" (")[0]
+
+            reports.append(
+                {
+                    **payload,
+                    "customer_name": customer_name,
+                    "path": artifact["scan_path"],
+                    "has_html": bool(artifact.get("html_path")),
+                    "has_pdf": bool(artifact.get("pdf_path")),
+                    "has_xml": bool(artifact.get("xml_path")),
+                }
+            )
+
+        return jsonify({"reports": reports})
