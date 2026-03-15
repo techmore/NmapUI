@@ -74,6 +74,7 @@ def build_task_bindings(
         sid=None,
         excluded_targets=None,
         scan_only_mode=False,
+        emit_to_client_override=None,
     ):
         return run_nmap_with_xml_output_runtime(
             target=target,
@@ -84,7 +85,7 @@ def build_task_bindings(
             scan_only_mode=scan_only_mode,
             vulners_script=vulners_script,
             stylesheet_pdf=stylesheet_pdf,
-            emit_to_client=emit_to_client,
+            emit_to_client=emit_to_client_override or emit_to_client,
             socketio_emit=socketio.emit,
             socketio_sleep=socketio.sleep,
             run_cancellable_command=run_cancellable_command,

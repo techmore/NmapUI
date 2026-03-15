@@ -7,14 +7,20 @@ from nmapui.workflows import generate_report_task as workflow_generate_report_ta
 def generate_report_task(*, sid, data, deps):
     broadcaster = deps.get("broadcaster")
     if broadcaster is not None:
+        wrapped_emit = make_broadcast_emit(
+            owner_sid=sid,
+            broadcaster=broadcaster,
+            emit_to_client=deps["emit_to_client"],
+            job_type="report",
+            runtime_store=deps.get("runtime_store"),
+        )
         deps = {
             **deps,
-            "emit_to_client": make_broadcast_emit(
-                owner_sid=sid,
-                broadcaster=broadcaster,
-                emit_to_client=deps["emit_to_client"],
-                job_type="report",
-                runtime_store=deps.get("runtime_store"),
+            "emit_to_client": wrapped_emit,
+            "run_nmap_with_xml_output": lambda *args, **kwargs: deps["run_nmap_with_xml_output"](
+                *args,
+                emit_to_client_override=wrapped_emit,
+                **kwargs,
             ),
             "on_job_end": lambda: broadcaster.end_job(sid, job_type="report"),
         }

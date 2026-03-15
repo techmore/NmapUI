@@ -1222,6 +1222,16 @@ def test_google_drive_integration_contract_exists():
     assert 'id="settings-google-drive-disconnect-btn"' in template
 
 
+def test_report_runtime_replays_nmap_feedback_through_broadcaster():
+    report_runtime_source = (ROOT / "nmapui" / "report_runtime.py").read_text()
+    task_bindings_source = (ROOT / "nmapui" / "app_task_bindings.py").read_text()
+
+    assert "emit_to_client_override=None" in task_bindings_source
+    assert "emit_to_client=emit_to_client_override or emit_to_client" in task_bindings_source
+    assert '"run_nmap_with_xml_output": lambda *args, **kwargs: deps["run_nmap_with_xml_output"](' in report_runtime_source
+    assert "emit_to_client_override=wrapped_emit" in report_runtime_source
+
+
 def test_template_does_not_keep_inline_report_generation_block():
     template = (ROOT / "templates" / "index.html").read_text()
 
