@@ -16,6 +16,7 @@ SETTINGS_FILE = BASE_DIR / "data" / "settings.json"
 RUNTIME_DB_FILE = BASE_DIR / "data" / "runtime.sqlite3"
 GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"
 GOOGLE_DRIVE_TOKEN_FILE = BASE_DIR / "data" / "google_drive_tokens.json"
+GOOGLE_DRIVE_TOKEN_KEY_FILE = BASE_DIR / "data" / "google_drive_tokens.key"
 
 
 def resolve_scan_path(path: str) -> Optional[Path]:

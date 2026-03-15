@@ -59,6 +59,7 @@ from nmapui.paths import (
     BASE_DIR,
     CURRENT_ASSIGNMENT_FILE,
     GOOGLE_DRIVE_CREDENTIALS_FILE,
+    GOOGLE_DRIVE_TOKEN_KEY_FILE,
     GOOGLE_DRIVE_TOKEN_FILE,
     RUNTIME_DB_FILE,
     SCANS_DIR,
@@ -315,6 +316,7 @@ register_app_handlers(
     upload_report_artifacts_to_google_drive=lambda *, scan_path, file_paths, metadata, settings_state: upload_files_to_google_drive(
         credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         file_paths=file_paths,
         folder_id=str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip(),
         requests_module=requests,
@@ -354,21 +356,25 @@ register_app_handlers(
     get_google_drive_auth_status=lambda: build_google_drive_auth_status(
         credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
     ),
     build_google_drive_auth_url=lambda *, redirect_uri: build_google_drive_auth_url(
         credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         redirect_uri=redirect_uri,
     ),
     exchange_google_drive_auth_code=lambda *, code, state: exchange_google_drive_auth_code(
         credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         code=code,
         state=state,
         requests_module=requests,
     ),
     disconnect_google_drive=lambda: disconnect_google_drive(
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         requests_module=requests,
     ),
     validate_remote_sync_settings=lambda *, endpoint, api_key: validate_remote_sync_settings(

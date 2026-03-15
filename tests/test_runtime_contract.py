@@ -233,6 +233,7 @@ def test_runtime_uses_separate_web_and_pdf_stylesheets():
     assert 'RUNTIME_DB_FILE = BASE_DIR / "data" / "runtime.sqlite3"' in paths_source
     assert 'GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"' in paths_source
     assert 'GOOGLE_DRIVE_TOKEN_FILE = BASE_DIR / "data" / "google_drive_tokens.json"' in paths_source
+    assert 'GOOGLE_DRIVE_TOKEN_KEY_FILE = BASE_DIR / "data" / "google_drive_tokens.key"' in paths_source
     assert '"web_stylesheet": web_stylesheet' in app_composition_source
     assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
 
@@ -1245,7 +1246,12 @@ def test_google_drive_integration_contract_exists():
     assert "def build_google_drive_auth_url(" in google_drive_source
     assert "def exchange_google_drive_auth_code(" in google_drive_source
     assert "def upload_files_to_google_drive(" in google_drive_source
+    assert "from cryptography.fernet import Fernet, InvalidToken" in google_drive_source
+    assert 'ENCRYPTED_TOKEN_SCHEMA_VERSION = 1' in google_drive_source
+    assert "def _load_or_create_encryption_key(key_path: Path) -> bytes:" in google_drive_source
+    assert '\"ciphertext\"' in google_drive_source
     assert "upload_report_artifacts_to_google_drive=lambda" in app_source
+    assert "key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE" in app_source
     assert "function uploadReportToGoogleDrive(scanPath)" in reports_tab_source
     assert "Upload to Drive" in reports_tab_source
     assert "async function connectGoogleDrive()" in settings_tab_source
