@@ -1,6 +1,7 @@
 from flask import Flask
 
 from nmapui.handlers.routes import register_core_routes
+from nmapui.settings import get_effective_scan_rules
 
 
 def test_runtime_status_route_reports_active_jobs():
@@ -104,4 +105,33 @@ def test_runtime_settings_summary_reports_settings_state():
             "customer_scan_history": 7,
             "runtime_logs": 12,
         },
+    }
+
+
+def test_effective_scan_rules_prefer_matching_target_profile():
+    rules = get_effective_scan_rules(
+        settings_state={
+            "target_profiles": [
+                {
+                    "name": "HQ",
+                    "target": "192.168.1.0/24",
+                    "customer_id": "cust-1",
+                    "scan_rules": {
+                        "scan_only_mode": True,
+                        "excluded_targets": ["192.168.1.50"],
+                    },
+                }
+            ],
+            "scan_rules": {
+                "scan_only_mode": False,
+                "excluded_targets": ["192.168.1.10"],
+            },
+        },
+        target="192.168.1.0/24",
+        customer_id="cust-1",
+    )
+
+    assert rules == {
+        "scan_only_mode": True,
+        "excluded_targets": ["192.168.1.50"],
     }

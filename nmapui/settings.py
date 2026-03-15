@@ -49,6 +49,7 @@ def _normalize_string_list(values: Any) -> list[str]:
 
 def normalize_target_profile(profile: Any) -> dict[str, Any]:
     profile = profile if isinstance(profile, dict) else {}
+    scan_rules = profile.get("scan_rules")
     return {
         "id": str(profile.get("id") or uuid.uuid4().hex[:12]),
         "name": str(profile.get("name", "") or "").strip(),
@@ -56,6 +57,12 @@ def normalize_target_profile(profile: Any) -> dict[str, Any]:
         "customer_id": str(profile.get("customer_id", "") or "").strip(),
         "customer_name": str(profile.get("customer_name", "") or "").strip(),
         "notes": str(profile.get("notes", "") or "").strip(),
+        "scan_rules": {
+            "scan_only_mode": bool((scan_rules or {}).get("scan_only_mode", False)),
+            "excluded_targets": _normalize_string_list(
+                (scan_rules or {}).get("excluded_targets", [])
+            ),
+        },
     }
 
 
@@ -205,4 +212,39 @@ def validate_remote_sync_settings(*, endpoint, api_key, requests_module, timeout
         "success": False,
         "status": "Endpoint responded unexpectedly",
         "error": f"Remote endpoint returned HTTP {response.status_code}.",
+    }
+
+
+def get_effective_scan_rules(*, settings_state, target="", customer_id="") -> dict[str, Any]:
+    normalized = normalize_settings_document(settings_state)
+    global_rules = normalized.get("scan_rules", {})
+    target = str(target or "").strip()
+    customer_id = str(customer_id or "").strip()
+
+    matched_profile = None
+    for profile in normalized.get("target_profiles", []):
+        if target and str(profile.get("target", "") or "").strip() != target:
+            continue
+        profile_customer_id = str(profile.get("customer_id", "") or "").strip()
+        if profile_customer_id and customer_id and profile_customer_id != customer_id:
+            continue
+        matched_profile = profile
+        break
+
+    if matched_profile is None:
+        return {
+            "scan_only_mode": bool(global_rules.get("scan_only_mode", False)),
+            "excluded_targets": _normalize_string_list(
+                global_rules.get("excluded_targets", [])
+            ),
+        }
+
+    profile_rules = matched_profile.get("scan_rules", {})
+    return {
+        "scan_only_mode": bool(
+            profile_rules.get("scan_only_mode", global_rules.get("scan_only_mode", False))
+        ),
+        "excluded_targets": _normalize_string_list(
+            profile_rules.get("excluded_targets", global_rules.get("excluded_targets", []))
+        ),
     }

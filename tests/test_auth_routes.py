@@ -6,6 +6,7 @@ from flask_socketio import SocketIO
 from nmapui.handlers.auto_scan import register_auto_scan_handlers
 from nmapui.handlers.scans import register_scan_routes
 from nmapui.handlers.settings import register_settings_routes
+from nmapui.settings import normalize_settings_document
 from persistence import load_json_document, normalize_scan_metadata_document
 
 
@@ -823,13 +824,7 @@ def test_settings_routes_save_normalized_payload(monkeypatch):
         {
             "settings_state": {},
             "save_settings": lambda payload: saved.setdefault(
-                "value",
-                {
-                    "schema_version": 1,
-                    "target_profiles": payload["target_profiles"],
-                    "scan_rules": payload["scan_rules"],
-                    "sync": payload["sync"],
-                },
+                "value", normalize_settings_document(payload)
             ),
             "validate_google_drive": lambda folder_id: {"success": True, "status": "Configured"},
             "validate_remote_sync": lambda endpoint, api_key: {"success": True, "status": "Configured"},
@@ -864,9 +859,50 @@ def test_settings_routes_save_normalized_payload(monkeypatch):
     payload = response.get_json()
     assert payload["success"] is True
     assert payload["settings"]["target_profiles"][0]["name"] == "HQ"
+    assert payload["settings"]["target_profiles"][0]["scan_rules"]["scan_only_mode"] is False
+    assert payload["settings"]["target_profiles"][0]["scan_rules"]["excluded_targets"] == []
     assert payload["settings"]["scan_rules"]["scan_only_mode"] is True
     assert payload["settings"]["scan_rules"]["excluded_targets"] == ["192.168.1.10", "192.168.1.11"]
     assert payload["settings"]["sync"]["remote_sync"]["api_key"] == "secret"
+
+
+def test_settings_routes_preserve_profile_level_scan_rule_overrides(monkeypatch):
+    configure_auth(monkeypatch)
+    app, _ = build_settings_app()
+
+    response = app.test_client().post(
+        "/api/settings",
+        json={
+            "target_profiles": [
+                {
+                    "name": "HQ",
+                    "target": "192.168.1.0/24",
+                    "customer_id": "cust-123",
+                    "customer_name": "Acme",
+                    "notes": "Primary office",
+                    "scan_rules": {
+                        "scan_only_mode": True,
+                        "excluded_targets": ["192.168.1.99"],
+                    },
+                }
+            ],
+            "scan_rules": {
+                "scan_only_mode": False,
+                "excluded_targets": [],
+            },
+            "sync": {
+                "google_drive": {"enabled": False, "folder_id": "", "status": "Not configured"},
+                "remote_sync": {"enabled": False, "endpoint": "", "api_key": "", "status": "Not configured"},
+            },
+        },
+        headers=basic_auth_header(),
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    profile_rules = payload["settings"]["target_profiles"][0]["scan_rules"]
+    assert profile_rules["scan_only_mode"] is True
+    assert profile_rules["excluded_targets"] == ["192.168.1.99"]
 
 
 def test_settings_routes_validate_google_drive(monkeypatch):

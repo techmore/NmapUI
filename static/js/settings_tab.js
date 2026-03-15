@@ -193,6 +193,7 @@ function renderTargetProfiles(profiles) {
                     <div class="text-sm font-semibold text-olive-900">${profile.name}</div>
                     <div class="mt-1 font-mono text-sm text-olive-700">${profile.target}</div>
                     <div class="mt-2 text-xs text-olive-600">${profile.customer_name || 'No customer pinned'}</div>
+                    <div class="mt-2 text-xs text-olive-600">Profile rules: ${profile.scan_rules?.scan_only_mode ? 'scan-only' : 'default mode'}${(profile.scan_rules?.excluded_targets || []).length ? ` | ${profile.scan_rules.excluded_targets.length} exclusion(s)` : ''}</div>
                     ${profile.notes ? `<div class="mt-2 text-xs text-olive-600">${profile.notes}</div>` : ''}
                 </div>
             </div>
@@ -229,6 +230,8 @@ function fillSettingsForm(state) {
     settingsState = state;
     document.getElementById('settings-scan-only-mode').checked = !!state.scan_rules?.scan_only_mode;
     document.getElementById('settings-excluded-targets').value = (state.scan_rules?.excluded_targets || []).join('\n');
+    document.getElementById('settings-profile-scan-only-mode').checked = false;
+    document.getElementById('settings-profile-excluded-targets').value = '';
     document.getElementById('settings-google-drive-enabled').checked = !!state.sync?.google_drive?.enabled;
     document.getElementById('settings-google-drive-folder').value = state.sync?.google_drive?.folder_id || '';
     document.getElementById('settings-google-drive-status').textContent = state.sync?.google_drive?.status || 'Not configured';
@@ -384,6 +387,8 @@ function addTargetProfile() {
     const targetInput = document.getElementById('settings-profile-target');
     const customerSelect = document.getElementById('settings-profile-customer');
     const notesInput = document.getElementById('settings-profile-notes');
+    const profileScanOnlyInput = document.getElementById('settings-profile-scan-only-mode');
+    const profileExcludedTargetsInput = document.getElementById('settings-profile-excluded-targets');
     const currentCustomer = document.getElementById('current-customer');
 
     const name = (nameInput?.value || '').trim();
@@ -412,6 +417,13 @@ function addTargetProfile() {
         customer_id: selectedValue || '',
         customer_name: selectedOption ? selectedOption.textContent.split(' (')[0] : '',
         notes: (notesInput?.value || '').trim(),
+        scan_rules: {
+            scan_only_mode: !!profileScanOnlyInput?.checked,
+            excluded_targets: (profileExcludedTargetsInput?.value || '')
+                .split('\n')
+                .map((value) => value.trim())
+                .filter(Boolean),
+        },
     });
 
     renderTargetProfiles(settingsState.target_profiles);
@@ -419,6 +431,12 @@ function addTargetProfile() {
     targetInput.value = '';
     if (notesInput) {
         notesInput.value = '';
+    }
+    if (profileScanOnlyInput) {
+        profileScanOnlyInput.checked = false;
+    }
+    if (profileExcludedTargetsInput) {
+        profileExcludedTargetsInput.value = '';
     }
     if (customerSelect) {
         customerSelect.value = '';

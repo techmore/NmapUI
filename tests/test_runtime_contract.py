@@ -1156,6 +1156,8 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="logs-clear-btn"' in template
     assert 'id="save-settings-btn"' in template
     assert 'id="settings-profile-list"' in template
+    assert 'id="settings-profile-scan-only-mode"' in template
+    assert 'id="settings-profile-excluded-targets"' in template
     assert 'id="settings-scan-only-mode"' in template
     assert 'id="settings-excluded-targets"' in template
     assert 'id="settings-google-drive-enabled"' in template
@@ -1166,6 +1168,14 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert '<script src="/static/js/settings_tab.js"></script>' in template
     assert "initializeAuditLog();" in template
     assert "initializeSettingsTab();" in template
+    settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    settings_module_source = (ROOT / "nmapui" / "settings.py").read_text()
+    workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
+    assert "settings-profile-scan-only-mode" in settings_source
+    assert "settings-profile-excluded-targets" in settings_source
+    assert "profile.scan_rules?.scan_only_mode" in settings_source
+    assert "def get_effective_scan_rules(*, settings_state, target=\"\", customer_id=\"\")" in settings_module_source
+    assert "get_effective_scan_rules(" in workflows_source
 
 
 def test_pdf_generation_prefers_browser_renderer_before_wkhtml():

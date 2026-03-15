@@ -711,6 +711,17 @@
                             <label for="settings-profile-notes" class="block text-sm font-medium text-olive-800">Notes</label>
                             <input id="settings-profile-notes" type="text" class="form-control form-control-md mt-1" placeholder="Optional notes">
                         </div>
+                        <label class="flex items-start gap-3 rounded-xl border border-olive-200 bg-white px-4 py-3">
+                            <input id="settings-profile-scan-only-mode" type="checkbox" class="mt-1 size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-olive-900">Profile scan-only override</span>
+                                <span class="block text-sm text-olive-700">Force unprivileged mode when this profile is active.</span>
+                            </span>
+                        </label>
+                        <div>
+                            <label for="settings-profile-excluded-targets" class="block text-sm font-medium text-olive-800">Profile Excluded Targets</label>
+                            <textarea id="settings-profile-excluded-targets" rows="4" class="form-control form-control-md mt-1" placeholder="One host, range, or CIDR per line"></textarea>
+                        </div>
                     </div>
                     <div class="mt-4 flex flex-wrap gap-2">
                         <button id="add-target-profile-btn" class="action-button action-button-primary action-button-compact" aria-label="Add target profile">

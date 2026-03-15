@@ -8,6 +8,7 @@ from nmapui.reporting import (
     inject_diff_summary_into_report_html,
     mark_scan_failure,
 )
+from nmapui.settings import get_effective_scan_rules
 
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,12 @@ def start_scan_task(context, sid, target):
     job_registry = context.job_registry
     emit_job_status = context.emit_job_status
     logger = context.logger
-    scan_rules = (context.settings_state or {}).get("scan_rules", {})
+    current_customer = context.get_client_state(sid=sid).get("current_customer", {})
+    scan_rules = get_effective_scan_rules(
+        settings_state=context.settings_state,
+        target=target,
+        customer_id=str(current_customer.get("id", "") or ""),
+    )
     scan_only_mode = bool(scan_rules.get("scan_only_mode", False))
     excluded_targets = [
         str(item or "").strip()
@@ -320,14 +326,6 @@ def generate_report_task(context, sid, data):
     extract_scan_statistics = context.extract_scan_statistics
     customer_fingerprinter = context.customer_fingerprinter
     on_job_end = context.on_job_end
-    scan_rules = (context.settings_state or {}).get("scan_rules", {})
-    scan_only_mode = bool(scan_rules.get("scan_only_mode", False))
-    excluded_targets = [
-        str(item or "").strip()
-        for item in scan_rules.get("excluded_targets", [])
-        if str(item or "").strip()
-    ]
-
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
     target = data.get("target")
@@ -352,6 +350,19 @@ def generate_report_task(context, sid, data):
                 "metadata": generated_customer.get("metadata", {}),
             }
             customer_name = current_customer["name"].split(" (")[0]
+            current_customer_id = str(current_customer.get("id", "") or "")
+
+    scan_rules = get_effective_scan_rules(
+        settings_state=context.settings_state,
+        target=target,
+        customer_id=current_customer_id,
+    )
+    scan_only_mode = bool(scan_rules.get("scan_only_mode", False))
+    excluded_targets = [
+        str(item or "").strip()
+        for item in scan_rules.get("excluded_targets", [])
+        if str(item or "").strip()
+    ]
 
     if not target:
         job_registry.complete(sid, "report", status="failed", details={"error": "No target specified"})
