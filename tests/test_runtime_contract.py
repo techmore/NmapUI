@@ -95,6 +95,8 @@ def test_template_uses_shared_scan_display_modules():
     assert "window.loadHostsFromStorage = loadHostsFromStorage;" in discovery_source
     assert "window.showHistoricalDataBanner = showHistoricalDataBanner;" in banner_source
     assert "window.showScanSummaryBanner = showScanSummaryBanner;" in banner_source
+    assert 'href="https://github.com/techmore/NmapUI"' in html
+    assert 'aria-label="Open NmapUI GitHub repository"' in html
     assert 'id="settings-nmap-version"' in html
     assert 'id="settings-vulners-version"' in html
     assert 'id="settings-arpscan-version"' in html
