@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from flask import jsonify, render_template, request
 from nmapui.auth import require_auth
 from nmapui.runtime_history import (
@@ -72,6 +74,11 @@ def register_core_routes(app, deps):
     def runtime_settings_summary():
         scan_rules = settings_state.get("scan_rules", {})
         sync = settings_state.get("sync", {})
+        maintenance_backfill = {}
+        if runtime_store is not None and hasattr(runtime_store, "get_runtime_snapshot"):
+            maintenance_backfill = (
+                runtime_store.get_runtime_snapshot("maintenance_backfill_status") or {}
+            )
         return jsonify(
             {
                 "scan_only_mode": bool(scan_rules.get("scan_only_mode", False)),
@@ -83,6 +90,7 @@ def register_core_routes(app, deps):
                 "remote_sync_enabled": bool(
                     (sync.get("remote_sync") or {}).get("enabled", False)
                 ),
+                "maintenance_backfill": maintenance_backfill,
             }
         )
 
@@ -140,7 +148,22 @@ def register_core_routes(app, deps):
             normalize_scan_metadata_document=deps.get("normalize_scan_metadata_document"),
             logger=deps.get("logger"),
         )
-        return jsonify({"success": True, "backfilled": backfilled})
+        last_run_at = datetime.now(timezone.utc).isoformat()
+        if runtime_store is not None and hasattr(runtime_store, "upsert_runtime_snapshot"):
+            runtime_store.upsert_runtime_snapshot(
+                "maintenance_backfill_status",
+                {
+                    "last_run_at": last_run_at,
+                    "last_backfilled": backfilled,
+                },
+            )
+        return jsonify(
+            {
+                "success": True,
+                "backfilled": backfilled,
+                "last_run_at": last_run_at,
+            }
+        )
 
     @app.route("/api/runtime/history/compare")
     @require_auth

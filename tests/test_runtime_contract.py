@@ -250,6 +250,8 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert '@app.route("/api/runtime/maintenance/backfill", methods=["POST"])' in routes_source
     assert '@app.route("/api/runtime/history/compare")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
+    assert 'runtime_store.get_runtime_snapshot("maintenance_backfill_status")' in routes_source
+    assert 'runtime_store.upsert_runtime_snapshot(' in routes_source
     assert "runtime_store.list_report_artifacts()" in routes_source
     assert "build_history_rows(" in routes_source
     assert "build_compare_result(" in routes_source
@@ -1177,6 +1179,8 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "setSyncStatus('settings-google-drive-status'" in settings_tab_module
     assert "setSyncStatus('settings-remote-sync-status'" in settings_tab_module
     assert "setMaintenanceStatus('Running runtime backfill...')" in settings_tab_module
+    assert "function syncMaintenanceStatusFromSummary(summary)" in settings_tab_module
+    assert "const lastBackfillValue =" in settings_tab_module
     assert "fetch('/api/settings/validate/google-drive'" in settings_tab_module
     assert "fetch('/api/settings/validate/remote-sync'" in settings_tab_module
     assert "fetch('/api/runtime/maintenance/backfill'" in settings_tab_module

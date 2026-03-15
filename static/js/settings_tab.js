@@ -80,12 +80,18 @@ function renderRuntimeSummary(summary) {
         return;
     }
 
+    const maintenanceBackfill = summary.maintenance_backfill || {};
+    const lastBackfillValue = maintenanceBackfill.last_run_at
+        ? `${new Date(maintenanceBackfill.last_run_at).toLocaleString()} (${maintenanceBackfill.last_backfilled || 0})`
+        : 'Never';
+
     const cards = [
         ['Profiles', String(summary.target_profiles_count || 0)],
         ['Exclusions', String(summary.excluded_targets_count || 0)],
         ['Scan-only mode', summary.scan_only_mode ? 'Enabled' : 'Disabled'],
         ['Google Drive', summary.google_drive_enabled ? 'Enabled' : 'Disabled'],
         ['Remote sync', summary.remote_sync_enabled ? 'Enabled' : 'Disabled'],
+        ['Last backfill', lastBackfillValue],
     ];
 
     container.replaceChildren();
@@ -230,12 +236,25 @@ function fillSettingsForm(state) {
     renderTargetProfiles(state.target_profiles || []);
 }
 
+function syncMaintenanceStatusFromSummary(summary) {
+    const maintenanceBackfill = summary?.maintenance_backfill || {};
+    if (maintenanceBackfill.last_run_at) {
+        setMaintenanceStatus(
+            `Last backfill: ${new Date(maintenanceBackfill.last_run_at).toLocaleString()} (${maintenanceBackfill.last_backfilled || 0} artifact(s)).`
+        );
+        return;
+    }
+    setMaintenanceStatus('Ready');
+}
+
 async function loadRuntimeSettingsSummary() {
     const response = await fetch('/api/runtime/settings-summary');
     if (!response.ok) {
         throw new Error(`Failed to load runtime settings summary (${response.status})`);
     }
-    renderRuntimeSummary(await response.json());
+    const summary = await response.json();
+    renderRuntimeSummary(summary);
+    syncMaintenanceStatusFromSummary(summary);
 }
 
 async function loadSettingsTab(force = false) {

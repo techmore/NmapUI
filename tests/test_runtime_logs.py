@@ -283,6 +283,7 @@ def test_runtime_backfill_route_runs_authenticated_backfill(monkeypatch, tmp_pat
     )
 
     runtime_calls = []
+    snapshot_calls = []
 
     class RuntimeStoreStub:
         def get_report_artifact(self, scan_path):
@@ -290,6 +291,9 @@ def test_runtime_backfill_route_runs_authenticated_backfill(monkeypatch, tmp_pat
 
         def upsert_report_artifact(self, **kwargs):
             runtime_calls.append(kwargs)
+
+        def upsert_runtime_snapshot(self, key, payload):
+            snapshot_calls.append((key, payload))
 
     app = Flask(__name__)
     app.config["TESTING"] = True
@@ -322,8 +326,46 @@ def test_runtime_backfill_route_runs_authenticated_backfill(monkeypatch, tmp_pat
     )
 
     assert response.status_code == 200
-    assert response.get_json() == {"success": True, "backfilled": 1}
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["backfilled"] == 1
+    assert "last_run_at" in payload
     assert runtime_calls[0]["scan_path"] == "Legacy/2026-03-13/scan_010000_target"
+    assert snapshot_calls[0][0] == "maintenance_backfill_status"
+    assert snapshot_calls[0][1]["last_backfilled"] == 1
+
+
+def test_runtime_settings_summary_includes_backfill_status():
+    class RuntimeStoreStub:
+        def get_runtime_snapshot(self, key):
+            if key == "maintenance_backfill_status":
+                return {
+                    "last_run_at": "2026-03-14T21:00:00+00:00",
+                    "last_backfilled": 4,
+                }
+            return None
+
+    app = Flask(__name__)
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
+            "settings_state": {"scan_rules": {}, "sync": {}, "target_profiles": []},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+        },
+    )
+
+    payload = app.test_client().get("/api/runtime/settings-summary").get_json()
+
+    assert payload["maintenance_backfill"]["last_backfilled"] == 4
+    assert payload["maintenance_backfill"]["last_run_at"] == "2026-03-14T21:00:00+00:00"
 
 
 def test_runtime_backfill_route_requires_auth(monkeypatch, tmp_path):

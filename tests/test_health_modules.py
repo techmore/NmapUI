@@ -87,4 +87,5 @@ def test_runtime_settings_summary_reports_settings_state():
         "target_profiles_count": 1,
         "google_drive_enabled": True,
         "remote_sync_enabled": False,
+        "maintenance_backfill": {},
     }
