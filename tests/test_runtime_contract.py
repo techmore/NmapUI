@@ -1171,14 +1171,19 @@ def test_template_uses_dom_helpers_for_scan_result_rendering():
     assert "async function saveSettingsTab()" in settings_tab_module
     assert "async function testGoogleDriveSettings()" in settings_tab_module
     assert "async function testRemoteSyncSettings()" in settings_tab_module
+    assert "async function runRuntimeBackfill()" in settings_tab_module
     assert "function addTargetProfile()" in settings_tab_module
     assert "function applyProfileToDashboard(profile)" in settings_tab_module
     assert "setSyncStatus('settings-google-drive-status'" in settings_tab_module
     assert "setSyncStatus('settings-remote-sync-status'" in settings_tab_module
+    assert "setMaintenanceStatus('Running runtime backfill...')" in settings_tab_module
     assert "fetch('/api/settings/validate/google-drive'" in settings_tab_module
     assert "fetch('/api/settings/validate/remote-sync'" in settings_tab_module
+    assert "fetch('/api/runtime/maintenance/backfill'" in settings_tab_module
     assert "window.initializeSettingsTab = initializeSettingsTab;" in settings_tab_module
     assert "window.loadSettingsTab = loadSettingsTab;" in settings_tab_module
+    assert 'id="settings-runtime-backfill-btn"' in template
+    assert 'id="settings-maintenance-status"' in template
     assert "cell.innerHTML = items.map" not in template
     assert "data.cve_array.forEach(cve => cell.innerHTML +=" not in template
     assert "row.cells[4].innerHTML +=" not in template

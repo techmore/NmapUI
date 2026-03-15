@@ -116,6 +116,25 @@ function setSyncStatus(elementId, message, isError = false) {
     element.classList.add('text-olive-600');
 }
 
+function setMaintenanceStatus(message, isError = false) {
+    const element = document.getElementById('settings-maintenance-status');
+    if (!element) {
+        return;
+    }
+
+    element.textContent = message;
+    element.classList.remove('text-olive-600', 'text-red-700', 'text-emerald-700');
+    if (isError) {
+        element.classList.add('text-red-700');
+        return;
+    }
+    if (/backfilled|completed|ready/i.test(message)) {
+        element.classList.add('text-emerald-700');
+        return;
+    }
+    element.classList.add('text-olive-600');
+}
+
 function applyProfileToDashboard(profile) {
     const targetInput = document.getElementById('scan-target');
     if (targetInput) {
@@ -311,6 +330,32 @@ async function testRemoteSyncSettings() {
     }
 }
 
+async function runRuntimeBackfill() {
+    setMaintenanceStatus('Running runtime backfill...');
+
+    try {
+        const response = await fetch('/api/runtime/maintenance/backfill', {
+            method: 'POST',
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Runtime backfill failed (${response.status})`);
+        }
+
+        setMaintenanceStatus(`Backfilled ${payload.backfilled} scan artifact(s).`, false);
+        await loadRuntimeSettingsSummary();
+        if (typeof window.loadReportsTab === 'function') {
+            window.loadReportsTab(true);
+        }
+        if (typeof window.loadHistoryTab === 'function') {
+            window.loadHistoryTab(true);
+        }
+    } catch (error) {
+        console.error('Error running runtime backfill:', error);
+        setMaintenanceStatus(error.message || 'Runtime backfill failed.', true);
+    }
+}
+
 function addTargetProfile() {
     const nameInput = document.getElementById('settings-profile-name');
     const targetInput = document.getElementById('settings-profile-target');
@@ -378,6 +423,7 @@ function initializeSettingsTab() {
     document.getElementById('capture-current-target-btn')?.addEventListener('click', captureCurrentTarget);
     document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', testGoogleDriveSettings);
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', testRemoteSyncSettings);
+    document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', runRuntimeBackfill);
     populateProfileCustomerOptions();
 }
 

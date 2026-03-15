@@ -326,6 +326,40 @@ def test_runtime_backfill_route_runs_authenticated_backfill(monkeypatch, tmp_pat
     assert runtime_calls[0]["scan_path"] == "Legacy/2026-03-13/scan_010000_target"
 
 
+def test_runtime_backfill_route_requires_auth(monkeypatch, tmp_path):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "load_json_document": __import__("persistence").load_json_document,
+            "normalize_scan_metadata_document": __import__("persistence").normalize_scan_metadata_document,
+            "resolve_scan_path": lambda path: tmp_path / "scans" / path,
+            "runtime_store": object(),
+            "scans_dir": tmp_path / "scans",
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+            "logger": app.logger,
+        },
+    )
+
+    response = app.test_client().post("/api/runtime/maintenance/backfill")
+
+    assert response.status_code == 401
+
+
 def test_runtime_history_compare_prefers_runtime_artifact_payloads(monkeypatch):
     monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
     monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
