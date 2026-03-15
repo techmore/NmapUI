@@ -169,12 +169,25 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'SWIFT_TARGET="arm64-apple-macosx13.0"' in build_script
     assert 'elif [[ "$HOST_ARCH" == "x86_64" ]]; then' in build_script
     assert 'SWIFT_TARGET="x86_64-apple-macosx13.0"' in build_script
+    assert 'SYSTEM_APPLICATIONS_DIR="/Applications"' in build_script
+    assert 'USER_APPLICATIONS_DIR="$HOME/Applications"' in build_script
+    assert 'if [[ -n "${NMAPUI_APPLICATIONS_DIR:-}" ]]; then' in build_script
+    assert 'APP_INSTALL_DIR="$NMAPUI_APPLICATIONS_DIR"' in build_script
+    assert 'elif [[ -d "$SYSTEM_APPLICATIONS_DIR" && -w "$SYSTEM_APPLICATIONS_DIR" ]]; then' in build_script
+    assert 'APP_INSTALL_DIR="$SYSTEM_APPLICATIONS_DIR"' in build_script
+    assert 'APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"' in build_script
+    assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"' in build_script
     assert 'echo "Host architecture: $HOST_ARCH"' in build_script
     assert "<string>$APP_VERSION</string>" in build_script
     assert 'echo "Target: $SWIFT_TARGET"' in build_script
+    assert 'echo "Install destination: $INSTALLED_APP_NAME"' in build_script
     assert '  -target "$SWIFT_TARGET" \\' in build_script
+    assert 'mkdir -p "$APP_INSTALL_DIR"' in build_script
+    assert 'rm -rf "$INSTALLED_APP_NAME"' in build_script
+    assert 'ditto "$APP_NAME" "$INSTALLED_APP_NAME"' in build_script
     assert 'if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then' in build_script
     assert 'echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"' in build_script
+    assert 'open "$INSTALLED_APP_NAME"' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
@@ -194,7 +207,11 @@ def test_wrapper_docs_reference_current_local_port():
         source = (ROOT / doc_name).read_text()
         assert "127.0.0.1:9000" in source
         assert "localhost:9999" not in source
-    assert "NMAPUI_SWIFT_TARGET" in (ROOT / "README.md").read_text()
+    readme = (ROOT / "README.md").read_text()
+    assert "NMAPUI_SWIFT_TARGET" in readme
+    assert "/Applications" in readme
+    assert "~/Applications" in readme
+    assert "NMAPUI_APPLICATIONS_DIR" in readme
 
 
 def test_pyinstaller_spec_includes_runtime_assets():

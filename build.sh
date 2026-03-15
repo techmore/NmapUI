@@ -15,6 +15,8 @@ PACKAGING_DIR="$ROOT_DIR/packaging/macos"
 SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"
 BIN="$ROOT_DIR/NmapUIMenuBar"
 APP_NAME="$ROOT_DIR/NmapUIMenuBar.app"
+SYSTEM_APPLICATIONS_DIR="/Applications"
+USER_APPLICATIONS_DIR="$HOME/Applications"
 BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
 BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
 SDK=$(xcrun --show-sdk-path --sdk macosx)
@@ -38,6 +40,16 @@ else
     exit 1
 fi
 
+if [[ -n "${NMAPUI_APPLICATIONS_DIR:-}" ]]; then
+    APP_INSTALL_DIR="$NMAPUI_APPLICATIONS_DIR"
+elif [[ -d "$SYSTEM_APPLICATIONS_DIR" && -w "$SYSTEM_APPLICATIONS_DIR" ]]; then
+    APP_INSTALL_DIR="$SYSTEM_APPLICATIONS_DIR"
+else
+    APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"
+fi
+
+INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"
+
 if [[ ! -f "$SRC" ]]; then
     echo "ERROR: Wrapper source file not found: $SRC"
     exit 1
@@ -54,6 +66,7 @@ echo "Source: $SRC"
 echo "SDK: $SDK"
 echo "Host architecture: $HOST_ARCH"
 echo "Target: $SWIFT_TARGET"
+echo "Install destination: $INSTALLED_APP_NAME"
 
 # Compile the Swift binary using the requested format
 swiftc \
@@ -210,12 +223,18 @@ else
     echo "  Workaround: xattr -d com.apple.quarantine \"$APP_NAME\""
 fi
 
+echo "Installing application bundle..."
+mkdir -p "$APP_INSTALL_DIR"
+rm -rf "$INSTALLED_APP_NAME"
+ditto "$APP_NAME" "$INSTALLED_APP_NAME"
+echo "Installed application bundle: $INSTALLED_APP_NAME"
+
 # Open the application
 if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then
     echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"
 else
     echo "Opening the application..."
-    open "$APP_NAME"
+    open "$INSTALLED_APP_NAME"
 fi
 
 echo "Done! The NmapUI Menu Bar application is now running."
