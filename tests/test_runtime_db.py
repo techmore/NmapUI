@@ -1,4 +1,7 @@
+from contextlib import contextmanager
 from pathlib import Path
+import sqlite3
+import threading
 
 from nmapui.runtime_db import (
     SQLITE_BUSY_TIMEOUT_MS,
@@ -153,3 +156,58 @@ def test_runtime_state_store_configures_sqlite_for_concurrent_usage(tmp_path: Pa
     assert pragmas["busy_timeout"] == SQLITE_BUSY_TIMEOUT_MS
     assert pragmas["foreign_keys"] == 1
     assert pragmas["synchronous"] in (1, "1", "normal")
+
+
+def test_runtime_state_store_retries_transient_locked_writes(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+    original_connect = store.connect
+    attempts = {"count": 0}
+
+    @contextmanager
+    def flaky_connect():
+        with original_connect() as conn:
+            if attempts["count"] == 0:
+                attempts["count"] += 1
+                raise sqlite3.OperationalError("database is locked")
+            attempts["count"] += 1
+            yield conn
+
+    store.connect = flaky_connect
+
+    store.upsert_runtime_snapshot(
+        "network_topology",
+        {"target": "192.168.1.0/24", "total_hops": 4},
+    )
+
+    assert attempts["count"] >= 2
+    assert store.get_runtime_snapshot("network_topology") == {
+        "target": "192.168.1.0/24",
+        "total_hops": 4,
+    }
+
+
+def test_runtime_state_store_handles_concurrent_log_writers(tmp_path: Path):
+    store = create_runtime_state_store(tmp_path / "runtime.sqlite3")
+    errors = []
+
+    def writer(writer_id: int):
+        try:
+            for entry_id in range(25):
+                store.append_log(
+                    category="runtime",
+                    level="INFO",
+                    message=f"writer-{writer_id}-entry-{entry_id}",
+                    payload={"writer": writer_id, "entry": entry_id},
+                )
+        except Exception as exc:  # pragma: no cover - failure path only
+            errors.append(exc)
+
+    threads = [threading.Thread(target=writer, args=(index,)) for index in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    logs = store.get_recent_logs(category="runtime", limit=200)
+    assert len(logs) == 100

@@ -5,11 +5,14 @@ from datetime import datetime, timezone
 import json
 import sqlite3
 from pathlib import Path
+import time
 from typing import Any, Iterator
 
 SQLITE_BUSY_TIMEOUT_MS = 5000
 SQLITE_JOURNAL_MODE = "wal"
 SQLITE_SYNCHRONOUS = "normal"
+SQLITE_WRITE_RETRY_ATTEMPTS = 3
+SQLITE_WRITE_RETRY_DELAY_SECONDS = 0.05
 
 
 def utcnow_iso() -> str:
@@ -147,14 +150,31 @@ class RuntimeStateStore:
             "foreign_keys": int(foreign_keys),
         }
 
+    def _run_write(self, operation):
+        last_error = None
+        for attempt in range(SQLITE_WRITE_RETRY_ATTEMPTS):
+            try:
+                with self.connect() as conn:
+                    return operation(conn)
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() and "busy" not in str(exc).lower():
+                    raise
+                last_error = exc
+                if attempt == SQLITE_WRITE_RETRY_ATTEMPTS - 1:
+                    raise
+                time.sleep(SQLITE_WRITE_RETRY_DELAY_SECONDS * (attempt + 1))
+        if last_error is not None:
+            raise last_error
+
     def initialize(self) -> None:
-        with self.connect() as conn:
+        def operation(conn):
             for statement in SCHEMA_STATEMENTS:
                 conn.execute(statement)
+        self._run_write(operation)
 
     def upsert_runtime_snapshot(self, key: str, payload: dict[str, Any]) -> None:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 """
                 INSERT INTO runtime_snapshots(key, payload_json, updated_at)
@@ -165,6 +185,7 @@ class RuntimeStateStore:
                 """,
                 (key, _json_dumps(payload), now),
             )
+        self._run_write(operation)
 
     def get_runtime_snapshot(self, key: str) -> dict[str, Any] | None:
         with self.connect() as conn:
@@ -186,7 +207,7 @@ class RuntimeStateStore:
         payload: dict[str, Any],
     ) -> None:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 """
                 INSERT INTO jobs(job_id, owner_sid, job_type, status, payload_json, created_at, updated_at)
@@ -200,6 +221,7 @@ class RuntimeStateStore:
                 """,
                 (job_id, owner_sid, job_type, status, _json_dumps(payload), now, now),
             )
+        self._run_write(operation)
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
@@ -273,7 +295,7 @@ class RuntimeStateStore:
         payload: dict[str, Any],
     ) -> None:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 """
                 INSERT INTO report_artifacts(
@@ -302,6 +324,7 @@ class RuntimeStateStore:
                     now,
                 ),
             )
+        self._run_write(operation)
 
     def list_report_artifacts(self, *, customer_id: str | None = None) -> list[dict[str, Any]]:
         query = """
@@ -355,11 +378,12 @@ class RuntimeStateStore:
         }
 
     def delete_report_artifact(self, scan_path: str) -> None:
-        with self.connect() as conn:
+        def operation(conn):
             conn.execute(
                 "DELETE FROM report_artifacts WHERE scan_path = ?",
                 (scan_path,),
             )
+        self._run_write(operation)
 
     def append_log(
         self,
@@ -370,7 +394,7 @@ class RuntimeStateStore:
         payload: dict[str, Any] | None = None,
     ) -> int:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             cursor = conn.execute(
                 """
                 INSERT INTO runtime_logs(category, level, message, payload_json, created_at)
@@ -379,6 +403,7 @@ class RuntimeStateStore:
                 (category, level, message, _json_dumps(payload), now),
             )
             return int(cursor.lastrowid)
+        return self._run_write(operation)
 
     def append_job_event(
         self,
@@ -391,7 +416,7 @@ class RuntimeStateStore:
         max_events: int = 200,
     ) -> int:
         now = utcnow_iso()
-        with self.connect() as conn:
+        def operation(conn):
             cursor = conn.execute(
                 """
                 INSERT INTO job_events(job_id, owner_sid, job_type, event_name, payload_json, created_at)
@@ -413,6 +438,7 @@ class RuntimeStateStore:
                 (job_id, job_id, max_events),
             )
             return int(cursor.lastrowid)
+        return self._run_write(operation)
 
     def list_job_events(
         self,
@@ -482,7 +508,7 @@ class RuntimeStateStore:
     ) -> int:
         now = utcnow_iso()
         timestamp = str(payload.get("timestamp", "") or now)
-        with self.connect() as conn:
+        def operation(conn):
             cursor = conn.execute(
                 """
                 INSERT INTO customer_scan_history(customer_id, timestamp, payload_json, created_at)
@@ -491,6 +517,7 @@ class RuntimeStateStore:
                 (customer_id, timestamp, _json_dumps(payload), now),
             )
             return int(cursor.lastrowid)
+        return self._run_write(operation)
 
     def list_customer_scan_history(
         self,
