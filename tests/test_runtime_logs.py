@@ -111,13 +111,22 @@ def test_runtime_reports_route_returns_persisted_artifacts(monkeypatch):
                     "xml_path": "scan.xml",
                     "payload": {
                         "timestamp": "2026-03-14T12:00:00",
-                        "customer_name": "Acme",
+                        "customer_name": "Auto-detect network...",
+                        "customer_id": "auto-wan-123",
+                        "network_key": {"public_ip": "203.0.113.10"},
                         "status": "completed",
                     },
                     "generated_at": "2026-03-14T12:00:00",
                     "updated_at": "2026-03-14T12:00:00",
                 }
             ]
+
+    class CustomerFingerprinterStub:
+        def get_customer_by_id(self, customer_id):
+            return None
+
+        def match_customer(self, network_key):
+            return ({"id": "cust-1", "name": "Acme HQ"}, 1.0)
 
     app = Flask(__name__)
     app.config["TESTING"] = True
@@ -131,6 +140,7 @@ def test_runtime_reports_route_returns_persisted_artifacts(monkeypatch):
             "get_versions": lambda: {"app": "v1.0.0"},
             "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
             "runtime_store": RuntimeStoreStub(),
+            "customer_fingerprinter": CustomerFingerprinterStub(),
             "settings_state": {},
             "startup_state": {"startup_complete": True},
             "get_auto_scan_thread": lambda: None,
@@ -147,7 +157,10 @@ def test_runtime_reports_route_returns_persisted_artifacts(monkeypatch):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["reports"][0]["path"] == "Acme/2026-03-14/scan_120000_192.168.222.0_24"
+    assert payload["reports"][0]["customer_name"] == "Acme HQ"
+    assert payload["reports"][0]["customer_id"] == "cust-1"
     assert payload["reports"][0]["has_pdf"] is True
+    assert payload["reports"][0]["downloads"]["pdf"].startswith("Nmap_Audit_Acme_HQ_")
 
 
 def test_runtime_report_file_routes_serve_persisted_artifacts(monkeypatch, tmp_path):
@@ -173,10 +186,12 @@ def test_runtime_report_file_routes_serve_persisted_artifacts(monkeypatch, tmp_p
                 "pdf_path": "Acme/2026-03-14/scan_120000_192.168.222.0_24/runtime.pdf",
                 "xml_path": "Acme/2026-03-14/scan_120000_192.168.222.0_24/runtime.xml",
                 "payload": {
-                    "downloads": {
-                        "pdf": "Acme-runtime.pdf",
-                        "xml": "Acme-runtime.xml",
-                    }
+                    "customer_name": "Auto-detect network...",
+                    "customer_id": "auto-wan-123",
+                    "target": "192.168.222.0/24",
+                    "date": "2026-03-14",
+                    "time": "120000",
+                    "network_key": {"public_ip": "203.0.113.10"},
                 },
             }
 
@@ -185,6 +200,14 @@ def test_runtime_report_file_routes_serve_persisted_artifacts(monkeypatch, tmp_p
 
     app = Flask(__name__)
     app.config["TESTING"] = True
+
+    class CustomerFingerprinterStub:
+        def get_customer_by_id(self, customer_id):
+            return None
+
+        def match_customer(self, network_key):
+            return ({"id": "cust-1", "name": "Acme HQ"}, 1.0)
+
     register_core_routes(
         app,
         {
@@ -195,6 +218,7 @@ def test_runtime_report_file_routes_serve_persisted_artifacts(monkeypatch, tmp_p
             "get_versions": lambda: {"app": "v1.0.0"},
             "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
             "runtime_store": RuntimeStoreStub(),
+            "customer_fingerprinter": CustomerFingerprinterStub(),
             "scans_dir": scans_dir,
             "settings_state": {},
             "startup_state": {"startup_complete": True},
@@ -225,9 +249,11 @@ def test_runtime_report_file_routes_serve_persisted_artifacts(monkeypatch, tmp_p
     assert html_response.status_code == 200
     assert b"runtime report" in html_response.data
     assert pdf_response.status_code == 200
-    assert "filename=Acme-runtime.pdf" in pdf_response.headers["Content-Disposition"]
+    assert "filename=" in pdf_response.headers["Content-Disposition"]
+    assert "Acme_HQ" in pdf_response.headers["Content-Disposition"]
     assert xml_response.status_code == 200
-    assert "filename=Acme-runtime.xml" in xml_response.headers["Content-Disposition"]
+    assert "filename=" in xml_response.headers["Content-Disposition"]
+    assert "Acme_HQ" in xml_response.headers["Content-Disposition"]
 
 
 def test_runtime_history_delete_route_removes_scan_and_runtime_artifact(monkeypatch, tmp_path):

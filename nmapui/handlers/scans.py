@@ -4,7 +4,11 @@ import shutil
 
 from flask import jsonify, make_response, request, send_file
 from nmapui.auth import require_auth
-from nmapui.reporting import _resolve_artifact_file_path, refresh_persisted_diff_summaries
+from nmapui.reporting import (
+    _resolve_artifact_file_path,
+    build_artifact_downloads,
+    refresh_persisted_diff_summaries,
+)
 from nmapui.runtime_history import build_compare_result, build_history_rows
 from persistence import remove_scan_metadata_index_entry
 
@@ -78,6 +82,7 @@ def register_scan_routes(app, deps):
     normalize_scan_metadata_document = deps["normalize_scan_metadata_document"]
     logger = deps["logger"]
     runtime_store = deps.get("runtime_store")
+    customer_fingerprinter = deps.get("customer_fingerprinter")
 
     @app.route("/api/scans")
     @require_auth
@@ -88,6 +93,7 @@ def register_scan_routes(app, deps):
             load_json_document=load_json_document,
             normalize_scan_metadata_document=normalize_scan_metadata_document,
             logger=logger,
+            customer_fingerprinter=customer_fingerprinter,
         )
         return _mark_legacy_scan_route(jsonify({"scans": scans}))
 
@@ -133,14 +139,20 @@ def register_scan_routes(app, deps):
         download_name = "Nmap_Audit_Report.pdf"
         artifact_payload = dict(artifact.get("payload", {}) or {}) if artifact else None
         if artifact_payload:
-            download_name = artifact_payload.get("downloads", {}).get("pdf", download_name)
+            download_name = build_artifact_downloads(
+                artifact_payload,
+                customer_fingerprinter=customer_fingerprinter,
+            ).get("pdf", download_name)
         metadata_path = scan_dir / "metadata.json"
         if metadata_path.exists() and not artifact_payload:
             try:
                 meta = normalize_scan_metadata_document(
                     load_json_document(metadata_path, {})
                 )
-                download_name = meta.get("downloads", {}).get("pdf", download_name)
+                download_name = build_artifact_downloads(
+                    meta,
+                    customer_fingerprinter=customer_fingerprinter,
+                ).get("pdf", download_name)
             except Exception as exc:
                 logger.error("Error generating download name: %s", exc)
 
@@ -169,14 +181,20 @@ def register_scan_routes(app, deps):
         download_name = "Nmap_Raw_Data.xml"
         artifact_payload = dict(artifact.get("payload", {}) or {}) if artifact else None
         if artifact_payload:
-            download_name = artifact_payload.get("downloads", {}).get("xml", download_name)
+            download_name = build_artifact_downloads(
+                artifact_payload,
+                customer_fingerprinter=customer_fingerprinter,
+            ).get("xml", download_name)
         metadata_path = scan_dir / "metadata.json"
         if metadata_path.exists() and not artifact_payload:
             try:
                 meta = normalize_scan_metadata_document(
                     load_json_document(metadata_path, {})
                 )
-                download_name = meta.get("downloads", {}).get("xml", download_name)
+                download_name = build_artifact_downloads(
+                    meta,
+                    customer_fingerprinter=customer_fingerprinter,
+                ).get("xml", download_name)
             except Exception as exc:
                 logger.error("Error generating download name: %s", exc)
 

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from flask import after_this_request, jsonify, render_template, request, send_file
 from nmapui.auth import require_auth
 from nmapui.handlers.scans import delete_scan_artifacts
-from nmapui.reporting import _resolve_artifact_file_path
+from nmapui.reporting import _resolve_artifact_file_path, build_artifact_downloads
 from nmapui.runtime_history import (
     backfill_runtime_history_artifacts,
     build_compare_result,
@@ -55,6 +55,7 @@ def register_core_routes(app, deps):
     startup_state = deps["startup_state"]
     get_auto_scan_thread = deps["get_auto_scan_thread"]
     upload_report_artifacts_to_google_drive = deps.get("upload_report_artifacts_to_google_drive")
+    customer_fingerprinter = deps.get("customer_fingerprinter")
 
     @app.route("/")
     def index():
@@ -191,7 +192,10 @@ def register_core_routes(app, deps):
             return jsonify({"reports": []})
 
         reports = [
-            normalize_runtime_report_row(artifact)
+            normalize_runtime_report_row(
+                artifact,
+                customer_fingerprinter=customer_fingerprinter,
+            )
             for artifact in runtime_store.list_report_artifacts()
         ]
         return jsonify({"reports": reports})
@@ -213,9 +217,10 @@ def register_core_routes(app, deps):
         artifact = _get_runtime_artifact(runtime_store, scan_path)
         download_name = "Nmap_Audit_Report.pdf"
         if artifact is not None:
-            download_name = (
-                dict(artifact.get("payload", {}) or {}).get("downloads", {}).get("pdf", download_name)
-            )
+            download_name = build_artifact_downloads(
+                dict(artifact.get("payload", {}) or {}),
+                customer_fingerprinter=customer_fingerprinter,
+            ).get("pdf", download_name)
         return _send_runtime_artifact(
             runtime_store=runtime_store,
             scans_dir=deps.get("scans_dir"),
@@ -232,9 +237,10 @@ def register_core_routes(app, deps):
         artifact = _get_runtime_artifact(runtime_store, scan_path)
         download_name = "Nmap_Raw_Data.xml"
         if artifact is not None:
-            download_name = (
-                dict(artifact.get("payload", {}) or {}).get("downloads", {}).get("xml", download_name)
-            )
+            download_name = build_artifact_downloads(
+                dict(artifact.get("payload", {}) or {}),
+                customer_fingerprinter=customer_fingerprinter,
+            ).get("xml", download_name)
         return _send_runtime_artifact(
             runtime_store=runtime_store,
             scans_dir=deps.get("scans_dir"),
@@ -289,6 +295,7 @@ def register_core_routes(app, deps):
             load_json_document=deps.get("load_json_document"),
             normalize_scan_metadata_document=deps.get("normalize_scan_metadata_document"),
             logger=deps.get("logger"),
+            customer_fingerprinter=customer_fingerprinter,
         )
         return jsonify({"history": history})
 

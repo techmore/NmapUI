@@ -91,6 +91,7 @@ def register_app_handlers(
             normalize_scan_metadata_document=normalize_scan_metadata_document,
             logger=logger,
             runtime_store=runtime_store,
+            customer_fingerprinter=customer_fingerprinter,
         ),
         history_handler_deps=build_history_handler_deps(
             get_most_recent_scan_xml=get_most_recent_scan_xml,
@@ -141,6 +142,7 @@ def register_app_handlers(
             startup_state=startup_state,
             get_auto_scan_thread=get_auto_scan_thread,
             upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
+            customer_fingerprinter=customer_fingerprinter,
         ),
         customer_handler_deps=build_customer_handler_deps(
             get_customer_fingerprinter=get_customer_fingerprinter,

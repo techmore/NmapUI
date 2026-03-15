@@ -3,6 +3,7 @@ let reportsTabLoaded = false;
 let historyTabLoaded = false;
 let currentAppTab = 'dashboard';
 let historyCompareBasePath = null;
+let reportsCustomerFilter = 'all';
 
 function updateReportsBadge(scans) {
     const badge = document.getElementById('reports-badge');
@@ -25,6 +26,40 @@ function updateReportsBadge(scans) {
     }
 
     badge.classList.add('hidden');
+}
+
+function renderReportsCustomerFilters(scans) {
+    const container = document.getElementById('reports-customer-filters');
+    if (!container) {
+        return;
+    }
+
+    const customerNames = Array.from(
+        new Set(
+            (scans || [])
+                .map((scan) => String(scan?.customer_name || '').trim())
+                .filter(Boolean)
+        )
+    ).sort((left, right) => left.localeCompare(right));
+
+    container.replaceChildren();
+
+    const filters = ['all', ...customerNames];
+    filters.forEach((filterValue) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'action-button action-button-secondary action-button-compact';
+        const active = reportsCustomerFilter === filterValue;
+        button.classList.toggle('action-button-primary', active);
+        button.classList.toggle('text-olive-700', !active);
+        button.classList.toggle('hover:bg-olive-100', !active);
+        button.textContent = filterValue === 'all' ? 'All Customers' : filterValue;
+        button.addEventListener('click', () => {
+            reportsCustomerFilter = filterValue;
+            renderReportsTab(scans);
+        });
+        container.appendChild(button);
+    });
 }
 
 function ensureTabPanelsAreSiblings() {
@@ -357,15 +392,19 @@ function renderReportsTab(scans) {
     }
 
     updateReportsBadge(scans);
+    renderReportsCustomerFilters(scans);
+    const filteredScans = reportsCustomerFilter === 'all'
+        ? scans
+        : scans.filter((scan) => scan.customer_name === reportsCustomerFilter);
     list.replaceChildren();
 
-    if (!scans.length) {
+    if (!filteredScans.length) {
         setTabStatus('reports-tab-status', 'No completed reports found yet.');
         return;
     }
 
     setTabStatus('reports-tab-status', '');
-    scans.forEach((scan) => {
+    filteredScans.forEach((scan) => {
         list.appendChild(createHistoryCard(scan));
     });
 }

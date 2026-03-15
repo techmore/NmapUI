@@ -305,7 +305,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert 'saved_last_scan_target = runtime_store.get_runtime_snapshot("last_scan_target")' in runtime_services_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
     assert "def persist_report_artifact(" in (ROOT / "nmapui" / "reporting.py").read_text()
-    assert "def normalize_runtime_report_row(artifact):" in runtime_history_source
+    assert "def normalize_runtime_report_row(artifact, *, customer_fingerprinter=None):" in runtime_history_source
     assert "def build_history_rows(" in runtime_history_source
     assert "def build_compare_result(" in runtime_history_source
     assert "def _backfill_runtime_artifact(" in runtime_history_source
@@ -321,6 +321,8 @@ def test_runtime_routes_include_database_export():
     assert '@app.route("/api/runtime/export")' in routes_source
     assert 'download_name=_build_runtime_db_download_name()' in routes_source
     assert 'mimetype="application/x-sqlite3"' in routes_source
+    assert 'customer_fingerprinter = deps.get("customer_fingerprinter")' in routes_source
+    assert 'customer_fingerprinter=customer_fingerprinter' in routes_source
 
 
 def test_runtime_backfill_admin_script_exists():
@@ -447,11 +449,12 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     assert 'stored_path=artifact.get("html_path") if artifact else None,' in scans_source
     assert 'stored_path=artifact.get("pdf_path") if artifact else None,' in scans_source
     assert 'stored_path=artifact.get("xml_path") if artifact else None,' in scans_source
-    assert 'artifact_payload.get("downloads", {}).get("pdf", download_name)' in scans_source
-    assert 'artifact_payload.get("downloads", {}).get("xml", download_name)' in scans_source
+    assert 'build_artifact_downloads(' in scans_source
+    assert 'customer_fingerprinter = deps.get("customer_fingerprinter")' in scans_source
+    assert 'build_artifact_downloads(' in scans_source
     assert "runtime_store.delete_report_artifact(path)" in scans_source
     assert "def delete_scan_artifacts(" in scans_source
-    assert "def build_artifact_downloads(metadata):" in reporting_source
+    assert "def build_artifact_downloads(metadata, *, customer_fingerprinter=None):" in reporting_source
     assert '"downloads": build_artifact_downloads(normalized_metadata),' in reporting_source
 
 
@@ -1273,9 +1276,14 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "socket.on('update_status', function (data) {" in audit_log_module
     assert "window.exportVisibleLogs = exportVisibleLogs;" in audit_log_module
     settings_tab_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
     assert "async function exportRuntimeDatabase()" in settings_tab_source
     assert "fetch('/api/runtime/export')" in settings_tab_source
     assert "window.exportRuntimeDatabase = exportRuntimeDatabase;" in settings_tab_source
+    assert "let reportsCustomerFilter = 'all';" in reports_tab_source
+    assert "function renderReportsCustomerFilters(scans)" in reports_tab_source
+    assert "const container = document.getElementById('reports-customer-filters');" in reports_tab_source
+    assert "reportsCustomerFilter = filterValue;" in reports_tab_source
 
 
 def test_google_drive_integration_contract_exists():
@@ -1341,6 +1349,7 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="tab-settings-btn"' in template
     assert 'id="history-tab-panel"' in template
     assert 'id="reports-tab-panel"' in template
+    assert 'id="reports-customer-filters"' in template
     assert 'id="logs-tab-panel"' in template
     assert 'id="settings-tab-panel"' in template
     assert 'id="history-compare-panel"' in template
@@ -1370,6 +1379,8 @@ def test_template_does_not_keep_inline_report_generation_block():
     settings_module_source = (ROOT / "nmapui" / "settings.py").read_text()
     workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
     report_status_source = (ROOT / "static" / "js" / "report_status.js").read_text()
+    runtime_history_source = (ROOT / "nmapui" / "runtime_history.py").read_text()
+    reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
     assert "settings-profile-scan-only-mode" in settings_source
     assert "settings-profile-excluded-targets" in settings_source
     assert "profile.scan_rules?.scan_only_mode" in settings_source
@@ -1377,6 +1388,10 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert "document.getElementById('reports-badge')" in reports_source
     assert "loadReportsTab(true);" in reports_source
     assert "removeReportProgressCard();" in report_status_source
+    assert "resolve_report_customer_identity(" in runtime_history_source
+    assert "build_artifact_downloads(" in runtime_history_source
+    assert "def resolve_report_customer_identity(metadata, *, customer_fingerprinter=None):" in reporting_source
+    assert "def build_artifact_downloads(metadata, *, customer_fingerprinter=None):" in reporting_source
     assert "def get_effective_scan_rules(*, settings_state, target=\"\", customer_id=\"\")" in settings_module_source
     assert "get_effective_scan_rules(" in workflows_source
 
