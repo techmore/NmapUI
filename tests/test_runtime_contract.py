@@ -242,6 +242,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     app_bindings_source = (ROOT / "nmapui" / "app_bindings.py").read_text()
     reports_tab_source = (ROOT / "static" / "js" / "reports_tab.js").read_text()
     history_modal_source = (ROOT / "static" / "js" / "history_modal.js").read_text()
+    layout_runtime_source = (ROOT / "static" / "js" / "layout_runtime.js").read_text()
     runtime_history_source = (ROOT / "nmapui" / "runtime_history.py").read_text()
 
     assert '@app.route("/api/runtime/logs")' in routes_source
@@ -250,6 +251,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert '@app.route("/api/runtime/reports/<path:scan_path>/pdf")' in routes_source
     assert '@app.route("/api/runtime/reports/<path:scan_path>/xml")' in routes_source
     assert '@app.route("/api/runtime/history")' in routes_source
+    assert '@app.route("/api/runtime/history/<path:scan_path>", methods=["DELETE"])' in routes_source
     assert '@app.route("/api/runtime/maintenance/backfill", methods=["POST"])' in routes_source
     assert '@app.route("/api/runtime/history/compare")' in routes_source
     assert 'runtime_store.get_recent_logs(' in routes_source
@@ -271,6 +273,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert "fetch('/api/runtime/reports')" in reports_tab_source
     assert "fetch('/api/runtime/history')" in reports_tab_source
     assert 'fetch("/api/runtime/history")' in history_modal_source
+    assert "fetch(`/api/runtime/history/${path}`" in layout_runtime_source
     assert "_log_runtime_event(runtime_store, event, data)" in app_bindings_source
     assert 'category="job"' in app_bindings_source
 
@@ -312,6 +315,7 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     assert 'artifact_payload.get("downloads", {}).get("pdf", download_name)' in scans_source
     assert 'artifact_payload.get("downloads", {}).get("xml", download_name)' in scans_source
     assert "runtime_store.delete_report_artifact(path)" in scans_source
+    assert "def delete_scan_artifacts(" in scans_source
     assert "def build_artifact_downloads(metadata):" in reporting_source
     assert '"downloads": build_artifact_downloads(normalized_metadata),' in reporting_source
 

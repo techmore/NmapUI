@@ -29,6 +29,40 @@ def _resolve_runtime_artifact_path(*, runtime_store, scans_dir, scan_path, store
     )
 
 
+def delete_scan_artifacts(
+    *,
+    path,
+    scans_dir,
+    resolve_scan_path,
+    load_json_document,
+    normalize_scan_metadata_document,
+    logger,
+    runtime_store,
+):
+    scan_dir = resolve_scan_path(path)
+    if scan_dir is None or not scan_dir.exists():
+        return {"success": False, "error": "Invalid path"}, 400
+
+    try:
+        metadata_path = scan_dir / "metadata.json"
+        metadata = normalize_scan_metadata_document(
+            load_json_document(metadata_path, {})
+        ) if metadata_path.exists() else {}
+        if runtime_store is not None and hasattr(runtime_store, "delete_report_artifact"):
+            runtime_store.delete_report_artifact(path)
+        shutil.rmtree(scan_dir)
+        remove_scan_metadata_index_entry(scans_dir, scan_dir)
+        refresh_persisted_diff_summaries(
+            scans_dir,
+            customer_id=metadata.get("customer_id"),
+            target=metadata.get("target"),
+            logger=logger,
+        )
+        return {"success": True}, 200
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}, 500
+
+
 def register_scan_routes(app, deps):
     scans_dir = deps["scans_dir"]
     resolve_scan_path = deps["resolve_scan_path"]
@@ -141,28 +175,16 @@ def register_scan_routes(app, deps):
     @app.route("/api/scans/<path:path>", methods=["DELETE"])
     @require_auth
     def delete_scan(path):
-        scan_dir = resolve_scan_path(path)
-        if scan_dir is None or not scan_dir.exists():
-            return jsonify({"success": False, "error": "Invalid path"}), 400
-
-        try:
-            metadata_path = scan_dir / "metadata.json"
-            metadata = normalize_scan_metadata_document(
-                load_json_document(metadata_path, {})
-            ) if metadata_path.exists() else {}
-            if runtime_store is not None and hasattr(runtime_store, "delete_report_artifact"):
-                runtime_store.delete_report_artifact(path)
-            shutil.rmtree(scan_dir)
-            remove_scan_metadata_index_entry(scans_dir, scan_dir)
-            refresh_persisted_diff_summaries(
-                scans_dir,
-                customer_id=metadata.get("customer_id"),
-                target=metadata.get("target"),
-                logger=logger,
-            )
-            return jsonify({"success": True})
-        except Exception as exc:
-            return jsonify({"success": False, "error": str(exc)}), 500
+        payload, status_code = delete_scan_artifacts(
+            path=path,
+            scans_dir=scans_dir,
+            resolve_scan_path=resolve_scan_path,
+            load_json_document=load_json_document,
+            normalize_scan_metadata_document=normalize_scan_metadata_document,
+            logger=logger,
+            runtime_store=runtime_store,
+        )
+        return jsonify(payload), status_code
 
     @app.route("/api/scans/compare")
     @require_auth

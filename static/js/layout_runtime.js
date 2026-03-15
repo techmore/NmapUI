@@ -168,7 +168,7 @@ async function deleteScan(path) {
     }
 
     try {
-        const response = await fetch(`/api/scans/${path}`, {
+        const response = await fetch(`/api/runtime/history/${path}`, {
             method: 'DELETE'
         });
 

@@ -185,6 +185,62 @@ def test_runtime_report_file_routes_serve_persisted_artifacts(monkeypatch, tmp_p
     assert "filename=Acme-runtime.xml" in xml_response.headers["Content-Disposition"]
 
 
+def test_runtime_history_delete_route_removes_scan_and_runtime_artifact(monkeypatch, tmp_path):
+    monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
+    monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")
+    monkeypatch.setenv("NMAPUI_TRUST_LOCAL_UI", "false")
+    monkeypatch.delenv("NMAPUI_ALLOW_DEFAULT_CREDENTIALS", raising=False)
+
+    scans_dir = tmp_path / "scans"
+    scan_dir = scans_dir / "Acme" / "2026-03-14" / "scan_120000_192.168.222.0_24"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    (scan_dir / "metadata.json").write_text(
+        '{"timestamp":"2026-03-14T12:00:00","customer_name":"Acme","customer_id":"cust-1","target":"192.168.222.0/24"}'
+    )
+
+    deleted_paths = []
+
+    class RuntimeStoreStub:
+        def delete_report_artifact(self, scan_path):
+            deleted_paths.append(scan_path)
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    register_core_routes(
+        app,
+        {
+            "build_liveness_payload": lambda **kwargs: {"status": "ok"},
+            "build_readiness_payload": lambda **kwargs: ({"status": "ok"}, 200),
+            "get_app_version": lambda: "v1.0.0",
+            "get_default_interface_cached": lambda: "en0",
+            "get_versions": lambda: {"app": "v1.0.0"},
+            "job_registry": type("JobRegistryStub", (), {"snapshot": lambda self: {"has_active_jobs": False, "active_jobs": []}})(),
+            "runtime_store": RuntimeStoreStub(),
+            "scans_dir": scans_dir,
+            "resolve_scan_path": lambda path: scans_dir / path,
+            "load_json_document": __import__("persistence").load_json_document,
+            "normalize_scan_metadata_document": __import__("persistence").normalize_scan_metadata_document,
+            "settings_state": {},
+            "startup_state": {"startup_complete": True},
+            "get_auto_scan_thread": lambda: None,
+            "logger": app.logger,
+        },
+    )
+
+    client = app.test_client()
+    headers = {"Authorization": "Basic " + base64.b64encode(b"scanner:secret-pass").decode()}
+    response = client.delete(
+        "/api/runtime/history/Acme/2026-03-14/scan_120000_192.168.222.0_24",
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"success": True}
+    assert deleted_paths == ["Acme/2026-03-14/scan_120000_192.168.222.0_24"]
+    assert not scan_dir.exists()
+
+
 def test_runtime_history_route_merges_runtime_reports_with_metadata_fallback(monkeypatch, tmp_path):
     monkeypatch.setenv("NMAPUI_USERNAME", "scanner")
     monkeypatch.setenv("NMAPUI_PASSWORD", "secret-pass")

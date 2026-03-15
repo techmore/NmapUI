@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from flask import jsonify, render_template, request, send_file
 from nmapui.auth import require_auth
+from nmapui.handlers.scans import delete_scan_artifacts
 from nmapui.reporting import _resolve_artifact_file_path
 from nmapui.runtime_history import (
     backfill_runtime_history_artifacts,
@@ -213,6 +214,20 @@ def register_core_routes(app, deps):
             logger=deps.get("logger"),
         )
         return jsonify({"history": history})
+
+    @app.route("/api/runtime/history/<path:scan_path>", methods=["DELETE"])
+    @require_auth
+    def runtime_history_delete(scan_path):
+        payload, status_code = delete_scan_artifacts(
+            path=scan_path,
+            scans_dir=deps.get("scans_dir"),
+            resolve_scan_path=deps.get("resolve_scan_path"),
+            load_json_document=deps.get("load_json_document"),
+            normalize_scan_metadata_document=deps.get("normalize_scan_metadata_document"),
+            logger=deps.get("logger"),
+            runtime_store=runtime_store,
+        )
+        return jsonify(payload), status_code
 
     @app.route("/api/runtime/maintenance/backfill", methods=["POST"])
     @require_auth
