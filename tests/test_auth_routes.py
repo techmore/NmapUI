@@ -290,6 +290,9 @@ def test_scan_routes_allow_authorized_access(tmp_path, monkeypatch):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["scans"][0]["customer_name"] == "Acme"
+    assert response.headers["Deprecation"] == "true"
+    assert response.headers["Sunset"] == "runtime-api-preferred"
+    assert response.headers["Link"] == '</api/runtime/history>; rel="successor-version"'
 
 
 def test_scan_routes_prefer_runtime_report_artifacts(tmp_path, monkeypatch):
@@ -326,8 +329,10 @@ def test_scan_download_routes_prefer_runtime_artifact_download_names(tmp_path, m
     )
 
     assert pdf_response.status_code == 200
+    assert pdf_response.headers["Deprecation"] == "true"
     assert "filename=Nmap_Audit_Acme_10.0.0.0_24_2026-03-14_020000.pdf" in pdf_response.headers["Content-Disposition"]
     assert xml_response.status_code == 200
+    assert xml_response.headers["Deprecation"] == "true"
     assert "filename=Nmap_Raw_Acme_10.0.0.0_24_2026-03-14_020000.xml" in xml_response.headers["Content-Disposition"]
 
 

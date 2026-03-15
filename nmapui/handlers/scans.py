@@ -2,7 +2,7 @@ from datetime import datetime
 import re
 import shutil
 
-from flask import jsonify, request, send_file
+from flask import jsonify, make_response, request, send_file
 from nmapui.auth import require_auth
 from nmapui.reporting import _resolve_artifact_file_path, refresh_persisted_diff_summaries
 from nmapui.runtime_history import build_compare_result, build_history_rows
@@ -63,6 +63,14 @@ def delete_scan_artifacts(
         return {"success": False, "error": str(exc)}, 500
 
 
+def _mark_legacy_scan_route(response):
+    response = make_response(response)
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = "runtime-api-preferred"
+    response.headers["Link"] = '</api/runtime/history>; rel="successor-version"'
+    return response
+
+
 def register_scan_routes(app, deps):
     scans_dir = deps["scans_dir"]
     resolve_scan_path = deps["resolve_scan_path"]
@@ -81,7 +89,7 @@ def register_scan_routes(app, deps):
             normalize_scan_metadata_document=normalize_scan_metadata_document,
             logger=logger,
         )
-        return jsonify({"scans": scans})
+        return _mark_legacy_scan_route(jsonify({"scans": scans}))
 
     @app.route("/api/scans/<path:path>/html")
     @require_auth
@@ -101,15 +109,15 @@ def register_scan_routes(app, deps):
         if not html_path.exists():
             html_path = scan_dir / "scan.html"
         if not html_path.exists():
-            return "Report not found", 404
-        return send_file(html_path)
+            return _mark_legacy_scan_route(("Report not found", 404))
+        return _mark_legacy_scan_route(send_file(html_path))
 
     @app.route("/api/scans/<path:path>/pdf")
     @require_auth
     def get_scan_pdf(path):
         scan_dir = resolve_scan_path(path)
         if scan_dir is None:
-            return "Invalid path", 400
+            return _mark_legacy_scan_route(("Invalid path", 400))
 
         artifact = runtime_store.get_report_artifact(path) if runtime_store is not None and hasattr(runtime_store, "get_report_artifact") else None
         pdf_path = _resolve_runtime_artifact_path(
@@ -120,7 +128,7 @@ def register_scan_routes(app, deps):
             default_name="scan_report.pdf",
         )
         if not pdf_path.exists():
-            return "PDF not found", 404
+            return _mark_legacy_scan_route(("PDF not found", 404))
 
         download_name = "Nmap_Audit_Report.pdf"
         artifact_payload = dict(artifact.get("payload", {}) or {}) if artifact else None
@@ -136,14 +144,16 @@ def register_scan_routes(app, deps):
             except Exception as exc:
                 logger.error("Error generating download name: %s", exc)
 
-        return send_file(pdf_path, as_attachment=True, download_name=download_name)
+        return _mark_legacy_scan_route(
+            send_file(pdf_path, as_attachment=True, download_name=download_name)
+        )
 
     @app.route("/api/scans/<path:path>/xml")
     @require_auth
     def get_scan_xml(path):
         scan_dir = resolve_scan_path(path)
         if scan_dir is None:
-            return "Invalid path", 400
+            return _mark_legacy_scan_route(("Invalid path", 400))
 
         artifact = runtime_store.get_report_artifact(path) if runtime_store is not None and hasattr(runtime_store, "get_report_artifact") else None
         xml_path = _resolve_runtime_artifact_path(
@@ -154,7 +164,7 @@ def register_scan_routes(app, deps):
             default_name="scan.xml",
         )
         if not xml_path.exists():
-            return "XML not found", 404
+            return _mark_legacy_scan_route(("XML not found", 404))
 
         download_name = "Nmap_Raw_Data.xml"
         artifact_payload = dict(artifact.get("payload", {}) or {}) if artifact else None
@@ -170,7 +180,9 @@ def register_scan_routes(app, deps):
             except Exception as exc:
                 logger.error("Error generating download name: %s", exc)
 
-        return send_file(xml_path, as_attachment=True, download_name=download_name)
+        return _mark_legacy_scan_route(
+            send_file(xml_path, as_attachment=True, download_name=download_name)
+        )
 
     @app.route("/api/scans/<path:path>", methods=["DELETE"])
     @require_auth
@@ -184,7 +196,7 @@ def register_scan_routes(app, deps):
             logger=logger,
             runtime_store=runtime_store,
         )
-        return jsonify(payload), status_code
+        return _mark_legacy_scan_route((jsonify(payload), status_code))
 
     @app.route("/api/scans/compare")
     @require_auth
@@ -192,7 +204,9 @@ def register_scan_routes(app, deps):
         base_path = str(request.args.get("base_path", "") or "").strip()
         current_path = str(request.args.get("current_path", "") or "").strip()
         if not base_path or not current_path:
-            return jsonify({"success": False, "error": "Both base_path and current_path are required"}), 400
+            return _mark_legacy_scan_route(
+                (jsonify({"success": False, "error": "Both base_path and current_path are required"}), 400)
+            )
 
         payload, error, status_code = build_compare_result(
             runtime_store=runtime_store,
@@ -203,5 +217,5 @@ def register_scan_routes(app, deps):
             current_path=current_path,
         )
         if payload is None:
-            return jsonify({"success": False, "error": error}), status_code
-        return jsonify({"success": True, **payload})
+            return _mark_legacy_scan_route((jsonify({"success": False, "error": error}), status_code))
+        return _mark_legacy_scan_route(jsonify({"success": True, **payload}))

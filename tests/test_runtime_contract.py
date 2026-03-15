@@ -312,6 +312,10 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     assert "build_compare_result(" in scans_source
     assert "def _load_runtime_artifact_payload(runtime_store, path):" in scans_source
     assert "def _resolve_runtime_artifact_path(*, runtime_store, scans_dir, scan_path, stored_path, default_name):" in scans_source
+    assert "def _mark_legacy_scan_route(response):" in scans_source
+    assert 'response.headers["Deprecation"] = "true"' in scans_source
+    assert 'response.headers["Sunset"] = "runtime-api-preferred"' in scans_source
+    assert 'response.headers["Link"] = \'</api/runtime/history>; rel="successor-version"\'' in scans_source
     assert 'stored_path=artifact.get("html_path") if artifact else None,' in scans_source
     assert 'stored_path=artifact.get("pdf_path") if artifact else None,' in scans_source
     assert 'stored_path=artifact.get("xml_path") if artifact else None,' in scans_source
