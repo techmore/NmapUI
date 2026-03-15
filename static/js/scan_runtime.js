@@ -246,3 +246,4 @@ function initializeScanRuntime(socket) {
 
 window.getClientJobs = getClientJobs;
 window.initializeScanRuntime = initializeScanRuntime;
+window.syncScanJobVisualState = syncScanJobVisualState;

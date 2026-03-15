@@ -99,6 +99,14 @@ function syncReportJobVisualState(job) {
         return;
     }
 
+    if (
+        typeof window.syncScanJobVisualState === 'function'
+        && reportGetClientJobs().scan.status !== 'running'
+        && reportGetClientJobs().scan.status !== 'cancelling'
+    ) {
+        window.syncScanJobVisualState({ status: 'completed' });
+    }
+
     reportActionPending = true;
     setReportButtonsPulsing(true, chunked);
     startReportTimer(job?.started_at || null);
@@ -125,7 +133,12 @@ function syncReportVisualStateFromFeedback(message) {
         inferredReportMode = 'chunked';
     }
 
-    if (reportGetClientJobs().report.status === 'running') {
+    if (
+        reportGetClientJobs().report.status === 'running'
+        || reportGetClientJobs().report.status === 'cancelling'
+        || reportGetClientJobs().scan.status === 'running'
+        || reportGetClientJobs().scan.status === 'cancelling'
+    ) {
         return;
     }
 
