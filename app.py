@@ -135,6 +135,7 @@ idle_state_manager = IdleStateManager(
 # Global customer fingerprinter
 customer_fingerprinter = CustomerFingerprinter()
 runtime_store = create_runtime_state_store(RUNTIME_DB_FILE)
+customer_fingerprinter.set_runtime_store(runtime_store)
 backfill_runtime_history_artifacts(
     runtime_store=runtime_store,
     scans_dir=SCANS_DIR,

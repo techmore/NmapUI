@@ -64,3 +64,36 @@ def test_generated_customer_is_reused_and_enriched_for_repeat_detection(tmp_path
     assert reused["id"] == first["id"]
     assert "203.0.113.10" in reused["networks"]["public_ips"]
     assert "9.9.9.9" in reused["networks"]["exit_ips"]
+
+
+def test_get_scan_history_prefers_runtime_store(tmp_path):
+    fingerprinter = build_fingerprinter(tmp_path)
+
+    class RuntimeStoreStub:
+        def list_report_artifacts(self, customer_id=None):
+            return [
+                {
+                    "scan_path": "Acme/2026-03-14/scan_120000_target",
+                    "customer_id": "cust-1",
+                    "target": "192.168.1.0/24",
+                    "html_path": "scan_web.html",
+                    "pdf_path": "scan_report.pdf",
+                    "xml_path": "scan.xml",
+                    "payload": {
+                        "timestamp": "2026-03-14T12:00:00",
+                        "customer_id": "cust-1",
+                        "customer_name": "Acme",
+                        "status": "completed",
+                    },
+                }
+            ]
+
+    fingerprinter.set_runtime_store(RuntimeStoreStub())
+
+    history = fingerprinter.get_scan_history(customer_id="cust-1", limit=10)
+
+    assert len(history) == 1
+    assert history[0]["customer_name"] == "Acme"
+    assert history[0]["scan_path"] == "Acme/2026-03-14/scan_120000_target"
+    assert history[0]["has_pdf"] is True
+    assert history[0]["source"] == "runtime_store"

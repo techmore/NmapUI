@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 
 
 class CustomerFingerprinter:
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, runtime_store=None):
         self.config_path = config_path or (BASE_DIR / "config" / "customers.yaml")
         self.config = None
         self.customers = []
@@ -31,6 +31,7 @@ class CustomerFingerprinter:
         self.traceroutes_path = BASE_DIR / "data" / "customer_traceroutes.json"
         self.customer_traceroutes = {}
         self.last_match_method = "unknown"
+        self.runtime_store = runtime_store
         self.store = CustomerFingerprintStore(
             config_path=self.config_path,
             traceroutes_path=self.traceroutes_path,
@@ -40,6 +41,9 @@ class CustomerFingerprinter:
         self.matcher = CustomerFingerprintMatcher(logger=logger)
         self.load_config()
         self.load_traceroute_history()
+
+    def set_runtime_store(self, runtime_store) -> None:
+        self.runtime_store = runtime_store
 
     def load_config(self):
         try:
@@ -304,6 +308,10 @@ class CustomerFingerprinter:
     def get_scan_history(
         self, customer_id: Optional[str] = None, limit: int = 50
     ) -> List[Dict]:
+        runtime_history = self._get_runtime_scan_history(customer_id=customer_id, limit=limit)
+        if runtime_history:
+            return runtime_history
+
         indexing_config = (self.config or {}).get("indexing", {})
         storage_path = indexing_config.get("storage_path", "data/scan_history.json")
 
@@ -315,3 +323,50 @@ class CustomerFingerprinter:
             customer_id=customer_id,
             limit=limit,
         )
+
+    def _get_runtime_scan_history(
+        self,
+        *,
+        customer_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict]:
+        if self.runtime_store is None or not hasattr(self.runtime_store, "list_report_artifacts"):
+            return []
+
+        try:
+            artifacts = self.runtime_store.list_report_artifacts(customer_id=customer_id)
+        except Exception as exc:
+            logger.error(f"Error loading runtime scan history: {exc}")
+            return []
+
+        history = []
+        for artifact in artifacts:
+            payload = dict(artifact.get("payload", {}) or {})
+            artifact_customer_id = str(
+                payload.get("customer_id")
+                or artifact.get("customer_id")
+                or payload.get("customer_info", {}).get("id", "")
+                or ""
+            )
+            if customer_id and artifact_customer_id != customer_id:
+                continue
+
+            history.append(
+                {
+                    **payload,
+                    "customer_id": artifact_customer_id,
+                    "customer_name": payload.get(
+                        "customer_name",
+                        payload.get("customer", artifact_customer_id or "Unknown"),
+                    ),
+                    "target": payload.get("target", artifact.get("target")),
+                    "scan_path": artifact.get("scan_path", ""),
+                    "has_html": bool(artifact.get("html_path")),
+                    "has_pdf": bool(artifact.get("pdf_path")),
+                    "has_xml": bool(artifact.get("xml_path")),
+                    "source": "runtime_store",
+                }
+            )
+
+        history.sort(key=lambda item: str(item.get("timestamp", "") or ""), reverse=True)
+        return history[:limit]

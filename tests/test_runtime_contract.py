@@ -478,6 +478,10 @@ def test_customer_fingerprinter_uses_extracted_store_services():
     assert "self.store = CustomerFingerprintStore(" in fingerprinter_source
     assert "self.scan_history_store = ScanHistoryStore(" in fingerprinter_source
     assert "self.matcher = CustomerFingerprintMatcher(" in fingerprinter_source
+    assert "self.runtime_store = runtime_store" in fingerprinter_source
+    assert "def set_runtime_store(self, runtime_store) -> None:" in fingerprinter_source
+    assert "runtime_history = self._get_runtime_scan_history(customer_id=customer_id, limit=limit)" in fingerprinter_source
+    assert 'self.runtime_store.list_report_artifacts(customer_id=customer_id)' in fingerprinter_source
     assert "matched_customer, confidence = self.matcher.match_customer(" in fingerprinter_source
     assert "self.last_match_method = self.matcher.last_match_method" in fingerprinter_source
     assert "class CustomerFingerprintStore:" in store_source

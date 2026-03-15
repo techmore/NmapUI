@@ -209,3 +209,60 @@ def test_customer_handlers_reject_unauthorized_socket_client(monkeypatch):
         for event in received
     )
     assert not any(event["name"] == "customers_list" for event in received)
+
+
+def test_get_network_statistics_prefers_runtime_store_history(monkeypatch):
+    configure_auth(monkeypatch)
+    logger = Flask(__name__).logger
+    customer_fingerprinter = type(
+        "FingerprinterStub",
+        (),
+        {
+            "customers": [],
+            "unknown_customer": {"id": "unknown", "name": "Unknown Network"},
+            "customer_traceroutes": {},
+            "get_scan_history": lambda self, customer_id=None, limit=50: [
+                {
+                    "timestamp": "2026-03-14T12:00:00",
+                    "customer_id": "cust-1",
+                    "customer_name": "Acme",
+                    "status": "completed",
+                    "source": "runtime_store",
+                },
+                {
+                    "timestamp": "2026-03-14T11:00:00",
+                    "customer_id": "cust-1",
+                    "customer_name": "Acme",
+                    "status": "completed",
+                    "source": "runtime_store",
+                },
+            ],
+        },
+    )()
+
+    app, socketio = build_customer_app(
+        {
+            "get_customer_fingerprinter": lambda: customer_fingerprinter,
+            "network_key": {},
+            "get_current_customer": lambda: {"id": "cust-1", "name": "Acme", "confidence": 1.0},
+            "set_current_customer": lambda value: None,
+            "merge_customer_metadata": lambda customer, saved_customer: customer,
+            "save_current_assignment": lambda: None,
+            "save_customers_config": lambda: None,
+            "normalize_scan_metadata_document": lambda value: value,
+            "load_json_document": lambda path, default: default,
+            "save_json_document": lambda path, value: None,
+            "logger": logger,
+        },
+    )
+
+    client = socketio.test_client(app, headers=basic_auth_header())
+    client.emit("get_network_statistics")
+    received = client.get_received()
+
+    stats_event = next(event for event in received if event["name"] == "network_statistics")
+    payload = stats_event["args"][0]
+    assert payload["total_scans"] == 2
+    assert payload["unique_customers"] == 1
+    assert payload["most_common_customer"]["id"] == "cust-1"
+    assert payload["most_common_customer"]["name"] == "Acme"
