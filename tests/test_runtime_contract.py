@@ -1282,7 +1282,12 @@ def test_frontend_modules_do_not_require_duplicate_globals_or_missing_init_deps(
     assert "fetch('/api/runtime/export')" in settings_tab_source
     assert "window.exportRuntimeDatabase = exportRuntimeDatabase;" in settings_tab_source
     assert "let reportsCustomerFilter = 'all';" in reports_tab_source
+    assert "let historyViewMode = 'current';" in reports_tab_source
     assert "function renderReportsCustomerFilters(scans)" in reports_tab_source
+    assert "function getCurrentHistoryContext()" in reports_tab_source
+    assert "function filterScansToCurrentContext(scans)" in reports_tab_source
+    assert "function renderHistoryContextPanel(scans)" in reports_tab_source
+    assert "function buildTimelineLabels(scans, latestPath)" in reports_tab_source
     assert "const container = document.getElementById('reports-customer-filters');" in reports_tab_source
     assert "reportsCustomerFilter = filterValue;" in reports_tab_source
     assert "let customersTabLoaded = false;" in customer_ui_source
@@ -1355,6 +1360,9 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert 'id="tab-logs-btn"' in template
     assert 'id="tab-settings-btn"' in template
     assert 'id="history-tab-panel"' in template
+    assert 'id="history-focus-current-btn"' in template
+    assert 'id="history-focus-all-btn"' in template
+    assert 'id="history-context-panel"' in template
     assert 'id="reports-tab-panel"' in template
     assert 'id="reports-customer-filters"' in template
     assert 'id="customers-tab-panel"' in template
@@ -1397,6 +1405,9 @@ def test_template_does_not_keep_inline_report_generation_block():
     assert "document.getElementById('reports-badge')" in reports_source
     assert "loadReportsTab(true);" in reports_source
     assert "document.getElementById('tab-customers-btn')?.addEventListener('click', () => switchAppTab('customers'));" in reports_source
+    assert "document.getElementById('history-focus-current-btn')?.addEventListener('click'" in reports_source
+    assert "document.getElementById('history-focus-all-btn')?.addEventListener('click'" in reports_source
+    assert "Showing ${visibleScans.length} scan(s) for the current network context." in reports_source
     assert "loadCustomersTab()" in reports_source
     assert "id=\"cust-public-ip\"" in template
     assert "socket.on('customer_updated'" in customer_ui_source

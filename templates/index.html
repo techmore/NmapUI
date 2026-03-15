@@ -586,11 +586,20 @@
                 <h2 class="text-3xl font-display italic text-olive-950">History</h2>
                 <p class="mt-1 text-sm text-olive-600">Review prior scans, compare selected scan pairs, and reopen historical artifacts.</p>
             </div>
-            <button id="refresh-history-tab-btn" class="action-button action-button-primary action-button-compact" aria-label="Refresh scan history">
-                Refresh History
-            </button>
+            <div class="flex flex-wrap gap-2">
+                <button id="history-focus-current-btn" class="action-button action-button-primary action-button-compact" aria-label="Focus history on the current network context">
+                    Current Context
+                </button>
+                <button id="history-focus-all-btn" class="action-button action-button-secondary action-button-compact" aria-label="Show all history">
+                    All History
+                </button>
+                <button id="refresh-history-tab-btn" class="action-button action-button-primary action-button-compact" aria-label="Refresh scan history">
+                    Refresh History
+                </button>
+            </div>
         </div>
         <div id="history-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div id="history-context-panel" class="mt-4 hidden rounded-2xl border border-olive-200 bg-white p-5 shadow-sm"></div>
         <div id="history-compare-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
         <div id="history-compare-panel" class="mt-4 hidden rounded-2xl border border-olive-200 bg-olive-50 p-5">
             <h3 class="text-xl font-display italic text-olive-950">Scan Comparison</h3>
