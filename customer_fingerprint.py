@@ -9,7 +9,11 @@ from pathlib import Path
 import yaml
 
 from customer_fingerprint_matcher import CustomerFingerprintMatcher
-from customer_fingerprint_store import CustomerFingerprintStore, ScanHistoryStore
+from customer_fingerprint_store import (
+    CustomerFingerprintStore,
+    ScanHistoryStore,
+    backfill_runtime_customer_scan_history,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +48,15 @@ class CustomerFingerprinter:
 
     def set_runtime_store(self, runtime_store) -> None:
         self.runtime_store = runtime_store
+
+    def backfill_runtime_scan_history(self) -> int:
+        indexing_config = (self.config or {}).get("indexing", {})
+        storage_path = indexing_config.get("storage_path", "data/scan_history.json")
+        return backfill_runtime_customer_scan_history(
+            runtime_store=self.runtime_store,
+            scan_history_path=storage_path,
+            logger=logger,
+        )
 
     def load_config(self):
         try:

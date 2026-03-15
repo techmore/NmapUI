@@ -223,6 +223,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert "def _backfill_runtime_artifact(" in runtime_history_source
     assert "def backfill_runtime_history_artifacts(" in runtime_history_source
     assert "backfill_runtime_history_artifacts(" in app_source
+    assert "customer_fingerprinter.backfill_runtime_scan_history()" in app_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
 
 
@@ -232,6 +233,8 @@ def test_runtime_backfill_admin_script_exists():
 
     assert "def main():" in script_source
     assert "backfill_runtime_history_artifacts(" in script_source
+    assert "backfill_runtime_customer_scan_history(" in script_source
+    assert "--scan-history-path" in script_source
     assert "create_runtime_state_store(" in script_source
     assert "scripts/backfill_runtime_store.py" in readme_source
 
@@ -473,13 +476,17 @@ def test_customer_fingerprinter_uses_extracted_store_services():
     store_source = (ROOT / "customer_fingerprint_store.py").read_text()
     matcher_source = (ROOT / "customer_fingerprint_matcher.py").read_text()
 
-    assert "from customer_fingerprint_store import CustomerFingerprintStore, ScanHistoryStore" in fingerprinter_source
+    assert "from customer_fingerprint_store import (" in fingerprinter_source
+    assert "CustomerFingerprintStore," in fingerprinter_source
+    assert "ScanHistoryStore," in fingerprinter_source
+    assert "backfill_runtime_customer_scan_history," in fingerprinter_source
     assert "from customer_fingerprint_matcher import CustomerFingerprintMatcher" in fingerprinter_source
     assert "self.store = CustomerFingerprintStore(" in fingerprinter_source
     assert "self.scan_history_store = ScanHistoryStore(" in fingerprinter_source
     assert "self.matcher = CustomerFingerprintMatcher(" in fingerprinter_source
     assert "self.runtime_store = runtime_store" in fingerprinter_source
     assert "def set_runtime_store(self, runtime_store) -> None:" in fingerprinter_source
+    assert "def backfill_runtime_scan_history(self) -> int:" in fingerprinter_source
     assert "runtime_history = self._get_runtime_scan_history(customer_id=customer_id, limit=limit)" in fingerprinter_source
     assert 'self.runtime_store.append_customer_scan_history(' in fingerprinter_source
     assert 'self.runtime_store.list_customer_scan_history(' in fingerprinter_source

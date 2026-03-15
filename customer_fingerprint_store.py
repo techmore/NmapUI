@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -81,6 +82,51 @@ class ScanHistoryStore:
         except Exception as exc:
             self.logger.error("Error loading scan history: %s", exc)
             return []
+
+
+def _customer_scan_history_key(entry: dict[str, Any]) -> str:
+    return json.dumps(entry, sort_keys=True)
+
+
+def backfill_runtime_customer_scan_history(
+    *,
+    runtime_store,
+    scan_history_path: str | Path,
+    logger=None,
+) -> int:
+    logger = logger or logging.getLogger(__name__)
+    path = Path(scan_history_path)
+    if (
+        runtime_store is None
+        or not hasattr(runtime_store, "append_customer_scan_history")
+        or not hasattr(runtime_store, "list_customer_scan_history")
+        or not path.exists()
+    ):
+        return 0
+
+    document = normalize_scan_history_document(
+        load_json_document(path, {"entries": []})
+    )
+    existing_entries = runtime_store.list_customer_scan_history(limit=100000)
+    existing_keys = {
+        _customer_scan_history_key(dict(row.get("payload", {}) or {}))
+        for row in existing_entries
+    }
+
+    backfilled = 0
+    for entry in document["entries"]:
+        entry_key = _customer_scan_history_key(entry)
+        if entry_key in existing_keys:
+            continue
+        runtime_store.append_customer_scan_history(
+            customer_id=entry.get("customer_id"),
+            payload=entry,
+        )
+        existing_keys.add(entry_key)
+        backfilled += 1
+
+    logger.info("Backfilled %s customer scan history entrie(s)", backfilled)
+    return backfilled
 
 
 class CustomerFingerprintStore:

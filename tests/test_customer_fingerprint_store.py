@@ -2,7 +2,11 @@ from pathlib import Path
 
 import yaml
 
-from customer_fingerprint_store import CustomerFingerprintStore, ScanHistoryStore
+from customer_fingerprint_store import (
+    CustomerFingerprintStore,
+    ScanHistoryStore,
+    backfill_runtime_customer_scan_history,
+)
 
 
 def test_customer_fingerprint_store_round_trips_config_and_traceroutes(tmp_path):
@@ -82,3 +86,39 @@ def test_scan_history_store_appends_trims_and_filters_entries(tmp_path):
     assert [entry["timestamp"] for entry in filtered_entries] == [
         "2026-03-14T12:10:00",
     ]
+
+
+def test_backfill_runtime_customer_scan_history_imports_legacy_entries(tmp_path):
+    storage_path = tmp_path / "scan_history.json"
+    storage_path.write_text(
+        """
+{
+  "entries": [
+    {
+      "timestamp": "2026-03-14T12:10:00",
+      "customer_id": "cust-1",
+      "customer_name": "Customer One"
+    }
+  ]
+}
+        """.strip()
+    )
+
+    calls = []
+
+    class RuntimeStoreStub:
+        def list_customer_scan_history(self, limit=100000):
+            return []
+
+        def append_customer_scan_history(self, *, customer_id, payload):
+            calls.append((customer_id, payload))
+            return 1
+
+    backfilled = backfill_runtime_customer_scan_history(
+        runtime_store=RuntimeStoreStub(),
+        scan_history_path=storage_path,
+    )
+
+    assert backfilled == 1
+    assert calls[0][0] == "cust-1"
+    assert calls[0][1]["customer_name"] == "Customer One"
