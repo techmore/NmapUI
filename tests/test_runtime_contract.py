@@ -176,7 +176,9 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'elif [[ -d "$SYSTEM_APPLICATIONS_DIR" && -w "$SYSTEM_APPLICATIONS_DIR" ]]; then' in build_script
     assert 'APP_INSTALL_DIR="$SYSTEM_APPLICATIONS_DIR"' in build_script
     assert 'APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"' in build_script
-    assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"' in build_script
+    assert 'BIN="$ROOT_DIR/NmapUI"' in build_script
+    assert 'APP_NAME="$ROOT_DIR/NmapUI.app"' in build_script
+    assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUI.app"' in build_script
     assert 'INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"' in build_script
     assert 'if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then' in build_script
     assert 'if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then' in build_script
@@ -184,6 +186,8 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'MIGRATION_SOURCE_DB="$INSTALLED_RUNTIME_DB"' in build_script
     assert 'echo "Host architecture: $HOST_ARCH"' in build_script
     assert "<string>$APP_VERSION</string>" in build_script
+    assert "<string>NmapUI</string>" in build_script
+    assert "<string>com.techmore.nmapui</string>" in build_script
     assert 'echo "Target: $SWIFT_TARGET"' in build_script
     assert 'echo "Install destination: $INSTALLED_APP_NAME"' in build_script
     assert 'echo "Database migration enabled"' in build_script
@@ -198,11 +202,13 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then' in build_script
     assert 'echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"' in build_script
     assert 'open "$INSTALLED_APP_NAME"' in build_script
+    assert 'pkill -f "NmapUI.app" 2>/dev/null || true' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
     assert 'PLAYWRIGHT_BROWSERS_PATH="$BUNDLE_PLAYWRIGHT_BROWSERS" python -m playwright install chromium' in build_script
     assert 'export PLAYWRIGHT_BROWSERS_PATH="$(pwd)/playwright-browsers"' in build_script
+    assert 'chmod +x "$APP_NAME/Contents/MacOS/NmapUI"' in build_script
     assert "VULNERS_RUNTIME_FILES=(" in build_script
     assert "nmap-vulners/vulners.nse" in build_script
     assert "nmap-vulners/http-vulners-regex.nse" in build_script

@@ -179,7 +179,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func uninstallApp(_ sender: Any?) {
         let alert = NSAlert()
         alert.messageText = "Uninstall NmapUI"
-        alert.informativeText = "Quit the app and move NmapUIMenuBar.app to the Trash to uninstall."
+        alert.informativeText = "Quit the app and move NmapUI.app to the Trash to uninstall."
         alert.addButton(withTitle: "OK")
         alert.alertStyle = .informational
         alert.runModal()
