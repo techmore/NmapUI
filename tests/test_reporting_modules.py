@@ -159,6 +159,8 @@ def test_save_scan_metadata_persists_report_artifact_record(tmp_path):
     assert runtime_calls[0]["target"] == "192.168.1.0/24"
     assert runtime_calls[0]["html_path"].endswith("scan_web.html")
     assert runtime_calls[0]["pdf_path"].endswith("scan_report.pdf")
+    assert runtime_calls[0]["payload"]["downloads"]["pdf"].endswith(".pdf")
+    assert runtime_calls[0]["payload"]["downloads"]["xml"].endswith(".xml")
 
 
 def test_save_scan_metadata_persists_asset_snapshot_and_diff_summary_to_report_artifact(tmp_path):

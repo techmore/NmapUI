@@ -98,11 +98,22 @@ def build_scan_app_with_runtime_artifacts(tmp_path):
                         "target": "10.0.0.0/24",
                         "status": "completed",
                         "completed_successfully": True,
+                        "downloads": {
+                            "pdf": "Nmap_Audit_Acme_10.0.0.0_24_2026-03-14_020000.pdf",
+                            "xml": "Nmap_Raw_Acme_10.0.0.0_24_2026-03-14_020000.xml",
+                        },
                     },
                     "generated_at": "2026-03-14T02:00:00",
                     "updated_at": "2026-03-14T02:00:00",
                 }
             ]
+
+        def get_report_artifact(self, scan_path):
+            artifacts = self.list_report_artifacts()
+            for artifact in artifacts:
+                if artifact["scan_path"] == scan_path:
+                    return artifact
+            return None
 
     register_scan_routes(
         app,
@@ -289,6 +300,30 @@ def test_scan_routes_prefer_runtime_report_artifacts(tmp_path, monkeypatch):
     assert payload["scans"][0]["has_html"] is True
     assert payload["scans"][0]["has_pdf"] is True
     assert payload["scans"][0]["has_xml"] is True
+
+
+def test_scan_download_routes_prefer_runtime_artifact_download_names(tmp_path, monkeypatch):
+    configure_auth(monkeypatch)
+    app = build_scan_app_with_runtime_artifacts(tmp_path)
+    client = app.test_client()
+    scan_dir = tmp_path / "scans" / "Acme" / "2026-03-14" / "scan_020000_target"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    (scan_dir / "scan_report.pdf").write_bytes(b"%PDF-1.4")
+    (scan_dir / "scan.xml").write_text("<nmaprun></nmaprun>")
+
+    pdf_response = client.get(
+        "/api/scans/Acme/2026-03-14/scan_020000_target/pdf",
+        headers=basic_auth_header(),
+    )
+    xml_response = client.get(
+        "/api/scans/Acme/2026-03-14/scan_020000_target/xml",
+        headers=basic_auth_header(),
+    )
+
+    assert pdf_response.status_code == 200
+    assert "filename=Nmap_Audit_Acme_10.0.0.0_24_2026-03-14_020000.pdf" in pdf_response.headers["Content-Disposition"]
+    assert xml_response.status_code == 200
+    assert "filename=Nmap_Raw_Acme_10.0.0.0_24_2026-03-14_020000.xml" in xml_response.headers["Content-Disposition"]
 
 
 def test_scan_routes_reject_spoofed_local_host_without_loopback_peer(tmp_path, monkeypatch):

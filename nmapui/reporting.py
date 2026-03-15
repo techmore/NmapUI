@@ -689,6 +689,19 @@ def save_scan_metadata(
     )
 
 
+def build_artifact_downloads(metadata):
+    customer = str(metadata.get("customer_name", "Unknown") or "Unknown").split(" (")[0]
+    target = str(metadata.get("target", "scan") or "scan").replace("/", "_")
+    date_str = str(metadata.get("date", datetime.now().strftime("%Y-%m-%d")) or datetime.now().strftime("%Y-%m-%d"))
+    time_str = str(metadata.get("time", "000000") or "000000").replace(":", "")
+    safe_cust = re.sub(r"[^\w\-]", "_", customer)
+    safe_target = re.sub(r"[^\w\.]", "_", target)
+    return {
+        "pdf": f"Nmap_Audit_{safe_cust}_{safe_target}_{date_str}_{time_str}.pdf",
+        "xml": f"Nmap_Raw_{safe_cust}_{safe_target}_{date_str}_{time_str}.xml",
+    }
+
+
 def persist_report_artifact(
     *,
     scan_dir,
@@ -727,6 +740,7 @@ def persist_report_artifact(
         payload={
             **normalized_metadata,
             "asset_snapshot": asset_snapshot,
+            "downloads": build_artifact_downloads(normalized_metadata),
         },
     )
 

@@ -9,6 +9,15 @@ from nmapui.runtime_history import build_compare_result, build_history_rows
 from persistence import remove_scan_metadata_index_entry
 
 
+def _load_runtime_artifact_payload(runtime_store, path):
+    if runtime_store is None or not hasattr(runtime_store, "get_report_artifact"):
+        return None
+    artifact = runtime_store.get_report_artifact(path)
+    if artifact is None:
+        return None
+    return dict(artifact.get("payload", {}) or {})
+
+
 def register_scan_routes(app, deps):
     scans_dir = deps["scans_dir"]
     resolve_scan_path = deps["resolve_scan_path"]
@@ -55,21 +64,16 @@ def register_scan_routes(app, deps):
             return "PDF not found", 404
 
         download_name = "Nmap_Audit_Report.pdf"
+        artifact_payload = _load_runtime_artifact_payload(runtime_store, path)
+        if artifact_payload:
+            download_name = artifact_payload.get("downloads", {}).get("pdf", download_name)
         metadata_path = scan_dir / "metadata.json"
-        if metadata_path.exists():
+        if metadata_path.exists() and not artifact_payload:
             try:
                 meta = normalize_scan_metadata_document(
                     load_json_document(metadata_path, {})
                 )
-                customer = meta.get("customer_name", "Unknown").split(" (")[0]
-                target = meta.get("target", "scan").replace("/", "_")
-                date_str = meta.get("date", datetime.now().strftime("%Y-%m-%d"))
-                time_str = meta.get("time", "000000").replace(":", "")
-                safe_cust = re.sub(r"[^\w\-]", "_", customer)
-                safe_target = re.sub(r"[^\w\.]", "_", target)
-                download_name = (
-                    f"Nmap_Audit_{safe_cust}_{safe_target}_{date_str}_{time_str}.pdf"
-                )
+                download_name = meta.get("downloads", {}).get("pdf", download_name)
             except Exception as exc:
                 logger.error("Error generating download name: %s", exc)
 
@@ -87,21 +91,16 @@ def register_scan_routes(app, deps):
             return "XML not found", 404
 
         download_name = "Nmap_Raw_Data.xml"
+        artifact_payload = _load_runtime_artifact_payload(runtime_store, path)
+        if artifact_payload:
+            download_name = artifact_payload.get("downloads", {}).get("xml", download_name)
         metadata_path = scan_dir / "metadata.json"
-        if metadata_path.exists():
+        if metadata_path.exists() and not artifact_payload:
             try:
                 meta = normalize_scan_metadata_document(
                     load_json_document(metadata_path, {})
                 )
-                customer = meta.get("customer_name", "Unknown").split(" (")[0]
-                target = meta.get("target", "scan").replace("/", "_")
-                date_str = meta.get("date", datetime.now().strftime("%Y-%m-%d"))
-                time_str = meta.get("time", "000000").replace(":", "")
-                safe_cust = re.sub(r"[^\w\-]", "_", customer)
-                safe_target = re.sub(r"[^\w\.]", "_", target)
-                download_name = (
-                    f"Nmap_Raw_{safe_cust}_{safe_target}_{date_str}_{time_str}.xml"
-                )
+                download_name = meta.get("downloads", {}).get("xml", download_name)
             except Exception as exc:
                 logger.error("Error generating download name: %s", exc)
 

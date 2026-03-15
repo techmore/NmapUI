@@ -294,13 +294,19 @@ def test_scan_routes_accept_runtime_store_artifact_reads():
     scans_source = (ROOT / "nmapui" / "handlers" / "scans.py").read_text()
     app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
     app_handler_registration_source = (ROOT / "nmapui" / "app_handler_registration.py").read_text()
+    reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
 
     assert "runtime_store = deps.get(\"runtime_store\")" in scans_source
     assert "build_history_rows(" in scans_source
     assert "build_scan_routes_deps(" in app_handler_registration_source
     assert '"runtime_store": runtime_store' in app_composition_source
     assert "build_compare_result(" in scans_source
+    assert "def _load_runtime_artifact_payload(runtime_store, path):" in scans_source
+    assert 'artifact_payload.get("downloads", {}).get("pdf", download_name)' in scans_source
+    assert 'artifact_payload.get("downloads", {}).get("xml", download_name)' in scans_source
     assert "runtime_store.delete_report_artifact(path)" in scans_source
+    assert "def build_artifact_downloads(metadata):" in reporting_source
+    assert '"downloads": build_artifact_downloads(normalized_metadata),' in reporting_source
 
 
 def test_history_and_saved_pdf_lookups_accept_runtime_store():
