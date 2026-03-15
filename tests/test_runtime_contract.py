@@ -293,6 +293,18 @@ def test_history_and_saved_pdf_lookups_accept_runtime_store():
     assert "runtime_store=runtime_store," in history_source
 
 
+def test_failed_scan_persistence_accepts_runtime_store():
+    reporting_source = (ROOT / "nmapui" / "reporting.py").read_text()
+    workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
+
+    assert "def mark_scan_failure(" in reporting_source
+    assert "runtime_store=None" in reporting_source
+    assert "persist_report_artifact(" in reporting_source
+    assert "runtime_store=runtime_store," in reporting_source
+    assert "stage=\"scan_chunks\",\n                            runtime_store=context.runtime_store," in workflows_source
+    assert "stage=\"exception\",\n                runtime_store=context.runtime_store," in workflows_source
+
+
 def test_pdf_stylesheet_stays_print_first_while_web_stylesheet_stays_interactive():
     pdf_stylesheet = (ROOT / "nmap-pdf-olive-legacy.xsl").read_text()
     web_stylesheet = (ROOT / "nmap-modern.xsl").read_text()

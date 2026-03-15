@@ -469,6 +469,7 @@ def generate_report_task(context, sid, data):
                             current_customer=current_customer,
                             error="Report generation cancelled",
                             stage="scan_chunks",
+                            runtime_store=context.runtime_store,
                         )
                     job_registry.complete(sid, "report", status="cancelled")
                     emit_job_status(sid, "report")
@@ -482,6 +483,7 @@ def generate_report_task(context, sid, data):
                         current_customer=current_customer,
                         error=f"Nmap scan failed on chunk {i + 1}",
                         stage="scan_chunks",
+                        runtime_store=context.runtime_store,
                     )
                 job_registry.complete(
                     sid,
@@ -680,6 +682,7 @@ def generate_report_task(context, sid, data):
                 current_customer=current_customer,
                 error=str(exc),
                 stage="exception",
+                runtime_store=context.runtime_store,
             )
         logger.exception("Report generation failed")
         logger.error("=" * 60)

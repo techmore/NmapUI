@@ -739,6 +739,7 @@ def mark_scan_failure(
     current_customer,
     error,
     stage,
+    runtime_store=None,
 ):
     """Persist failure metadata for an incomplete scan directory."""
     metadata_path = scan_dir / "metadata.json"
@@ -777,6 +778,18 @@ def mark_scan_failure(
         scans_dir,
         customer_id=metadata.get("customer_id"),
         target=metadata.get("target"),
+    )
+    persist_report_artifact(
+        scan_dir=scan_dir,
+        customer_id=metadata.get("customer_id", ""),
+        target=metadata.get("target", ""),
+        files={
+            "xml": scan_dir / "scan.xml",
+            "web_html": scan_dir / "scan_web.html",
+            "pdf": scan_dir / "scan_report.pdf",
+        },
+        metadata=metadata,
+        runtime_store=runtime_store,
     )
 
 

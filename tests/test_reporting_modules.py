@@ -385,6 +385,11 @@ def test_get_most_recent_scan_xml_prefers_runtime_artifacts(tmp_path):
 def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
     scan_dir = tmp_path / "data" / "scans" / "Acme" / "2026-03-14" / "scan_010000_target"
     scan_dir.mkdir(parents=True)
+    runtime_calls = []
+
+    class RuntimeStoreStub:
+        def upsert_report_artifact(self, **kwargs):
+            runtime_calls.append(kwargs)
 
     mark_scan_failure(
         scan_dir,
@@ -393,6 +398,7 @@ def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
         current_customer={"id": "cust-123", "name": "Acme Customer"},
         error="Nmap scan failed on chunk 2",
         stage="scan_chunks",
+        runtime_store=RuntimeStoreStub(),
     )
 
     metadata = json.loads((scan_dir / "metadata.json").read_text())
@@ -405,6 +411,12 @@ def test_mark_scan_failure_persists_incomplete_artifact_metadata(tmp_path):
     assert metadata["customer_id"] == "cust-123"
     assert index["entries"][0]["metadata"]["status"] == "failed"
     assert index["entries"][0]["metadata"]["failure_stage"] == "scan_chunks"
+    assert runtime_calls
+    assert runtime_calls[0]["customer_id"] == "cust-123"
+    assert runtime_calls[0]["payload"]["status"] == "failed"
+    assert runtime_calls[0]["payload"]["failure_stage"] == "scan_chunks"
+    assert runtime_calls[0]["payload"]["failure_error"] == "Nmap scan failed on chunk 2"
+    assert runtime_calls[0]["payload"]["completed_successfully"] is False
 
 
 def test_merge_nmap_xml_files_combines_hosts_and_updates_runstats(tmp_path):
