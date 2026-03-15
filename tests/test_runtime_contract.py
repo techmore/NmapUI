@@ -220,6 +220,7 @@ def test_runtime_sqlite_store_schema_exists():
     assert "def normalize_runtime_report_row(artifact):" in runtime_history_source
     assert "def build_history_rows(" in runtime_history_source
     assert "def build_compare_result(" in runtime_history_source
+    assert "def _backfill_runtime_artifact(" in runtime_history_source
     assert '"runtime_store": runtime_store' in (ROOT / "nmapui" / "app_composition.py").read_text()
 
 
@@ -240,6 +241,7 @@ def test_runtime_logs_route_and_ui_hydration_exist():
     assert "build_history_rows(" in routes_source
     assert "build_compare_result(" in routes_source
     assert "iter_scan_metadata_documents(" in runtime_history_source
+    assert "runtime_store.upsert_report_artifact(" in runtime_history_source
     assert "function loadPersistedLogs()" in audit_log_source
     assert "fetch('/api/runtime/logs?limit=200')" in audit_log_source
     assert "function refreshPersistedLogs()" in audit_log_source

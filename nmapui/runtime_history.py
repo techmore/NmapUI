@@ -25,6 +25,30 @@ def normalize_runtime_report_row(artifact):
     }
 
 
+def _backfill_runtime_artifact(runtime_store, scan_path, metadata, metadata_path):
+    if runtime_store is None:
+        return
+    if not hasattr(runtime_store, "get_report_artifact") or not hasattr(
+        runtime_store, "upsert_report_artifact"
+    ):
+        return
+    if runtime_store.get_report_artifact(scan_path) is not None:
+        return
+
+    scan_dir = metadata_path.parent
+    runtime_store.upsert_report_artifact(
+        scan_path=scan_path,
+        customer_id=str(metadata.get("customer_id", "") or ""),
+        target=str(metadata.get("target", "") or ""),
+        html_path="scan_web.html"
+        if (scan_dir / "scan_web.html").exists()
+        else ("scan.html" if (scan_dir / "scan.html").exists() else ""),
+        pdf_path="scan_report.pdf" if (scan_dir / "scan_report.pdf").exists() else "",
+        xml_path="scan.xml" if (scan_dir / "scan.xml").exists() else "",
+        payload=dict(metadata),
+    )
+
+
 def build_history_rows(
     *,
     runtime_store,
@@ -68,6 +92,7 @@ def build_history_rows(
             ).exists()
             data["has_pdf"] = (metadata_path.parent / "scan_report.pdf").exists()
             data["has_xml"] = (metadata_path.parent / "scan.xml").exists()
+            _backfill_runtime_artifact(runtime_store, rel_path, data, metadata_path)
             history.append(data)
 
     history.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
