@@ -200,6 +200,8 @@ cat > "$APP_NAME/Contents/Info.plist" << EOF
     <string>NmapUI Menu Bar</string>
     <key>CFBundleDisplayName</key>
     <string>NmapUI Menu Bar</string>
+    <key>CFBundleExecutable</key>
+    <string>NmapUIMenuBar</string>
     <key>CFBundleIdentifier</key>
     <string>com.techmore.nmapuimenubar</string>
     <key>CFBundleVersion</key>
