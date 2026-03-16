@@ -249,8 +249,21 @@ fi
 
 echo "Installing application bundle..."
 mkdir -p "$APP_INSTALL_DIR"
-rm -rf "$INSTALLED_APP_NAME"
-rm -rf "$APP_INSTALL_DIR/NmapUIMenuBar.app"
+if [[ -e "$INSTALLED_APP_NAME" ]]; then
+    rm -rf "$INSTALLED_APP_NAME" || {
+        echo "ERROR: Unable to remove existing app at $INSTALLED_APP_NAME" >&2
+        echo "The app may be running or owned by another user (often due to sudo installs)." >&2
+        echo "Try: sudo rm -rf \"$INSTALLED_APP_NAME\" and rerun ./build.sh" >&2
+        exit 1
+    }
+fi
+if [[ -e "$APP_INSTALL_DIR/NmapUIMenuBar.app" ]]; then
+    rm -rf "$APP_INSTALL_DIR/NmapUIMenuBar.app" || {
+        echo "ERROR: Unable to remove legacy app at $APP_INSTALL_DIR/NmapUIMenuBar.app" >&2
+        echo "Try: sudo rm -rf \"$APP_INSTALL_DIR/NmapUIMenuBar.app\" and rerun ./build.sh" >&2
+        exit 1
+    }
+fi
 ditto "$APP_NAME" "$INSTALLED_APP_NAME"
 
 if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
