@@ -355,6 +355,9 @@ async function loadSettingsTab(force = false) {
 async function connectGoogleDrive() {
     setSyncStatus('settings-google-drive-status', 'Starting Google Drive authorization...');
     try {
+        if (!googleDriveAuthStatus?.configured) {
+            throw new Error('Google Drive credentials are not bundled in this build. Please contact support.');
+        }
         const response = await fetch('/api/settings/google-drive/auth-url');
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.auth_url) {
@@ -362,9 +365,22 @@ async function connectGoogleDrive() {
         }
         window.open(payload.auth_url, '_blank', 'noopener,noreferrer');
         setSyncStatus('settings-google-drive-status', 'Google Drive authorization opened in a new tab.');
+        waitForGoogleDriveConnection();
     } catch (error) {
         console.error('Error starting Google Drive auth:', error);
         setSyncStatus('settings-google-drive-status', error.message || 'Failed to start Google Drive auth.', true);
+    }
+}
+
+async function waitForGoogleDriveConnection(timeoutMs = 90000, intervalMs = 4000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        await loadGoogleDriveAuthStatus();
+        if (googleDriveAuthStatus?.connected) {
+            await loadSettingsTab(true);
+            return;
+        }
     }
 }
 
@@ -380,6 +396,31 @@ async function disconnectGoogleDriveAccount() {
     } catch (error) {
         console.error('Error disconnecting Google Drive:', error);
         setSyncStatus('settings-google-drive-status', error.message || 'Failed to disconnect Google Drive.', true);
+    }
+}
+
+async function uploadGoogleDriveCredentials(file) {
+    if (!file) {
+        return;
+    }
+    setSyncStatus('settings-google-drive-status', 'Uploading Google Drive credentials...');
+    try {
+        const text = await file.text();
+        const credentials = JSON.parse(text);
+        const response = await fetch('/api/settings/google-drive/credentials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credentials }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Failed to save credentials (${response.status})`);
+        }
+        setSyncStatus('settings-google-drive-status', payload.status || 'Credentials saved', false);
+        await loadGoogleDriveAuthStatus();
+    } catch (error) {
+        console.error('Error uploading Google Drive credentials:', error);
+        setSyncStatus('settings-google-drive-status', error.message || 'Failed to upload credentials.', true);
     }
 }
 

@@ -214,12 +214,22 @@ def register_core_routes(app, deps):
     @app.route("/api/runtime/reports/<path:scan_path>/html")
     @require_auth
     def runtime_report_html(scan_path):
+        artifact = _get_runtime_artifact(runtime_store, scan_path)
+        download_name = None
+        if artifact is not None:
+            download_name = build_artifact_downloads(
+                dict(artifact.get("payload", {}) or {}),
+                customer_fingerprinter=customer_fingerprinter,
+            ).get("html")
+        wants_download = request.args.get("download") == "1"
         return _send_runtime_artifact(
             runtime_store=runtime_store,
             scans_dir=deps.get("scans_dir"),
             scan_path=scan_path,
             artifact_key="html_path",
             default_name="scan_web.html",
+            download_name=download_name if wants_download else None,
+            as_attachment=wants_download,
         )
 
     @app.route("/api/runtime/reports/<path:scan_path>/pdf")

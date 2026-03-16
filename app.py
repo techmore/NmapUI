@@ -1,4 +1,5 @@
 from flask import Flask, request
+from datetime import datetime
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import sys
@@ -75,8 +76,11 @@ from nmapui.paths import (
 from nmapui.google_drive import (
     build_google_drive_auth_status,
     build_google_drive_auth_url,
+    create_google_drive_folder,
     disconnect_google_drive,
     exchange_google_drive_auth_code,
+    ensure_google_drive_reports_folder,
+    save_google_drive_credentials,
     upload_files_to_google_drive,
 )
 from nmapui.runtime import (
@@ -95,6 +99,7 @@ from nmapui.reporting import (
     extract_scan_statistics,
     find_latest_saved_scan_for_pdf,
     get_most_recent_scan_xml,
+    build_artifact_downloads,
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
     save_scan_metadata,
@@ -295,6 +300,85 @@ traceroute_bindings = build_traceroute_bindings(
 )
 run_traceroute = traceroute_bindings["run_traceroute"]
 
+def _sanitize_drive_component(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
+
+
+def _format_scan_folder_name(metadata: dict, scan_path: str) -> str:
+    timestamp = metadata.get("scan_start_time") or metadata.get("timestamp") or ""
+    scan_time = None
+    if timestamp:
+        normalized = str(timestamp).replace("Z", "+00:00")
+        try:
+            scan_time = datetime.fromisoformat(normalized)
+        except ValueError:
+            scan_time = None
+    if scan_time is None:
+        scan_time = datetime.now()
+    time_label = scan_time.strftime("%Y-%m-%d_%H-%M-%S")
+    target_label = _sanitize_drive_component(str(metadata.get("target") or ""))
+    customer_label = _sanitize_drive_component(str(metadata.get("customer_name") or ""))
+    path_label = _sanitize_drive_component(scan_path)
+    parts = [time_label]
+    if customer_label:
+        parts.append(customer_label)
+    if target_label:
+        parts.append(target_label)
+    if path_label:
+        parts.append(path_label)
+    return "_".join(parts)
+
+
+def _format_scan_basename(metadata: dict, scan_path: str) -> str:
+    return _format_scan_folder_name(metadata, scan_path)
+
+
+def _build_drive_upload_names(file_paths, metadata, scan_path) -> dict[str, str]:
+    base = _format_scan_basename(metadata, scan_path)
+    downloads = build_artifact_downloads(metadata or {}, customer_fingerprinter=customer_fingerprinter)
+    names: dict[str, str] = {}
+    for file_path in file_paths:
+        name = file_path.name
+        if name == "scan_report.pdf":
+            names[str(file_path)] = downloads.get("pdf", f"{base}.pdf")
+        elif name == "scan.xml":
+            names[str(file_path)] = downloads.get("xml", f"{base}.xml")
+        elif name == "scan_web.html":
+            names[str(file_path)] = downloads.get("html", f"{base}.html")
+        elif name == "scan_pdf.html":
+            names[str(file_path)] = f"{base}_pdf.html"
+        elif name == "scan.nmap":
+            names[str(file_path)] = f"{base}.nmap"
+        elif name == "scan.gnmap":
+            names[str(file_path)] = f"{base}.gnmap"
+        else:
+            names[str(file_path)] = f"{base}_{name}"
+    return names
+
+
+def upload_report_artifacts_to_google_drive(*, scan_path, file_paths, metadata, settings_state):
+    base_folder_id = str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip() or None
+    folder_name = _format_scan_folder_name(metadata or {}, scan_path or "")
+    folder_result = create_google_drive_folder(
+        name=folder_name,
+        parent_id=base_folder_id,
+        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+        token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+        requests_module=requests,
+    )
+    if not folder_result.get("success"):
+        return folder_result
+    file_name_map = _build_drive_upload_names(file_paths, metadata or {}, scan_path or "")
+    return upload_files_to_google_drive(
+        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+        token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+        file_paths=file_paths,
+        folder_id=folder_result.get("folder_id", ""),
+        file_name_map=file_name_map,
+        requests_module=requests,
+    )
 
 register_app_handlers(
     app=app,
@@ -341,14 +425,7 @@ register_app_handlers(
     startup_state=startup_state,
     runtime_store=runtime_store,
     get_auto_scan_thread=runtime_bindings["get_auto_scan_thread"],
-    upload_report_artifacts_to_google_drive=lambda *, scan_path, file_paths, metadata, settings_state: upload_files_to_google_drive(
-        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
-        token_path=GOOGLE_DRIVE_TOKEN_FILE,
-        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
-        file_paths=file_paths,
-        folder_id=str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip(),
-        requests_module=requests,
-    ),
+    upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
     get_customer_fingerprinter=lambda: customer_fingerprinter,
     get_current_customer=lambda: get_current_customer_state(request.sid),
     set_current_customer=lambda value: set_current_customer_state(
@@ -394,6 +471,16 @@ register_app_handlers(
         code=code,
         state=state,
         requests_module=requests,
+    ),
+    ensure_google_drive_reports_folder=lambda: ensure_google_drive_reports_folder(
+        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+        token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+        requests_module=requests,
+    ),
+    save_google_drive_credentials=lambda credentials: save_google_drive_credentials(
+        GOOGLE_DRIVE_CREDENTIALS_FILE,
+        credentials,
     ),
     disconnect_google_drive=lambda: disconnect_google_drive(
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
@@ -451,6 +538,7 @@ task_bindings = build_task_bindings(
     current_customer=current_customer,
     extract_scan_statistics=extract_scan_statistics,
     customer_fingerprinter=customer_fingerprinter,
+    upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
     runtime_store=runtime_store,
     find_latest_saved_scan_for_pdf=find_latest_saved_scan_for_pdf,
     load_json_document=load_json_document,

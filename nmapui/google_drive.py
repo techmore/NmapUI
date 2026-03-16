@@ -15,6 +15,27 @@ GOOGLE_DRIVE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_DRIVE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 GOOGLE_DRIVE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink"
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+GOOGLE_DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files"
+GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+def _format_google_drive_error(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return "Unknown error"
+    error = payload.get("error")
+    if isinstance(error, dict):
+        message = error.get("message") or error.get("status") or "Google Drive API error"
+        reasons = []
+        for entry in error.get("errors", []) or []:
+            if isinstance(entry, dict) and entry.get("reason"):
+                reasons.append(entry["reason"])
+        if reasons:
+            unique = ", ".join(sorted(set(reasons)))
+            return f"{message} ({unique})"
+        return message
+    if isinstance(error, str):
+        return error
+    return payload.get("error_description") or payload.get("message") or "Unknown error"
 ENCRYPTED_TOKEN_SCHEMA_VERSION = 1
 
 
@@ -80,6 +101,14 @@ def load_google_drive_credentials(credentials_path: Path) -> dict:
     if "web" in payload:
         payload = payload["web"]
     return payload if isinstance(payload, dict) else {}
+
+
+def save_google_drive_credentials(credentials_path: Path, payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return {"success": False, "error": "Invalid credentials payload"}
+    _save_json_file(credentials_path, payload)
+    _set_owner_only_permissions(credentials_path)
+    return {"success": True, "status": "Google Drive credentials saved"}
 
 
 def load_google_drive_token_state(token_path: Path, key_path: Path | None = None) -> dict:
@@ -316,6 +345,7 @@ def upload_files_to_google_drive(
     key_path: Path | None = None,
     file_paths: list[Path],
     folder_id: str,
+    file_name_map: dict[str, str] | None = None,
     requests_module,
 ) -> dict:
     access_token = ensure_google_drive_access_token(
@@ -326,7 +356,8 @@ def upload_files_to_google_drive(
     )
     uploaded = []
     for file_path in file_paths:
-        metadata = {"name": file_path.name}
+        override_name = (file_name_map or {}).get(str(file_path))
+        metadata = {"name": override_name or file_path.name}
         if folder_id:
             metadata["parents"] = [folder_id]
         with file_path.open("rb") as file_handle:
@@ -354,4 +385,101 @@ def upload_files_to_google_drive(
         "success": True,
         "uploaded": uploaded,
         "status": f"Uploaded {len(uploaded)} file(s) to Google Drive",
+    }
+
+
+def ensure_google_drive_reports_folder(
+    *,
+    credentials_path: Path,
+    token_path: Path,
+    key_path: Path | None = None,
+    requests_module,
+    folder_name: str = "nmapui-reports",
+) -> dict:
+    access_token = ensure_google_drive_access_token(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        key_path=key_path,
+        requests_module=requests_module,
+    )
+    headers = {"Authorization": f"Bearer {access_token}"}
+    query = (
+        "mimeType='application/vnd.google-apps.folder' "
+        f"and name='{folder_name}' and trashed=false"
+    )
+    response = requests_module.get(
+        GOOGLE_DRIVE_FILES_ENDPOINT,
+        headers=headers,
+        params={"q": query, "fields": "files(id,name)"},
+        timeout=10,
+    )
+    payload = response.json()
+    if response.status_code >= 400:
+        error_detail = _format_google_drive_error(payload)
+        return {
+            "success": False,
+            "error": f"Failed to query Drive folder (HTTP {response.status_code}): {error_detail}",
+        }
+
+    files = payload.get("files") or []
+    if files:
+        folder_id = files[0].get("id")
+        return {"success": True, "folder_id": folder_id, "status": "Drive folder ready"}
+
+    create_response = requests_module.post(
+        GOOGLE_DRIVE_FILES_ENDPOINT,
+        headers={**headers, "Content-Type": "application/json"},
+        json={"name": folder_name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME},
+        timeout=10,
+    )
+    create_payload = create_response.json()
+    if create_response.status_code >= 400:
+        error_detail = _format_google_drive_error(create_payload)
+        return {
+            "success": False,
+            "error": f"Failed to create Drive folder (HTTP {create_response.status_code}): {error_detail}",
+        }
+    return {
+        "success": True,
+        "folder_id": create_payload.get("id"),
+        "status": "Drive folder created",
+    }
+
+
+def create_google_drive_folder(
+    *,
+    name: str,
+    parent_id: str | None,
+    credentials_path: Path,
+    token_path: Path,
+    key_path: Path | None = None,
+    requests_module,
+) -> dict:
+    access_token = ensure_google_drive_access_token(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        key_path=key_path,
+        requests_module=requests_module,
+    )
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    payload = {"name": name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME}
+    if parent_id:
+        payload["parents"] = [parent_id]
+    response = requests_module.post(
+        GOOGLE_DRIVE_FILES_ENDPOINT,
+        headers=headers,
+        json=payload,
+        timeout=10,
+    )
+    create_payload = response.json()
+    if response.status_code >= 400:
+        error_detail = _format_google_drive_error(create_payload)
+        return {
+            "success": False,
+            "error": f"Failed to create Drive folder (HTTP {response.status_code}): {error_detail}",
+        }
+    return {
+        "success": True,
+        "folder_id": create_payload.get("id"),
+        "status": "Drive folder created",
     }
