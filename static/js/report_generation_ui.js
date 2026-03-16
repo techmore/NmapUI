@@ -150,7 +150,9 @@ function syncReportVisualStateFromFeedback(message) {
 }
 
 function getReportRequestContext() {
-    const target = document.getElementById('scan-target').value || lastScanTarget;
+    const targetInput = document.getElementById('scan-target');
+    const fallbackCIDR = window.currentCIDR || '';
+    const target = (targetInput?.value || lastScanTarget || fallbackCIDR).trim();
     const customerOption = document.getElementById('current-customer').selectedOptions[0];
     let customerName = 'Unknown';
 

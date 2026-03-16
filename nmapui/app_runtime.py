@@ -1,5 +1,6 @@
 import logging
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from nmapui.auto_scan_runtime import execute_auto_scan as execute_auto_scan_impl
 from nmapui.handlers.auto_scan import start_auto_scan_thread as handler_start_auto_scan_thread
@@ -43,6 +44,17 @@ def start_auto_scan_thread(
     return thread_ref["thread"]
 
 
+def _resolve_log_dir(base_dir: Path) -> Path:
+    preferred = Path.home() / "Library" / "Application Support" / "NmapUI" / "logs"
+    try:
+        preferred.mkdir(parents=True, exist_ok=True)
+        return preferred
+    except OSError:
+        fallback = base_dir / "logs"
+        fallback.mkdir(exist_ok=True)
+        return fallback
+
+
 def configure_root_logging(*, base_dir):
     root_logger = logging.getLogger()
     if getattr(root_logger, "_nmapui_configured", False):
@@ -58,8 +70,7 @@ def configure_root_logging(*, base_dir):
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    log_dir = base_dir / "logs"
-    log_dir.mkdir(exist_ok=True)
+    log_dir = _resolve_log_dir(base_dir)
     file_handler = RotatingFileHandler(
         log_dir / "nmapui.log",
         maxBytes=10 * 1024 * 1024,
