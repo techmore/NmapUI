@@ -84,6 +84,14 @@ def load_google_drive_credentials(credentials_path: Path) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def save_google_drive_credentials(credentials_path: Path, payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return {"success": False, "error": "Invalid credentials payload"}
+    _save_json_file(credentials_path, payload)
+    _set_owner_only_permissions(credentials_path)
+    return {"success": True, "status": "Google Drive credentials saved"}
+
+
 def load_google_drive_token_state(token_path: Path, key_path: Path | None = None) -> dict:
     key_path = key_path or token_path.with_suffix(".key")
     try:

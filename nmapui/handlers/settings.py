@@ -13,6 +13,7 @@ def register_settings_routes(app, deps):
     build_google_drive_auth_url = deps["build_google_drive_auth_url"]
     exchange_google_drive_auth_code = deps["exchange_google_drive_auth_code"]
     ensure_google_drive_reports_folder = deps["ensure_google_drive_reports_folder"]
+    save_google_drive_credentials = deps["save_google_drive_credentials"]
     disconnect_google_drive = deps["disconnect_google_drive"]
 
     @app.route("/api/settings")
@@ -67,6 +68,16 @@ def register_settings_routes(app, deps):
     def google_drive_auth_url_route():
         redirect_uri = request.host_url.rstrip("/") + "/api/settings/google-drive/callback"
         result = build_google_drive_auth_url(redirect_uri=redirect_uri)
+        status_code = 200 if result.get("success") else 400
+        return jsonify(result), status_code
+
+    @app.route("/api/settings/google-drive/credentials", methods=["POST"])
+    @require_auth
+    def google_drive_credentials_route():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict) or "credentials" not in payload:
+            return jsonify({"success": False, "error": "Invalid credentials payload"}), 400
+        result = save_google_drive_credentials(payload.get("credentials"))
         status_code = 200 if result.get("success") else 400
         return jsonify(result), status_code
 

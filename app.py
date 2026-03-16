@@ -77,6 +77,7 @@ from nmapui.google_drive import (
     disconnect_google_drive,
     exchange_google_drive_auth_code,
     ensure_google_drive_reports_folder,
+    save_google_drive_credentials,
     upload_files_to_google_drive,
 )
 from nmapui.runtime import (
@@ -386,6 +387,10 @@ register_app_handlers(
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
         key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         requests_module=requests,
+    ),
+    save_google_drive_credentials=lambda credentials: save_google_drive_credentials(
+        GOOGLE_DRIVE_CREDENTIALS_FILE,
+        credentials,
     ),
     disconnect_google_drive=lambda: disconnect_google_drive(
         token_path=GOOGLE_DRIVE_TOKEN_FILE,

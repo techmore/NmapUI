@@ -336,6 +336,9 @@ async function loadSettingsTab(force = false) {
 async function connectGoogleDrive() {
     setSyncStatus('settings-google-drive-status', 'Starting Google Drive authorization...');
     try {
+        if (!googleDriveAuthStatus?.configured) {
+            throw new Error('Missing Google Drive OAuth credentials. Upload the JSON credentials file first.');
+        }
         const response = await fetch('/api/settings/google-drive/auth-url');
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.auth_url) {
@@ -374,6 +377,31 @@ async function disconnectGoogleDriveAccount() {
     } catch (error) {
         console.error('Error disconnecting Google Drive:', error);
         setSyncStatus('settings-google-drive-status', error.message || 'Failed to disconnect Google Drive.', true);
+    }
+}
+
+async function uploadGoogleDriveCredentials(file) {
+    if (!file) {
+        return;
+    }
+    setSyncStatus('settings-google-drive-status', 'Uploading Google Drive credentials...');
+    try {
+        const text = await file.text();
+        const credentials = JSON.parse(text);
+        const response = await fetch('/api/settings/google-drive/credentials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credentials }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Failed to save credentials (${response.status})`);
+        }
+        setSyncStatus('settings-google-drive-status', payload.status || 'Credentials saved', false);
+        await loadGoogleDriveAuthStatus();
+    } catch (error) {
+        console.error('Error uploading Google Drive credentials:', error);
+        setSyncStatus('settings-google-drive-status', error.message || 'Failed to upload credentials.', true);
     }
 }
 
@@ -615,6 +643,10 @@ function initializeSettingsTab() {
     document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', testGoogleDriveSettings);
     document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', connectGoogleDrive);
     document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', disconnectGoogleDriveAccount);
+    document.getElementById('settings-google-drive-credentials')?.addEventListener('change', (event) => {
+        uploadGoogleDriveCredentials(event.target.files?.[0]);
+        event.target.value = '';
+    });
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', testRemoteSyncSettings);
     document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', runRuntimeBackfill);
     document.getElementById('settings-runtime-retention-btn')?.addEventListener('click', runRuntimeRetention);
