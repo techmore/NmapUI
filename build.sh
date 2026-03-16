@@ -250,6 +250,7 @@ fi
 echo "Installing application bundle..."
 mkdir -p "$APP_INSTALL_DIR"
 rm -rf "$INSTALLED_APP_NAME"
+rm -rf "$APP_INSTALL_DIR/NmapUIMenuBar.app"
 ditto "$APP_NAME" "$INSTALLED_APP_NAME"
 
 if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
