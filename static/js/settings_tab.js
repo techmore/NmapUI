@@ -277,7 +277,10 @@ function fillSettingsForm(state) {
     settingsState = state;
     document.getElementById('settings-scan-only-mode').checked = !!state.scan_rules?.scan_only_mode;
     document.getElementById('settings-excluded-targets').value = (state.scan_rules?.excluded_targets || []).join('\n');
-    document.getElementById('settings-max-scan-minutes').value = state.scan_rules?.max_scan_minutes || 120;
+    const maxScanInput = document.getElementById('settings-max-scan-minutes');
+    if (maxScanInput) {
+        maxScanInput.value = state.scan_rules?.max_scan_minutes || 120;
+    }
     document.getElementById('settings-save-reports-desktop').checked = !!state.reports?.save_to_desktop;
     document.getElementById('settings-profile-scan-only-mode').checked = false;
     document.getElementById('settings-profile-excluded-targets').value = '';
