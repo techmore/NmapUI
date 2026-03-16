@@ -333,10 +333,23 @@ async function loadSettingsTab(force = false) {
     }
 }
 
+let googleDriveConnectAfterCredentials = false;
+
 async function connectGoogleDrive() {
     setSyncStatus('settings-google-drive-status', 'Starting Google Drive authorization...');
     try {
         if (!googleDriveAuthStatus?.configured) {
+            const credentialsInput = document.getElementById('settings-google-drive-credentials');
+            if (credentialsInput) {
+                googleDriveConnectAfterCredentials = true;
+                setSyncStatus(
+                    'settings-google-drive-status',
+                    'Upload your Google Drive OAuth JSON to continue (this will immediately open the Google sign-in window).',
+                    false,
+                );
+                credentialsInput.click();
+                return;
+            }
             throw new Error('Missing Google Drive OAuth credentials. Upload the JSON credentials file first.');
         }
         const response = await fetch('/api/settings/google-drive/auth-url');
@@ -399,6 +412,10 @@ async function uploadGoogleDriveCredentials(file) {
         }
         setSyncStatus('settings-google-drive-status', payload.status || 'Credentials saved', false);
         await loadGoogleDriveAuthStatus();
+        if (googleDriveConnectAfterCredentials) {
+            googleDriveConnectAfterCredentials = false;
+            await connectGoogleDrive();
+        }
     } catch (error) {
         console.error('Error uploading Google Drive credentials:', error);
         setSyncStatus('settings-google-drive-status', error.message || 'Failed to upload credentials.', true);
