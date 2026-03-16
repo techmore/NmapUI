@@ -753,6 +753,7 @@ def build_artifact_downloads(metadata, *, customer_fingerprinter=None):
     safe_cust = re.sub(r"[^\w\-]", "_", customer)
     safe_target = re.sub(r"[^\w\.]", "_", target)
     return {
+        "html": f"Nmap_Report_{safe_cust}_{safe_target}_{date_str}_{time_str}.html",
         "pdf": f"Nmap_Audit_{safe_cust}_{safe_target}_{date_str}_{time_str}.pdf",
         "xml": f"Nmap_Raw_{safe_cust}_{safe_target}_{date_str}_{time_str}.xml",
     }

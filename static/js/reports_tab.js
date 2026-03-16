@@ -273,6 +273,7 @@ function renderHistoryContextPanel(scans) {
     actions.className = 'mt-4 flex flex-wrap gap-2';
     if (latestScan.has_html) {
         actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(latestScan.path, 'html'), 'View HTML Report', true));
+        actions.appendChild(createScanActionLink(`${buildRuntimeReportArtifactUrl(latestScan.path, 'html')}?download=1`, 'Download HTML'));
     }
     if (latestScan.has_pdf) {
         actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(latestScan.path, 'pdf'), 'Download PDF'));
@@ -471,6 +472,7 @@ function createHistoryCard(scan, options = {}) {
 
     if (scan.has_html) {
         actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(scan.path, 'html'), 'View Report', true));
+        actions.appendChild(createScanActionLink(`${buildRuntimeReportArtifactUrl(scan.path, 'html')}?download=1`, 'Download HTML'));
     }
     if (scan.has_pdf) {
         actions.appendChild(createScanActionLink(buildRuntimeReportArtifactUrl(scan.path, 'pdf'), 'Download PDF'));
