@@ -49,7 +49,7 @@ else
     APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"
 fi
 
-INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUIMenuBar.app"
+INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUI.app"
 INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"
 if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
     if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then
