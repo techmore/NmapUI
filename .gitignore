@@ -6,6 +6,7 @@ __pycache__/
 data/scans/
 scans/
 config/customers.yaml
+config/google_drive_credentials.json
 data/*.json
 auto_scan_config.json
 results.xml
