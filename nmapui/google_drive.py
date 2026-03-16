@@ -442,3 +442,42 @@ def ensure_google_drive_reports_folder(
         "folder_id": create_payload.get("id"),
         "status": "Drive folder created",
     }
+
+
+def create_google_drive_folder(
+    *,
+    name: str,
+    parent_id: str | None,
+    credentials_path: Path,
+    token_path: Path,
+    key_path: Path | None = None,
+    requests_module,
+) -> dict:
+    access_token = ensure_google_drive_access_token(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        key_path=key_path,
+        requests_module=requests_module,
+    )
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    payload = {"name": name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME}
+    if parent_id:
+        payload["parents"] = [parent_id]
+    response = requests_module.post(
+        GOOGLE_DRIVE_FILES_ENDPOINT,
+        headers=headers,
+        json=payload,
+        timeout=10,
+    )
+    create_payload = response.json()
+    if response.status_code >= 400:
+        error_detail = _format_google_drive_error(create_payload)
+        return {
+            "success": False,
+            "error": f"Failed to create Drive folder (HTTP {response.status_code}): {error_detail}",
+        }
+    return {
+        "success": True,
+        "folder_id": create_payload.get("id"),
+        "status": "Drive folder created",
+    }

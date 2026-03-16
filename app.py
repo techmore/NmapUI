@@ -1,4 +1,5 @@
 from flask import Flask, request
+from datetime import datetime
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import sys
@@ -74,6 +75,7 @@ from nmapui.paths import (
 from nmapui.google_drive import (
     build_google_drive_auth_status,
     build_google_drive_auth_url,
+    create_google_drive_folder,
     disconnect_google_drive,
     exchange_google_drive_auth_code,
     ensure_google_drive_reports_folder,
@@ -281,14 +283,56 @@ traceroute_bindings = build_traceroute_bindings(
 )
 run_traceroute = traceroute_bindings["run_traceroute"]
 
-upload_report_artifacts_to_google_drive = lambda *, scan_path, file_paths, metadata, settings_state: upload_files_to_google_drive(
-    credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
-    token_path=GOOGLE_DRIVE_TOKEN_FILE,
-    key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
-    file_paths=file_paths,
-    folder_id=str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip(),
-    requests_module=requests,
-)
+def _sanitize_drive_component(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
+
+
+def _format_scan_folder_name(metadata: dict, scan_path: str) -> str:
+    timestamp = metadata.get("scan_start_time") or metadata.get("timestamp") or ""
+    scan_time = None
+    if timestamp:
+        normalized = str(timestamp).replace("Z", "+00:00")
+        try:
+            scan_time = datetime.fromisoformat(normalized)
+        except ValueError:
+            scan_time = None
+    if scan_time is None:
+        scan_time = datetime.now()
+    time_label = scan_time.strftime("%Y-%m-%d_%H-%M-%S")
+    target_label = _sanitize_drive_component(str(metadata.get("target") or ""))
+    customer_label = _sanitize_drive_component(str(metadata.get("customer_name") or ""))
+    path_label = _sanitize_drive_component(scan_path)
+    parts = [time_label]
+    if customer_label:
+        parts.append(customer_label)
+    if target_label:
+        parts.append(target_label)
+    if path_label:
+        parts.append(path_label)
+    return "_".join(parts)
+
+
+def upload_report_artifacts_to_google_drive(*, scan_path, file_paths, metadata, settings_state):
+    base_folder_id = str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip() or None
+    folder_name = _format_scan_folder_name(metadata or {}, scan_path or "")
+    folder_result = create_google_drive_folder(
+        name=folder_name,
+        parent_id=base_folder_id,
+        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+        token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+        requests_module=requests,
+    )
+    if not folder_result.get("success"):
+        return folder_result
+    return upload_files_to_google_drive(
+        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+        token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+        file_paths=file_paths,
+        folder_id=folder_result.get("folder_id", ""),
+        requests_module=requests,
+    )
 
 register_app_handlers(
     app=app,
