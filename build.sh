@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Build script for NmapUI Menu Bar Wrapper
+# Build script for the NmapUI macOS wrapper
 # Builds the Swift application bundle and opens it
 
 # Clean up any existing instances
 echo "Cleaning up any existing instances..."
-pkill -f "NmapUIMenuBar" 2>/dev/null || true
+pkill -f "NmapUI.app" 2>/dev/null || true
 sleep 1  # Give processes time to terminate
 
 # Set variables
@@ -13,8 +13,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
 PACKAGING_DIR="$ROOT_DIR/packaging/macos"
 SRC="$PACKAGING_DIR/NmapUIMenuBarLauncher.swift"
-BIN="$ROOT_DIR/NmapUIMenuBar"
-APP_NAME="$ROOT_DIR/NmapUIMenuBar.app"
+BUILD_DIR="$ROOT_DIR/.build"
+BIN="$BUILD_DIR/NmapUI"
+APP_NAME="$ROOT_DIR/NmapUI.app"
 SYSTEM_APPLICATIONS_DIR="/Applications"
 USER_APPLICATIONS_DIR="$HOME/Applications"
 BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
@@ -64,13 +65,16 @@ if [[ ! -f "$SRC" ]]; then
     exit 1
 fi
 
+# Ensure build output doesn't collide with the nmapui package on case-insensitive filesystems.
+mkdir -p "$BUILD_DIR"
+
 # Run install.sh if .venv doesn't exist yet
 if [[ ! -d "$ROOT_DIR/.venv" && ! -d "$ROOT_DIR/venv" ]]; then
     echo "No virtual environment found — running install.sh first..."
     bash "$ROOT_DIR/install.sh" || { echo "install.sh failed"; exit 1; }
 fi
 
-echo "Building NmapUI Menu Bar Wrapper..."
+echo "Building NmapUI macOS wrapper..."
 echo "Source: $SRC"
 echo "SDK: $SDK"
 echo "Host architecture: $HOST_ARCH"
@@ -80,6 +84,13 @@ echo "Install destination: $INSTALLED_APP_NAME"
 if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
     echo "Database migration enabled"
     echo "Database migration source: $MIGRATION_SOURCE_DB"
+fi
+
+# The Swift compiler outputs a binary at $BIN. If a file or directory exists there
+# (from a previous build or manual artifact), it will cause compilation to fail.
+if [[ -e "$BIN" ]]; then
+    echo "Removing conflicting build output at $BIN"
+    rm -rf "$BIN"
 fi
 
 # Compile the Swift binary using the requested format
@@ -197,13 +208,11 @@ cat > "$APP_NAME/Contents/Info.plist" << EOF
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>NmapUI Menu Bar</string>
+    <string>NmapUI</string>
     <key>CFBundleDisplayName</key>
-    <string>NmapUI Menu Bar</string>
-    <key>CFBundleExecutable</key>
-    <string>NmapUIMenuBar</string>
+    <string>NmapUI</string>
     <key>CFBundleIdentifier</key>
-    <string>com.techmore.nmapuimenubar</string>
+    <string>com.techmore.nmapui</string>
     <key>CFBundleVersion</key>
     <string>$APP_VERSION</string>
     <key>CFBundleShortVersionString</key>
@@ -225,7 +234,7 @@ EOF
 echo "Application bundle created: $APP_NAME"
 
 # Make the binary executable
-chmod +x "$APP_NAME/Contents/MacOS/NmapUIMenuBar"
+chmod +x "$APP_NAME/Contents/MacOS/NmapUI"
 
 # Ad-hoc code sign to satisfy macOS Gatekeeper on locally built bundles.
 # This prevents "cannot be opened because Apple cannot check it for malicious
@@ -251,21 +260,7 @@ fi
 
 echo "Installing application bundle..."
 mkdir -p "$APP_INSTALL_DIR"
-if [[ -e "$INSTALLED_APP_NAME" ]]; then
-    rm -rf "$INSTALLED_APP_NAME" || {
-        echo "ERROR: Unable to remove existing app at $INSTALLED_APP_NAME" >&2
-        echo "The app may be running or owned by another user (often due to sudo installs)." >&2
-        echo "Try: sudo rm -rf \"$INSTALLED_APP_NAME\" and rerun ./build.sh" >&2
-        exit 1
-    }
-fi
-if [[ -e "$APP_INSTALL_DIR/NmapUIMenuBar.app" ]]; then
-    rm -rf "$APP_INSTALL_DIR/NmapUIMenuBar.app" || {
-        echo "ERROR: Unable to remove legacy app at $APP_INSTALL_DIR/NmapUIMenuBar.app" >&2
-        echo "Try: sudo rm -rf \"$APP_INSTALL_DIR/NmapUIMenuBar.app\" and rerun ./build.sh" >&2
-        exit 1
-    }
-fi
+rm -rf "$INSTALLED_APP_NAME"
 ditto "$APP_NAME" "$INSTALLED_APP_NAME"
 
 if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
@@ -285,7 +280,7 @@ else
     open "$INSTALLED_APP_NAME"
 fi
 
-echo "Done! The NmapUI Menu Bar application is now running."
+echo "Done! The NmapUI application is now running."
 echo "Look for the network icon in your menu bar."
-echo "Use the menu to open http://127.0.0.1:9000 or control the bundled app process."
+echo "Use the menu to open the selected local NmapUI URL or control the bundled app process."
 echo "Menu options: Open NmapUI, Start NmapUI, Stop NmapUI, Quit, Uninstall"

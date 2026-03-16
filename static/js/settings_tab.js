@@ -34,6 +34,9 @@ function getSettingsFormState() {
                 .map((value) => value.trim())
                 .filter(Boolean),
         },
+        reports: {
+            save_to_desktop: document.getElementById('settings-save-reports-desktop')?.checked || false,
+        },
         sync: {
             google_drive: {
                 enabled: document.getElementById('settings-google-drive-enabled')?.checked || false,
@@ -46,6 +49,16 @@ function getSettingsFormState() {
                 api_key: document.getElementById('settings-remote-sync-api-key')?.value || '',
                 status: document.getElementById('settings-remote-sync-status')?.textContent || 'Not configured',
             },
+        },
+        auto_monitor: {
+            defaults: {
+                enabled_by_default: document.getElementById('settings-auto-monitor-enabled-by-default')?.checked || false,
+                recurrence: document.getElementById('settings-auto-monitor-recurrence')?.value || 'weekly',
+                day_of_week: document.getElementById('settings-auto-monitor-day')?.value || 'sunday',
+                time: document.getElementById('settings-auto-monitor-time')?.value || '01:00',
+                scan_mode: 'complete_pdf',
+            },
+            rules: settingsState?.auto_monitor?.rules || [],
         },
     };
 }
@@ -95,6 +108,7 @@ function renderRuntimeSummary(summary) {
         ['Profiles', String(summary.target_profiles_count || 0)],
         ['Exclusions', String(summary.excluded_targets_count || 0)],
         ['Scan-only mode', summary.scan_only_mode ? 'Enabled' : 'Disabled'],
+        ['Desktop reports', summary.reports_save_to_desktop ? 'Enabled' : 'Disabled'],
         ['Google Drive', summary.google_drive_enabled ? 'Enabled' : 'Disabled'],
         ['Remote sync', summary.remote_sync_enabled ? 'Enabled' : 'Disabled'],
         ['Reports in DB', String(persistedCounts.report_artifacts || 0)],
@@ -258,6 +272,7 @@ function fillSettingsForm(state) {
     settingsState = state;
     document.getElementById('settings-scan-only-mode').checked = !!state.scan_rules?.scan_only_mode;
     document.getElementById('settings-excluded-targets').value = (state.scan_rules?.excluded_targets || []).join('\n');
+    document.getElementById('settings-save-reports-desktop').checked = !!state.reports?.save_to_desktop;
     document.getElementById('settings-profile-scan-only-mode').checked = false;
     document.getElementById('settings-profile-excluded-targets').value = '';
     document.getElementById('settings-google-drive-enabled').checked = !!state.sync?.google_drive?.enabled;
@@ -267,6 +282,10 @@ function fillSettingsForm(state) {
     document.getElementById('settings-remote-sync-endpoint').value = state.sync?.remote_sync?.endpoint || '';
     document.getElementById('settings-remote-sync-api-key').value = state.sync?.remote_sync?.api_key || '';
     document.getElementById('settings-remote-sync-status').textContent = state.sync?.remote_sync?.status || 'Not configured';
+    document.getElementById('settings-auto-monitor-enabled-by-default').checked = !!state.auto_monitor?.defaults?.enabled_by_default;
+    document.getElementById('settings-auto-monitor-recurrence').value = state.auto_monitor?.defaults?.recurrence || 'weekly';
+    document.getElementById('settings-auto-monitor-day').value = state.auto_monitor?.defaults?.day_of_week || 'sunday';
+    document.getElementById('settings-auto-monitor-time').value = state.auto_monitor?.defaults?.time || '01:00';
     populateProfileCustomerOptions();
     renderTargetProfiles(state.target_profiles || []);
 }
@@ -585,6 +604,16 @@ function addTargetProfile() {
         target_profiles: [],
         scan_rules: { scan_only_mode: false, excluded_targets: [] },
         sync: { google_drive: {}, remote_sync: {} },
+        auto_monitor: {
+            defaults: {
+                enabled_by_default: false,
+                recurrence: 'weekly',
+                day_of_week: 'sunday',
+                time: '01:00',
+                scan_mode: 'complete_pdf',
+            },
+            rules: [],
+        },
     };
 
     settingsState.target_profiles = settingsState.target_profiles || [];

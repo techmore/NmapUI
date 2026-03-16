@@ -67,6 +67,7 @@ def register_app_handlers(
     generate_report_task,
     generate_pdf_from_saved_task,
     save_settings,
+    get_customer_name,
     validate_google_drive_settings,
     validate_remote_sync_settings,
     get_google_drive_auth_status,
@@ -183,6 +184,7 @@ def register_app_handlers(
         settings_routes_deps=build_settings_routes_deps(
             settings_state=settings_state,
             save_settings=save_settings,
+            get_customer_name=get_customer_name,
             validate_google_drive=validate_google_drive_settings,
             validate_remote_sync=validate_remote_sync_settings,
             get_google_drive_auth_status=get_google_drive_auth_status,

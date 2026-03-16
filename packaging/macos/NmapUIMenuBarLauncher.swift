@@ -1,13 +1,23 @@
 import Cocoa
+import Darwin
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    let appURL = URL(string: "http://127.0.0.1:9000")!
-    let runtimeStatusURL = URL(string: "http://127.0.0.1:9000/api/runtime/status")!
+    var runtimePort = 9000
     var statusItem: NSStatusItem!
     var pythonProcess: Process?
     var statusPollTimer: Timer?
     var hadActiveJob = false
     var completedIndicatorUntil: Date?
+    var lockFileURL: URL?
+    var launchedWithPrivileges = false
+
+    var appURL: URL {
+        URL(string: "http://127.0.0.1:\(runtimePort)")!
+    }
+
+    var runtimeStatusURL: URL {
+        URL(string: "http://127.0.0.1:\(runtimePort)/api/runtime/status")!
+    }
 
     // Menu items that need dynamic state updates
     var openItem: NSMenuItem!
@@ -16,10 +26,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var restartItem: NSMenuItem!
 
     var isFlaskRunning: Bool {
-        pythonProcess?.isRunning == true
+        if launchedWithPrivileges {
+            return isLocalPortInUse(runtimePort)
+        }
+        return pythonProcess?.isRunning == true
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if !acquireSingleInstanceLock() {
+            NSApp.terminate(nil)
+            return
+        }
         setupStatusItem()
         startFlask()
     }
@@ -73,6 +90,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Flask lifecycle
 
+    func isLocalPortInUse(_ port: Int) -> Bool {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return true }
+        defer { close(fd) }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.stride)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = UInt16(port).bigEndian
+        let convertResult = withUnsafeMutablePointer(to: &address.sin_addr) {
+            inet_pton(AF_INET, "127.0.0.1", $0)
+        }
+        guard convertResult == 1 else { return true }
+
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.stride))
+            }
+        }
+        return result == 0
+    }
+
+    func pickAvailableRuntimePort(startingAt startPort: Int = 9000, attempts: Int = 20) -> Int? {
+        for candidate in startPort..<(startPort + attempts) {
+            if !isLocalPortInUse(candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
     func startFlask() {
         guard !isFlaskRunning else { return }
 
@@ -85,15 +133,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
+        guard let selectedPort = pickAvailableRuntimePort() else {
+            updateStatusIcon(state: .error, detail: "No local runtime port available")
+            return
+        }
+        runtimePort = selectedPort
+
+        let allowedOrigins = "http://127.0.0.1:\(runtimePort),http://localhost:\(runtimePort)"
+        startStatusPolling()
+        updateStatusIcon(state: .starting, detail: "Starting NmapUI")
+
+        if startFlaskWithPrivileges(runScriptPath: runScriptPath, allowedOrigins: allowedOrigins) {
+            launchedWithPrivileges = true
+            pythonProcess = nil
+            print("NmapUI started with elevated privileges")
+            return
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [runScriptPath]
         process.currentDirectoryURL = URL(fileURLWithPath: resourcesPath, isDirectory: true)
+        var environment = ProcessInfo.processInfo.environment
+        environment["NMAPUI_PORT"] = String(runtimePort)
+        environment["NMAPUI_ALLOWED_ORIGINS"] = allowedOrigins
+        process.environment = environment
 
         do {
             try process.run()
             pythonProcess = process
-            startStatusPolling()
+            launchedWithPrivileges = false
             updateStatusIcon(state: .starting, detail: "Starting NmapUI")
             print("NmapUI started with PID: \(process.processIdentifier)")
         } catch {
@@ -106,11 +175,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // previous run or if pythonProcess is stale after a crash/restart).
     func stopFlask(wait: Bool = true) {
         stopStatusPolling()
-        if let process = pythonProcess, process.isRunning {
+        if launchedWithPrivileges {
+            stopFlaskWithPrivileges()
+            launchedWithPrivileges = false
+            pythonProcess = nil
+        } else if let process = pythonProcess, process.isRunning {
             process.terminate()
             if wait { process.waitUntilExit() }
+            pythonProcess = nil
         }
-        pythonProcess = nil
 
         // Belt-and-suspenders: kill any app.py that may still be alive
         let pkill = Process()
@@ -123,7 +196,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatusIcon(state: .idle, detail: "NmapUI stopped")
     }
 
-    // Poll localhost:9000 until Flask responds (or timeout), then open browser
+    // Poll the selected localhost port until Flask responds (or timeout), then open browser
     func waitForFlaskThenOpen(timeout: TimeInterval = 15) {
         DispatchQueue.global(qos: .userInitiated).async {
             let deadline = Date().addingTimeInterval(timeout)
@@ -179,7 +252,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func uninstallApp(_ sender: Any?) {
         let alert = NSAlert()
         alert.messageText = "Uninstall NmapUI"
-        alert.informativeText = "Quit the app and move NmapUIMenuBar.app to the Trash to uninstall."
+        alert.informativeText = "Quit the app and move NmapUI.app to the Trash to uninstall."
         alert.addButton(withTitle: "OK")
         alert.alertStyle = .informational
         alert.runModal()
@@ -187,6 +260,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         stopFlask(wait: false)
+        releaseSingleInstanceLock()
         statusItem = nil
     }
 
@@ -323,6 +397,92 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: accessibility)
         button.toolTip = detail
+    }
+
+    // MARK: - Privileged start/stop
+
+    func startFlaskWithPrivileges(runScriptPath: String, allowedOrigins: String) -> Bool {
+        let command = "NMAPUI_PORT=\(runtimePort) NMAPUI_ALLOWED_ORIGINS=\(allowedOrigins) \"\(runScriptPath)\" >/tmp/nmapui-privileged.log 2>&1 &"
+        let appleScript = "do shell script \(appleScriptEscaped(command)) with administrator privileges"
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", appleScript]
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            print("Failed to start privileged NmapUI: \(error)")
+            return false
+        }
+    }
+
+    func stopFlaskWithPrivileges() {
+        let command = "/usr/bin/pkill -f \"/Applications/NmapUI.app/Contents/Resources/app.py\""
+        let appleScript = "do shell script \(appleScriptEscaped(command)) with administrator privileges"
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", appleScript]
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            print("Failed to stop privileged NmapUI: \(error)")
+        }
+    }
+
+    func appleScriptEscaped(_ value: String) -> String {
+        var escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
+        escaped = escaped.replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
+    }
+
+    // MARK: - Single instance lock
+
+    func acquireSingleInstanceLock() -> Bool {
+        let fileManager = FileManager.default
+        let lockDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("NmapUI", isDirectory: true)
+        guard let lockDirectory else { return true }
+
+        do {
+            try fileManager.createDirectory(at: lockDirectory, withIntermediateDirectories: true)
+        } catch {
+            print("Unable to create lock directory: \(error)")
+            return true
+        }
+
+        let lockFile = lockDirectory.appendingPathComponent("nmapui.lock")
+        lockFileURL = lockFile
+
+        if let contents = try? String(contentsOf: lockFile).trimmingCharacters(in: .whitespacesAndNewlines),
+           let pid = Int32(contents),
+           pid > 0,
+           pid != getpid(),
+           kill(pid, 0) == 0 {
+            let alert = NSAlert()
+            alert.messageText = "NmapUI already running"
+            alert.informativeText = "Another instance of NmapUI is already running. Use the existing menu bar icon."
+            alert.addButton(withTitle: "OK")
+            alert.alertStyle = .warning
+            alert.runModal()
+            return false
+        }
+
+        do {
+            try "\(getpid())".write(to: lockFile, atomically: true, encoding: .utf8)
+        } catch {
+            print("Unable to write lock file: \(error)")
+        }
+
+        return true
+    }
+
+    func releaseSingleInstanceLock() {
+        guard let lockFileURL else { return }
+        try? FileManager.default.removeItem(at: lockFileURL)
     }
 }
 

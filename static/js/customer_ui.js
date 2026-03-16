@@ -1,6 +1,121 @@
 let customersTabLoaded = false;
 let customerFormMode = 'add';
 let editingCustomerId = null;
+let customerAutoMonitorState = { defaults: null, rules: [] };
+
+function getAutoMonitorRule(customer) {
+    const customerId = String(customer?.id || '');
+    return (customerAutoMonitorState.rules || []).find(
+        (rule) => String(rule.customer_id || '') === customerId
+    ) || null;
+}
+
+function getDefaultAutoMonitorRule(customer) {
+    const defaults = customerAutoMonitorState.defaults || {
+        enabled_by_default: false,
+        recurrence: 'weekly',
+        day_of_week: 'sunday',
+        time: '01:00',
+        scan_mode: 'complete_pdf',
+    };
+    return {
+        enabled: defaults.enabled_by_default,
+        recurrence: defaults.recurrence,
+        day_of_week: defaults.day_of_week,
+        time: defaults.time,
+        target: customer?.networks?.public_ip && customer.networks.public_ip !== 'dynamic'
+            ? customer.networks.public_ip
+            : '',
+        next_run: null,
+    };
+}
+
+async function loadAutoMonitorSettings() {
+    const response = await fetch('/api/settings/auto-monitor', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+        throw new Error(`Auto-monitor settings request failed with HTTP ${response.status}`);
+    }
+    customerAutoMonitorState = await response.json();
+    return customerAutoMonitorState;
+}
+
+async function saveAutoMonitorRule(customer, updates) {
+    const settingsResponse = await fetch('/api/settings', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+    });
+    if (!settingsResponse.ok) {
+        throw new Error(`Settings request failed with HTTP ${settingsResponse.status}`);
+    }
+
+    const currentSettings = await settingsResponse.json();
+    const nextSettings = structuredClone(currentSettings || {});
+    const defaults = nextSettings.auto_monitor?.defaults
+        || customerAutoMonitorState.defaults
+        || {};
+    const rules = Array.isArray(nextSettings.auto_monitor?.rules)
+        ? nextSettings.auto_monitor.rules.slice()
+        : [];
+    const customerId = String(customer.id || '');
+    const existingIndex = rules.findIndex(
+        (rule) => String(rule.customer_id || '') === customerId
+    );
+    const baseRule = existingIndex >= 0
+        ? rules[existingIndex]
+        : {
+            customer_id: customerId,
+            customer_name: customer.name || '',
+            enabled: Boolean(defaults.enabled_by_default),
+            recurrence: defaults.recurrence || 'weekly',
+            day_of_week: defaults.day_of_week || 'sunday',
+            time: defaults.time || '01:00',
+            scan_mode: 'complete_pdf',
+            target: customer.networks?.public_ip && customer.networks.public_ip !== 'dynamic'
+                ? customer.networks.public_ip
+                : '',
+            public_ip: customer.networks?.public_ip || '',
+        };
+
+    const nextRule = {
+        ...baseRule,
+        ...updates,
+        customer_id: customerId,
+        customer_name: customer.name || '',
+        public_ip: customer.networks?.public_ip || baseRule.public_ip || '',
+        scan_mode: 'complete_pdf',
+    };
+
+    if (!nextSettings.auto_monitor) {
+        nextSettings.auto_monitor = { defaults, rules: [] };
+    }
+    if (existingIndex >= 0) {
+        rules[existingIndex] = nextRule;
+    } else {
+        rules.push(nextRule);
+    }
+    nextSettings.auto_monitor.defaults = defaults;
+    nextSettings.auto_monitor.rules = rules;
+
+    const saveResponse = await fetch('/api/settings', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify(nextSettings),
+    });
+    if (!saveResponse.ok) {
+        throw new Error(`Settings save failed with HTTP ${saveResponse.status}`);
+    }
+
+    const saved = await saveResponse.json();
+    customerAutoMonitorState = saved.settings.auto_monitor || customerAutoMonitorState;
+    return customerAutoMonitorState;
+}
 
 function showCustomerForm(mode = 'add') {
     customerFormMode = mode;
@@ -275,6 +390,58 @@ function renderCustomersTab(customers) {
         `;
         card.appendChild(details);
 
+        const autoMonitorRule = getAutoMonitorRule(customer) || getDefaultAutoMonitorRule(customer);
+        const autoMonitor = document.createElement('section');
+        autoMonitor.className = 'mt-4 rounded-2xl border border-olive-200 bg-white p-4';
+        autoMonitor.innerHTML = `
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h4 class="text-sm font-bold uppercase tracking-widest text-olive-600">Auto-monitor</h4>
+                    <p class="mt-1 text-sm text-olive-700">Run Complete + PDF automatically for this customer.</p>
+                </div>
+                <label class="flex items-center gap-2 text-sm font-medium text-olive-900">
+                    <input type="checkbox" class="customer-auto-monitor-enabled size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500" ${autoMonitorRule.enabled ? 'checked' : ''}>
+                    Enabled
+                </label>
+            </div>
+            <div class="mt-4 grid gap-3 md:grid-cols-2">
+                <label class="text-sm text-olive-700">
+                    <span class="mb-1 block font-medium text-olive-900">Recurrence</span>
+                    <select class="customer-auto-monitor-recurrence form-control form-control-sm">
+                        <option value="daily" ${autoMonitorRule.recurrence === 'daily' ? 'selected' : ''}>Daily</option>
+                        <option value="weekly" ${autoMonitorRule.recurrence === 'weekly' ? 'selected' : ''}>Weekly</option>
+                        <option value="biweekly" ${autoMonitorRule.recurrence === 'biweekly' ? 'selected' : ''}>Bi-weekly</option>
+                        <option value="monthly" ${autoMonitorRule.recurrence === 'monthly' ? 'selected' : ''}>Monthly</option>
+                        <option value="quarterly" ${autoMonitorRule.recurrence === 'quarterly' ? 'selected' : ''}>Quarterly</option>
+                    </select>
+                </label>
+                <label class="text-sm text-olive-700">
+                    <span class="mb-1 block font-medium text-olive-900">Time</span>
+                    <input type="time" class="customer-auto-monitor-time form-control form-control-sm" value="${autoMonitorRule.time || '01:00'}">
+                </label>
+                <label class="text-sm text-olive-700">
+                    <span class="mb-1 block font-medium text-olive-900">Weekday Anchor</span>
+                    <select class="customer-auto-monitor-day form-control form-control-sm">
+                        <option value="monday" ${autoMonitorRule.day_of_week === 'monday' ? 'selected' : ''}>Monday</option>
+                        <option value="tuesday" ${autoMonitorRule.day_of_week === 'tuesday' ? 'selected' : ''}>Tuesday</option>
+                        <option value="wednesday" ${autoMonitorRule.day_of_week === 'wednesday' ? 'selected' : ''}>Wednesday</option>
+                        <option value="thursday" ${autoMonitorRule.day_of_week === 'thursday' ? 'selected' : ''}>Thursday</option>
+                        <option value="friday" ${autoMonitorRule.day_of_week === 'friday' ? 'selected' : ''}>Friday</option>
+                        <option value="saturday" ${autoMonitorRule.day_of_week === 'saturday' ? 'selected' : ''}>Saturday</option>
+                        <option value="sunday" ${autoMonitorRule.day_of_week === 'sunday' ? 'selected' : ''}>Sunday</option>
+                    </select>
+                </label>
+                <label class="text-sm text-olive-700">
+                    <span class="mb-1 block font-medium text-olive-900">Target</span>
+                    <input type="text" class="customer-auto-monitor-target form-control form-control-sm" value="${autoMonitorRule.target || ''}" placeholder="192.168.10.0/24">
+                </label>
+            </div>
+            <div class="mt-3 text-xs text-olive-600 customer-auto-monitor-next-run">
+                ${autoMonitorRule.next_run ? `Next run ${new Date(autoMonitorRule.next_run).toLocaleString()}` : 'No scheduled run yet'}
+            </div>
+        `;
+        card.appendChild(autoMonitor);
+
         const actions = document.createElement('div');
         actions.className = 'mt-4 flex flex-wrap gap-2';
 
@@ -310,6 +477,31 @@ function renderCustomersTab(customers) {
         });
         actions.appendChild(deleteButton);
 
+        const saveMonitorButton = document.createElement('button');
+        saveMonitorButton.type = 'button';
+        saveMonitorButton.className = 'action-button action-button-primary action-button-compact';
+        saveMonitorButton.textContent = 'Save Auto-monitor';
+        saveMonitorButton.addEventListener('click', async () => {
+            const updates = {
+                enabled: autoMonitor.querySelector('.customer-auto-monitor-enabled')?.checked || false,
+                recurrence: autoMonitor.querySelector('.customer-auto-monitor-recurrence')?.value || 'weekly',
+                day_of_week: autoMonitor.querySelector('.customer-auto-monitor-day')?.value || 'sunday',
+                time: autoMonitor.querySelector('.customer-auto-monitor-time')?.value || '01:00',
+                target: autoMonitor.querySelector('.customer-auto-monitor-target')?.value || '',
+            };
+
+            try {
+                setCustomerTabStatus(`Saving auto-monitor rule for ${customer.name}...`);
+                await saveAutoMonitorRule(customer, updates);
+                await loadAutoMonitorSettings();
+                renderCustomersTab(customers);
+                setCustomerTabStatus(`Saved auto-monitor rule for ${customer.name}.`);
+            } catch (error) {
+                setCustomerTabStatus(`Failed to save auto-monitor rule: ${error.message}`, true);
+            }
+        });
+        actions.appendChild(saveMonitorButton);
+
         card.appendChild(actions);
         list.appendChild(card);
     });
@@ -320,9 +512,16 @@ function loadCustomersTab(force = false) {
         return;
     }
     setCustomerTabStatus('Loading customers...');
-    if (window.socket) {
-        window.socket.emit('get_customers');
-    }
+    Promise.resolve()
+        .then(() => loadAutoMonitorSettings())
+        .catch(() => {
+            customerAutoMonitorState = { defaults: null, rules: [] };
+        })
+        .finally(() => {
+            if (window.socket) {
+                window.socket.emit('get_customers');
+            }
+        });
 }
 
 function initializeCustomerUI(socket) {

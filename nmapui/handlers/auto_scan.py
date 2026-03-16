@@ -4,6 +4,7 @@ import threading
 from flask import jsonify, request
 from flask_socketio import emit
 
+from nmapui.auto_monitor import get_due_auto_monitor_rules, normalize_auto_monitor_settings
 from nmapui.auto_scan import (
     build_auto_scan_status_payload,
     validate_auto_scan_config_update as default_validate_auto_scan_config_update,
@@ -58,7 +59,7 @@ def register_auto_scan_handlers(app, socketio, deps):
         return jsonify({"success": True})
 
 
-def auto_scan_loop(*, socketio, auto_scan_config, should_run_auto_scan, startup_at, startup_grace_seconds, execute_auto_scan, logger):
+def auto_scan_loop(*, socketio, auto_scan_config, settings_state=None, should_run_auto_scan, startup_at, startup_grace_seconds, execute_auto_scan, execute_auto_monitor_rule=None, logger):
     """Background loop to check and execute auto scans."""
     last_check_minute = None
 
@@ -83,6 +84,23 @@ def auto_scan_loop(*, socketio, auto_scan_config, should_run_auto_scan, startup_
 
                     logger.info("Executing auto scan")
                     execute_auto_scan()
+
+                auto_monitor_settings = normalize_auto_monitor_settings(
+                    (settings_state or {}).get("auto_monitor", {})
+                )
+                for rule in get_due_auto_monitor_rules(
+                    auto_monitor_settings,
+                    now=now,
+                    startup_at=startup_at,
+                    startup_grace_seconds=startup_grace_seconds,
+                ):
+                    logger.info(
+                        "Executing auto-monitor rule %s for customer %s",
+                        rule.get("id"),
+                        rule.get("customer_name"),
+                    )
+                    if execute_auto_monitor_rule is not None:
+                        execute_auto_monitor_rule(rule)
         except Exception as exc:
             logger.error("Auto scan loop error: %s", exc)
 
@@ -110,7 +128,7 @@ def acquire_auto_scan_scheduler_lock(*, lock_file=AUTO_SCAN_SCHEDULER_LOCK_FILE)
     return handle
 
 
-def start_auto_scan_thread(*, thread_ref, socketio, auto_scan_config, should_run_auto_scan, startup_at, startup_grace_seconds, execute_auto_scan, logger, acquire_scheduler_lock=acquire_auto_scan_scheduler_lock):
+def start_auto_scan_thread(*, thread_ref, socketio, auto_scan_config, settings_state=None, should_run_auto_scan, startup_at, startup_grace_seconds, execute_auto_scan, execute_auto_monitor_rule=None, logger, acquire_scheduler_lock=acquire_auto_scan_scheduler_lock):
     """Start the auto-scan worker once per process."""
     if thread_ref["thread"] and thread_ref["thread"].is_alive():
         return
@@ -128,10 +146,12 @@ def start_auto_scan_thread(*, thread_ref, socketio, auto_scan_config, should_run
         kwargs={
             "socketio": socketio,
             "auto_scan_config": auto_scan_config,
+            "settings_state": settings_state,
             "should_run_auto_scan": should_run_auto_scan,
             "startup_at": startup_at,
             "startup_grace_seconds": startup_grace_seconds,
             "execute_auto_scan": execute_auto_scan,
+            "execute_auto_monitor_rule": execute_auto_monitor_rule,
             "logger": logger,
         },
         daemon=True,

@@ -19,10 +19,12 @@ def start_auto_scan_thread(
     auto_scan_thread,
     socketio,
     auto_scan_config,
+    settings_state,
     should_run_auto_scan,
     startup_at,
     startup_grace_seconds,
     execute_auto_scan,
+    execute_auto_monitor_rule,
     logger,
 ):
     thread_ref = {"thread": auto_scan_thread}
@@ -30,10 +32,12 @@ def start_auto_scan_thread(
         thread_ref=thread_ref,
         socketio=socketio,
         auto_scan_config=auto_scan_config,
+        settings_state=settings_state,
         should_run_auto_scan=should_run_auto_scan,
         startup_at=startup_at,
         startup_grace_seconds=startup_grace_seconds,
         execute_auto_scan=execute_auto_scan,
+        execute_auto_monitor_rule=execute_auto_monitor_rule,
         logger=logger,
     )
     return thread_ref["thread"]
@@ -70,6 +74,7 @@ def configure_root_logging(*, base_dir):
 def run_server(
     *,
     argv=None,
+    runtime_options=None,
     build_runtime_options,
     log_auth_posture,
     startup_checks,
@@ -79,8 +84,14 @@ def run_server(
     app,
     sys_module,
 ):
-    runtime_options = build_runtime_options(argv or sys_module.argv)
+    runtime_options = runtime_options or build_runtime_options(argv or sys_module.argv)
     quick_mode = runtime_options["quick_mode"]
+    if runtime_options.get("port_auto_selected"):
+        logging.getLogger(__name__).warning(
+            "Default runtime port %s was unavailable; using %s instead",
+            runtime_options.get("requested_port"),
+            runtime_options["port"],
+        )
 
     log_auth_posture()
     startup_checks(quick=quick_mode)

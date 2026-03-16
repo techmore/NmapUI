@@ -35,6 +35,37 @@ def build_execute_auto_scan_deps(
     }
 
 
+def build_execute_auto_monitor_rule_deps(
+    *,
+    rule,
+    logger,
+    network_key,
+    rate_limiter,
+    validate_target,
+    job_registry,
+    emit_job_status,
+    generate_report_task,
+    set_current_customer_state,
+    set_last_scan_target_state,
+    settings_state,
+    save_settings,
+):
+    return {
+        "rule": rule,
+        "logger": logger,
+        "network_key": network_key,
+        "rate_limiter": rate_limiter,
+        "validate_target": validate_target,
+        "job_registry": job_registry,
+        "emit_job_status": emit_job_status,
+        "generate_report_task": generate_report_task,
+        "set_current_customer_state": set_current_customer_state,
+        "set_last_scan_target_state": set_last_scan_target_state,
+        "settings_state": settings_state,
+        "save_settings": save_settings,
+    }
+
+
 def build_scan_task_deps(
     *,
     broadcaster,
@@ -370,6 +401,7 @@ def build_settings_routes_deps(
     *,
     settings_state,
     save_settings,
+    get_customer_name,
     validate_google_drive,
     validate_remote_sync,
     get_google_drive_auth_status,
@@ -382,6 +414,7 @@ def build_settings_routes_deps(
     return {
         "settings_state": settings_state,
         "save_settings": save_settings,
+        "get_customer_name": get_customer_name,
         "validate_google_drive": validate_google_drive,
         "validate_remote_sync": validate_remote_sync,
         "get_google_drive_auth_status": get_google_drive_auth_status,

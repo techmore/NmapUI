@@ -1,6 +1,8 @@
 from datetime import datetime
 import logging
+from pathlib import Path
 import re
+import shutil
 
 from nmapui.runtime_log import append_runtime_log
 from nmapui.reporting import (
@@ -12,6 +14,44 @@ from nmapui.settings import get_effective_scan_rules
 
 
 logger = logging.getLogger(__name__)
+
+
+def copy_report_files_to_desktop(
+    *,
+    files,
+    scan_dir,
+    scans_dir,
+    emit_to_client,
+    sid,
+    socketio_sleep,
+):
+    if scan_dir is None or scans_dir is None:
+        return
+
+    try:
+        desktop_root = Path.home() / "Desktop" / "nmapui-reports"
+        relative_path = scan_dir.relative_to(scans_dir)
+        destination_dir = desktop_root / relative_path
+        destination_dir.mkdir(parents=True, exist_ok=True)
+
+        copied = 0
+        for path in files.values():
+            if not path or not path.exists():
+                continue
+            shutil.copy2(path, destination_dir / path.name)
+            copied += 1
+
+        if copied:
+            emit_to_client(
+                sid,
+                "scan_feedback",
+                f"📌 Copied {copied} report files to {destination_dir}",
+            )
+            socketio_sleep(0)
+    except Exception as exc:
+        logger.warning("Failed to copy report files to Desktop: %s", exc)
+        emit_to_client(sid, "scan_feedback", "⚠️ Unable to copy report files to Desktop")
+        socketio_sleep(0)
 
 
 def start_deep_scan(context, targets, sid, is_gateway_phase=False):
@@ -325,7 +365,6 @@ def generate_report_task(context, sid, data):
         current_customer = context.current_customer
     extract_scan_statistics = context.extract_scan_statistics
     customer_fingerprinter = context.customer_fingerprinter
-    upload_report_artifacts_to_google_drive = context.upload_report_artifacts_to_google_drive
     on_job_end = context.on_job_end
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
@@ -464,6 +503,7 @@ def generate_report_task(context, sid, data):
                 run_kwargs["excluded_targets"] = excluded_targets
             if scan_only_mode:
                 run_kwargs["scan_only_mode"] = True
+            run_kwargs["force_privileged_scan"] = True
 
             if not run_nmap_with_xml_output(
                 chunk_target,
@@ -580,25 +620,15 @@ def generate_report_task(context, sid, data):
             "nmap": scan_dir / "scan.nmap",
             "gnmap": scan_dir / "scan.gnmap",
         }
-        if upload_report_artifacts_to_google_drive and (context.settings_state or {}).get("sync", {}).get("google_drive", {}).get("enabled"):
-            try:
-                file_paths = [path for path in files.values() if path.exists()]
-                if file_paths:
-                    upload_result = upload_report_artifacts_to_google_drive(
-                        scan_path=str(scan_dir.relative_to(scans_dir)),
-                        file_paths=file_paths,
-                        metadata=current_metadata,
-                        settings_state=context.settings_state,
-                    )
-                    if upload_result.get("success"):
-                        emit_to_client(sid, "scan_feedback", "☁️ Google Drive backup complete")
-                    else:
-                        emit_to_client(sid, "scan_feedback", f"⚠️ Google Drive backup failed: {upload_result.get('error', 'Unknown error')}")
-                    socketio_sleep(0)
-            except Exception as exc:
-                logger.warning("Google Drive upload failed: %s", exc)
-                emit_to_client(sid, "scan_feedback", "⚠️ Google Drive backup failed")
-                socketio_sleep(0)
+        if (context.settings_state or {}).get("reports", {}).get("save_to_desktop"):
+            copy_report_files_to_desktop(
+                files=files,
+                scan_dir=scan_dir,
+                scans_dir=scans_dir,
+                emit_to_client=emit_to_client,
+                sid=sid,
+                socketio_sleep=socketio_sleep,
+            )
 
         end_time = datetime.now()
         duration = end_time - start_time
