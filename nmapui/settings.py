@@ -417,7 +417,8 @@ def get_effective_scan_rules(*, settings_state, target="", customer_id="") -> di
             profile_rules.get("excluded_targets", global_rules.get("excluded_targets", []))
         ),
         "max_scan_minutes": int(
-            profile_rules.get("max_scan_minutes", global_rules.get("max_scan_minutes", 120))
+            (profile_rules.get("max_scan_minutes") or 0)
+            or global_rules.get("max_scan_minutes", 120)
             or 120
         ),
     }

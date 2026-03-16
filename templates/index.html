@@ -758,6 +758,11 @@
                             <label for="settings-profile-excluded-targets" class="block text-sm font-medium text-olive-800">Profile Excluded Targets</label>
                             <textarea id="settings-profile-excluded-targets" rows="4" class="form-control form-control-md mt-1" placeholder="One host, range, or CIDR per line"></textarea>
                         </div>
+                        <div>
+                            <label for="settings-profile-max-scan-minutes" class="block text-sm font-medium text-olive-800">Profile max scan duration (minutes)</label>
+                            <input id="settings-profile-max-scan-minutes" type="number" min="15" max="480" step="15" class="form-control form-control-md mt-1" placeholder="Use global default">
+                            <p class="mt-2 text-xs text-olive-600">Overrides the global max scan duration when this profile is active.</p>
+                        </div>
                     </div>
                     <div class="mt-4 flex flex-wrap gap-2">
                         <button id="add-target-profile-btn" class="action-button action-button-primary action-button-compact" aria-label="Add target profile">
