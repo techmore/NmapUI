@@ -112,13 +112,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return result == 0
     }
 
-    func pickAvailableRuntimePort(startingAt startPort: Int = 9000, attempts: Int = 20) -> Int? {
-        for candidate in startPort..<(startPort + attempts) {
-            if !isLocalPortInUse(candidate) {
-                return candidate
-            }
+    func pickAvailableRuntimePort() -> Int? {
+        let fixedPort = 9000
+        if isLocalPortInUse(fixedPort) {
+            return nil
         }
-        return nil
+        return fixedPort
     }
 
     func startFlask() {
@@ -134,7 +133,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         guard let selectedPort = pickAvailableRuntimePort() else {
-            updateStatusIcon(state: .error, detail: "No local runtime port available")
+            updateStatusIcon(state: .error, detail: "Port 9000 is already in use")
             return
         }
         runtimePort = selectedPort

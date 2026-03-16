@@ -44,4 +44,4 @@ The app appears as a network icon in the menu bar. Use the menu to start, stop, 
 
 ## Support Contract
 
-Only `NmapUIMenuBarLauncher.swift` is supported. Older popover and relay prototypes have been removed from the tracked build path so the wrapper release flow and port contract stay deterministic. The built bundle is installed as `NmapUI.app`.
+Only `NmapUIMenuBarLauncher.swift` is supported. Older popover and relay prototypes have been removed from the tracked build path so the wrapper release flow and port contract stay deterministic (fixed at port 9000). The built bundle is installed as `NmapUI.app`.

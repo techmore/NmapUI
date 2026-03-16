@@ -4,7 +4,7 @@ This guide documents the supported macOS wrapper implementation for launching th
 
 ## Supported Wrapper Source
 
-Use [NmapUIMenuBarLauncher.swift](/Users/techmore/projects/NmapUI/packaging/macos/NmapUIMenuBarLauncher.swift) as the only supported source file. It launches the bundled `run.sh` helper and opens the selected local runtime URL, defaulting to `http://127.0.0.1:9000`.
+Use [NmapUIMenuBarLauncher.swift](/Users/techmore/projects/NmapUI/packaging/macos/NmapUIMenuBarLauncher.swift) as the only supported source file. It launches the bundled `run.sh` helper and opens the local runtime URL at `http://127.0.0.1:9000`.
 
 ## Build and Run
 
