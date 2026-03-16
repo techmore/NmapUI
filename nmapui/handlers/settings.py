@@ -12,6 +12,7 @@ def register_settings_routes(app, deps):
     get_google_drive_auth_status = deps["get_google_drive_auth_status"]
     build_google_drive_auth_url = deps["build_google_drive_auth_url"]
     exchange_google_drive_auth_code = deps["exchange_google_drive_auth_code"]
+    ensure_google_drive_reports_folder = deps["ensure_google_drive_reports_folder"]
     disconnect_google_drive = deps["disconnect_google_drive"]
 
     @app.route("/api/settings")
@@ -87,10 +88,37 @@ def register_settings_routes(app, deps):
                 f"<p>{result.get('error', 'Unknown error')}</p></body></html>",
                 400,
             )
-        return (
-            "<html><body><h3>Google Drive connected</h3>"
-            "<p>You can close this window and return to NmapUI.</p></body></html>"
-        )
+        folder_result = ensure_google_drive_reports_folder()
+        normalized = normalize_settings_document(settings_state)
+        google_drive_state = normalized.get("sync", {}).get("google_drive", {})
+        if folder_result.get("success"):
+            google_drive_state.update(
+                {
+                    "enabled": True,
+                    "folder_id": folder_result.get("folder_id", ""),
+                    "status": "Connected",
+                }
+            )
+        else:
+            google_drive_state.update(
+                {
+                    "enabled": False,
+                    "status": "Connected (folder setup failed)",
+                }
+            )
+        normalized["sync"]["google_drive"] = google_drive_state
+        normalized = save_settings(normalized)
+        settings_state.clear()
+        settings_state.update(normalized)
+        message = "Google Drive connected."
+        if folder_result.get("success"):
+            message = "Google Drive connected. Reports will sync to nmapui-reports."
+        else:
+            message = (
+                "Google Drive connected, but the default folder could not be created. "
+                "Check Settings to finish setup."
+            )
+        return f"<html><body><h3>{message}</h3><p>You can close this window and return to NmapUI.</p></body></html>"
 
     @app.route("/api/settings/google-drive/disconnect", methods=["POST"])
     @require_auth

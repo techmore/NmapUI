@@ -95,6 +95,7 @@ def build_report_task_deps(
     save_scan_metadata,
     scans_dir,
     settings_state,
+    upload_report_artifacts_to_google_drive,
     socketio_sleep,
     split_subnet_into_chunks,
     stylesheet,
@@ -117,6 +118,7 @@ def build_report_task_deps(
         "create_scan_folder": create_scan_folder,
         "scans_dir": scans_dir,
         "settings_state": settings_state,
+        "upload_report_artifacts_to_google_drive": upload_report_artifacts_to_google_drive,
         "sanitize_customer_dir_name": sanitize_customer_dir_name,
         "run_nmap_with_xml_output": run_nmap_with_xml_output,
         "merge_nmap_xml_files": merge_nmap_xml_files,
@@ -373,6 +375,7 @@ def build_settings_routes_deps(
     get_google_drive_auth_status,
     build_google_drive_auth_url,
     exchange_google_drive_auth_code,
+    ensure_google_drive_reports_folder,
     disconnect_google_drive,
 ):
     return {
@@ -383,6 +386,7 @@ def build_settings_routes_deps(
         "get_google_drive_auth_status": get_google_drive_auth_status,
         "build_google_drive_auth_url": build_google_drive_auth_url,
         "exchange_google_drive_auth_code": exchange_google_drive_auth_code,
+        "ensure_google_drive_reports_folder": ensure_google_drive_reports_folder,
         "disconnect_google_drive": disconnect_google_drive,
     }
 

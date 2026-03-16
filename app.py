@@ -76,6 +76,7 @@ from nmapui.google_drive import (
     build_google_drive_auth_url,
     disconnect_google_drive,
     exchange_google_drive_auth_code,
+    ensure_google_drive_reports_folder,
     upload_files_to_google_drive,
 )
 from nmapui.runtime import (
@@ -279,6 +280,14 @@ traceroute_bindings = build_traceroute_bindings(
 )
 run_traceroute = traceroute_bindings["run_traceroute"]
 
+upload_report_artifacts_to_google_drive = lambda *, scan_path, file_paths, metadata, settings_state: upload_files_to_google_drive(
+    credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+    token_path=GOOGLE_DRIVE_TOKEN_FILE,
+    key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+    file_paths=file_paths,
+    folder_id=str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip(),
+    requests_module=requests,
+)
 
 register_app_handlers(
     app=app,
@@ -318,14 +327,7 @@ register_app_handlers(
     startup_state=startup_state,
     runtime_store=runtime_store,
     get_auto_scan_thread=runtime_bindings["get_auto_scan_thread"],
-    upload_report_artifacts_to_google_drive=lambda *, scan_path, file_paths, metadata, settings_state: upload_files_to_google_drive(
-        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
-        token_path=GOOGLE_DRIVE_TOKEN_FILE,
-        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
-        file_paths=file_paths,
-        folder_id=str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip(),
-        requests_module=requests,
-    ),
+    upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
     get_customer_fingerprinter=lambda: customer_fingerprinter,
     get_current_customer=lambda: get_current_customer_state(request.sid),
     set_current_customer=lambda value: set_current_customer_state(
@@ -377,6 +379,12 @@ register_app_handlers(
         key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         code=code,
         state=state,
+        requests_module=requests,
+    ),
+    ensure_google_drive_reports_folder=lambda: ensure_google_drive_reports_folder(
+        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+        token_path=GOOGLE_DRIVE_TOKEN_FILE,
+        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         requests_module=requests,
     ),
     disconnect_google_drive=lambda: disconnect_google_drive(
@@ -432,6 +440,7 @@ task_bindings = build_task_bindings(
     current_customer=current_customer,
     extract_scan_statistics=extract_scan_statistics,
     customer_fingerprinter=customer_fingerprinter,
+    upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
     runtime_store=runtime_store,
     find_latest_saved_scan_for_pdf=find_latest_saved_scan_for_pdf,
     load_json_document=load_json_document,

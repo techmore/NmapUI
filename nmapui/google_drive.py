@@ -15,6 +15,8 @@ GOOGLE_DRIVE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_DRIVE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 GOOGLE_DRIVE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink"
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+GOOGLE_DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files"
+GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder"
 ENCRYPTED_TOKEN_SCHEMA_VERSION = 1
 
 
@@ -354,4 +356,60 @@ def upload_files_to_google_drive(
         "success": True,
         "uploaded": uploaded,
         "status": f"Uploaded {len(uploaded)} file(s) to Google Drive",
+    }
+
+
+def ensure_google_drive_reports_folder(
+    *,
+    credentials_path: Path,
+    token_path: Path,
+    key_path: Path | None = None,
+    requests_module,
+    folder_name: str = "nmapui-reports",
+) -> dict:
+    access_token = ensure_google_drive_access_token(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        key_path=key_path,
+        requests_module=requests_module,
+    )
+    headers = {"Authorization": f"Bearer {access_token}"}
+    query = (
+        "mimeType='application/vnd.google-apps.folder' "
+        f"and name='{folder_name}' and trashed=false"
+    )
+    response = requests_module.get(
+        GOOGLE_DRIVE_FILES_ENDPOINT,
+        headers=headers,
+        params={"q": query, "fields": "files(id,name)"},
+        timeout=10,
+    )
+    payload = response.json()
+    if response.status_code >= 400:
+        return {
+            "success": False,
+            "error": payload.get("error", {}).get("message") or "Failed to query Drive folder",
+        }
+
+    files = payload.get("files") or []
+    if files:
+        folder_id = files[0].get("id")
+        return {"success": True, "folder_id": folder_id, "status": "Drive folder ready"}
+
+    create_response = requests_module.post(
+        GOOGLE_DRIVE_FILES_ENDPOINT,
+        headers={**headers, "Content-Type": "application/json"},
+        json={"name": folder_name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME},
+        timeout=10,
+    )
+    create_payload = create_response.json()
+    if create_response.status_code >= 400:
+        return {
+            "success": False,
+            "error": create_payload.get("error", {}).get("message") or "Failed to create Drive folder",
+        }
+    return {
+        "success": True,
+        "folder_id": create_payload.get("id"),
+        "status": "Drive folder created",
     }

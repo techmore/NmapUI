@@ -325,6 +325,7 @@ def generate_report_task(context, sid, data):
         current_customer = context.current_customer
     extract_scan_statistics = context.extract_scan_statistics
     customer_fingerprinter = context.customer_fingerprinter
+    upload_report_artifacts_to_google_drive = context.upload_report_artifacts_to_google_drive
     on_job_end = context.on_job_end
     operation_id = f"report_generation:{sid}"
     idle_state_manager.start_operation(operation_id)
@@ -579,6 +580,25 @@ def generate_report_task(context, sid, data):
             "nmap": scan_dir / "scan.nmap",
             "gnmap": scan_dir / "scan.gnmap",
         }
+        if upload_report_artifacts_to_google_drive and (context.settings_state or {}).get("sync", {}).get("google_drive", {}).get("enabled"):
+            try:
+                file_paths = [path for path in files.values() if path.exists()]
+                if file_paths:
+                    upload_result = upload_report_artifacts_to_google_drive(
+                        scan_path=str(scan_dir.relative_to(scans_dir)),
+                        file_paths=file_paths,
+                        metadata=current_metadata,
+                        settings_state=context.settings_state,
+                    )
+                    if upload_result.get("success"):
+                        emit_to_client(sid, "scan_feedback", "☁️ Google Drive backup complete")
+                    else:
+                        emit_to_client(sid, "scan_feedback", f"⚠️ Google Drive backup failed: {upload_result.get('error', 'Unknown error')}")
+                    socketio_sleep(0)
+            except Exception as exc:
+                logger.warning("Google Drive upload failed: %s", exc)
+                emit_to_client(sid, "scan_feedback", "⚠️ Google Drive backup failed")
+                socketio_sleep(0)
 
         end_time = datetime.now()
         duration = end_time - start_time

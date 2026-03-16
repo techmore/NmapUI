@@ -66,6 +66,7 @@ class ReportWorkflowContext:
     customer_fingerprinter: Any
     runtime_store: Any = None
     settings_state: Any = None
+    upload_report_artifacts_to_google_drive: Any = None
     web_stylesheet: Any = None
     pdf_stylesheet: Any = None
     on_job_end: Any = None
@@ -181,6 +182,7 @@ def build_report_workflow_context(deps):
         customer_fingerprinter=deps["customer_fingerprinter"],
         runtime_store=deps.get("runtime_store"),
         settings_state=deps.get("settings_state"),
+        upload_report_artifacts_to_google_drive=deps.get("upload_report_artifacts_to_google_drive"),
         web_stylesheet=deps.get("web_stylesheet"),
         pdf_stylesheet=deps.get("pdf_stylesheet"),
         on_job_end=deps.get("on_job_end"),

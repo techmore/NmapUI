@@ -343,9 +343,22 @@ async function connectGoogleDrive() {
         }
         window.open(payload.auth_url, '_blank', 'noopener,noreferrer');
         setSyncStatus('settings-google-drive-status', 'Google Drive authorization opened in a new tab.');
+        waitForGoogleDriveConnection();
     } catch (error) {
         console.error('Error starting Google Drive auth:', error);
         setSyncStatus('settings-google-drive-status', error.message || 'Failed to start Google Drive auth.', true);
+    }
+}
+
+async function waitForGoogleDriveConnection(timeoutMs = 90000, intervalMs = 4000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        await loadGoogleDriveAuthStatus();
+        if (googleDriveAuthStatus?.connected) {
+            await loadSettingsTab(true);
+            return;
+        }
     }
 }
 
