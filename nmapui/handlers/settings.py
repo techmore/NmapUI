@@ -111,10 +111,11 @@ def register_settings_routes(app, deps):
                 }
             )
         else:
+            failure_reason = folder_result.get("error", "Folder setup failed")
             google_drive_state.update(
                 {
                     "enabled": False,
-                    "status": "Connected (folder setup failed)",
+                    "status": f"Connected (folder setup failed: {failure_reason})",
                 }
             )
         normalized["sync"]["google_drive"] = google_drive_state
@@ -127,7 +128,7 @@ def register_settings_routes(app, deps):
         else:
             message = (
                 "Google Drive connected, but the default folder could not be created. "
-                "Check Settings to finish setup."
+                f"{folder_result.get('error', 'Check Settings to finish setup.')}"
             )
         return f"<html><body><h3>{message}</h3><p>You can close this window and return to NmapUI.</p></body></html>"
 

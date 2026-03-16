@@ -17,6 +17,25 @@ GOOGLE_DRIVE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/drive/v3/files
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 GOOGLE_DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files"
 GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+def _format_google_drive_error(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return "Unknown error"
+    error = payload.get("error")
+    if isinstance(error, dict):
+        message = error.get("message") or error.get("status") or "Google Drive API error"
+        reasons = []
+        for entry in error.get("errors", []) or []:
+            if isinstance(entry, dict) and entry.get("reason"):
+                reasons.append(entry["reason"])
+        if reasons:
+            unique = ", ".join(sorted(set(reasons)))
+            return f"{message} ({unique})"
+        return message
+    if isinstance(error, str):
+        return error
+    return payload.get("error_description") or payload.get("message") or "Unknown error"
 ENCRYPTED_TOKEN_SCHEMA_VERSION = 1
 
 
@@ -394,9 +413,10 @@ def ensure_google_drive_reports_folder(
     )
     payload = response.json()
     if response.status_code >= 400:
+        error_detail = _format_google_drive_error(payload)
         return {
             "success": False,
-            "error": payload.get("error", {}).get("message") or "Failed to query Drive folder",
+            "error": f"Failed to query Drive folder (HTTP {response.status_code}): {error_detail}",
         }
 
     files = payload.get("files") or []
@@ -412,9 +432,10 @@ def ensure_google_drive_reports_folder(
     )
     create_payload = create_response.json()
     if create_response.status_code >= 400:
+        error_detail = _format_google_drive_error(create_payload)
         return {
             "success": False,
-            "error": create_payload.get("error", {}).get("message") or "Failed to create Drive folder",
+            "error": f"Failed to create Drive folder (HTTP {create_response.status_code}): {error_detail}",
         }
     return {
         "success": True,
