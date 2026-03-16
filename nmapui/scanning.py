@@ -317,7 +317,7 @@ def run_nmap_with_xml_output(
             str(output_base),
             target,
         ]
-        timeout_seconds = 1200
+        timeout_seconds = 7200
 
     if excluded_targets:
         cmd[1:1] = ["--exclude", ",".join(excluded_targets)]
@@ -394,13 +394,13 @@ def run_nmap_with_xml_output(
                 socketio_emit("scan_feedback", message)
             socketio_sleep(0)
 
-        return result.returncode == 0
+        return {"success": result.returncode == 0, "timeout": False}
 
     except RuntimeError as exc:
         if str(exc) == "report cancelled":
             if sid:
                 emit_to_client(sid, "scan_feedback", "Report generation cancelled")
-            return False
+            return {"success": False, "timeout": False, "cancelled": True}
         raise
     except subprocess.TimeoutExpired:
         end_time = datetime.now()
@@ -426,4 +426,10 @@ def run_nmap_with_xml_output(
             socketio_emit("scan_feedback", error_msg)
             socketio_emit("report_error", payload)
         socketio_sleep(0)
-        return False
+        return {
+            "success": False,
+            "timeout": True,
+            "timeout_seconds": timeout_seconds,
+            "elapsed_seconds": duration,
+            "error": payload.get("error"),
+        }

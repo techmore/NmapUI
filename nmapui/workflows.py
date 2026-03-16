@@ -5,6 +5,7 @@ import re
 import shutil
 
 from nmapui.runtime_log import append_runtime_log
+import ipaddress
 from nmapui.reporting import (
     build_report_diff_summary,
     inject_diff_summary_into_report_html,
@@ -465,6 +466,56 @@ def generate_report_task(context, sid, data):
     start_time = datetime.now()
 
     try:
+        def _split_cidr_once(value):
+            try:
+                network = ipaddress.ip_network(value, strict=False)
+            except ValueError:
+                return None
+            max_prefix = 30 if network.version == 4 else 126
+            if network.prefixlen >= max_prefix:
+                return None
+            return [str(subnet) for subnet in network.subnets(new_prefix=network.prefixlen + 1)]
+
+        def _scan_subnets_with_fallback(parent_target, base_path, *, depth, max_depth, run_kwargs):
+            subnets = _split_cidr_once(parent_target)
+            if not subnets:
+                return None
+            emit_to_client(
+                sid,
+                "scan_feedback",
+                f"⏱️ Scan timed out; splitting {parent_target} into {len(subnets)} smaller chunks",
+            )
+            socketio_sleep(0)
+            xml_paths = []
+            for sub_index, subnet in enumerate(subnets, start=1):
+                if job_registry.is_cancelled(sid, "report"):
+                    return None
+                sub_output = base_path.parent / f"{base_path.name}_sub_{depth}_{sub_index}"
+                result = run_nmap_with_xml_output(
+                    subnet,
+                    sub_output,
+                    "comprehensive",
+                    sid=sid,
+                    **run_kwargs,
+                )
+                if result.get("success"):
+                    xml_paths.append(sub_output.with_suffix(".xml"))
+                    continue
+                if result.get("timeout") and depth < max_depth:
+                    nested = _scan_subnets_with_fallback(
+                        subnet,
+                        sub_output,
+                        depth=depth + 1,
+                        max_depth=max_depth,
+                        run_kwargs=run_kwargs,
+                    )
+                    if not nested:
+                        return None
+                    xml_paths.extend(nested)
+                    continue
+                return None
+            return xml_paths
+
         emit_to_client(sid, "scan_feedback", "📁 Creating scan folder...")
         update_job_progress(sid, "report", phase="create_folder", message="Creating scan folder", progress=10)
         socketio_sleep(0)
@@ -505,13 +556,25 @@ def generate_report_task(context, sid, data):
                 run_kwargs["scan_only_mode"] = True
             run_kwargs["force_privileged_scan"] = True
 
-            if not run_nmap_with_xml_output(
+            scan_result = run_nmap_with_xml_output(
                 chunk_target,
                 chunk_output_base,
                 "comprehensive",
                 sid=sid,
                 **run_kwargs,
-            ):
+            )
+            if not scan_result.get("success"):
+                if scan_result.get("timeout"):
+                    fallback_xmls = _scan_subnets_with_fallback(
+                        chunk_target,
+                        chunk_output_base,
+                        depth=1,
+                        max_depth=4,
+                        run_kwargs=run_kwargs,
+                    )
+                    if fallback_xmls:
+                        xml_files.extend(fallback_xmls)
+                        continue
                 if job_registry.is_cancelled(sid, "report"):
                     if scan_dir is not None:
                         mark_scan_failure(
