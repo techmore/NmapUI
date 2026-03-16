@@ -345,6 +345,7 @@ def upload_files_to_google_drive(
     key_path: Path | None = None,
     file_paths: list[Path],
     folder_id: str,
+    file_name_map: dict[str, str] | None = None,
     requests_module,
 ) -> dict:
     access_token = ensure_google_drive_access_token(
@@ -355,7 +356,8 @@ def upload_files_to_google_drive(
     )
     uploaded = []
     for file_path in file_paths:
-        metadata = {"name": file_path.name}
+        override_name = (file_name_map or {}).get(str(file_path))
+        metadata = {"name": override_name or file_path.name}
         if folder_id:
             metadata["parents"] = [folder_id]
         with file_path.open("rb") as file_handle:

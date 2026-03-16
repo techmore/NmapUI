@@ -98,6 +98,7 @@ from nmapui.reporting import (
     extract_scan_statistics,
     find_latest_saved_scan_for_pdf,
     get_most_recent_scan_xml,
+    build_artifact_downloads,
     merge_nmap_xml_files,
     parse_scan_xml_for_assets,
     save_scan_metadata,
@@ -312,6 +313,33 @@ def _format_scan_folder_name(metadata: dict, scan_path: str) -> str:
     return "_".join(parts)
 
 
+def _format_scan_basename(metadata: dict, scan_path: str) -> str:
+    return _format_scan_folder_name(metadata, scan_path)
+
+
+def _build_drive_upload_names(file_paths, metadata, scan_path) -> dict[str, str]:
+    base = _format_scan_basename(metadata, scan_path)
+    downloads = build_artifact_downloads(metadata or {}, customer_fingerprinter=customer_fingerprinter)
+    names: dict[str, str] = {}
+    for file_path in file_paths:
+        name = file_path.name
+        if name == "scan_report.pdf":
+            names[str(file_path)] = downloads.get("pdf", f"{base}.pdf")
+        elif name == "scan.xml":
+            names[str(file_path)] = downloads.get("xml", f"{base}.xml")
+        elif name == "scan_web.html":
+            names[str(file_path)] = downloads.get("html", f"{base}.html")
+        elif name == "scan_pdf.html":
+            names[str(file_path)] = f"{base}_pdf.html"
+        elif name == "scan.nmap":
+            names[str(file_path)] = f"{base}.nmap"
+        elif name == "scan.gnmap":
+            names[str(file_path)] = f"{base}.gnmap"
+        else:
+            names[str(file_path)] = f"{base}_{name}"
+    return names
+
+
 def upload_report_artifacts_to_google_drive(*, scan_path, file_paths, metadata, settings_state):
     base_folder_id = str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip() or None
     folder_name = _format_scan_folder_name(metadata or {}, scan_path or "")
@@ -325,12 +353,14 @@ def upload_report_artifacts_to_google_drive(*, scan_path, file_paths, metadata, 
     )
     if not folder_result.get("success"):
         return folder_result
+    file_name_map = _build_drive_upload_names(file_paths, metadata or {}, scan_path or "")
     return upload_files_to_google_drive(
         credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
         token_path=GOOGLE_DRIVE_TOKEN_FILE,
         key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
         file_paths=file_paths,
         folder_id=folder_result.get("folder_id", ""),
+        file_name_map=file_name_map,
         requests_module=requests,
     )
 
