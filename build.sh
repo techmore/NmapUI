@@ -159,6 +159,18 @@ tar -cf - \
   nmap-modern.xsl \
   nmap-pdf-olive-legacy.xsl | tar -xf - -C "$APP_NAME/Contents/Resources"
 
+APP_RESOURCES_DIR="$APP_NAME/Contents/Resources"
+APP_VERSION_VALUE="$(cat "$ROOT_DIR/VERSION" 2>/dev/null || echo "unknown")"
+APP_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+APP_BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+cat > "$APP_RESOURCES_DIR/build_info.json" << EOF
+{
+  "version": "$APP_VERSION_VALUE",
+  "git_sha": "$APP_GIT_SHA",
+  "built_at": "$APP_BUILD_TIME"
+}
+EOF
+
 echo "Creating clean bundled virtual environment..."
 python3 -m venv "$BUNDLE_VENV"
 source "$BUNDLE_VENV/bin/activate"

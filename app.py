@@ -9,6 +9,7 @@ import ipaddress
 import netifaces as ni
 import shutil
 import logging
+import json
 from customer_fingerprint import CustomerFingerprinter
 from nmapui.auth import log_auth_posture
 from nmapui.auto_scan import (
@@ -130,6 +131,19 @@ from persistence import (
 )
 
 configure_root_logging_runtime(base_dir=BASE_DIR)
+
+try:
+    build_info_path = BASE_DIR / "build_info.json"
+    if build_info_path.exists():
+        build_info = json.loads(build_info_path.read_text())
+        logging.getLogger(__name__).info(
+            "Build info: version=%s git_sha=%s built_at=%s",
+            build_info.get("version"),
+            build_info.get("git_sha"),
+            build_info.get("built_at"),
+        )
+except Exception:
+    logging.getLogger(__name__).warning("Failed to read build_info.json", exc_info=True)
 
 logger = logging.getLogger(__name__)
 
