@@ -554,6 +554,8 @@ def generate_report_task(context, sid, data):
                 run_kwargs["excluded_targets"] = excluded_targets
             if scan_only_mode:
                 run_kwargs["scan_only_mode"] = True
+            max_scan_minutes = int(scan_rules.get("max_scan_minutes", 120) or 120)
+            run_kwargs["timeout_seconds"] = max(max_scan_minutes, 15) * 60
             run_kwargs["force_privileged_scan"] = True
 
             scan_result = run_nmap_with_xml_output(

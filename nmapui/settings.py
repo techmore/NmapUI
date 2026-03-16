@@ -18,6 +18,7 @@ DEFAULT_APP_SETTINGS = {
     "scan_rules": {
         "scan_only_mode": False,
         "excluded_targets": [],
+        "max_scan_minutes": 120,
     },
     "reports": {
         "save_to_desktop": False,
@@ -154,6 +155,7 @@ def normalize_target_profile(profile: Any) -> dict[str, Any]:
             "excluded_targets": _normalize_string_list(
                 (scan_rules or {}).get("excluded_targets", [])
             ),
+            "max_scan_minutes": int((scan_rules or {}).get("max_scan_minutes", 120) or 120),
         },
     }
 
@@ -189,6 +191,7 @@ def normalize_settings_document(
             "excluded_targets": _normalize_string_list(
                 (scan_rules or {}).get("excluded_targets", [])
             ),
+            "max_scan_minutes": int((scan_rules or {}).get("max_scan_minutes", 120) or 120),
         },
         "reports": {
             "save_to_desktop": bool((reports or {}).get("save_to_desktop", False)),
@@ -402,6 +405,7 @@ def get_effective_scan_rules(*, settings_state, target="", customer_id="") -> di
             "excluded_targets": _normalize_string_list(
                 global_rules.get("excluded_targets", [])
             ),
+            "max_scan_minutes": int(global_rules.get("max_scan_minutes", 120) or 120),
         }
 
     profile_rules = matched_profile.get("scan_rules", {})
@@ -411,5 +415,9 @@ def get_effective_scan_rules(*, settings_state, target="", customer_id="") -> di
         ),
         "excluded_targets": _normalize_string_list(
             profile_rules.get("excluded_targets", global_rules.get("excluded_targets", []))
+        ),
+        "max_scan_minutes": int(
+            profile_rules.get("max_scan_minutes", global_rules.get("max_scan_minutes", 120))
+            or 120
         ),
     }

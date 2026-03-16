@@ -33,6 +33,10 @@ function getSettingsFormState() {
                 .split('\n')
                 .map((value) => value.trim())
                 .filter(Boolean),
+            max_scan_minutes: Number.parseInt(
+                document.getElementById('settings-max-scan-minutes')?.value || '120',
+                10,
+            ) || 120,
         },
         reports: {
             save_to_desktop: document.getElementById('settings-save-reports-desktop')?.checked || false,
@@ -108,6 +112,7 @@ function renderRuntimeSummary(summary) {
         ['Profiles', String(summary.target_profiles_count || 0)],
         ['Exclusions', String(summary.excluded_targets_count || 0)],
         ['Scan-only mode', summary.scan_only_mode ? 'Enabled' : 'Disabled'],
+        ['Max scan duration', `${summary.max_scan_minutes || 120} min`],
         ['Desktop reports', summary.reports_save_to_desktop ? 'Enabled' : 'Disabled'],
         ['Google Drive', summary.google_drive_enabled ? 'Enabled' : 'Disabled'],
         ['Remote sync', summary.remote_sync_enabled ? 'Enabled' : 'Disabled'],
@@ -272,6 +277,7 @@ function fillSettingsForm(state) {
     settingsState = state;
     document.getElementById('settings-scan-only-mode').checked = !!state.scan_rules?.scan_only_mode;
     document.getElementById('settings-excluded-targets').value = (state.scan_rules?.excluded_targets || []).join('\n');
+    document.getElementById('settings-max-scan-minutes').value = state.scan_rules?.max_scan_minutes || 120;
     document.getElementById('settings-save-reports-desktop').checked = !!state.reports?.save_to_desktop;
     document.getElementById('settings-profile-scan-only-mode').checked = false;
     document.getElementById('settings-profile-excluded-targets').value = '';
@@ -602,7 +608,7 @@ function addTargetProfile() {
 
     settingsState = settingsState || {
         target_profiles: [],
-        scan_rules: { scan_only_mode: false, excluded_targets: [] },
+        scan_rules: { scan_only_mode: false, excluded_targets: [], max_scan_minutes: 120 },
         sync: { google_drive: {}, remote_sync: {} },
         auto_monitor: {
             defaults: {

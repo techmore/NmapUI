@@ -265,6 +265,7 @@ def run_nmap_with_xml_output(
     socketio_emit,
     socketio_sleep,
     run_cancellable_command,
+    timeout_seconds=None,
 ):
     """Run nmap with all formats output (-oA)."""
     if force_privileged_scan:
@@ -291,7 +292,7 @@ def run_nmap_with_xml_output(
             str(output_base),
             target,
         ]
-        timeout_seconds = 180
+        timeout_seconds = int(timeout_seconds or 180)
     else:
         logger.info("Running comprehensive scan on %s...", target)
         message = (
@@ -317,7 +318,7 @@ def run_nmap_with_xml_output(
             str(output_base),
             target,
         ]
-        timeout_seconds = 7200
+        timeout_seconds = int(timeout_seconds or 7200)
 
     if excluded_targets:
         cmd[1:1] = ["--exclude", ",".join(excluded_targets)]

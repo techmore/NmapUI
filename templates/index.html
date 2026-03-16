@@ -786,6 +786,11 @@
                             <textarea id="settings-excluded-targets" rows="5" class="form-control form-control-md mt-1" placeholder="One host, range, or CIDR per line"></textarea>
                             <p class="mt-2 text-xs text-olive-600">Exclusions are applied to Nmap-based scan flows. Current ARP discovery remains best-effort and may still touch excluded IPs outside scan-only mode.</p>
                         </div>
+                        <div>
+                            <label for="settings-max-scan-minutes" class="block text-sm font-medium text-olive-800">Max scan duration (minutes)</label>
+                            <input id="settings-max-scan-minutes" type="number" min="15" max="480" step="15" class="form-control form-control-md mt-1" placeholder="120">
+                            <p class="mt-2 text-xs text-olive-600">Comprehensive scans will stop after this limit and auto-split into smaller chunks if needed.</p>
+                        </div>
                     </div>
                 </section>
 

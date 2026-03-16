@@ -114,6 +114,7 @@ def register_core_routes(app, deps):
         scan_rules = settings_state.get("scan_rules", {})
         reports = settings_state.get("reports", {})
         sync = settings_state.get("sync", {})
+        max_scan_minutes = int(scan_rules.get("max_scan_minutes", 120) or 120)
         maintenance_backfill = {}
         maintenance_retention = {}
         persisted_counts = {
@@ -138,6 +139,7 @@ def register_core_routes(app, deps):
         return jsonify(
             {
                 "scan_only_mode": bool(scan_rules.get("scan_only_mode", False)),
+                "max_scan_minutes": max_scan_minutes,
                 "excluded_targets_count": len(scan_rules.get("excluded_targets", [])),
                 "target_profiles_count": len(settings_state.get("target_profiles", [])),
                 "reports_save_to_desktop": bool(reports.get("save_to_desktop", False)),
