@@ -393,18 +393,25 @@ class RuntimeStateStore:
             )
         self._run_write(operation)
 
-    def list_report_artifacts(self, *, customer_id: str | None = None) -> list[dict[str, Any]]:
+    def list_report_artifacts(
+        self,
+        *,
+        customer_id: str | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         query = """
             SELECT scan_path, customer_id, target, html_path, pdf_path, xml_path, payload_json, generated_at, updated_at
             FROM report_artifacts
         """
-        params: tuple[Any, ...] = ()
+        params: list[Any] = []
         if customer_id:
             query += " WHERE customer_id = ?"
-            params = (customer_id,)
-        query += " ORDER BY generated_at DESC"
+            params.append(customer_id)
+        query += " ORDER BY generated_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
         with self.connect() as conn:
-            rows = conn.execute(query, params).fetchall()
+            rows = conn.execute(query, tuple(params)).fetchall()
         return [
             {
                 "scan_path": row["scan_path"],

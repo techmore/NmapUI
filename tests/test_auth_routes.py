@@ -274,6 +274,8 @@ def build_settings_app():
             "get_google_drive_auth_status": lambda: {"configured": True, "connected": False, "status": "Not connected"},
             "build_google_drive_auth_url": lambda redirect_uri: {"success": True, "auth_url": f"https://example.com/auth?redirect_uri={redirect_uri}"},
             "exchange_google_drive_auth_code": lambda code, state: {"success": True, "status": "Google Drive connected"},
+            "ensure_google_drive_reports_folder": lambda: {"success": True, "folder_id": "test-folder-id", "status": "Drive folder ready"},
+            "save_google_drive_credentials": lambda credentials: {"success": True, "status": "Google Drive credentials saved"},
             "disconnect_google_drive": lambda: {"success": True, "status": "Google Drive disconnected"},
         },
     )
@@ -907,6 +909,8 @@ def test_settings_routes_save_normalized_payload(monkeypatch):
             "get_google_drive_auth_status": lambda: {"configured": True, "connected": False, "status": "Not connected"},
             "build_google_drive_auth_url": lambda redirect_uri: {"success": True, "auth_url": "https://example.com/auth"},
             "exchange_google_drive_auth_code": lambda code, state: {"success": True, "status": "Google Drive connected"},
+            "ensure_google_drive_reports_folder": lambda: {"success": True, "folder_id": "test-folder-id", "status": "Drive folder ready"},
+            "save_google_drive_credentials": lambda credentials: {"success": True, "status": "Google Drive credentials saved"},
             "disconnect_google_drive": lambda: {"success": True, "status": "Google Drive disconnected"},
         },
     )

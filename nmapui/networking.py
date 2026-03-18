@@ -74,7 +74,7 @@ def calculate_cidr(ip, subnet_mask):
 def identify_gateway_firewall_targets(hosts, network_key):
     gateway_targets = []
 
-    if network_key["hops"]:
+    if network_key.get("hops"):
         first_private_hop = next(
             (hop for hop in network_key["hops"] if hop["is_private"]), None
         )

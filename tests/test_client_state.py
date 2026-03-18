@@ -158,7 +158,7 @@ def test_generate_report_task_prefers_per_client_state_snapshot(tmp_path):
             "create_scan_folder": create_scan_folder_stub,
             "scans_dir": tmp_path,
             "sanitize_customer_dir_name": lambda value: value.replace(" ", "_"),
-            "run_nmap_with_xml_output": lambda *args, **kwargs: True,
+            "run_nmap_with_xml_output": lambda *args, **kwargs: {"success": True},
             "merge_nmap_xml_files": lambda *args, **kwargs: None,
             "socketio_sleep": lambda value: None,
             "convert_xml_to_html": lambda *args, **kwargs: True,
@@ -229,7 +229,7 @@ def test_generate_report_task_uses_distinct_web_and_pdf_stylesheets(tmp_path):
             "create_scan_folder": create_scan_folder_stub,
             "scans_dir": tmp_path,
             "sanitize_customer_dir_name": lambda value: value.replace(" ", "_"),
-            "run_nmap_with_xml_output": lambda *args, **kwargs: True,
+            "run_nmap_with_xml_output": lambda *args, **kwargs: {"success": True},
             "merge_nmap_xml_files": lambda *args, **kwargs: None,
             "socketio_sleep": lambda value: None,
             "convert_xml_to_html": convert_xml_to_html_stub,
@@ -304,7 +304,7 @@ def test_generate_report_task_injects_diff_summary_into_generated_html(tmp_path)
         scan_dir.mkdir(parents=True, exist_ok=True)
         return scan_dir
 
-    def run_nmap_with_xml_output_stub(target, output_base, scan_type, sid=None):
+    def run_nmap_with_xml_output_stub(target, output_base, scan_type, sid=None, **kwargs):
         output_base.with_suffix(".xml").write_text(
             """
             <nmaprun>
@@ -316,7 +316,7 @@ def test_generate_report_task_injects_diff_summary_into_generated_html(tmp_path)
             </nmaprun>
             """
         )
-        return True
+        return {"success": True}
 
     def convert_xml_to_html_stub(xml_path, html_path, *, stylesheet, get_app_version, feedback=None):
         html_path.write_text("<html><body><h1>Report</h1></body></html>", encoding="utf-8")
@@ -396,10 +396,10 @@ def test_generate_report_task_respects_non_chunked_full_scan_requests(tmp_path):
         scan_dir.mkdir(parents=True, exist_ok=True)
         return scan_dir
 
-    def run_nmap_with_xml_output_stub(target, output_base, scan_type, sid=None):
+    def run_nmap_with_xml_output_stub(target, output_base, scan_type, sid=None, **kwargs):
         observed_targets.append(target)
         output_base.with_suffix(".xml").write_text("<nmaprun></nmaprun>", encoding="utf-8")
-        return True
+        return {"success": True}
 
     def convert_xml_to_html_stub(xml_path, html_path, *, stylesheet, get_app_version, feedback=None):
         html_path.write_text("<html><body>Report</body></html>", encoding="utf-8")

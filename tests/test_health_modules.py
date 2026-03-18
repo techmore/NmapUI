@@ -97,6 +97,8 @@ def test_runtime_settings_summary_reports_settings_state():
         "scan_only_mode": True,
         "excluded_targets_count": 1,
         "target_profiles_count": 1,
+        "max_scan_minutes": 120,
+        "reports_save_to_desktop": False,
         "google_drive_enabled": True,
         "remote_sync_enabled": False,
         "tool_versions": {
@@ -141,4 +143,5 @@ def test_effective_scan_rules_prefer_matching_target_profile():
     assert rules == {
         "scan_only_mode": True,
         "excluded_targets": ["192.168.1.50"],
+        "max_scan_minutes": 120,
     }

@@ -746,14 +746,14 @@ def generate_report_task(context, sid, data):
         )
         socketio_sleep(0)
 
-        cust_id = None
-        for customer in customer_fingerprinter.customers:
-            if customer.get("name") == customer_name:
-                cust_id = customer.get("id")
-                break
-
-        if not cust_id and current_customer.get("name") == customer_name:
-            cust_id = current_customer.get("id")
+        # Prefer the authoritative ID already resolved earlier in this task
+        cust_id = current_customer_id if current_customer_id and current_customer_id != "unknown" else None
+        if not cust_id:
+            # Fallback: name-based search (handles edge case where ID wasn't resolved)
+            for customer in customer_fingerprinter.customers:
+                if customer.get("name") == customer_name:
+                    cust_id = customer.get("id")
+                    break
 
         if cust_id and cust_id != "unknown":
             customer_fingerprinter.update_last_scan_duration(cust_id, duration_str)

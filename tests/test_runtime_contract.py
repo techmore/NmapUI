@@ -208,7 +208,7 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'elif [[ -d "$SYSTEM_APPLICATIONS_DIR" && -w "$SYSTEM_APPLICATIONS_DIR" ]]; then' in build_script
     assert 'APP_INSTALL_DIR="$SYSTEM_APPLICATIONS_DIR"' in build_script
     assert 'APP_INSTALL_DIR="$USER_APPLICATIONS_DIR"' in build_script
-    assert 'BIN="$ROOT_DIR/NmapUI"' in build_script
+    assert 'BIN="$BUILD_DIR/NmapUI"' in build_script
     assert 'APP_NAME="$ROOT_DIR/NmapUI.app"' in build_script
     assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUI.app"' in build_script
     assert 'INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"' in build_script
@@ -792,7 +792,7 @@ def test_runtime_status_route_and_menu_bar_indicator_contract():
     assert 'var runtimeStatusURL: URL {' in launcher_source
     assert 'URL(string: "http://127.0.0.1:\\(runtimePort)/api/runtime/status")!' in launcher_source
     assert 'environment["NMAPUI_PORT"] = String(runtimePort)' in launcher_source
-    assert 'environment["NMAPUI_ALLOWED_ORIGINS"] = "http://127.0.0.1:\\(runtimePort),http://localhost:\\(runtimePort)"' in launcher_source
+    assert 'environment["NMAPUI_ALLOWED_ORIGINS"] = allowedOrigins' in launcher_source
     assert "pickAvailableRuntimePort" in launcher_source
     assert "startStatusPolling()" in launcher_source
     assert "pollRuntimeStatus()" in launcher_source
@@ -1416,7 +1416,7 @@ def test_google_drive_integration_contract_exists():
     assert '\"ciphertext\"' in google_drive_source
     assert 'with file_path.open("rb") as file_handle:' in google_drive_source
     assert "file_path.read_bytes()" not in google_drive_source
-    assert "upload_report_artifacts_to_google_drive=lambda" in app_source
+    assert "upload_report_artifacts_to_google_drive=" in app_source
     assert "key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE" in app_source
     assert "load_remote_sync_secret(" in app_source
     assert "REMOTE_SYNC_SECRET_FILE" in app_source

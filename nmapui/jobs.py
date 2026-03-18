@@ -15,38 +15,41 @@ class RateLimiter:
         self.cooldown_seconds = cooldown_seconds
         self.scan_timestamps = []
         self.last_scan_time = None
+        self._lock = threading.Lock()
 
     def can_scan(self):
-        now = datetime.now()
+        with self._lock:
+            now = datetime.now()
 
-        if self.last_scan_time:
-            elapsed = (now - self.last_scan_time).total_seconds()
-            if elapsed < self.cooldown_seconds:
-                logger.warning(
-                    "Scan cooldown active. Wait %ss more",
-                    int(self.cooldown_seconds - elapsed),
-                )
-                return (
-                    False,
-                    f"Cooldown active. Try again in {int(self.cooldown_seconds - elapsed)}s",
-                )
+            if self.last_scan_time:
+                elapsed = (now - self.last_scan_time).total_seconds()
+                if elapsed < self.cooldown_seconds:
+                    logger.warning(
+                        "Scan cooldown active. Wait %ss more",
+                        int(self.cooldown_seconds - elapsed),
+                    )
+                    return (
+                        False,
+                        f"Cooldown active. Try again in {int(self.cooldown_seconds - elapsed)}s",
+                    )
 
-        one_hour_ago = now - timedelta(hours=1)
-        recent_scans = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
-        if len(recent_scans) >= self.max_scans_per_hour:
-            logger.warning("Rate limit reached: %s scans/hour", self.max_scans_per_hour)
-            return False, f"Rate limit reached ({self.max_scans_per_hour} scans/hour)"
+            one_hour_ago = now - timedelta(hours=1)
+            recent_scans = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
+            if len(recent_scans) >= self.max_scans_per_hour:
+                logger.warning("Rate limit reached: %s scans/hour", self.max_scans_per_hour)
+                return False, f"Rate limit reached ({self.max_scans_per_hour} scans/hour)"
 
-        return True, None
+            return True, None
 
     def record_scan(self):
-        now = datetime.now()
-        self.scan_timestamps.append(now)
-        self.last_scan_time = now
+        with self._lock:
+            now = datetime.now()
+            self.scan_timestamps.append(now)
+            self.last_scan_time = now
 
-        one_hour_ago = now - timedelta(hours=1)
-        self.scan_timestamps = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
-        logger.info("Scan recorded. Total in last hour: %s", len(self.scan_timestamps))
+            one_hour_ago = now - timedelta(hours=1)
+            self.scan_timestamps = [ts for ts in self.scan_timestamps if ts > one_hour_ago]
+            logger.info("Scan recorded. Total in last hour: %s", len(self.scan_timestamps))
 
 
 class ScanBroadcaster:

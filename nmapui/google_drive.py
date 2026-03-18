@@ -185,7 +185,7 @@ def build_google_drive_auth_url(
     if not credentials.get("client_id") or not credentials.get("client_secret"):
         return {
             "success": False,
-            "error": f"Missing Google Drive OAuth credentials file at {credentials_path}",
+            "error": "Google Drive OAuth credentials file not found. Upload your credentials.json from the Google Cloud Console.",
         }
 
     state = secrets.token_urlsafe(24)
@@ -231,6 +231,15 @@ def exchange_google_drive_auth_code(
     pending_auth = token_state.get("pending_auth") or {}
     if not pending_auth or pending_auth.get("state") != state:
         return {"success": False, "error": "Invalid or expired Google Drive auth state."}
+
+    created_at_str = pending_auth.get("created_at", "")
+    if created_at_str:
+        try:
+            created_at = datetime.fromisoformat(created_at_str)
+            if datetime.now(timezone.utc) - created_at > timedelta(minutes=10):
+                return {"success": False, "error": "Google Drive auth state has expired. Please restart the auth flow."}
+        except ValueError:
+            pass
 
     response = requests_module.post(
         GOOGLE_DRIVE_TOKEN_ENDPOINT,

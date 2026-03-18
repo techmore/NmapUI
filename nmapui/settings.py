@@ -309,7 +309,7 @@ def validate_google_drive_settings(*, folder_id, credentials_path: Path) -> dict
         return {
             "success": False,
             "status": "OAuth credentials missing",
-            "error": f"Missing Google Drive OAuth credentials file at {credentials_path}",
+            "error": "Google Drive OAuth credentials file not found. Upload your credentials.json from the Google Cloud Console.",
         }
 
     return {

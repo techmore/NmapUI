@@ -28,8 +28,12 @@ AUTO_SCAN_ALLOWED_KEYS = {"enabled", "start_time", "end_time", "last_run"}
 
 
 def _parse_time_of_day(value: str) -> tuple[int, int]:
-    hour_text, minute_text = str(value or "00:00").split(":", 1)
-    return int(hour_text), int(minute_text)
+    try:
+        hour_text, minute_text = str(value or "00:00").split(":", 1)
+        return int(hour_text), int(minute_text)
+    except (ValueError, AttributeError):
+        logger.warning("Invalid time-of-day value %r, defaulting to 00:00", value)
+        return 0, 0
 
 
 def get_next_auto_scan_run(config: dict, *, now: datetime | None = None) -> datetime | None:
