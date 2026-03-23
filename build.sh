@@ -20,6 +20,8 @@ SYSTEM_APPLICATIONS_DIR="/Applications"
 USER_APPLICATIONS_DIR="$HOME/Applications"
 BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
 BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
+GOOGLE_DRIVE_CREDENTIALS_SOURCE="$ROOT_DIR/config/google_drive_credentials.json"
+GOOGLE_DRIVE_CREDENTIALS_BUNDLE="$APP_NAME/Contents/Resources/config/google_drive_credentials.json"
 TEMP_MIGRATION_DB=""
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 HOST_ARCH="$(uname -m)"
@@ -167,6 +169,38 @@ remove_bundle_path() {
     fi
 }
 
+stage_google_drive_credentials() {
+    mkdir -p "$(dirname "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE")"
+
+    if [[ -f "$GOOGLE_DRIVE_CREDENTIALS_SOURCE" ]]; then
+        cp "$GOOGLE_DRIVE_CREDENTIALS_SOURCE" "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE"
+        chmod 600 "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE" 2>/dev/null || true
+        echo "Bundled Google Drive OAuth credentials from $GOOGLE_DRIVE_CREDENTIALS_SOURCE"
+        return
+    fi
+
+    if [[ -n "${NMAPUI_GOOGLE_DRIVE_CREDENTIALS_JSON_B64:-}" ]]; then
+        if ! printf '%s' "$NMAPUI_GOOGLE_DRIVE_CREDENTIALS_JSON_B64" | base64 --decode > "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE"; then
+            echo "ERROR: Failed to decode NMAPUI_GOOGLE_DRIVE_CREDENTIALS_JSON_B64" >&2
+            exit 1
+        fi
+        chmod 600 "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE" 2>/dev/null || true
+        echo "Bundled Google Drive OAuth credentials from NMAPUI_GOOGLE_DRIVE_CREDENTIALS_JSON_B64"
+        return
+    fi
+
+    rm -f "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE"
+
+    if [[ "${NMAPUI_REQUIRE_GOOGLE_DRIVE_CREDENTIALS:-0}" == "1" ]]; then
+        echo "ERROR: Google Drive OAuth credentials are missing." >&2
+        echo "Provide $GOOGLE_DRIVE_CREDENTIALS_SOURCE or NMAPUI_GOOGLE_DRIVE_CREDENTIALS_JSON_B64 before building." >&2
+        exit 1
+    fi
+
+    echo "WARNING: Google Drive OAuth credentials are missing from this build."
+    echo "WARNING: Google Drive sync will require importing credentials.json from Settings after install."
+}
+
 # Ensure build output doesn't collide with the nmapui package on case-insensitive filesystems.
 echo "Purging stale runtime state and build artifacts..."
 purge_bundle_artifacts "$APP_NAME"
@@ -277,6 +311,8 @@ cat > "$APP_RESOURCES_DIR/build_info.json" << EOF
   "built_at": "$APP_BUILD_TIME"
 }
 EOF
+
+stage_google_drive_credentials
 
 echo "Creating clean bundled virtual environment..."
 python3 -m venv "$BUNDLE_VENV"

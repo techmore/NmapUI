@@ -244,6 +244,22 @@ def test_build_google_drive_auth_status_reports_connected_token(tmp_path):
     assert status["connected"] is True
 
 
+def test_build_google_drive_auth_status_reports_missing_credentials(tmp_path):
+    credentials_path = tmp_path / "credentials.json"
+    token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
+
+    status = build_google_drive_auth_status(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        key_path=key_path,
+    )
+
+    assert status["configured"] is False
+    assert status["connected"] is False
+    assert status["status"] == "OAuth credentials missing. Import credentials.json to enable Google Drive."
+
+
 def test_load_google_drive_token_state_migrates_plaintext_file(tmp_path):
     token_path = tmp_path / "tokens.json"
     key_path = tmp_path / "tokens.key"

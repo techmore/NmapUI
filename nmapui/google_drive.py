@@ -157,11 +157,18 @@ def build_google_drive_auth_status(*, credentials_path: Path, token_path: Path, 
     has_refresh_token = bool(token_state.get("refresh_token"))
     has_access_token = bool(token_state.get("access_token"))
     expires_at = token_state.get("expires_at")
+    configured = bool(credentials.get("client_id") and credentials.get("client_secret"))
+    if has_refresh_token or has_access_token:
+        status = "Connected"
+    elif configured:
+        status = "Not connected"
+    else:
+        status = "OAuth credentials missing. Import credentials.json to enable Google Drive."
     return {
-        "configured": bool(credentials.get("client_id") and credentials.get("client_secret")),
+        "configured": configured,
         "connected": has_refresh_token or has_access_token,
         "expires_at": expires_at,
-        "status": "Connected" if (has_refresh_token or has_access_token) else "Not connected",
+        "status": status,
     }
 
 

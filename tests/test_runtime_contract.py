@@ -140,6 +140,22 @@ def test_settings_tab_includes_auto_monitor_defaults():
     assert "settings-auto-monitor-time" in settings_source
 
 
+def test_settings_tab_exposes_google_drive_credentials_import():
+    html = (ROOT / "templates" / "index.html").read_text()
+    settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+
+    assert 'id="settings-google-drive-import-btn"' in html
+    assert 'Import Credentials JSON' in html
+    assert 'id="settings-google-drive-credentials-file"' in html
+    assert 'accept=".json,application/json"' in html
+    assert "Builds can bundle Google Drive OAuth credentials." in html
+    assert "function importGoogleDriveCredentials()" in settings_source
+    assert "function handleGoogleDriveCredentialsSelection(event)" in settings_source
+    assert "Google Drive credentials are missing. Use Import Credentials to upload your credentials.json, then connect again." in settings_source
+    assert "document.getElementById('settings-google-drive-import-btn')?.addEventListener('click', importGoogleDriveCredentials);" in settings_source
+    assert "document.getElementById('settings-google-drive-credentials-file')?.addEventListener('change', handleGoogleDriveCredentialsSelection);" in settings_source
+
+
 def test_ci_workflow_covers_browser_and_packaged_smoke_jobs():
     ci_source = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
@@ -212,6 +228,8 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'APP_NAME="$ROOT_DIR/NmapUI.app"' in build_script
     assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUI.app"' in build_script
     assert 'INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"' in build_script
+    assert 'GOOGLE_DRIVE_CREDENTIALS_SOURCE="$ROOT_DIR/config/google_drive_credentials.json"' in build_script
+    assert 'GOOGLE_DRIVE_CREDENTIALS_BUNDLE="$APP_NAME/Contents/Resources/config/google_drive_credentials.json"' in build_script
     assert 'if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then' in build_script
     assert 'if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then' in build_script
     assert 'MIGRATION_SOURCE_DB="$NMAPUI_MIGRATE_DB_FROM"' in build_script
@@ -242,11 +260,20 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert "kill_runtime_tree() {" in build_script
     assert "purge_bundle_artifacts() {" in build_script
     assert "remove_bundle_path() {" in build_script
+    assert "stage_google_drive_credentials() {" in build_script
     assert 'purge_bundle_artifacts "$APP_NAME"' in build_script
     assert 'purge_bundle_artifacts "$INSTALLED_APP_NAME"' in build_script
     assert 'rm -rf "$BUILD_DIR"' in build_script
     assert 'rm -rf "$APP_NAME"' in build_script
     assert 'remove_bundle_path "$INSTALLED_APP_NAME"' in build_script
+    assert 'cp "$GOOGLE_DRIVE_CREDENTIALS_SOURCE" "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE"' in build_script
+    assert "printf '%s' \"$NMAPUI_GOOGLE_DRIVE_CREDENTIALS_JSON_B64\" | base64 --decode > \"$GOOGLE_DRIVE_CREDENTIALS_BUNDLE\"" in build_script
+    assert 'chmod 600 "$GOOGLE_DRIVE_CREDENTIALS_BUNDLE" 2>/dev/null || true' in build_script
+    assert 'if [[ "${NMAPUI_REQUIRE_GOOGLE_DRIVE_CREDENTIALS:-0}" == "1" ]]; then' in build_script
+    assert 'Provide $GOOGLE_DRIVE_CREDENTIALS_SOURCE or NMAPUI_GOOGLE_DRIVE_CREDENTIALS_JSON_B64 before building.' in build_script
+    assert 'WARNING: Google Drive OAuth credentials are missing from this build.' in build_script
+    assert 'WARNING: Google Drive sync will require importing credentials.json from Settings after install.' in build_script
+    assert "\nstage_google_drive_credentials\n\n" in build_script
     assert 'if ! /usr/bin/osascript -e "do shell script \\"$(applescript_escape "$shell_command")\\" with administrator privileges"; then' in build_script
     assert 'Existing app bundle at $bundle_path requires administrator privileges to remove.' in build_script
     assert 'ERROR: Unable to remove existing app bundle without osascript: $bundle_path' in build_script
@@ -256,6 +283,7 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'SHUTDOWN_MARKER="$(pwd)/nmapui-shutdown"' in build_script
     assert '/bin/echo "$$" > "$PID_FILE"' in build_script
     assert '/bin/rm -f "$SHUTDOWN_MARKER"' in build_script
+    assert 'stage_google_drive_credentials' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script

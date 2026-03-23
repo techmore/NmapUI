@@ -162,7 +162,8 @@ function setSyncStatus(elementId, message, isError = false) {
 function updateGoogleDriveAuthButtons() {
     const connectButton = document.getElementById('settings-google-drive-connect-btn');
     const disconnectButton = document.getElementById('settings-google-drive-disconnect-btn');
-    if (!connectButton || !disconnectButton) {
+    const importButton = document.getElementById('settings-google-drive-import-btn');
+    if (!connectButton || !disconnectButton || !importButton) {
         return;
     }
 
@@ -171,6 +172,8 @@ function updateGoogleDriveAuthButtons() {
     disconnectButton.disabled = !connected;
     connectButton.classList.toggle('opacity-50', connected);
     disconnectButton.classList.toggle('opacity-50', !connected);
+    importButton.disabled = false;
+    importButton.classList.remove('opacity-50');
 }
 
 function setMaintenanceStatus(message, isError = false) {
@@ -369,7 +372,7 @@ async function connectGoogleDrive() {
     setSyncStatus('settings-google-drive-status', 'Starting Google Drive authorization...');
     try {
         if (!googleDriveAuthStatus?.configured) {
-            throw new Error('Google Drive credentials are not bundled in this build. Please contact support.');
+            throw new Error('Google Drive credentials are missing. Use Import Credentials to upload your credentials.json, then connect again.');
         }
         const response = await fetch('/api/settings/google-drive/auth-url');
         const payload = await response.json().catch(() => ({}));
@@ -434,6 +437,23 @@ async function uploadGoogleDriveCredentials(file) {
     } catch (error) {
         console.error('Error uploading Google Drive credentials:', error);
         setSyncStatus('settings-google-drive-status', error.message || 'Failed to upload credentials.', true);
+    }
+}
+
+function importGoogleDriveCredentials() {
+    document.getElementById('settings-google-drive-credentials-file')?.click();
+}
+
+async function handleGoogleDriveCredentialsSelection(event) {
+    const input = event.target;
+    const file = input?.files?.[0];
+    if (!file) {
+        return;
+    }
+    try {
+        await uploadGoogleDriveCredentials(file);
+    } finally {
+        input.value = '';
     }
 }
 
@@ -687,6 +707,8 @@ function initializeSettingsTab() {
     document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', testGoogleDriveSettings);
     document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', connectGoogleDrive);
     document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', disconnectGoogleDriveAccount);
+    document.getElementById('settings-google-drive-import-btn')?.addEventListener('click', importGoogleDriveCredentials);
+    document.getElementById('settings-google-drive-credentials-file')?.addEventListener('change', handleGoogleDriveCredentialsSelection);
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', testRemoteSyncSettings);
     document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', runRuntimeBackfill);
     document.getElementById('settings-runtime-retention-btn')?.addEventListener('click', runRuntimeRetention);
