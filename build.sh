@@ -22,6 +22,9 @@ BUNDLE_VENV="$APP_NAME/Contents/Resources/.venv"
 BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"
 GOOGLE_DRIVE_CREDENTIALS_SOURCE="$ROOT_DIR/config/google_drive_credentials.json"
 GOOGLE_DRIVE_CREDENTIALS_BUNDLE="$APP_NAME/Contents/Resources/config/google_drive_credentials.json"
+RUNTIME_SUPPORT_DIR="${NMAPUI_SUPPORT_DIR:-$HOME/Library/Application Support/NmapUI}"
+RUNTIME_DATA_DIR="${NMAPUI_DATA_DIR:-$RUNTIME_SUPPORT_DIR/data}"
+RUNTIME_LOG_DIR="${NMAPUI_LOG_DIR:-$RUNTIME_SUPPORT_DIR/logs}"
 TEMP_MIGRATION_DB=""
 SDK=$(xcrun --show-sdk-path --sdk macosx)
 HOST_ARCH="$(uname -m)"
@@ -53,7 +56,7 @@ else
 fi
 
 INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUI.app"
-INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"
+INSTALLED_RUNTIME_DB="$RUNTIME_DATA_DIR/runtime.sqlite3"
 if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then
     if [[ -n "${NMAPUI_MIGRATE_DB_FROM:-}" ]]; then
         MIGRATION_SOURCE_DB="$NMAPUI_MIGRATE_DB_FROM"
@@ -132,7 +135,7 @@ kill_runtime_tree() {
     /usr/bin/pkill -KILL -f "$run_script" 2>/dev/null || true
     /usr/bin/pkill -KILL -f "$resource_root/app.py" 2>/dev/null || true
     /usr/bin/pkill -KILL -f "$resource_root/.venv/bin/python3" 2>/dev/null || true
-    /bin/rm -f "$pid_file" "$shutdown_marker" "$bundle_path/$AUTO_SCAN_LOCK_REL" 2>/dev/null || true
+    /bin/rm -f "$pid_file" "$shutdown_marker" "$bundle_path/$AUTO_SCAN_LOCK_REL" "$RUNTIME_DATA_DIR/auto_scan_scheduler.lock" 2>/dev/null || true
 }
 
 purge_bundle_artifacts() {
@@ -345,6 +348,17 @@ fi
 /bin/echo "$$" > "$PID_FILE"
 
 source "$VENV_ACTIVATE"
+CONSOLE_USER="$(stat -f%Su /dev/console 2>/dev/null || true)"
+USER_HOME=""
+if [[ -n "$CONSOLE_USER" && "$CONSOLE_USER" != "root" ]]; then
+    USER_HOME="$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}' | tail -1)"
+fi
+if [[ -z "$USER_HOME" ]]; then
+    USER_HOME="$HOME"
+fi
+export NMAPUI_DATA_DIR="${NMAPUI_DATA_DIR:-$USER_HOME/Library/Application Support/NmapUI/data}"
+export NMAPUI_LOG_DIR="${NMAPUI_LOG_DIR:-$USER_HOME/Library/Application Support/NmapUI/logs}"
+mkdir -p "$NMAPUI_DATA_DIR" "$NMAPUI_LOG_DIR"
 export PLAYWRIGHT_BROWSERS_PATH="$(pwd)/playwright-browsers"
 
 # The menu bar wrapper runs a local embedded Flask-SocketIO server rather than

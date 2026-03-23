@@ -14,6 +14,7 @@ from customer_fingerprint_store import (
     ScanHistoryStore,
     backfill_runtime_customer_scan_history,
 )
+from nmapui.paths import BASE_DIR, CUSTOMER_TRACEROUTES_FILE
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,9 +23,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(__file__).parent.resolve()
-
-
 class CustomerFingerprinter:
     def __init__(self, config_path: Optional[str] = None, runtime_store=None):
         self.config_path = config_path or (BASE_DIR / "config" / "customers.yaml")
@@ -32,7 +30,7 @@ class CustomerFingerprinter:
         self.customers = []
         self.unknown_customer = None
         self.settings = {}
-        self.traceroutes_path = BASE_DIR / "data" / "customer_traceroutes.json"
+        self.traceroutes_path = CUSTOMER_TRACEROUTES_FILE
         self.customer_traceroutes = {}
         self.last_match_method = "unknown"
         self.runtime_store = runtime_store

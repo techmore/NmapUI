@@ -1,5 +1,6 @@
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 from pathlib import Path
 
 from nmapui.auto_scan_runtime import execute_auto_scan as execute_auto_scan_impl
@@ -45,7 +46,12 @@ def start_auto_scan_thread(
 
 
 def _resolve_log_dir(base_dir: Path) -> Path:
-    preferred = Path.home() / "Library" / "Application Support" / "NmapUI" / "logs"
+    override = str(os.environ.get("NMAPUI_LOG_DIR", "") or "").strip()
+    preferred = (
+        Path(override).expanduser()
+        if override
+        else Path.home() / "Library" / "Application Support" / "NmapUI" / "logs"
+    )
     try:
         preferred.mkdir(parents=True, exist_ok=True)
         return preferred

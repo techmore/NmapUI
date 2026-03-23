@@ -227,7 +227,10 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'BIN="$BUILD_DIR/NmapUI"' in build_script
     assert 'APP_NAME="$ROOT_DIR/NmapUI.app"' in build_script
     assert 'INSTALLED_APP_NAME="$APP_INSTALL_DIR/NmapUI.app"' in build_script
-    assert 'INSTALLED_RUNTIME_DB="$INSTALLED_APP_NAME/Contents/Resources/data/runtime.sqlite3"' in build_script
+    assert 'RUNTIME_SUPPORT_DIR="${NMAPUI_SUPPORT_DIR:-$HOME/Library/Application Support/NmapUI}"' in build_script
+    assert 'RUNTIME_DATA_DIR="${NMAPUI_DATA_DIR:-$RUNTIME_SUPPORT_DIR/data}"' in build_script
+    assert 'RUNTIME_LOG_DIR="${NMAPUI_LOG_DIR:-$RUNTIME_SUPPORT_DIR/logs}"' in build_script
+    assert 'INSTALLED_RUNTIME_DB="$RUNTIME_DATA_DIR/runtime.sqlite3"' in build_script
     assert 'GOOGLE_DRIVE_CREDENTIALS_SOURCE="$ROOT_DIR/config/google_drive_credentials.json"' in build_script
     assert 'GOOGLE_DRIVE_CREDENTIALS_BUNDLE="$APP_NAME/Contents/Resources/config/google_drive_credentials.json"' in build_script
     assert 'if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then' in build_script
@@ -283,6 +286,9 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'SHUTDOWN_MARKER="$(pwd)/nmapui-shutdown"' in build_script
     assert '/bin/echo "$$" > "$PID_FILE"' in build_script
     assert '/bin/rm -f "$SHUTDOWN_MARKER"' in build_script
+    assert 'export NMAPUI_DATA_DIR="${NMAPUI_DATA_DIR:-$USER_HOME/Library/Application Support/NmapUI/data}"' in build_script
+    assert 'export NMAPUI_LOG_DIR="${NMAPUI_LOG_DIR:-$USER_HOME/Library/Application Support/NmapUI/logs}"' in build_script
+    assert 'mkdir -p "$NMAPUI_DATA_DIR" "$NMAPUI_LOG_DIR"' in build_script
     assert 'stage_google_drive_credentials' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
@@ -377,15 +383,24 @@ def test_bundle_audit_guide_documents_runtime_asset_choice():
 def test_runtime_uses_separate_web_and_pdf_stylesheets():
     paths_source = (ROOT / "nmapui" / "paths.py").read_text()
     app_composition_source = (ROOT / "nmapui" / "app_composition.py").read_text()
+    app_runtime_source = (ROOT / "nmapui" / "app_runtime.py").read_text()
+    fingerprinter_source = (ROOT / "customer_fingerprint.py").read_text()
 
     assert 'XSL_STYLESHEET = BASE_DIR / "nmap-modern.xsl"' in paths_source
     assert 'XSL_STYLESHEET_PDF = BASE_DIR / "nmap-pdf-olive-legacy.xsl"' in paths_source
-    assert 'RUNTIME_DB_FILE = BASE_DIR / "data" / "runtime.sqlite3"' in paths_source
+    assert "def _resolve_data_dir() -> Path:" in paths_source
+    assert 'override = str(os.environ.get("NMAPUI_DATA_DIR", "") or "").strip()' in paths_source
+    assert "DATA_DIR = _resolve_data_dir()" in paths_source
+    assert 'SCANS_DIR = DATA_DIR / "scans"' in paths_source
+    assert 'RUNTIME_DB_FILE = DATA_DIR / "runtime.sqlite3"' in paths_source
     assert 'GOOGLE_DRIVE_CREDENTIALS_FILE = BASE_DIR / "config" / "google_drive_credentials.json"' in paths_source
-    assert 'GOOGLE_DRIVE_TOKEN_FILE = BASE_DIR / "data" / "google_drive_tokens.json"' in paths_source
-    assert 'GOOGLE_DRIVE_TOKEN_KEY_FILE = BASE_DIR / "data" / "google_drive_tokens.key"' in paths_source
-    assert 'REMOTE_SYNC_SECRET_FILE = BASE_DIR / "data" / "remote_sync_secret.json"' in paths_source
-    assert 'REMOTE_SYNC_SECRET_KEY_FILE = BASE_DIR / "data" / "remote_sync_secret.key"' in paths_source
+    assert 'GOOGLE_DRIVE_TOKEN_FILE = DATA_DIR / "google_drive_tokens.json"' in paths_source
+    assert 'GOOGLE_DRIVE_TOKEN_KEY_FILE = DATA_DIR / "google_drive_tokens.key"' in paths_source
+    assert 'REMOTE_SYNC_SECRET_FILE = DATA_DIR / "remote_sync_secret.json"' in paths_source
+    assert 'REMOTE_SYNC_SECRET_KEY_FILE = DATA_DIR / "remote_sync_secret.key"' in paths_source
+    assert 'CUSTOMER_TRACEROUTES_FILE = DATA_DIR / "customer_traceroutes.json"' in paths_source
+    assert 'override = str(os.environ.get("NMAPUI_LOG_DIR", "") or "").strip()' in app_runtime_source
+    assert 'self.traceroutes_path = CUSTOMER_TRACEROUTES_FILE' in fingerprinter_source
     assert '"web_stylesheet": web_stylesheet' in app_composition_source
     assert '"pdf_stylesheet": pdf_stylesheet' in app_composition_source
 
