@@ -17,6 +17,33 @@ from nmapui.settings import get_effective_scan_rules
 logger = logging.getLogger(__name__)
 
 
+def _plan_report_scan_targets(target, *, chunked_requested, split_subnet_into_chunks):
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+    except ValueError:
+        return [target], bool(chunked_requested), None
+
+    if network.num_addresses <= 1:
+        return [target], bool(chunked_requested), None
+
+    if not chunked_requested and network.version == 4 and network.prefixlen < 24:
+        chunk_targets = [str(subnet) for subnet in network.subnets(new_prefix=24)]
+        if chunk_targets:
+            return (
+                chunk_targets,
+                True,
+                (
+                    f"Large network detected - overriding single-pass report scan with "
+                    f"{len(chunk_targets)} /24 chunks to avoid timeouts"
+                ),
+            )
+
+    planned_targets = (
+        split_subnet_into_chunks(target) if chunked_requested else [target]
+    )
+    return planned_targets, bool(chunked_requested), None
+
+
 def copy_report_files_to_desktop(
     *,
     files,
@@ -420,15 +447,22 @@ def generate_report_task(context, sid, data):
         idle_state_manager.end_operation(operation_id)
         return
 
-    chunked_scan = data.get("chunked", True)
-    targets = split_subnet_into_chunks(target) if chunked_scan else [target]
+    chunked_scan_requested = bool(data.get("chunked", True))
+    targets, chunked_scan, chunk_override_message = _plan_report_scan_targets(
+        target,
+        chunked_requested=chunked_scan_requested,
+        split_subnet_into_chunks=split_subnet_into_chunks,
+    )
     num_chunks = len(targets)
     logger.info("Target split into %s chunks: %s", num_chunks, targets)
 
     if num_chunks > 1:
+        if chunk_override_message:
+            emit_to_client(sid, "scan_feedback", chunk_override_message)
+            socketio_sleep(0)
         emit_to_client(sid, "scan_feedback", f"Large network detected - scanning in {num_chunks} chunks")
         socketio_sleep(0)
-    elif not chunked_scan:
+    elif not chunked_scan_requested:
         emit_to_client(sid, "scan_feedback", "Running a single comprehensive scan without chunking")
         socketio_sleep(0)
 
