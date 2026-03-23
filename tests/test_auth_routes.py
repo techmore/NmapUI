@@ -1081,6 +1081,35 @@ def test_settings_routes_callback_reports_when_no_backfill_report_available(monk
     assert b"No saved report was uploaded automatically." in response.data
 
 
+def test_settings_routes_callback_returns_html_when_unexpected_error_occurs(monkeypatch):
+    configure_auth(monkeypatch)
+    app = Flask(__name__)
+    register_settings_routes(
+        app,
+        {
+            "settings_state": {},
+            "save_settings": lambda payload: payload,
+            "validate_google_drive": lambda folder_id: {"success": True, "status": "Configured"},
+            "validate_remote_sync": lambda endpoint, api_key: {"success": True, "status": "Configured"},
+            "get_google_drive_auth_status": lambda: {"configured": True, "connected": False, "status": "Not connected"},
+            "build_google_drive_auth_url": lambda redirect_uri: {"success": True, "auth_url": "https://example.com/auth"},
+            "exchange_google_drive_auth_code": lambda code, state: {"success": True, "status": "Google Drive connected"},
+            "ensure_google_drive_reports_folder": lambda: (_ for _ in ()).throw(RuntimeError("folder api exploded")),
+            "save_google_drive_credentials": lambda credentials: {"success": True, "status": "Google Drive credentials saved"},
+            "disconnect_google_drive": lambda: {"success": True, "status": "Google Drive disconnected"},
+            "upload_latest_report_to_google_drive": lambda: {"success": False, "attempted": False},
+        },
+    )
+
+    response = app.test_client().get(
+        "/api/settings/google-drive/callback?code=abc&state=xyz",
+    )
+
+    assert response.status_code == 500
+    assert b"Google Drive connection failed" in response.data
+    assert b"Unexpected callback error: folder api exploded" in response.data
+
+
 def test_runtime_reports_can_upload_to_google_drive(monkeypatch, tmp_path):
     configure_auth(monkeypatch)
     upload_calls = []

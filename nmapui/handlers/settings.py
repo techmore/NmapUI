@@ -118,61 +118,69 @@ def register_settings_routes(app, deps):
                 f"<p>{error}</p></body></html>",
                 400,
             )
-        result = exchange_google_drive_auth_code(code=code, state=state)
-        if not result.get("success"):
+        try:
+            result = exchange_google_drive_auth_code(code=code, state=state)
+            if not result.get("success"):
+                return (
+                    "<html><body><h3>Google Drive connection failed</h3>"
+                    f"<p>{result.get('error', 'Unknown error')}</p></body></html>",
+                    400,
+                )
+            folder_result = ensure_google_drive_reports_folder()
+            normalized = normalize_settings_document(settings_state)
+            google_drive_state = normalized.get("sync", {}).get("google_drive", {})
+            if folder_result.get("success"):
+                google_drive_state.update(
+                    {
+                        "enabled": True,
+                        "folder_id": folder_result.get("folder_id", ""),
+                        "status": "Connected",
+                    }
+                )
+            else:
+                failure_reason = folder_result.get("error", "Folder setup failed")
+                google_drive_state.update(
+                    {
+                        "enabled": False,
+                        "status": f"Connected (folder setup failed: {failure_reason})",
+                    }
+                )
+            normalized["sync"]["google_drive"] = google_drive_state
+            normalized = save_settings(normalized)
+            settings_state.clear()
+            settings_state.update(normalized)
+            message = "Google Drive connected."
+            backfill_result = None
+            if folder_result.get("success") and upload_latest_report_to_google_drive is not None:
+                backfill_result = upload_latest_report_to_google_drive()
+            if folder_result.get("success"):
+                message = "Google Drive connected. Reports will sync to nmapui-reports."
+                if isinstance(backfill_result, dict):
+                    if backfill_result.get("attempted") and backfill_result.get("success"):
+                        message += " Latest completed report was uploaded."
+                    elif backfill_result.get("attempted") and not backfill_result.get("success"):
+                        message += (
+                            " Latest completed report upload failed. "
+                            f"{backfill_result.get('error', 'Check Logs for details.')}"
+                        )
+                    elif backfill_result.get("error"):
+                        message += (
+                            " No saved report was uploaded automatically. "
+                            f"{backfill_result.get('error')}"
+                        )
+            else:
+                message = (
+                    "Google Drive connected, but the default folder could not be created. "
+                    f"{folder_result.get('error', 'Check Settings to finish setup.')}"
+                )
+            return f"<html><body><h3>{message}</h3><p>You can close this window and return to NmapUI.</p></body></html>"
+        except Exception as exc:
+            app.logger.exception("Google Drive callback failed")
             return (
                 "<html><body><h3>Google Drive connection failed</h3>"
-                f"<p>{result.get('error', 'Unknown error')}</p></body></html>",
-                400,
+                f"<p>Unexpected callback error: {exc}</p></body></html>",
+                500,
             )
-        folder_result = ensure_google_drive_reports_folder()
-        normalized = normalize_settings_document(settings_state)
-        google_drive_state = normalized.get("sync", {}).get("google_drive", {})
-        if folder_result.get("success"):
-            google_drive_state.update(
-                {
-                    "enabled": True,
-                    "folder_id": folder_result.get("folder_id", ""),
-                    "status": "Connected",
-                }
-            )
-        else:
-            failure_reason = folder_result.get("error", "Folder setup failed")
-            google_drive_state.update(
-                {
-                    "enabled": False,
-                    "status": f"Connected (folder setup failed: {failure_reason})",
-                }
-            )
-        normalized["sync"]["google_drive"] = google_drive_state
-        normalized = save_settings(normalized)
-        settings_state.clear()
-        settings_state.update(normalized)
-        message = "Google Drive connected."
-        backfill_result = None
-        if folder_result.get("success") and upload_latest_report_to_google_drive is not None:
-            backfill_result = upload_latest_report_to_google_drive()
-        if folder_result.get("success"):
-            message = "Google Drive connected. Reports will sync to nmapui-reports."
-            if isinstance(backfill_result, dict):
-                if backfill_result.get("attempted") and backfill_result.get("success"):
-                    message += " Latest completed report was uploaded."
-                elif backfill_result.get("attempted") and not backfill_result.get("success"):
-                    message += (
-                        " Latest completed report upload failed. "
-                        f"{backfill_result.get('error', 'Check Logs for details.')}"
-                    )
-                elif backfill_result.get("error"):
-                    message += (
-                        " No saved report was uploaded automatically. "
-                        f"{backfill_result.get('error')}"
-                    )
-        else:
-            message = (
-                "Google Drive connected, but the default folder could not be created. "
-                f"{folder_result.get('error', 'Check Settings to finish setup.')}"
-            )
-        return f"<html><body><h3>{message}</h3><p>You can close this window and return to NmapUI.</p></body></html>"
 
     @app.route("/api/settings/google-drive/disconnect", methods=["POST"])
     @require_auth

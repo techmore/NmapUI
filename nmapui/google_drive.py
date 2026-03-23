@@ -36,6 +36,16 @@ def _format_google_drive_error(payload: dict) -> str:
     if isinstance(error, str):
         return error
     return payload.get("error_description") or payload.get("message") or "Unknown error"
+
+
+def _response_json(response) -> dict:
+    try:
+        payload = response.json()
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 ENCRYPTED_TOKEN_SCHEMA_VERSION = 1
 
 
@@ -248,21 +258,29 @@ def exchange_google_drive_auth_code(
         except ValueError:
             pass
 
-    response = requests_module.post(
-        GOOGLE_DRIVE_TOKEN_ENDPOINT,
-        data={
-            "client_id": credentials.get("client_id", ""),
-            "client_secret": credentials.get("client_secret", ""),
-            "code": code,
-            "code_verifier": pending_auth.get("code_verifier", ""),
-            "grant_type": "authorization_code",
-            "redirect_uri": pending_auth.get("redirect_uri", ""),
-        },
-        timeout=10,
-    )
-    payload = response.json()
+    try:
+        response = requests_module.post(
+            GOOGLE_DRIVE_TOKEN_ENDPOINT,
+            data={
+                "client_id": credentials.get("client_id", ""),
+                "client_secret": credentials.get("client_secret", ""),
+                "code": code,
+                "code_verifier": pending_auth.get("code_verifier", ""),
+                "grant_type": "authorization_code",
+                "redirect_uri": pending_auth.get("redirect_uri", ""),
+            },
+            timeout=10,
+        )
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to reach Google Drive token endpoint: {exc}"}
+    payload = _response_json(response)
     if response.status_code >= 400 or "access_token" not in payload:
-        return {"success": False, "error": payload.get("error_description") or payload.get("error") or "Failed to exchange Google Drive auth code."}
+        return {
+            "success": False,
+            "error": payload.get("error_description")
+            or payload.get("error")
+            or f"Failed to exchange Google Drive auth code (HTTP {response.status_code}).",
+        }
 
     expires_in = int(payload.get("expires_in") or 3600)
     token_state.update(
@@ -307,19 +325,26 @@ def ensure_google_drive_access_token(
         raise RuntimeError("Google Drive is not connected.")
 
     credentials = load_google_drive_credentials(credentials_path)
-    response = requests_module.post(
-        GOOGLE_DRIVE_TOKEN_ENDPOINT,
-        data={
-            "client_id": credentials.get("client_id", ""),
-            "client_secret": credentials.get("client_secret", ""),
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=10,
-    )
-    payload = response.json()
+    try:
+        response = requests_module.post(
+            GOOGLE_DRIVE_TOKEN_ENDPOINT,
+            data={
+                "client_id": credentials.get("client_id", ""),
+                "client_secret": credentials.get("client_secret", ""),
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            timeout=10,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Failed to refresh Google Drive access token: {exc}") from exc
+    payload = _response_json(response)
     if response.status_code >= 400 or "access_token" not in payload:
-        raise RuntimeError(payload.get("error_description") or payload.get("error") or "Failed to refresh Google Drive access token.")
+        raise RuntimeError(
+            payload.get("error_description")
+            or payload.get("error")
+            or f"Failed to refresh Google Drive access token (HTTP {response.status_code})."
+        )
 
     expires_in = int(payload.get("expires_in") or 3600)
     token_state.update(
@@ -377,24 +402,30 @@ def upload_files_to_google_drive(
         if folder_id:
             metadata["parents"] = [folder_id]
         with file_path.open("rb") as file_handle:
-            response = requests_module.post(
-                GOOGLE_DRIVE_UPLOAD_ENDPOINT,
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                },
-                files={
-                    "metadata": (
-                        "metadata.json",
-                        json.dumps(metadata).encode("utf-8"),
-                        "application/json; charset=UTF-8",
-                    ),
-                    "file": (file_path.name, file_handle, "application/octet-stream"),
-                },
-                timeout=30,
-            )
-        payload = response.json()
+            try:
+                response = requests_module.post(
+                    GOOGLE_DRIVE_UPLOAD_ENDPOINT,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                    },
+                    files={
+                        "metadata": (
+                            "metadata.json",
+                            json.dumps(metadata).encode("utf-8"),
+                            "application/json; charset=UTF-8",
+                        ),
+                        "file": (file_path.name, file_handle, "application/octet-stream"),
+                    },
+                    timeout=30,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"Drive upload failed for {file_path.name}: {exc}") from exc
+        payload = _response_json(response)
         if response.status_code >= 400:
-            raise RuntimeError(payload.get("error", {}).get("message") or f"Drive upload failed for {file_path.name}.")
+            raise RuntimeError(
+                payload.get("error", {}).get("message")
+                or f"Drive upload failed for {file_path.name} (HTTP {response.status_code})."
+            )
         uploaded.append(payload)
 
     return {
@@ -423,13 +454,16 @@ def ensure_google_drive_reports_folder(
         "mimeType='application/vnd.google-apps.folder' "
         f"and name='{folder_name}' and trashed=false"
     )
-    response = requests_module.get(
-        GOOGLE_DRIVE_FILES_ENDPOINT,
-        headers=headers,
-        params={"q": query, "fields": "files(id,name)"},
-        timeout=10,
-    )
-    payload = response.json()
+    try:
+        response = requests_module.get(
+            GOOGLE_DRIVE_FILES_ENDPOINT,
+            headers=headers,
+            params={"q": query, "fields": "files(id,name)"},
+            timeout=10,
+        )
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to query Drive folder: {exc}"}
+    payload = _response_json(response)
     if response.status_code >= 400:
         error_detail = _format_google_drive_error(payload)
         return {
@@ -442,13 +476,16 @@ def ensure_google_drive_reports_folder(
         folder_id = files[0].get("id")
         return {"success": True, "folder_id": folder_id, "status": "Drive folder ready"}
 
-    create_response = requests_module.post(
-        GOOGLE_DRIVE_FILES_ENDPOINT,
-        headers={**headers, "Content-Type": "application/json"},
-        json={"name": folder_name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME},
-        timeout=10,
-    )
-    create_payload = create_response.json()
+    try:
+        create_response = requests_module.post(
+            GOOGLE_DRIVE_FILES_ENDPOINT,
+            headers={**headers, "Content-Type": "application/json"},
+            json={"name": folder_name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME},
+            timeout=10,
+        )
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to create Drive folder: {exc}"}
+    create_payload = _response_json(create_response)
     if create_response.status_code >= 400:
         error_detail = _format_google_drive_error(create_payload)
         return {
@@ -481,13 +518,16 @@ def create_google_drive_folder(
     payload = {"name": name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME}
     if parent_id:
         payload["parents"] = [parent_id]
-    response = requests_module.post(
-        GOOGLE_DRIVE_FILES_ENDPOINT,
-        headers=headers,
-        json=payload,
-        timeout=10,
-    )
-    create_payload = response.json()
+    try:
+        response = requests_module.post(
+            GOOGLE_DRIVE_FILES_ENDPOINT,
+            headers=headers,
+            json=payload,
+            timeout=10,
+        )
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to create Drive folder: {exc}"}
+    create_payload = _response_json(response)
     if response.status_code >= 400:
         error_detail = _format_google_drive_error(create_payload)
         return {

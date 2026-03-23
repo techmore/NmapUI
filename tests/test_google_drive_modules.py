@@ -96,6 +96,37 @@ def test_exchange_google_drive_auth_code_saves_tokens(tmp_path):
     assert "access-123" not in token_path.read_text()
 
 
+def test_exchange_google_drive_auth_code_handles_request_failure(tmp_path):
+    credentials_path = tmp_path / "credentials.json"
+    token_path = tmp_path / "tokens.json"
+    key_path = tmp_path / "tokens.key"
+    write_credentials(credentials_path)
+    build_google_drive_auth_url(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        key_path=key_path,
+        redirect_uri="http://127.0.0.1:9000/api/settings/google-drive/callback",
+    )
+    token_state = load_google_drive_token_state(token_path, key_path=key_path)
+
+    class RequestsStub:
+        @staticmethod
+        def post(url, data=None, timeout=None):
+            raise RuntimeError("network down")
+
+    result = exchange_google_drive_auth_code(
+        credentials_path=credentials_path,
+        token_path=token_path,
+        key_path=key_path,
+        code="code-123",
+        state=token_state["pending_auth"]["state"],
+        requests_module=RequestsStub,
+    )
+
+    assert result["success"] is False
+    assert "Failed to reach Google Drive token endpoint" in result["error"]
+
+
 def test_ensure_google_drive_access_token_refreshes_expired_token(tmp_path):
     credentials_path = tmp_path / "credentials.json"
     token_path = tmp_path / "tokens.json"
