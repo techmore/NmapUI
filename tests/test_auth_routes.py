@@ -248,7 +248,7 @@ def build_auto_scan_app():
     return app
 
 
-def build_settings_app():
+def build_settings_app(backfill_result=None, backfill_calls=None):
     app = Flask(__name__)
     settings_state = {
         "target_profiles": [],
@@ -277,6 +277,16 @@ def build_settings_app():
             "ensure_google_drive_reports_folder": lambda: {"success": True, "folder_id": "test-folder-id", "status": "Drive folder ready"},
             "save_google_drive_credentials": lambda credentials: {"success": True, "status": "Google Drive credentials saved"},
             "disconnect_google_drive": lambda: {"success": True, "status": "Google Drive disconnected"},
+            "upload_latest_report_to_google_drive": lambda: (
+                backfill_calls.append(True) if backfill_calls is not None else None
+            ) or (
+                backfill_result
+                or {
+                    "success": False,
+                    "attempted": False,
+                    "error": "No completed reports are available yet",
+                }
+            ),
         },
     )
     return app, settings_state
@@ -1028,6 +1038,47 @@ def test_settings_routes_return_google_drive_auth_url(monkeypatch):
 
     assert response.status_code == 200
     assert "https://example.com/auth" in response.get_json()["auth_url"]
+
+
+def test_settings_routes_callback_backfills_latest_report_when_drive_connects(monkeypatch):
+    configure_auth(monkeypatch)
+    backfill_calls = []
+    app, _ = build_settings_app(
+        backfill_result={
+            "success": True,
+            "attempted": True,
+            "status": "Uploaded 3 file(s) to Google Drive",
+            "scan_path": "Acme/2026-03-14/scan_020000_target",
+        },
+        backfill_calls=backfill_calls,
+    )
+
+    response = app.test_client().get(
+        "/api/settings/google-drive/callback?code=abc&state=xyz",
+    )
+
+    assert response.status_code == 200
+    assert b"Google Drive connected. Reports will sync to nmapui-reports." in response.data
+    assert b"Latest completed report was uploaded." in response.data
+    assert len(backfill_calls) == 1
+
+
+def test_settings_routes_callback_reports_when_no_backfill_report_available(monkeypatch):
+    configure_auth(monkeypatch)
+    app, _ = build_settings_app(
+        backfill_result={
+            "success": False,
+            "attempted": False,
+            "error": "No completed reports are available yet",
+        },
+    )
+
+    response = app.test_client().get(
+        "/api/settings/google-drive/callback?code=abc&state=xyz",
+    )
+
+    assert response.status_code == 200
+    assert b"No saved report was uploaded automatically." in response.data
 
 
 def test_runtime_reports_can_upload_to_google_drive(monkeypatch, tmp_path):

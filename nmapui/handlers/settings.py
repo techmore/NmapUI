@@ -17,6 +17,7 @@ def register_settings_routes(app, deps):
     ensure_google_drive_reports_folder = deps["ensure_google_drive_reports_folder"]
     save_google_drive_credentials = deps["save_google_drive_credentials"]
     disconnect_google_drive = deps["disconnect_google_drive"]
+    upload_latest_report_to_google_drive = deps.get("upload_latest_report_to_google_drive")
 
     @app.route("/api/settings")
     @require_auth
@@ -148,8 +149,24 @@ def register_settings_routes(app, deps):
         settings_state.clear()
         settings_state.update(normalized)
         message = "Google Drive connected."
+        backfill_result = None
+        if folder_result.get("success") and upload_latest_report_to_google_drive is not None:
+            backfill_result = upload_latest_report_to_google_drive()
         if folder_result.get("success"):
             message = "Google Drive connected. Reports will sync to nmapui-reports."
+            if isinstance(backfill_result, dict):
+                if backfill_result.get("attempted") and backfill_result.get("success"):
+                    message += " Latest completed report was uploaded."
+                elif backfill_result.get("attempted") and not backfill_result.get("success"):
+                    message += (
+                        " Latest completed report upload failed. "
+                        f"{backfill_result.get('error', 'Check Logs for details.')}"
+                    )
+                elif backfill_result.get("error"):
+                    message += (
+                        " No saved report was uploaded automatically. "
+                        f"{backfill_result.get('error')}"
+                    )
         else:
             message = (
                 "Google Drive connected, but the default folder could not be created. "

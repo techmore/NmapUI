@@ -228,13 +228,34 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert 'TEMP_MIGRATION_DB="$(mktemp "${TMPDIR:-/tmp}/nmapui-runtime-db.XXXXXX.sqlite3")"' in build_script
     assert 'cp "$MIGRATION_SOURCE_DB" "$TEMP_MIGRATION_DB"' in build_script
     assert 'mkdir -p "$APP_INSTALL_DIR"' in build_script
-    assert 'rm -rf "$INSTALLED_APP_NAME"' in build_script
     assert 'ditto "$APP_NAME" "$INSTALLED_APP_NAME"' in build_script
     assert 'cp "$TEMP_MIGRATION_DB" "$INSTALLED_RUNTIME_DB"' in build_script
     assert 'if [[ "${NMAPUI_SKIP_OPEN:-}" == "1" ]]; then' in build_script
     assert 'echo "Skipping application auto-open because NMAPUI_SKIP_OPEN=1"' in build_script
     assert 'open "$INSTALLED_APP_NAME"' in build_script
     assert 'pkill -f "NmapUI.app" 2>/dev/null || true' in build_script
+    assert 'RUNTIME_PID_FILE_REL="Contents/Resources/nmapui-runtime.pid"' in build_script
+    assert 'SHUTDOWN_MARKER_REL="Contents/Resources/nmapui-shutdown"' in build_script
+    assert 'AUTO_SCAN_LOCK_REL="Contents/Resources/data/auto_scan_scheduler.lock"' in build_script
+    assert "shell_escape() {" in build_script
+    assert "applescript_escape() {" in build_script
+    assert "kill_runtime_tree() {" in build_script
+    assert "purge_bundle_artifacts() {" in build_script
+    assert "remove_bundle_path() {" in build_script
+    assert 'purge_bundle_artifacts "$APP_NAME"' in build_script
+    assert 'purge_bundle_artifacts "$INSTALLED_APP_NAME"' in build_script
+    assert 'rm -rf "$BUILD_DIR"' in build_script
+    assert 'rm -rf "$APP_NAME"' in build_script
+    assert 'remove_bundle_path "$INSTALLED_APP_NAME"' in build_script
+    assert 'if ! /usr/bin/osascript -e "do shell script \\"$(applescript_escape "$shell_command")\\" with administrator privileges"; then' in build_script
+    assert 'Existing app bundle at $bundle_path requires administrator privileges to remove.' in build_script
+    assert 'ERROR: Unable to remove existing app bundle without osascript: $bundle_path' in build_script
+    assert 'ERROR: Failed to remove existing app bundle: $bundle_path' in build_script
+    assert 'ERROR: Existing app bundle still present after privileged removal: $bundle_path' in build_script
+    assert 'PID_FILE="$(pwd)/nmapui-runtime.pid"' in build_script
+    assert 'SHUTDOWN_MARKER="$(pwd)/nmapui-shutdown"' in build_script
+    assert '/bin/echo "$$" > "$PID_FILE"' in build_script
+    assert '/bin/rm -f "$SHUTDOWN_MARKER"' in build_script
     assert "export NMAPUI_ALLOW_UNSAFE_WERKZEUG=true" in build_script
     assert "export NMAPUI_TRUST_LOCAL_UI=true" in build_script
     assert 'BUNDLE_PLAYWRIGHT_BROWSERS="$APP_NAME/Contents/Resources/playwright-browsers"' in build_script
@@ -248,6 +269,35 @@ def test_wrapper_contract_uses_single_supported_launcher():
     assert "nmap-vulners/http-vulners-paths.txt" in build_script
     assert "nmap-vulners/vulners_enterprise.nse" not in build_script
     assert "  nmap-vulners \\" not in build_script
+
+
+def test_wrapper_launcher_quit_path_tracks_and_stops_runtime_tree():
+    launcher_source = (
+        ROOT / "packaging" / "macos" / "NmapUIMenuBarLauncher.swift"
+    ).read_text()
+
+    assert "var isQuitting = false" in launcher_source
+    assert "var runtimePIDFilePath: String?" in launcher_source
+    assert 'appendingPathComponent("nmapui-runtime.pid")' in launcher_source
+    assert "var shutdownMarkerPath: String?" in launcher_source
+    assert 'appendingPathComponent("nmapui-shutdown")' in launcher_source
+    assert "removeRuntimeMarkers()" in launcher_source
+    assert "writeShutdownMarker()" in launcher_source
+    assert "stopTrackedRuntimeProcesses(wait: wait)" in launcher_source
+    assert "func stopRuntimeShellCommand(wait: Bool) -> String" in launcher_source
+    assert 'process.arguments = ["-lc", stopRuntimeShellCommand(wait: wait)]' in launcher_source
+    assert 'escaped = escaped.replacingOccurrences(of: "\\n", with: "; ")' in launcher_source
+    assert 'let command = stopRuntimeShellCommand(wait: true)' in launcher_source
+    assert 'let appleScript = "do shell script \\(appleScriptEscaped(command)) with administrator privileges"' in launcher_source
+    assert 'if isQuitting {' in launcher_source
+    assert 'isQuitting = true' in launcher_source
+    assert 'stopFlask(wait: false)' in launcher_source
+    assert 'TARGET_PID="$(/bin/cat "$PID_FILE" 2>/dev/null | /usr/bin/tr -cd \'0-9\')"' in launcher_source
+    assert '/usr/bin/pkill -TERM -f "$RUN_SCRIPT_PATH" 2>/dev/null || true' in launcher_source
+    assert '/usr/bin/pkill -TERM -f "$RESOURCES_PATH/app.py" 2>/dev/null || true' in launcher_source
+    assert '/usr/bin/pkill -TERM -f "$RESOURCES_PATH/.venv/bin/python3" 2>/dev/null || true' in launcher_source
+    assert '/bin/rm -f "$PID_FILE" "$SHUTDOWN_MARKER"' in launcher_source
+    assert "/Applications/NmapUI.app/Contents/Resources/app.py" not in launcher_source
 
 
 def test_wrapper_docs_reference_current_local_port():

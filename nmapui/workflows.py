@@ -770,6 +770,129 @@ def generate_report_task(context, sid, data):
         logger.info("=" * 60)
 
         relative_path = str(scan_dir.relative_to(scans_dir))
+        google_drive_upload = {
+            "enabled": False,
+            "attempted": False,
+            "success": False,
+            "status": "",
+            "error": "",
+            "skipped_reason": "",
+        }
+        google_drive_sync = (
+            ((context.settings_state or {}).get("sync") or {}).get("google_drive") or {}
+        )
+        google_drive_upload["enabled"] = bool(google_drive_sync.get("enabled", False))
+        upload_handler = context.upload_report_artifacts_to_google_drive
+        upload_file_paths = [path for path in (web_html_path, pdf_path, xml_path) if path.exists()]
+        upload_metadata = {
+            "path": relative_path,
+            "timestamp": end_time.isoformat(),
+            "scan_start_time": start_time.isoformat(),
+            "customer_name": customer_name,
+            "customer_id": str(current_customer.get("id", "") or ""),
+            "target": target,
+        }
+        if google_drive_upload["enabled"]:
+            if upload_handler is None:
+                google_drive_upload["skipped_reason"] = "upload_handler_unavailable"
+                append_runtime_log(
+                    runtime_store=context.runtime_store,
+                    category="google_drive",
+                    level="WARNING",
+                    message="Google Drive auto-upload skipped",
+                    payload={
+                        "sid": sid,
+                        "target": target,
+                        "path": relative_path,
+                        "reason": google_drive_upload["skipped_reason"],
+                    },
+                )
+            elif not upload_file_paths:
+                google_drive_upload["skipped_reason"] = "no_artifacts"
+                append_runtime_log(
+                    runtime_store=context.runtime_store,
+                    category="google_drive",
+                    level="WARNING",
+                    message="Google Drive auto-upload skipped",
+                    payload={
+                        "sid": sid,
+                        "target": target,
+                        "path": relative_path,
+                        "reason": google_drive_upload["skipped_reason"],
+                    },
+                )
+            else:
+                google_drive_upload["attempted"] = True
+                emit_to_client(sid, "scan_feedback", "☁️ Uploading report artifacts to Google Drive...")
+                socketio_sleep(0)
+                append_runtime_log(
+                    runtime_store=context.runtime_store,
+                    category="google_drive",
+                    level="INFO",
+                    message="Google Drive auto-upload started",
+                    payload={
+                        "sid": sid,
+                        "target": target,
+                        "path": relative_path,
+                        "file_count": len(upload_file_paths),
+                    },
+                )
+                try:
+                    upload_result = upload_handler(
+                        scan_path=relative_path,
+                        file_paths=upload_file_paths,
+                        metadata=upload_metadata,
+                        settings_state=context.settings_state,
+                    )
+                except Exception as upload_exc:
+                    upload_result = {"success": False, "error": str(upload_exc)}
+
+                if upload_result.get("success"):
+                    google_drive_upload["success"] = True
+                    google_drive_upload["status"] = str(
+                        upload_result.get("status", "Uploaded to Google Drive")
+                    )
+                    emit_to_client(sid, "scan_feedback", f"☁️ {google_drive_upload['status']}")
+                    socketio_sleep(0)
+                    append_runtime_log(
+                        runtime_store=context.runtime_store,
+                        category="google_drive",
+                        level="INFO",
+                        message="Google Drive auto-upload completed",
+                        payload={
+                            "sid": sid,
+                            "target": target,
+                            "path": relative_path,
+                            "file_count": len(upload_file_paths),
+                            "status": google_drive_upload["status"],
+                        },
+                    )
+                else:
+                    google_drive_upload["error"] = str(
+                        upload_result.get("error", "Unknown upload failure")
+                    )
+                    emit_to_client(
+                        sid,
+                        "scan_feedback",
+                        f"⚠️ Google Drive upload failed: {google_drive_upload['error']}",
+                    )
+                    socketio_sleep(0)
+                    append_runtime_log(
+                        runtime_store=context.runtime_store,
+                        category="google_drive",
+                        level="ERROR",
+                        message="Google Drive auto-upload failed",
+                        payload={
+                            "sid": sid,
+                            "target": target,
+                            "path": relative_path,
+                            "file_count": len(upload_file_paths),
+                            "error": google_drive_upload["error"],
+                        },
+                    )
+        else:
+            google_drive_upload["skipped_reason"] = "sync_disabled"
+
         emit_to_client(
             sid,
             "report_complete",
@@ -778,6 +901,7 @@ def generate_report_task(context, sid, data):
                 "path": relative_path,
                 "scan_dir": str(scan_dir),
                 "diff_summary": diff_summary,
+                "google_drive_upload": google_drive_upload,
             },
         )
         job_registry.complete(
@@ -796,6 +920,7 @@ def generate_report_task(context, sid, data):
                 "target": target,
                 "path": relative_path,
                 "duration_formatted": duration_str,
+                "google_drive_upload": google_drive_upload,
             },
         )
         emit_job_status(sid, "report")

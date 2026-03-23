@@ -10,6 +10,7 @@ from nmapui.runtime_history import (
     build_history_rows,
     normalize_runtime_report_row,
 )
+from nmapui.runtime_log import append_runtime_log
 from nmapui.runtime_db import (
     DEFAULT_CUSTOMER_SCAN_HISTORY_RETENTION,
     DEFAULT_RUNTIME_LOG_RETENTION,
@@ -60,6 +61,17 @@ def register_core_routes(app, deps):
     get_auto_scan_thread = deps["get_auto_scan_thread"]
     upload_report_artifacts_to_google_drive = deps.get("upload_report_artifacts_to_google_drive")
     customer_fingerprinter = deps.get("customer_fingerprinter")
+
+    def append_runtime_log_safe(*, category, level, message, payload=None):
+        if runtime_store is None or not hasattr(runtime_store, "append_log"):
+            return
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category=category,
+            level=level,
+            message=message,
+            payload=payload or {},
+        )
 
     @app.route("/")
     def index():
@@ -300,12 +312,43 @@ def register_core_routes(app, deps):
         if not file_paths:
             return jsonify({"success": False, "error": "No report artifacts found for upload"}), 404
 
+        append_runtime_log_safe(
+            category="google_drive",
+            level="INFO",
+            message="Manual Google Drive upload started",
+            payload={
+                "scan_path": scan_path,
+                "file_count": len(file_paths),
+            },
+        )
         result = upload_report_artifacts_to_google_drive(
             scan_path=scan_path,
             file_paths=file_paths,
             metadata=payload,
             settings_state=settings_state,
         )
+        if result.get("success"):
+            append_runtime_log_safe(
+                category="google_drive",
+                level="INFO",
+                message="Manual Google Drive upload completed",
+                payload={
+                    "scan_path": scan_path,
+                    "file_count": len(file_paths),
+                    "status": result.get("status", ""),
+                },
+            )
+        else:
+            append_runtime_log_safe(
+                category="google_drive",
+                level="ERROR",
+                message="Manual Google Drive upload failed",
+                payload={
+                    "scan_path": scan_path,
+                    "file_count": len(file_paths),
+                    "error": result.get("error", "Unknown upload failure"),
+                },
+            )
         status_code = 200 if result.get("success") else 400
         return jsonify(result), status_code
 

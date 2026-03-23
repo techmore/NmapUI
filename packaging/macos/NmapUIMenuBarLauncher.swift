@@ -24,6 +24,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var startItem: NSMenuItem!
     var stopItem: NSMenuItem!
     var restartItem: NSMenuItem!
+    var isQuitting = false
+
+    var resourcesPath: String? {
+        (Bundle.main.bundlePath as NSString?)?.appendingPathComponent("Contents/Resources")
+    }
+
+    var runScriptPath: String? {
+        guard let resourcesPath else { return nil }
+        return (resourcesPath as NSString).appendingPathComponent("run.sh")
+    }
+
+    var runtimePIDFilePath: String? {
+        guard let resourcesPath else { return nil }
+        return (resourcesPath as NSString).appendingPathComponent("nmapui-runtime.pid")
+    }
+
+    var shutdownMarkerPath: String? {
+        guard let resourcesPath else { return nil }
+        return (resourcesPath as NSString).appendingPathComponent("nmapui-shutdown")
+    }
 
     var isFlaskRunning: Bool {
         if launchedWithPrivileges {
@@ -122,15 +142,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func startFlask() {
         guard !isFlaskRunning else { return }
+        isQuitting = false
 
-        guard let bundleNS = Bundle.main.bundlePath as NSString? else { return }
-        let resourcesPath = bundleNS.appendingPathComponent("Contents/Resources")
-        let runScriptPath = (resourcesPath as NSString).appendingPathComponent("run.sh")
+        guard let resourcesPath, let runScriptPath else { return }
 
         guard FileManager.default.fileExists(atPath: runScriptPath) else {
             print("run.sh not found inside bundle — rebuild with build.sh")
             return
         }
+
+        removeRuntimeMarkers()
 
         guard let selectedPort = pickAvailableRuntimePort() else {
             updateStatusIcon(state: .error, detail: "Port 9000 is already in use")
@@ -173,6 +194,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Kill the tracked process and any stray app.py processes (e.g. from a
     // previous run or if pythonProcess is stale after a crash/restart).
     func stopFlask(wait: Bool = true) {
+        writeShutdownMarker()
         stopStatusPolling()
         if launchedWithPrivileges {
             stopFlaskWithPrivileges()
@@ -184,12 +206,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pythonProcess = nil
         }
 
-        // Belt-and-suspenders: kill any app.py that may still be alive
-        let pkill = Process()
-        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        pkill.arguments = ["-f", "app.py"]
-        try? pkill.run()
-        if wait { pkill.waitUntilExit() }
+        stopTrackedRuntimeProcesses(wait: wait)
+        removeRuntimeMarkers()
 
         print("NmapUI stopped")
         updateStatusIcon(state: .idle, detail: "NmapUI stopped")
@@ -244,6 +262,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func quitApp(_ sender: Any?) {
+        isQuitting = true
         stopFlask(wait: false)
         NSApp.terminate(nil)
     }
@@ -258,6 +277,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        isQuitting = true
         stopFlask(wait: false)
         releaseSingleInstanceLock()
         statusItem = nil
@@ -303,6 +323,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func pollRuntimeStatus() {
+        if isQuitting {
+            return
+        }
         guard isFlaskRunning else {
             updateStatusIcon(state: .idle, detail: "NmapUI stopped")
             return
@@ -401,7 +424,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Privileged start/stop
 
     func startFlaskWithPrivileges(runScriptPath: String, allowedOrigins: String) -> Bool {
-        let command = "NMAPUI_PORT=\(runtimePort) NMAPUI_ALLOWED_ORIGINS=\(allowedOrigins) \"\(runScriptPath)\" >/tmp/nmapui-privileged.log 2>&1 &"
+        let command = "rm -f \(shellEscaped(shutdownMarkerPath ?? "")) \(shellEscaped(runtimePIDFilePath ?? "")); NMAPUI_PORT=\(runtimePort) NMAPUI_ALLOWED_ORIGINS=\(allowedOrigins) \(shellEscaped(runScriptPath)) >/tmp/nmapui-privileged.log 2>&1 &"
         let appleScript = "do shell script \(appleScriptEscaped(command)) with administrator privileges"
 
         let process = Process()
@@ -418,7 +441,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func stopFlaskWithPrivileges() {
-        let command = "/usr/bin/pkill -f \"/Applications/NmapUI.app/Contents/Resources/app.py\""
+        let command = stopRuntimeShellCommand(wait: true)
         let appleScript = "do shell script \(appleScriptEscaped(command)) with administrator privileges"
 
         let process = Process()
@@ -435,7 +458,102 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func appleScriptEscaped(_ value: String) -> String {
         var escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
         escaped = escaped.replacingOccurrences(of: "\"", with: "\\\"")
+        escaped = escaped.replacingOccurrences(of: "\n", with: "; ")
         return "\"\(escaped)\""
+    }
+
+    func shellEscaped(_ value: String) -> String {
+        if value.isEmpty {
+            return "''"
+        }
+        return "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    func writeShutdownMarker() {
+        guard let shutdownMarkerPath else { return }
+        FileManager.default.createFile(atPath: shutdownMarkerPath, contents: Data(), attributes: nil)
+    }
+
+    func removeRuntimeMarkers() {
+        guard let runtimePIDFilePath, let shutdownMarkerPath else { return }
+        try? FileManager.default.removeItem(atPath: runtimePIDFilePath)
+        try? FileManager.default.removeItem(atPath: shutdownMarkerPath)
+    }
+
+    func stopRuntimeShellCommand(wait: Bool) -> String {
+        let resourcesPathValue = resourcesPath ?? ""
+        let runScriptPathValue = runScriptPath ?? ""
+        let runtimePIDFilePathValue = runtimePIDFilePath ?? ""
+        let shutdownMarkerPathValue = shutdownMarkerPath ?? ""
+        let waitFlag = wait ? "1" : "0"
+        return """
+        RESOURCES_PATH=\(shellEscaped(resourcesPathValue))
+        RUN_SCRIPT_PATH=\(shellEscaped(runScriptPathValue))
+        PID_FILE=\(shellEscaped(runtimePIDFilePathValue))
+        SHUTDOWN_MARKER=\(shellEscaped(shutdownMarkerPathValue))
+        WAIT_FLAG=\(waitFlag)
+        kill_tree() {
+          local target_pid="$1"
+          if [[ -z "$target_pid" ]]; then
+            return
+          fi
+          local child_pid
+          while IFS= read -r child_pid; do
+            [[ -z "$child_pid" ]] && continue
+            kill_tree "$child_pid"
+          done < <(/usr/bin/pgrep -P "$target_pid" 2>/dev/null || true)
+          /bin/kill -TERM "$target_pid" 2>/dev/null || true
+        }
+        force_kill_tree() {
+          local target_pid="$1"
+          if [[ -z "$target_pid" ]]; then
+            return
+          fi
+          local child_pid
+          while IFS= read -r child_pid; do
+            [[ -z "$child_pid" ]] && continue
+            force_kill_tree "$child_pid"
+          done < <(/usr/bin/pgrep -P "$target_pid" 2>/dev/null || true)
+          /bin/kill -KILL "$target_pid" 2>/dev/null || true
+        }
+        if [[ -n "$SHUTDOWN_MARKER" ]]; then
+          /usr/bin/touch "$SHUTDOWN_MARKER" 2>/dev/null || true
+        fi
+        if [[ -f "$PID_FILE" ]]; then
+          TARGET_PID="$(/bin/cat "$PID_FILE" 2>/dev/null | /usr/bin/tr -cd '0-9')"
+          if [[ -n "$TARGET_PID" ]]; then
+            kill_tree "$TARGET_PID"
+            if [[ "$WAIT_FLAG" == "1" ]]; then
+              /bin/sleep 2
+              force_kill_tree "$TARGET_PID"
+            fi
+          fi
+        fi
+        /usr/bin/pkill -TERM -f "$RUN_SCRIPT_PATH" 2>/dev/null || true
+        /usr/bin/pkill -TERM -f "$RESOURCES_PATH/app.py" 2>/dev/null || true
+        /usr/bin/pkill -TERM -f "$RESOURCES_PATH/.venv/bin/python3" 2>/dev/null || true
+        if [[ "$WAIT_FLAG" == "1" ]]; then
+          /bin/sleep 1
+          /usr/bin/pkill -KILL -f "$RUN_SCRIPT_PATH" 2>/dev/null || true
+          /usr/bin/pkill -KILL -f "$RESOURCES_PATH/app.py" 2>/dev/null || true
+          /usr/bin/pkill -KILL -f "$RESOURCES_PATH/.venv/bin/python3" 2>/dev/null || true
+        fi
+        /bin/rm -f "$PID_FILE" "$SHUTDOWN_MARKER"
+        """
+    }
+
+    func stopTrackedRuntimeProcesses(wait: Bool) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-lc", stopRuntimeShellCommand(wait: wait)]
+        do {
+            try process.run()
+            if wait {
+                process.waitUntilExit()
+            }
+        } catch {
+            print("Failed to stop tracked runtime processes: \(error)")
+        }
     }
 
     // MARK: - Single instance lock

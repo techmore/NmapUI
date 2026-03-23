@@ -65,7 +65,114 @@ if [[ ! -f "$SRC" ]]; then
     exit 1
 fi
 
+RUNTIME_PID_FILE_REL="Contents/Resources/nmapui-runtime.pid"
+SHUTDOWN_MARKER_REL="Contents/Resources/nmapui-shutdown"
+AUTO_SCAN_LOCK_REL="Contents/Resources/data/auto_scan_scheduler.lock"
+
+shell_escape() {
+    printf "'%s'" "${1//\'/\'\"\'\"\'}"
+}
+
+applescript_escape() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    printf '%s' "$value"
+}
+
+kill_runtime_tree() {
+    local bundle_path="$1"
+    local pid_file="$bundle_path/$RUNTIME_PID_FILE_REL"
+    local shutdown_marker="$bundle_path/$SHUTDOWN_MARKER_REL"
+    local resource_root="$bundle_path/Contents/Resources"
+    local run_script="$resource_root/run.sh"
+
+    kill_tree() {
+        local target_pid="$1"
+        if [[ -z "$target_pid" ]]; then
+            return
+        fi
+        local child_pid
+        while IFS= read -r child_pid; do
+            [[ -z "$child_pid" ]] && continue
+            kill_tree "$child_pid"
+        done < <(/usr/bin/pgrep -P "$target_pid" 2>/dev/null || true)
+        /bin/kill -TERM "$target_pid" 2>/dev/null || true
+    }
+
+    force_kill_tree() {
+        local target_pid="$1"
+        if [[ -z "$target_pid" ]]; then
+            return
+        fi
+        local child_pid
+        while IFS= read -r child_pid; do
+            [[ -z "$child_pid" ]] && continue
+            force_kill_tree "$child_pid"
+        done < <(/usr/bin/pgrep -P "$target_pid" 2>/dev/null || true)
+        /bin/kill -KILL "$target_pid" 2>/dev/null || true
+    }
+
+    /usr/bin/touch "$shutdown_marker" 2>/dev/null || true
+    if [[ -f "$pid_file" ]]; then
+        local target_pid
+        target_pid="$(/bin/cat "$pid_file" 2>/dev/null | /usr/bin/tr -cd '0-9')"
+        if [[ -n "$target_pid" ]]; then
+            kill_tree "$target_pid"
+            /bin/sleep 2
+            force_kill_tree "$target_pid"
+        fi
+    fi
+    /usr/bin/pkill -TERM -f "$run_script" 2>/dev/null || true
+    /usr/bin/pkill -TERM -f "$resource_root/app.py" 2>/dev/null || true
+    /usr/bin/pkill -TERM -f "$resource_root/.venv/bin/python3" 2>/dev/null || true
+    /bin/sleep 1
+    /usr/bin/pkill -KILL -f "$run_script" 2>/dev/null || true
+    /usr/bin/pkill -KILL -f "$resource_root/app.py" 2>/dev/null || true
+    /usr/bin/pkill -KILL -f "$resource_root/.venv/bin/python3" 2>/dev/null || true
+    /bin/rm -f "$pid_file" "$shutdown_marker" "$bundle_path/$AUTO_SCAN_LOCK_REL" 2>/dev/null || true
+}
+
+purge_bundle_artifacts() {
+    local bundle_path="$1"
+    [[ -z "$bundle_path" ]] && return
+    kill_runtime_tree "$bundle_path"
+}
+
+remove_bundle_path() {
+    local bundle_path="$1"
+    [[ -z "$bundle_path" ]] && return
+
+    rm -rf "$bundle_path" 2>/dev/null || true
+    if [[ ! -e "$bundle_path" ]]; then
+        return
+    fi
+
+    if ! command -v osascript >/dev/null 2>&1; then
+        echo "ERROR: Unable to remove existing app bundle without osascript: $bundle_path" >&2
+        exit 1
+    fi
+
+    echo "Existing app bundle at $bundle_path requires administrator privileges to remove."
+    local shell_command
+    shell_command="rm -rf $(shell_escape "$bundle_path")"
+    if ! /usr/bin/osascript -e "do shell script \"$(applescript_escape "$shell_command")\" with administrator privileges"; then
+        echo "ERROR: Failed to remove existing app bundle: $bundle_path" >&2
+        exit 1
+    fi
+
+    if [[ -e "$bundle_path" ]]; then
+        echo "ERROR: Existing app bundle still present after privileged removal: $bundle_path" >&2
+        exit 1
+    fi
+}
+
 # Ensure build output doesn't collide with the nmapui package on case-insensitive filesystems.
+echo "Purging stale runtime state and build artifacts..."
+purge_bundle_artifacts "$APP_NAME"
+purge_bundle_artifacts "$INSTALLED_APP_NAME"
+rm -rf "$BUILD_DIR"
+rm -rf "$APP_NAME"
 mkdir -p "$BUILD_DIR"
 
 # Run install.sh if .venv doesn't exist yet
@@ -189,12 +296,17 @@ cat > "$APP_NAME/Contents/Resources/run.sh" << 'EOF'
 cd "$(dirname "$0")"
 
 VENV_ACTIVATE=".venv/bin/activate"
+PID_FILE="$(pwd)/nmapui-runtime.pid"
+SHUTDOWN_MARKER="$(pwd)/nmapui-shutdown"
 
 if [[ ! -f "$VENV_ACTIVATE" ]]; then
     echo "ERROR: Virtual environment not found inside app bundle." >&2
     echo "Rebuild the app bundle with install.sh completed first." >&2
     exit 1
 fi
+
+/bin/rm -f "$SHUTDOWN_MARKER"
+/bin/echo "$$" > "$PID_FILE"
 
 source "$VENV_ACTIVATE"
 export PLAYWRIGHT_BROWSERS_PATH="$(pwd)/playwright-browsers"
@@ -272,7 +384,7 @@ fi
 
 echo "Installing application bundle..."
 mkdir -p "$APP_INSTALL_DIR"
-rm -rf "$INSTALLED_APP_NAME"
+remove_bundle_path "$INSTALLED_APP_NAME"
 ditto "$APP_NAME" "$INSTALLED_APP_NAME"
 
 if [[ "${NMAPUI_MIGRATE_DB:-0}" == "1" ]]; then

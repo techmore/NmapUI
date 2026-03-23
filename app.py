@@ -90,11 +90,13 @@ from nmapui.runtime import (
 )
 from nmapui.runtime_db import create_runtime_state_store
 from nmapui.runtime_history import backfill_runtime_history_artifacts
+from nmapui.runtime_log import append_runtime_log
 from nmapui.runtime_services import create_runtime_services
 from nmapui.startup import create_startup_state
 from nmapui.state import merge_customer_metadata
 from nmapui.tooling import ToolVersionRegistry
 from nmapui.reporting import (
+    _resolve_artifact_file_path,
     convert_html_to_pdf,
     convert_xml_to_html,
     extract_scan_statistics,
@@ -373,26 +375,142 @@ def _build_drive_upload_names(file_paths, metadata, scan_path) -> dict[str, str]
 def upload_report_artifacts_to_google_drive(*, scan_path, file_paths, metadata, settings_state):
     base_folder_id = str((((settings_state or {}).get("sync") or {}).get("google_drive") or {}).get("folder_id", "") or "").strip() or None
     folder_name = _format_scan_folder_name(metadata or {}, scan_path or "")
-    folder_result = create_google_drive_folder(
-        name=folder_name,
-        parent_id=base_folder_id,
-        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
-        token_path=GOOGLE_DRIVE_TOKEN_FILE,
-        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
-        requests_module=requests,
+    logger.info(
+        "Google Drive upload requested for %s (files=%s, parent_folder_configured=%s)",
+        scan_path,
+        len(file_paths or []),
+        bool(base_folder_id),
     )
-    if not folder_result.get("success"):
-        return folder_result
-    file_name_map = _build_drive_upload_names(file_paths, metadata or {}, scan_path or "")
-    return upload_files_to_google_drive(
-        credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
-        token_path=GOOGLE_DRIVE_TOKEN_FILE,
-        key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+    try:
+        folder_result = create_google_drive_folder(
+            name=folder_name,
+            parent_id=base_folder_id,
+            credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+            token_path=GOOGLE_DRIVE_TOKEN_FILE,
+            key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+            requests_module=requests,
+        )
+        if not folder_result.get("success"):
+            return folder_result
+        file_name_map = _build_drive_upload_names(file_paths, metadata or {}, scan_path or "")
+        return upload_files_to_google_drive(
+            credentials_path=GOOGLE_DRIVE_CREDENTIALS_FILE,
+            token_path=GOOGLE_DRIVE_TOKEN_FILE,
+            key_path=GOOGLE_DRIVE_TOKEN_KEY_FILE,
+            file_paths=file_paths,
+            folder_id=folder_result.get("folder_id", ""),
+            file_name_map=file_name_map,
+            requests_module=requests,
+        )
+    except Exception as exc:
+        logger.warning("Google Drive upload failed for %s: %s", scan_path, exc)
+        return {"success": False, "error": str(exc)}
+
+
+def upload_latest_report_to_google_drive():
+    if runtime_store is None or not hasattr(runtime_store, "list_report_artifacts"):
+        return {
+            "success": False,
+            "attempted": False,
+            "error": "Runtime report store is unavailable",
+        }
+
+    reports = runtime_store.list_report_artifacts(limit=1)
+    if not reports:
+        return {
+            "success": False,
+            "attempted": False,
+            "error": "No completed reports are available yet",
+        }
+
+    artifact = dict(reports[0] or {})
+    scan_path = str(artifact.get("scan_path", "") or "").strip()
+    if not scan_path:
+        return {
+            "success": False,
+            "attempted": False,
+            "error": "Latest report is missing a scan path",
+        }
+
+    file_paths = []
+    for artifact_key, default_name in (
+        ("html_path", "scan_web.html"),
+        ("pdf_path", "scan_report.pdf"),
+        ("xml_path", "scan.xml"),
+    ):
+        artifact_path = _resolve_artifact_file_path(
+            scans_dir=SCANS_DIR,
+            scan_path=scan_path,
+            stored_path=artifact.get(artifact_key),
+            default_name=default_name,
+        )
+        if artifact_path.exists():
+            file_paths.append(artifact_path)
+
+    if not file_paths:
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="google_drive",
+            level="WARNING",
+            message="Google Drive post-connect backfill skipped",
+            payload={
+                "scan_path": scan_path,
+                "reason": "no_artifacts",
+            },
+        )
+        return {
+            "success": False,
+            "attempted": False,
+            "error": "Latest report has no uploadable artifacts",
+            "scan_path": scan_path,
+        }
+
+    append_runtime_log(
+        runtime_store=runtime_store,
+        category="google_drive",
+        level="INFO",
+        message="Google Drive post-connect backfill started",
+        payload={
+            "scan_path": scan_path,
+            "file_count": len(file_paths),
+        },
+    )
+    result = upload_report_artifacts_to_google_drive(
+        scan_path=scan_path,
         file_paths=file_paths,
-        folder_id=folder_result.get("folder_id", ""),
-        file_name_map=file_name_map,
-        requests_module=requests,
+        metadata=dict(artifact.get("payload", {}) or {}),
+        settings_state=settings_state,
     )
+    if result.get("success"):
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="google_drive",
+            level="INFO",
+            message="Google Drive post-connect backfill completed",
+            payload={
+                "scan_path": scan_path,
+                "file_count": len(file_paths),
+                "status": result.get("status", ""),
+            },
+        )
+    else:
+        append_runtime_log(
+            runtime_store=runtime_store,
+            category="google_drive",
+            level="ERROR",
+            message="Google Drive post-connect backfill failed",
+            payload={
+                "scan_path": scan_path,
+                "file_count": len(file_paths),
+                "error": result.get("error", "Unknown upload failure"),
+            },
+        )
+    return {
+        **result,
+        "attempted": True,
+        "scan_path": scan_path,
+        "file_count": len(file_paths),
+    }
 
 register_app_handlers(
     app=app,
@@ -440,6 +558,7 @@ register_app_handlers(
     runtime_store=runtime_store,
     get_auto_scan_thread=runtime_bindings["get_auto_scan_thread"],
     upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
+    upload_latest_report_to_google_drive=upload_latest_report_to_google_drive,
     get_customer_fingerprinter=lambda: customer_fingerprinter,
     get_current_customer=lambda: get_current_customer_state(request.sid),
     set_current_customer=lambda value: set_current_customer_state(

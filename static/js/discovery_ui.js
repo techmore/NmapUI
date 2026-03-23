@@ -553,8 +553,18 @@ function initializeDiscoveryUI(socket) {
 function formatReportCompleteMessage(data) {
     const scanDir = data?.scan_dir || 'saved scan folder';
     const diffSummary = data?.diff_summary;
+    const driveUpload = data?.google_drive_upload;
+    let driveMessage = '';
+    if (driveUpload?.attempted && driveUpload?.success) {
+        driveMessage = ' Uploaded to Google Drive.';
+    } else if (driveUpload?.attempted && !driveUpload?.success) {
+        driveMessage = ' Google Drive upload failed (see Logs tab).';
+    } else if (driveUpload?.enabled && driveUpload?.skipped_reason) {
+        driveMessage = ' Google Drive upload was skipped.';
+    }
+
     if (!diffSummary || !diffSummary.has_changes) {
-        return 'Report generated successfully. Check: ' + scanDir;
+        return `Report generated successfully. Check: ${scanDir}.${driveMessage}`;
     }
 
     const facts = [];
@@ -575,7 +585,7 @@ function formatReportCompleteMessage(data) {
     }
 
     const summaryText = facts.length ? ` Changes detected: ${facts.join(', ')}.` : ' Changes detected.';
-    return `Report generated successfully. Check: ${scanDir}.${summaryText}`;
+    return `Report generated successfully. Check: ${scanDir}.${summaryText}${driveMessage}`;
 }
 
 window.setSafeExternalLink = setSafeExternalLink;

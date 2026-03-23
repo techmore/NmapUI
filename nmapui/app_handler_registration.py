@@ -50,6 +50,7 @@ def register_app_handlers(
     runtime_store,
     get_auto_scan_thread,
     upload_report_artifacts_to_google_drive,
+    upload_latest_report_to_google_drive,
     get_customer_fingerprinter,
     get_current_customer,
     set_current_customer,
@@ -193,5 +194,6 @@ def register_app_handlers(
             ensure_google_drive_reports_folder=ensure_google_drive_reports_folder,
             save_google_drive_credentials=save_google_drive_credentials,
             disconnect_google_drive=disconnect_google_drive,
+            upload_latest_report_to_google_drive=upload_latest_report_to_google_drive,
         ),
     )
