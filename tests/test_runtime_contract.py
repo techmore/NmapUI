@@ -325,7 +325,9 @@ def test_wrapper_launcher_quit_path_tracks_and_stops_runtime_tree():
     assert 'let appleScript = "do shell script \\(appleScriptEscaped(command)) with administrator privileges"' in launcher_source
     assert 'if isQuitting {' in launcher_source
     assert 'isQuitting = true' in launcher_source
-    assert 'stopFlask(wait: false)' in launcher_source
+    assert 'stopFlask(wait: true)' in launcher_source
+    assert 'RUNTIME_PORT=\\(shellEscaped(runtimePortValue))' in launcher_source
+    assert 'done < <(/usr/sbin/lsof -tiTCP:"$RUNTIME_PORT" -sTCP:LISTEN 2>/dev/null || true)' in launcher_source
     assert 'TARGET_PID="$(/bin/cat "$PID_FILE" 2>/dev/null | /usr/bin/tr -cd \'0-9\')"' in launcher_source
     assert '/usr/bin/pkill -TERM -f "$RUN_SCRIPT_PATH" 2>/dev/null || true' in launcher_source
     assert '/usr/bin/pkill -TERM -f "$RESOURCES_PATH/app.py" 2>/dev/null || true' in launcher_source

@@ -263,7 +263,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func quitApp(_ sender: Any?) {
         isQuitting = true
-        stopFlask(wait: false)
+        stopFlask(wait: true)
         NSApp.terminate(nil)
     }
 
@@ -278,7 +278,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         isQuitting = true
-        stopFlask(wait: false)
+        stopFlask(wait: true)
         releaseSingleInstanceLock()
         statusItem = nil
     }
@@ -485,12 +485,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let runScriptPathValue = runScriptPath ?? ""
         let runtimePIDFilePathValue = runtimePIDFilePath ?? ""
         let shutdownMarkerPathValue = shutdownMarkerPath ?? ""
+        let runtimePortValue = String(runtimePort)
         let waitFlag = wait ? "1" : "0"
         return """
         RESOURCES_PATH=\(shellEscaped(resourcesPathValue))
         RUN_SCRIPT_PATH=\(shellEscaped(runScriptPathValue))
         PID_FILE=\(shellEscaped(runtimePIDFilePathValue))
         SHUTDOWN_MARKER=\(shellEscaped(shutdownMarkerPathValue))
+        RUNTIME_PORT=\(shellEscaped(runtimePortValue))
         WAIT_FLAG=\(waitFlag)
         kill_tree() {
           local target_pid="$1"
@@ -528,6 +530,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               force_kill_tree "$TARGET_PID"
             fi
           fi
+        fi
+        if [[ -n "$RUNTIME_PORT" ]]; then
+          while IFS= read -r listener_pid; do
+            [[ -z "$listener_pid" ]] && continue
+            kill_tree "$listener_pid"
+            if [[ "$WAIT_FLAG" == "1" ]]; then
+              /bin/sleep 1
+              force_kill_tree "$listener_pid"
+            fi
+          done < <(/usr/sbin/lsof -tiTCP:"$RUNTIME_PORT" -sTCP:LISTEN 2>/dev/null || true)
         fi
         /usr/bin/pkill -TERM -f "$RUN_SCRIPT_PATH" 2>/dev/null || true
         /usr/bin/pkill -TERM -f "$RESOURCES_PATH/app.py" 2>/dev/null || true
