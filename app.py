@@ -87,6 +87,7 @@ from nmapui.google_drive import (
 from nmapui.runtime import (
     check_for_updates,
     get_app_version,
+    updates_disabled,
 )
 from nmapui.runtime_db import create_runtime_state_store
 from nmapui.runtime_history import backfill_runtime_history_artifacts
@@ -165,6 +166,7 @@ idle_state_manager = IdleStateManager(
     safe_emit=safe_emit,
     check_for_updates=check_for_updates,
     logger=logger,
+    update_checks_enabled=not updates_disabled(),
 )
 
 # Global customer fingerprinter

@@ -54,7 +54,17 @@ def _parse_version(version: str):
         return (0, 0, 0, 0, 0)
 
 
-def _select_release_asset(release: dict, *, platform_name: Optional[str] = None, machine: Optional[str] = None):
+def updates_disabled() -> bool:
+    """When True, skip GitHub API calls and idle auto-update UI."""
+    return env_flag("NMAPUI_DISABLE_UPDATE_CHECKS", default=False)
+
+
+def should_skip_opening_update_urls() -> bool:
+    """When True, do not open a browser for update download URLs (CI, headless servers)."""
+    return env_flag("NMAPUI_SKIP_OPEN", default=False) or env_flag("NMAPUI_HEADLESS", default=False)
+
+
+def _select_release_asset(release: dict, *, platform_name: str | None = None, machine: str | None = None):
     platform_name = platform_name or sys.platform
     machine = (machine or platform.machine()).lower()
     assets = release.get("assets") or []
@@ -88,6 +98,13 @@ def _select_release_asset(release: dict, *, platform_name: Optional[str] = None,
 def check_for_updates():
     """Check for new releases on GitHub."""
     current_version = get_app_version()
+    if updates_disabled():
+        return {
+            "available": False,
+            "current_version": current_version,
+            "latest_version": current_version,
+            "update_checks_disabled": True,
+        }
     try:
         response = requests.get(
             "https://api.github.com/repos/techmore/NmapUI/releases/latest", timeout=10

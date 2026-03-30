@@ -4,10 +4,18 @@ from datetime import datetime
 class IdleStateManager:
     """Manage application idle state for auto-update workflows."""
 
-    def __init__(self, *, safe_emit, check_for_updates, logger):
+    def __init__(
+        self,
+        *,
+        safe_emit,
+        check_for_updates,
+        logger,
+        update_checks_enabled: bool = True,
+    ):
         self.safe_emit = safe_emit
         self.check_for_updates = check_for_updates
         self.logger = logger
+        self.update_checks_enabled = update_checks_enabled
         self.active_operations = set()
         self.last_activity = datetime.now()
         self.idle_threshold = 30
@@ -49,7 +57,8 @@ class IdleStateManager:
             self.safe_emit("idle_state_changed", {"idle": self.idle_state})
 
             if (
-                self.idle_state
+                self.update_checks_enabled
+                and self.idle_state
                 and self.update_available
                 and self.auto_update_enabled
                 and not self.countdown_active
@@ -64,6 +73,10 @@ class IdleStateManager:
         return time_since_activity >= self.idle_threshold
 
     def set_update_available(self, available: bool, update_info=None):
+        if not self.update_checks_enabled:
+            self.update_available = False
+            self.safe_emit("hide_auto_update_banner")
+            return
         self.update_available = available
         if (
             available
@@ -76,6 +89,8 @@ class IdleStateManager:
             self.safe_emit("hide_auto_update_banner")
 
     def _trigger_auto_update_banner(self):
+        if not self.update_checks_enabled:
+            return
         update_info = self.check_for_updates()
         self.logger.info("Auto-update check: %s", update_info)
         if isinstance(update_info, dict) and update_info.get("available"):

@@ -886,6 +886,11 @@ def generate_report_task(context, sid, data):
                     google_drive_upload["status"] = str(
                         upload_result.get("status", "Uploaded to Google Drive")
                     )
+                    logger.info(
+                        "google_drive_upload status=success scan_path=%s file_count=%d",
+                        relative_path,
+                        len(upload_file_paths),
+                    )
                     emit_to_client(sid, "scan_feedback", f"☁️ {google_drive_upload['status']}")
                     socketio_sleep(0)
                     append_runtime_log(
@@ -904,6 +909,11 @@ def generate_report_task(context, sid, data):
                 else:
                     google_drive_upload["error"] = str(
                         upload_result.get("error", "Unknown upload failure")
+                    )
+                    logger.error(
+                        "google_drive_upload status=failed scan_path=%s error=%s",
+                        relative_path,
+                        google_drive_upload["error"],
                     )
                     emit_to_client(
                         sid,

@@ -38,6 +38,8 @@ logs/
 # Environment
 .env
 .env.local
+.venv/
+venv/
 .claude
 agents
 reports/
