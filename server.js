@@ -26,11 +26,13 @@ app.get('/google-drive/oauth2callback', async (req, res) => {
         '--state', req.query.state || ''
     ]);
     if (result.success) {
-        io.emit('google_drive_status', result);
+        const googleDrive = saveGoogleDriveConfig({ enabled: true });
+        logEvent(null, 'settings', 'Google Drive connected and sync enabled.');
+        io.emit('google_drive_status', { ...result, config: googleDrive });
         res.send('<html><body><h1>Google Drive connected</h1><p>You can close this window and return to Gemini Nmap.</p></body></html>');
         return;
     }
-    io.emit('google_drive_status', result);
+    io.emit('google_drive_status', { ...result, config: getGoogleDriveConfig() });
     res.status(400).send(`<html><body><h1>Google Drive connection failed</h1><p>${String(result.error || 'Unknown error')}</p></body></html>`);
 });
 
@@ -82,6 +84,10 @@ function saveGoogleDriveConfig(googleDriveConfig) {
     appConfig = config;
     saveJSON(CONFIG_PATH, config);
     return config.googleDrive;
+}
+
+function getGoogleDriveConfig() {
+    return appConfig.googleDrive || {};
 }
 
 function shellQuote(value) {
@@ -726,11 +732,17 @@ io.on('connection', (socket) => {
     socket.on('get_customer_profile', () => socket.emit('customer_profile', getCustomerFingerprintProfile()));
     socket.on('get_google_drive_status', async () => {
         const status = await runGoogleDriveHelper(['status']);
-        socket.emit('google_drive_status', { ...status, config: appConfig.googleDrive || {} });
+        if (status.connected && !getGoogleDriveConfig().enabled) {
+            saveGoogleDriveConfig({ enabled: true });
+            logEvent(socket, 'settings', 'Google Drive connection found; sync enabled on server.');
+        }
+        socket.emit('google_drive_status', { ...status, config: getGoogleDriveConfig() });
     });
     socket.on('save_google_drive_credentials', async (data = {}) => {
         const result = await runGoogleDriveHelper(['save-credentials'], data.credentialsJson || '');
-        socket.emit('google_drive_status', result);
+        const googleDrive = result.success ? saveGoogleDriveConfig({ enabled: true }) : getGoogleDriveConfig();
+        if (result.success) logEvent(socket, 'settings', 'Google Drive credentials imported and sync enabled.');
+        socket.emit('google_drive_status', { ...result, config: googleDrive });
     });
     socket.on('connect_google_drive', async () => {
         const result = await runGoogleDriveHelper(['auth-url', '--redirect-uri', getGoogleDriveRedirectUri()]);
@@ -738,7 +750,9 @@ io.on('connection', (socket) => {
     });
     socket.on('disconnect_google_drive', async () => {
         const result = await runGoogleDriveHelper(['disconnect']);
-        socket.emit('google_drive_status', { ...result, config: appConfig.googleDrive || {} });
+        const googleDrive = saveGoogleDriveConfig({ enabled: false });
+        if (result.success) logEvent(socket, 'settings', 'Google Drive disconnected and sync disabled.');
+        socket.emit('google_drive_status', { ...result, config: googleDrive });
     });
     socket.on('save_google_drive_settings', (data = {}) => {
         const googleDrive = saveGoogleDriveConfig({
