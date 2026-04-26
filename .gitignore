@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+__pycache__/
+*.py[cod]
+
+.env
+.env.*
+config.json
+history.json
+.google_drive/
+
+reports_archive/
+phase2_results.xml
+targets.tmp
