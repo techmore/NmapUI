@@ -169,17 +169,8 @@ function initializeSettingsTab(socket) {
     if (settingsTabInitialized) return;
     settingsTabInitialized = true;
 
-    const autoScanToggle = document.getElementById('auto-scan-toggle');
-    const autoScanModal = document.getElementById('auto-scan-modal');
-    
     // Load initial settings
     socket.on('initial_data', (data) => {
-        // We'll need the server to send current auto-scan config in initial_data
-        if (data.autoScan) {
-            if (autoScanToggle) autoScanToggle.checked = data.autoScan.enabled;
-            if (data.autoScan.startTime) document.getElementById('auto-start-time').value = data.autoScan.startTime;
-            if (data.autoScan.endTime) document.getElementById('auto-end-time').value = data.autoScan.endTime;
-        }
         if (data.googleDrive) applyGoogleDriveConfig(data.googleDrive);
         socket.emit('get_google_drive_status');
     });
@@ -201,14 +192,6 @@ function initializeSettingsTab(socket) {
     socket.on('google_drive_upload_complete', (data = {}) => {
         setGoogleDriveStatus(data.status || 'Report uploaded to Google Drive.');
         socket.emit('get_google_drive_status');
-    });
-
-    autoScanToggle?.addEventListener('change', () => {
-        if (autoScanToggle.checked) {
-            autoScanModal.classList.remove('hidden');
-        } else {
-            socket.emit('disable_auto_scan');
-        }
     });
 
     document.getElementById('save-settings-btn')?.addEventListener('click', saveSettingsTab);
@@ -249,21 +232,6 @@ function initializeSettingsTab(socket) {
             document.getElementById('settings-maintenance-status').textContent = 'Runtime maintenance endpoints are not connected in this build.';
         });
     });
-}
-
-function saveAutoScanTimes() {
-    const startTime = document.getElementById('auto-start-time').value;
-    const endTime = document.getElementById('auto-end-time').value;
-    const target = document.getElementById('scan-target').value;
-
-    window.socket.emit('enable_auto_scan', { startTime, endTime, target });
-    document.getElementById('auto-scan-modal').classList.add('hidden');
-    alert('Auto-scan enabled daily at ' + startTime);
-}
-
-function hideAutoScanTimeModal() {
-    document.getElementById('auto-scan-modal').classList.add('hidden');
-    document.getElementById('auto-scan-toggle').checked = false;
 }
 
 window.loadSettingsTab = loadSettingsTab;

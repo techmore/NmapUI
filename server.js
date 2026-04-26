@@ -86,6 +86,15 @@ function saveGoogleDriveConfig(googleDriveConfig) {
     return config.googleDrive;
 }
 
+function saveAutoScanConfig(autoScanConfig) {
+    const config = loadJSON(CONFIG_PATH, {});
+    config.autoScan = { ...(config.autoScan || {}), ...autoScanConfig };
+    appConfig = config;
+    saveJSON(CONFIG_PATH, config);
+    setupAutoScan(config);
+    return config.autoScan;
+}
+
 function getGoogleDriveConfig() {
     return appConfig.googleDrive || {};
 }
@@ -299,14 +308,28 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
 
 function setupAutoScan(config) {
     if (autoScanTask) autoScanTask.stop();
-    if (config.autoScan && config.autoScan.enabled) {
-        const [hour, minute] = config.autoScan.startTime.split(':');
-        autoScanTask = cron.schedule(`${minute} ${hour} * * *`, () => {
-            logEvent(null, 'job', 'Starting scheduled daily scan...');
-            startChainedScan(null, config.autoScan.target, true);
-        });
-        console.log(`Auto-scan scheduled for ${config.autoScan.startTime} daily.`);
-    }
+    autoScanTask = null;
+    const autoScan = config.autoScan || {};
+    if (!autoScan.enabled) return;
+
+    const startTime = autoScan.startTime || '01:00';
+    const [hour = '1', minute = '0'] = startTime.split(':');
+    const recurrence = ['hourly', 'daily', 'weekly', 'monthly'].includes(autoScan.recurrence)
+        ? autoScan.recurrence
+        : 'daily';
+    const cronExpression = {
+        hourly: `${minute} * * * *`,
+        daily: `${minute} ${hour} * * *`,
+        weekly: `${minute} ${hour} * * 0`,
+        monthly: `${minute} ${hour} 1 * *`
+    }[recurrence];
+
+    autoScanTask = cron.schedule(cronExpression, () => {
+        const target = autoScan.target || cachedNetworkInfo?.cidr || '192.168.1.0/24';
+        logEvent(null, 'job', `Starting scheduled ${recurrence} Complete+PDF scan for ${target}...`);
+        startChainedScan(null, target, true);
+    });
+    console.log(`Auto-monitor scheduled ${recurrence} at ${startTime}.`);
 }
 
 function logEvent(socket, level, message) {
@@ -722,11 +745,11 @@ function startChainedScan(socket, target, usePn = false) {
 }
 
 io.on('connection', (socket) => {
-    socket.emit('sync_state', { hosts: discoveredHosts, isScanning: !!currentScan, phase: currentScanPhase, target: currentTarget, startTime: scanStartTime, scanKind: currentScanKind, hops: cachedHops, customerProfile: getCustomerFingerprintProfile() });
+    socket.emit('sync_state', { hosts: discoveredHosts, isScanning: !!currentScan, phase: currentScanPhase, target: currentTarget, startTime: scanStartTime, scanKind: currentScanKind, hops: cachedHops, customerProfile: getCustomerFingerprintProfile(), autoScan: appConfig.autoScan || {} });
     socket.on('get_initial_data', async () => {
         const network = cachedNetworkInfo || await getNetworkInfo();
         const publicIP = cachedPublicIP || await getPublicIP();
-        socket.emit('initial_data', { ...network, publicIP, customerProfile: getCustomerFingerprintProfile(), googleDrive: appConfig.googleDrive || {} });
+        socket.emit('initial_data', { ...network, publicIP, customerProfile: getCustomerFingerprintProfile(), googleDrive: appConfig.googleDrive || {}, autoScan: appConfig.autoScan || {} });
         cachedHops.forEach(hop => socket.emit('traceroute_hop', hop));
     });
     socket.on('start_quick_scan', (data) => startChainedScan(socket, data.target, false));
@@ -738,6 +761,21 @@ io.on('connection', (socket) => {
         runNmap(socket, buildPhase2Args(true, true), 3, null, { scanKind: 'dragnet' });
     });
     socket.on('stop_scan', () => { if (currentScan) currentScan.kill(); });
+    socket.on('enable_auto_scan', (data = {}) => {
+        const autoScan = saveAutoScanConfig({
+            enabled: true,
+            recurrence: ['hourly', 'daily', 'weekly', 'monthly'].includes(data.recurrence) ? data.recurrence : 'daily',
+            startTime: data.startTime || '01:00',
+            target: data.target || cachedNetworkInfo?.cidr || '192.168.1.0/24'
+        });
+        logEvent(socket, 'settings', `Auto-monitor enabled: ${autoScan.recurrence} at ${autoScan.startTime} for ${autoScan.target}.`);
+        io.emit('auto_scan_config', autoScan);
+    });
+    socket.on('disable_auto_scan', () => {
+        const autoScan = saveAutoScanConfig({ enabled: false });
+        logEvent(socket, 'settings', 'Auto-monitor disabled.');
+        io.emit('auto_scan_config', autoScan);
+    });
     socket.on('get_history', () => socket.emit('history_data', loadJSON(HISTORY_PATH, [])));
     socket.on('get_customer_profile', () => socket.emit('customer_profile', getCustomerFingerprintProfile()));
     socket.on('get_google_drive_status', async () => {

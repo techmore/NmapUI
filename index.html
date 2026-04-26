@@ -1361,7 +1361,7 @@
 
                 <div class="flex items-center gap-3 ml-4">
                     <label class="flex items-center cursor-pointer group">
-                        <input type="checkbox" id="auto-scan-toggle" class="sr-only peer" aria-label="Enable automated daily scans">
+                        <input type="checkbox" id="auto-scan-toggle" class="sr-only peer" aria-label="Enable auto-monitor scans">
                         <div class="relative w-10 h-5 bg-olive-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-olive-600"></div>
                         <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 group-hover:text-olive-800 transition-colors">Auto-Monitor</span>
                     </label>
@@ -1638,31 +1638,36 @@
     <div id="auto-scan-modal" class="hidden modal-overlay z-50">
         <div class="modal-panel max-w-md p-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-display italic text-olive-900">Set Auto Scan Times</h3>
+                <h3 class="text-lg font-display italic text-olive-900">Set Auto-Monitor Schedule</h3>
                 <button onclick="hideAutoScanTimeModal()" class="icon-button size-8 text-xl" aria-label="Close auto scan schedule dialog">&times;</button>
             </div>
 
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-olive-700 mb-1">Start Time</label>
-                        <input type="time" id="auto-start-time" class="form-control form-control-md" value="01:00">
+                        <label class="block text-sm font-medium text-olive-700 mb-1">Recurrence</label>
+                        <select id="auto-recurrence" class="form-control form-control-md">
+                            <option value="hourly">Hourly</option>
+                            <option value="daily" selected="selected">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-olive-700 mb-1">End Time</label>
-                        <input type="time" id="auto-end-time" class="form-control form-control-md" value="06:00">
+                        <label class="block text-sm font-medium text-olive-700 mb-1">Start Time</label>
+                        <input type="time" id="auto-start-time" class="form-control form-control-md" value="01:00">
                     </div>
                 </div>
 
                 <div class="bg-olive-50 p-3 rounded-lg">
                     <p class="text-sm text-olive-700">
-                        <strong>Automatic Mode:</strong> During these hours, the system will automatically run scans and generate reports using the current network target.
+                        <strong>Automatic Mode:</strong> Auto-monitor runs Complete + PDF using the current network target. The schedule is saved on the server and resumes after restart.
                     </p>
                 </div>
 
                 <div class="flex gap-3 pt-4">
                     <button onclick="saveAutoScanTimes()" class="action-button action-button-primary flex-1">
-                        Enable Auto Scan
+                        Enable Auto-Monitor
                     </button>
                     <button onclick="saveAndRunScan()" class="action-button action-button-primary flex-1">
                         Save and Run Scan
