@@ -339,6 +339,38 @@ function logEvent(socket, level, message) {
     else io.emit('log_entry', entry);
 }
 
+function ipToInt(ip) {
+    const parts = String(ip).split('.').map(Number);
+    if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+    return (((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3]) >>> 0;
+}
+
+function intToIp(value) {
+    return [
+        (value >>> 24) & 255,
+        (value >>> 16) & 255,
+        (value >>> 8) & 255,
+        value & 255
+    ].join('.');
+}
+
+function maskHexToInfo(maskHex) {
+    const normalized = String(maskHex || '').replace(/^0x/i, '').padStart(8, '0').slice(-8);
+    const maskInt = parseInt(normalized, 16) >>> 0;
+    if (!Number.isFinite(maskInt)) return null;
+    const binary = maskInt.toString(2).padStart(32, '0');
+    if (!/^1*0*$/.test(binary)) return null;
+    const prefix = binary.indexOf('0') === -1 ? 32 : binary.indexOf('0');
+    return { maskInt, prefix, dotted: intToIp(maskInt) };
+}
+
+function getNetworkCidr(localIP, maskHex) {
+    const ipInt = ipToInt(localIP);
+    const maskInfo = maskHexToInfo(maskHex);
+    if (ipInt === null || !maskInfo) return '';
+    return `${intToIp((ipInt & maskInfo.maskInt) >>> 0)}/${maskInfo.prefix}`;
+}
+
 async function getNetworkInfo() {
     return new Promise((resolve) => {
         exec("route get default", (error, routeOutput) => {
@@ -348,17 +380,13 @@ async function getNetworkInfo() {
                 const ipMatch = ifconfigOutput && ifconfigOutput.match(/inet\s+([0-9.]+)/);
                 const maskMatch = ifconfigOutput && ifconfigOutput.match(/netmask\s+0x([0-9a-f]+)/);
                 const localIP = ipMatch ? ipMatch[1] : 'Unknown';
-                let cidr = '';
-                if (ipMatch) {
-                    const parts = localIP.split('.');
-                    if (maskMatch) {
-                        const maskHex = maskMatch[1].toLowerCase();
-                        if (maskHex === 'ffffff00') cidr = `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
-                        else if (maskHex === 'ffff0000') cidr = `${parts[0]}.${parts[1]}.0.0/16`;
-                        else cidr = `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
-                    } else cidr = `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
-                }
-                const result = { localIP, mask: maskMatch ? '0x' + maskMatch[1] : 'Unknown', cidr: cidr || '192.168.1.0/24' };
+                const maskInfo = maskMatch ? maskHexToInfo(maskMatch[1]) : null;
+                const cidr = maskMatch ? getNetworkCidr(localIP, maskMatch[1]) : '';
+                const result = {
+                    localIP,
+                    mask: maskInfo ? maskInfo.dotted : (maskMatch ? '0x' + maskMatch[1] : 'Unknown'),
+                    cidr: cidr || '192.168.1.0/24'
+                };
                 cachedNetworkInfo = result;
                 resolve(result);
             });
