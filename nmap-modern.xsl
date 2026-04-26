@@ -395,14 +395,14 @@ Updated: 2026
 
 	          @media print {
 	            html {
-	              font-size: 8px !important;
+	              font-size: 7px !important;
 	            }
 
 	            body {
 	              background-color: #e9ebe0 !important;
 	              color: #25291f !important;
-	              font-size: 8px !important;
-	              line-height: 1.25 !important;
+	              font-size: 7px !important;
+	              line-height: 1.15 !important;
 	              -webkit-print-color-adjust: exact !important;
 	              print-color-adjust: exact !important;
 	            }
@@ -422,23 +422,23 @@ Updated: 2026
 	            }
 
 	            h1 {
-	              font-size: 18px !important;
+	              font-size: 14px !important;
 	              line-height: 1.05 !important;
-	              margin-bottom: 3px !important;
+	              margin-bottom: 2px !important;
 	            }
 
 	            h2 {
-	              font-size: 15px !important;
+	              font-size: 11px !important;
 	              line-height: 1.1 !important;
-	              margin-bottom: 5px !important;
+	              margin-bottom: 3px !important;
 	            }
 
 	            h3,
 	            h4,
 	            h5 {
-	              font-size: 11px !important;
-	              line-height: 1.15 !important;
-	              margin-bottom: 3px !important;
+	              font-size: 8px !important;
+	              line-height: 1.1 !important;
+	              margin-bottom: 2px !important;
 	            }
 
 	            body,
@@ -454,9 +454,9 @@ Updated: 2026
 	            .card {
 	              background: rgba(255,255,255,0.88) !important;
 	              border: 1px solid #d8dbc7 !important;
-	              border-radius: 5px !important;
-	              margin-bottom: 3mm !important;
-	              padding: 5px !important;
+	              border-radius: 3px !important;
+	              margin-bottom: 1.5mm !important;
+	              padding: 3px !important;
 	              -webkit-print-color-adjust: exact !important;
 	              print-color-adjust: exact !important;
 	            }
@@ -465,7 +465,7 @@ Updated: 2026
 	            .p-6,
 	            .p-5,
 	            .p-4 {
-	              padding: 5px !important;
+	              padding: 3px !important;
 	            }
 
 	            .mb-12,
@@ -473,7 +473,7 @@ Updated: 2026
 	            .mb-6,
 	            .mb-4,
 	            .mb-3 {
-	              margin-bottom: 4px !important;
+	              margin-bottom: 2px !important;
 	            }
 
 	            .pt-24,
@@ -485,7 +485,7 @@ Updated: 2026
 	            .gap-6,
 	            .gap-4,
 	            .gap-3 {
-	              gap: 4px !important;
+	              gap: 2px !important;
 	            }
 
 	            .text-4xl,
@@ -495,32 +495,32 @@ Updated: 2026
 	            .text-lg,
 	            .text-sm,
 	            .text-xs {
-	              font-size: 8px !important;
-	              line-height: 1.25 !important;
+	              font-size: 7px !important;
+	              line-height: 1.15 !important;
 	            }
 
 	            .badge {
-	              padding: 1px 4px !important;
-	              border-radius: 4px !important;
-	              font-size: 7px !important;
+	              padding: 0 2px !important;
+	              border-radius: 2px !important;
+	              font-size: 6px !important;
 	              line-height: 1.1 !important;
 	            }
 
 	            table.dataTable thead th {
 	              background-color: #32382a !important;
 	              color: white !important;
-	              padding: 3px 4px !important;
-	              font-size: 7px !important;
-	              line-height: 1.15 !important;
+	              padding: 1px 2px !important;
+	              font-size: 6px !important;
+	              line-height: 1.1 !important;
 	              -webkit-print-color-adjust: exact !important;
 	              print-color-adjust: exact !important;
 	            }
 
 	            table.dataTable tbody td,
 	            table.dataTable tbody th {
-	              padding: 2px 4px !important;
-	              font-size: 7px !important;
-	              line-height: 1.15 !important;
+	              padding: 1px 2px !important;
+	              font-size: 6px !important;
+	              line-height: 1.1 !important;
 	            }
 
             .badge-success {
@@ -557,11 +557,11 @@ Updated: 2026
 	            }
 
 	            .progress-bar {
-	              height: 12px !important;
+	              height: 8px !important;
 	            }
 
 	            .progress-segment {
-	              font-size: 7px !important;
+	              font-size: 6px !important;
 	              line-height: 1 !important;
 	            }
 
@@ -569,6 +569,7 @@ Updated: 2026
             .dataTables_paginate,
             .dataTables_length,
             .dataTables_filter,
+            .no-print,
             button,
             input,
             textarea {
@@ -578,7 +579,7 @@ Updated: 2026
 	            .collapsible-header {
 	              display: block !important;
 	              background-color: #f5f6f3 !important;
-	              padding: 5px !important;
+	              padding: 3px !important;
 	              page-break-after: avoid !important;
 	              -webkit-print-color-adjust: exact !important;
 	              print-color-adjust: exact !important;
@@ -597,14 +598,14 @@ Updated: 2026
 
 	            pre {
 	              background-color: #f5f6f3 !important;
-	              border-radius: 4px !important;
-	              padding: 4px !important;
+	              border-radius: 2px !important;
+	              padding: 2px !important;
 	              -webkit-print-color-adjust: exact !important;
 	              print-color-adjust: exact !important;
 	              white-space: pre-wrap !important;
 	              word-break: break-word !important;
-	              font-size: 6px !important;
-	              line-height: 1.15 !important;
+	              font-size: 5px !important;
+	              line-height: 1.05 !important;
 	            }
 
             table {
@@ -623,17 +624,25 @@ Updated: 2026
             #productversions,
             #ssh-auth,
             #onlinehosts {
-              page-break-after: always;
+              page-break-after: auto !important;
             }
 
-            /* Avoid page breaks inside cards */
             .card {
-              page-break-inside: avoid;
+              page-break-inside: auto !important;
             }
+
+	            .grid {
+	              display: grid !important;
+	              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+	            }
+
+	            .flex-shrink-0 {
+	              display: none !important;
+	            }
 
 	            @page {
 	              size: Letter landscape;
-	              margin: 4mm;
+	              margin: 3mm;
 	            }
           }
         </style>
@@ -685,7 +694,7 @@ Updated: 2026
               <xsl:value-of select="/nmaprun/@startstr"/> – <xsl:value-of select="/nmaprun/runstats/finished/@timestr"/>
             </p>
             
-            <div class="bg-olive-50 border border-olive-200 rounded-lg p-4 mb-6">
+            <div class="bg-olive-50 border border-olive-200 rounded-lg p-4 mb-6 no-print">
               <pre class="text-xs overflow-x-auto"><a target="_blank" class="text-olive-700 hover:text-olive-900"><xsl:attribute name="href">https://explainshell.com/explain?cmd=<xsl:value-of select="/nmaprun/@args"/></xsl:attribute><xsl:value-of select="/nmaprun/@args"/></a></pre>
             </div>
             
@@ -1117,7 +1126,7 @@ Updated: 2026
             </div>
             
             <!-- Keyword Highlighting -->
-            <div class="border-t border-olive-200 pt-6">
+            <div class="border-t border-olive-200 pt-6 no-print">
               <label class="block text-sm font-medium text-olive-900 mb-2">Highlight Keywords in Services</label>
               <textarea id="keyword-input" rows="2" placeholder="sha1, password, md5, login..." 
                         class="w-full mb-3">sha1,login,password,md5</textarea>
