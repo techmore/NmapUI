@@ -1,3 +1,5 @@
+const VERSION = 'v2026.4.26.4.00';
+
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -792,7 +794,7 @@ function startChainedScan(socket, target, usePn = false) {
 }
 
 io.on('connection', (socket) => {
-    socket.emit('sync_state', { hosts: discoveredHosts, isScanning: !!currentScan, phase: currentScanPhase, target: currentTarget, startTime: scanStartTime, scanKind: currentScanKind, hops: cachedHops, customerProfile: getCustomerFingerprintProfile(), autoScan: appConfig.autoScan || {} });
+    socket.emit('sync_state', { version: VERSION, hosts: discoveredHosts, isScanning: !!currentScan, phase: currentScanPhase, target: currentTarget, startTime: scanStartTime, scanKind: currentScanKind, hops: cachedHops, customerProfile: getCustomerFingerprintProfile(), autoScan: appConfig.autoScan || {} });
     socket.on('get_initial_data', async () => {
         const network = cachedNetworkInfo || await getNetworkInfo();
         const publicIP = cachedPublicIP || await getPublicIP();
@@ -896,4 +898,4 @@ exec('sudo nmap --script-updatedb');
 
 setupAutoScan(loadJSON(CONFIG_PATH, {}));
 getNetworkInfo(); getPublicIP(); runTraceroute();
-server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`${VERSION} Server running on http://localhost:${PORT}`));

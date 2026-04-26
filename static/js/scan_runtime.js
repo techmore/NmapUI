@@ -127,9 +127,15 @@ function highlightActiveScanHost(data) {
     if (row) row.classList.add('is-active-scan-host', 'bg-amber-50', 'ring-1', 'ring-amber-300');
 }
 
+let appVersion = null;
+
 function initializeScanRuntime(socket) {
     socket.on('sync_state', (state) => {
-        if (state.customerProfile && typeof renderCustomerFingerprint === 'function') {
+        if (state.version) {
+            appVersion = state.version;
+            const versionEl = document.getElementById('app-version');
+            if (versionEl) versionEl.textContent = state.version;
+        }
             renderCustomerFingerprint(state.customerProfile);
         }
 
