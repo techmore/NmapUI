@@ -173,6 +173,19 @@ function formatReportTimestamp(date = new Date()) {
     ].join('');
 }
 
+function formatReportDisplayTimestamp(date = new Date()) {
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZoneName: 'short'
+    });
+}
+
 function getTopologyFingerprintParts() {
     const hosts = discoveredHosts
         .map(host => [host.ip, host.mac || '', host.vendor || '', host.hostname || ''].join('|'))
@@ -609,7 +622,9 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                 const profile = getCustomerFingerprintProfile();
                 const reportDir = path.join(REPORTS_DIR, profile.folderName);
                 if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
-                const reportTimestamp = formatReportTimestamp();
+                const reportDate = new Date();
+                const reportTimestamp = formatReportTimestamp(reportDate);
+                const reportDisplayTimestamp = formatReportDisplayTimestamp(reportDate);
                 const reportBaseName = `${profile.reportLabel}-${reportTimestamp}`;
                 const reportName = `${reportBaseName}.html`;
                 const pdfName = `${reportBaseName}.pdf`;
@@ -621,8 +636,11 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                 const xsltCommand = [
                     'xsltproc',
                     '-o', shellQuote(reportPath),
-                    '--stringparam', 'customer_name', shellQuote(profile.reportLabel),
+                    '--stringparam', 'customer_name', shellQuote(profile.prefix),
+                    '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
                     '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
+                    '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
+                    '--stringparam', 'public_ip', shellQuote(profile.publicIP),
                     shellQuote(xslPath),
                     shellQuote(xmlPath)
                 ].join(' ');

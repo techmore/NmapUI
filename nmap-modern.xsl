@@ -11,7 +11,10 @@ Updated: 2026
 
   <xsl:param name="techmore_version"/>
   <xsl:param name="customer_name"/>
+  <xsl:param name="report_identifier"/>
   <xsl:param name="report_timestamp"/>
+  <xsl:param name="report_display_timestamp"/>
+  <xsl:param name="public_ip"/>
 
    <!-- Services that have both product and version -->
   <xsl:key name="svcByProduct"
@@ -399,6 +402,10 @@ Updated: 2026
 	            display: none;
 	          }
 
+	          .pdf-only {
+	            display: none;
+	          }
+
 	          @media print {
 	            html {
 	              font-size: 7px !important;
@@ -420,13 +427,15 @@ Updated: 2026
 	            .pdf-cover {
 	              display: flex !important;
 	              box-sizing: border-box !important;
-	              min-height: 209mm !important;
+	              width: 100% !important;
+	              height: 187mm !important;
+	              min-height: 0 !important;
 	              page-break-after: always !important;
 	              break-after: page !important;
 	              background: #414637 !important;
 	              color: #f5f6f3 !important;
 	              border: 1px solid #636b54 !important;
-	              padding: 18mm !important;
+	              padding: 16mm !important;
 	              flex-direction: column !important;
 	              justify-content: space-between !important;
 	              -webkit-print-color-adjust: exact !important;
@@ -440,38 +449,38 @@ Updated: 2026
 	            }
 
 	            .pdf-cover-label {
-	              font-size: 9px !important;
+	              font-size: 10px !important;
 	              letter-spacing: 0.14em !important;
 	              text-transform: uppercase !important;
 	              color: #d8dbc7 !important;
 	            }
 
 	            .pdf-cover-title {
-	              font-size: 42px !important;
+	              font-size: 38px !important;
 	              line-height: 0.95 !important;
 	              font-weight: 700 !important;
 	              margin-top: 8mm !important;
-	              margin-bottom: 5mm !important;
+	              margin-bottom: 4mm !important;
 	            }
 
 	            .pdf-cover-subtitle {
-	              font-size: 18px !important;
+	              font-size: 16px !important;
 	              line-height: 1.1 !important;
 	              color: #e9ebe0 !important;
 	            }
 
 	            .pdf-cover-meta {
 	              display: grid !important;
-	              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-	              gap: 4mm !important;
+	              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+	              gap: 3mm !important;
 	              border-top: 1px solid #979f83 !important;
-	              padding-top: 6mm !important;
+	              padding-top: 5mm !important;
             }
 
 	            .pdf-cover-meta div {
 	              background: rgba(245,246,243,0.08) !important;
 	              border: 1px solid rgba(216,219,199,0.35) !important;
-	              padding: 4mm !important;
+	              padding: 3.5mm !important;
 	            }
 
 	            .pdf-cover-meta span {
@@ -484,9 +493,36 @@ Updated: 2026
 
 	            .pdf-cover-meta strong {
 	              display: block !important;
-	              font-size: 12px !important;
+	              font-size: 10px !important;
 	              line-height: 1.15 !important;
 	              margin-top: 2mm !important;
+	              word-break: break-word !important;
+            }
+
+	            .pdf-summary-title {
+	              display: block !important;
+	              font-size: 13px !important;
+	              line-height: 1.1 !important;
+	              margin-bottom: 3px !important;
+            }
+
+	            .pdf-summary-subtitle {
+	              display: block !important;
+	              font-size: 8px !important;
+	              line-height: 1.2 !important;
+	              margin-bottom: 3px !important;
+            }
+
+	            .pdf-only {
+	              display: block !important;
+	            }
+
+	            .pdf-section-label {
+	              font-size: 7px !important;
+	              color: #636b54 !important;
+	              text-transform: uppercase !important;
+	              letter-spacing: 0.12em !important;
+	              margin-bottom: 2px !important;
             }
 
 	            .max-w-7xl,
@@ -647,6 +683,7 @@ Updated: 2026
             .dataTables_paginate,
             .dataTables_length,
             .dataTables_filter,
+            .dataTables_info,
             .no-print,
             button,
             input,
@@ -726,8 +763,8 @@ Updated: 2026
 	            }
 
 	            .pdf-page-two {
-	              page-break-after: always !important;
-	              break-after: page !important;
+	              page-break-after: auto !important;
+	              break-after: auto !important;
             }
 
 	            .flex-shrink-0 {
@@ -745,35 +782,6 @@ Updated: 2026
       </head>
       
       <body class="min-h-screen">
-        <!-- Fixed Navigation -->
-        <nav class="fixed top-0 left-0 right-0 bg-white border-b border-olive-200 z-50 shadow-sm">
-	          <div class="report-shell">
-            <div class="flex items-center justify-between h-16">
-              <div class="flex items-center space-x-8">
-                <span class="text-2xl font-display font-semibold text-olive-900">Nmap Results</span>
-                <div class="hidden md:flex space-x-6">
-                  <a href="#scannedhosts" class="nav-link text-sm font-medium text-olive-700">Scanned Hosts</a>
-                  <a href="#openservices" class="nav-link text-sm font-medium text-olive-700">Open Services</a>
-                  <a href="#webservices" class="nav-link text-sm font-medium text-olive-700">Web Services</a>
-                  <a href="#productversions" class="nav-link text-sm font-medium text-olive-700">Product Versions</a>
-                  <xsl:if test="count(/nmaprun/host/ports/port[state/@state='open']/service[@name='ssh']) &gt; 0">
-                    <a href="#ssh-auth" class="nav-link text-sm font-medium text-olive-700">SSH Auth</a>
-                  </xsl:if>
-                  <a href="#onlinehosts" class="nav-link text-sm font-medium text-olive-700">Online Hosts</a>
-                </div>
-              </div>
-              <div class="flex items-center space-x-4">
-                <a href="https://www.pentestfactory.de/schwachstellendatenbank/" target="_blank" 
-                   class="text-sm text-olive-600 hover:text-olive-800" title="Vulnerability Database">CVEs ↗</a>
-                <a href="https://www.ssllabs.com/ssltest/" target="_blank" 
-                   class="text-sm text-olive-600 hover:text-olive-800" title="SSL Server Test">SSL/TLS ↗</a>
-                <a href="https://securityheaders.com/" target="_blank" 
-                   class="text-sm text-olive-600 hover:text-olive-800" title="HTTP Header Test">Headers ↗</a>
-              </div>
-            </div>
-          </div>
-        </nav>
-
         <section class="pdf-cover">
           <div>
             <div class="pdf-cover-label">TM-NmapUI</div>
@@ -793,9 +801,23 @@ Updated: 2026
               </strong>
             </div>
             <div>
+              <span>Report ID</span>
+              <strong>
+                <xsl:choose>
+                  <xsl:when test="string-length(normalize-space($report_identifier)) &gt; 0">
+                    <xsl:value-of select="$report_identifier"/>
+                  </xsl:when>
+                  <xsl:otherwise><xsl:value-of select="/nmaprun/@startstr"/></xsl:otherwise>
+                </xsl:choose>
+              </strong>
+            </div>
+            <div>
               <span>Timestamp</span>
               <strong>
                 <xsl:choose>
+                  <xsl:when test="string-length(normalize-space($report_display_timestamp)) &gt; 0">
+                    <xsl:value-of select="$report_display_timestamp"/>
+                  </xsl:when>
                   <xsl:when test="string-length(normalize-space($report_timestamp)) &gt; 0">
                     <xsl:value-of select="$report_timestamp"/>
                   </xsl:when>
@@ -810,16 +832,46 @@ Updated: 2026
           </div>
         </section>
 
+        <!-- Fixed Navigation -->
+        <nav class="fixed top-0 left-0 right-0 bg-white border-b border-olive-200 z-50 shadow-sm">
+	          <div class="report-shell">
+            <div class="flex items-center justify-between h-16">
+              <div class="flex items-center space-x-8">
+                <span class="text-2xl font-display font-semibold text-olive-900">Nmap Results</span>
+                <div class="hidden md:flex space-x-6">
+                  <a href="#scannedhosts" class="nav-link text-sm font-medium text-olive-700">Scanned Hosts</a>
+                  <a href="#openservices" class="nav-link text-sm font-medium text-olive-700">Open Services</a>
+                  <a href="#webservices" class="nav-link text-sm font-medium text-olive-700">Web Services</a>
+                  <a href="#productversions" class="nav-link text-sm font-medium text-olive-700">Product Versions</a>
+                  <xsl:if test="count(/nmaprun/host/ports/port[state/@state='open']/service[@name='ssh']) &gt; 0">
+                    <a href="#ssh-auth" class="nav-link text-sm font-medium text-olive-700">SSH Auth</a>
+                  </xsl:if>
+                  <a href="#onlinehosts" class="nav-link text-sm font-medium text-olive-700">Online Hosts</a>
+                </div>
+              </div>
+              <div class="flex items-center space-x-4">
+                <a href="https://www.pentestfactory.de/schwachstellendatenbank/" target="_blank"
+                   class="text-sm text-olive-600 hover:text-olive-800" title="Vulnerability Database">CVEs ↗</a>
+                <a href="https://www.ssllabs.com/ssltest/" target="_blank"
+                   class="text-sm text-olive-600 hover:text-olive-800" title="SSL Server Test">SSL/TLS ↗</a>
+                <a href="https://securityheaders.com/" target="_blank"
+                   class="text-sm text-olive-600 hover:text-olive-800" title="HTTP Header Test">Headers ↗</a>
+              </div>
+            </div>
+          </div>
+        </nav>
+
         <!-- Main Content -->
 	        <div class="report-shell pt-24 pb-12">
           
           <!-- Hero Section -->
           <div class="card p-8 mb-8 fade-in pdf-page-two">
-            <h1 class="text-4xl font-display font-bold text-olive-900 mb-2">Nmap Port Scanning Results</h1>
-            <p class="text-sm text-olive-500 mb-1">
+            <div class="pdf-only pdf-section-label">Executive Summary</div>
+            <h1 class="text-4xl font-display font-bold text-olive-900 mb-2 pdf-summary-title">Nmap Port Scanning Results</h1>
+            <p class="text-sm text-olive-500 mb-1 pdf-summary-subtitle">
               Techmore Network Scanner <xsl:value-of select="$techmore_version"/>
             </p>
-            <p class="text-olive-600 mb-4">
+            <p class="text-olive-600 mb-4 pdf-summary-subtitle">
               Version <xsl:value-of select="/nmaprun/@version"/> ·
               <xsl:value-of select="/nmaprun/@startstr"/> – <xsl:value-of select="/nmaprun/runstats/finished/@timestr"/>
             </p>
