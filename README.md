@@ -1,4 +1,4 @@
-# Gemini Nmap
+# TM-NMapUI
 
 Network Scanner GUI - A web-based network scanning and monitoring tool powered by Nmap.
 

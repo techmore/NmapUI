@@ -3,7 +3,7 @@
 set -e
 
 echo "========================================"
-echo "Gemini Nmap - Dependency Installer"
+echo "TM-NMapUI - Dependency Installer"
 echo "========================================"
 
 BREW_PACKAGES=(
