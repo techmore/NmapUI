@@ -10,6 +10,8 @@ Updated: 2026
   <xsl:output method="html" encoding="utf-8" indent="yes" doctype-system="about:legacy-compat"/>
 
   <xsl:param name="techmore_version"/>
+  <xsl:param name="customer_name"/>
+  <xsl:param name="report_timestamp"/>
 
    <!-- Services that have both product and version -->
   <xsl:key name="svcByProduct"
@@ -389,9 +391,13 @@ Updated: 2026
             }
           }
           
-          .fade-in {
-            animation: fadeIn 0.3s ease;
-          }
+	          .fade-in {
+	            animation: fadeIn 0.3s ease;
+	          }
+
+	          .pdf-cover {
+	            display: none;
+	          }
 
 	          @media print {
 	            html {
@@ -409,6 +415,78 @@ Updated: 2026
 
             nav {
               display: none !important;
+            }
+
+	            .pdf-cover {
+	              display: flex !important;
+	              box-sizing: border-box !important;
+	              min-height: 209mm !important;
+	              page-break-after: always !important;
+	              break-after: page !important;
+	              background: #414637 !important;
+	              color: #f5f6f3 !important;
+	              border: 1px solid #636b54 !important;
+	              padding: 18mm !important;
+	              flex-direction: column !important;
+	              justify-content: space-between !important;
+	              -webkit-print-color-adjust: exact !important;
+	              print-color-adjust: exact !important;
+	            }
+
+	            .pdf-cover * {
+	              color: inherit !important;
+	              -webkit-print-color-adjust: exact !important;
+	              print-color-adjust: exact !important;
+	            }
+
+	            .pdf-cover-label {
+	              font-size: 9px !important;
+	              letter-spacing: 0.14em !important;
+	              text-transform: uppercase !important;
+	              color: #d8dbc7 !important;
+	            }
+
+	            .pdf-cover-title {
+	              font-size: 42px !important;
+	              line-height: 0.95 !important;
+	              font-weight: 700 !important;
+	              margin-top: 8mm !important;
+	              margin-bottom: 5mm !important;
+	            }
+
+	            .pdf-cover-subtitle {
+	              font-size: 18px !important;
+	              line-height: 1.1 !important;
+	              color: #e9ebe0 !important;
+	            }
+
+	            .pdf-cover-meta {
+	              display: grid !important;
+	              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+	              gap: 4mm !important;
+	              border-top: 1px solid #979f83 !important;
+	              padding-top: 6mm !important;
+            }
+
+	            .pdf-cover-meta div {
+	              background: rgba(245,246,243,0.08) !important;
+	              border: 1px solid rgba(216,219,199,0.35) !important;
+	              padding: 4mm !important;
+	            }
+
+	            .pdf-cover-meta span {
+	              display: block !important;
+	              font-size: 7px !important;
+	              color: #d8dbc7 !important;
+	              text-transform: uppercase !important;
+	              letter-spacing: 0.08em !important;
+            }
+
+	            .pdf-cover-meta strong {
+	              display: block !important;
+	              font-size: 12px !important;
+	              line-height: 1.15 !important;
+	              margin-top: 2mm !important;
             }
 
 	            .max-w-7xl,
@@ -631,10 +709,26 @@ Updated: 2026
               page-break-inside: auto !important;
             }
 
-	            .grid {
+	            .pdf-kpi-grid,
+	            .pdf-card-grid-4 {
 	              display: grid !important;
 	              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 	            }
+
+	            .pdf-card-grid-3 {
+	              display: grid !important;
+	              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+	            }
+
+	            .pdf-card-grid-2 {
+	              display: grid !important;
+	              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	            }
+
+	            .pdf-page-two {
+	              page-break-after: always !important;
+	              break-after: page !important;
+            }
 
 	            .flex-shrink-0 {
 	              display: none !important;
@@ -680,11 +774,47 @@ Updated: 2026
           </div>
         </nav>
 
+        <section class="pdf-cover">
+          <div>
+            <div class="pdf-cover-label">TM-NmapUI</div>
+            <div class="pdf-cover-title">Vulnerability Scanning</div>
+            <div class="pdf-cover-subtitle">Network Exposure and Service Discovery Report</div>
+          </div>
+          <div class="pdf-cover-meta">
+            <div>
+              <span>Customer</span>
+              <strong>
+                <xsl:choose>
+                  <xsl:when test="string-length(normalize-space($customer_name)) &gt; 0">
+                    <xsl:value-of select="$customer_name"/>
+                  </xsl:when>
+                  <xsl:otherwise>Customer Profile</xsl:otherwise>
+                </xsl:choose>
+              </strong>
+            </div>
+            <div>
+              <span>Timestamp</span>
+              <strong>
+                <xsl:choose>
+                  <xsl:when test="string-length(normalize-space($report_timestamp)) &gt; 0">
+                    <xsl:value-of select="$report_timestamp"/>
+                  </xsl:when>
+                  <xsl:otherwise><xsl:value-of select="/nmaprun/runstats/finished/@timestr"/></xsl:otherwise>
+                </xsl:choose>
+              </strong>
+            </div>
+            <div>
+              <span>Scope</span>
+              <strong><xsl:value-of select="/nmaprun/runstats/hosts/@total"/> IPs / <xsl:value-of select="/nmaprun/runstats/hosts/@up"/> online</strong>
+            </div>
+          </div>
+        </section>
+
         <!-- Main Content -->
 	        <div class="report-shell pt-24 pb-12">
           
           <!-- Hero Section -->
-          <div class="card p-8 mb-8 fade-in">
+          <div class="card p-8 mb-8 fade-in pdf-page-two">
             <h1 class="text-4xl font-display font-bold text-olive-900 mb-2">Nmap Port Scanning Results</h1>
             <p class="text-sm text-olive-500 mb-1">
               Techmore Network Scanner <xsl:value-of select="$techmore_version"/>
@@ -698,7 +828,7 @@ Updated: 2026
               <pre class="text-xs overflow-x-auto"><a target="_blank" class="text-olive-700 hover:text-olive-900"><xsl:attribute name="href">https://explainshell.com/explain?cmd=<xsl:value-of select="/nmaprun/@args"/></xsl:attribute><xsl:value-of select="/nmaprun/@args"/></a></pre>
             </div>
             
-            <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-3 gap-4 mb-6 pdf-card-grid-3">
               <div class="text-center">
                 <div class="text-3xl font-bold text-olive-900"><xsl:value-of select="/nmaprun/runstats/hosts/@total"/></div>
                 <div class="text-sm text-olive-600">Total IPs Scanned</div>
@@ -714,7 +844,7 @@ Updated: 2026
             </div>
 
             <!-- Enhanced Summary Dashboard -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 pdf-kpi-grid">
               <!-- Critical Vulnerabilities -->
               <div class="card p-4">
                 <div class="flex items-center">
@@ -785,7 +915,7 @@ Updated: 2026
             </div>
 
             <!-- Network & Vulnerability Summary -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 pdf-card-grid-3">
               <!-- Network Range -->
               <div class="card p-4">
                 <h3 class="text-lg font-semibold text-olive-900 mb-3">Network Scanned</h3>
@@ -861,7 +991,7 @@ Updated: 2026
             </div>
 
             <!-- Security Risk Assessment -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 pdf-card-grid-2">
               <!-- High-Risk Services -->
               <div class="card p-4 border-l-4 border-red-400">
                 <h3 class="text-lg font-semibold text-olive-900 mb-3 flex items-center">
@@ -944,7 +1074,7 @@ Updated: 2026
             </div>
 
             <!-- Top 10 Most Vulnerable & Most Open Ports -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 pdf-card-grid-2">
               <!-- Hosts with Vulnerabilities -->
               <div class="card p-4">
                 <h3 class="text-lg font-semibold text-olive-900 mb-3">Hosts with Vulnerabilities</h3>
@@ -991,7 +1121,7 @@ Updated: 2026
             </div>
 
             <!-- Network Health & Performance -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 pdf-card-grid-3">
               <!-- Network Utilization -->
               <div class="card p-4">
                 <h3 class="text-lg font-semibold text-olive-900 mb-3">Network Utilization</h3>
@@ -1073,7 +1203,7 @@ Updated: 2026
             </div>
 
             <!-- Top Services & OS Summary -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 pdf-card-grid-2">
               <!-- Top Services -->
               <div class="card p-4">
                 <h3 class="text-lg font-semibold text-olive-900 mb-3">Top Services</h3>

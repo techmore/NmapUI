@@ -558,14 +558,24 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                 const profile = getCustomerFingerprintProfile();
                 const reportDir = path.join(REPORTS_DIR, profile.folderName);
                 if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
-                const reportBaseName = `${profile.reportLabel}-${formatReportTimestamp()}`;
+                const reportTimestamp = formatReportTimestamp();
+                const reportBaseName = `${profile.reportLabel}-${reportTimestamp}`;
                 const reportName = `${reportBaseName}.html`;
                 const pdfName = `${reportBaseName}.pdf`;
                 const reportPath = path.join(reportDir, reportName);
                 const pdfPath = path.join(reportDir, pdfName);
                 const reportUrl = `/reports/${profile.folderName}/${reportName}`;
                 const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
-                exec(`xsltproc -o ${shellQuote(reportPath)} ${shellQuote(path.join(__dirname, 'nmap-modern.xsl'))} ${shellQuote(xmlPath)}`, (err) => {
+                const xslPath = path.join(__dirname, 'nmap-modern.xsl');
+                const xsltCommand = [
+                    'xsltproc',
+                    '-o', shellQuote(reportPath),
+                    '--stringparam', 'customer_name', shellQuote(profile.reportLabel),
+                    '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
+                    shellQuote(xslPath),
+                    shellQuote(xmlPath)
+                ].join(' ');
+                exec(xsltCommand, (err) => {
                     if (!err) {
                         generatePDF(reportPath, pdfPath, (pdfErr) => {
                             const pdfReady = !pdfErr && fs.existsSync(pdfPath);
