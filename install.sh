@@ -9,7 +9,6 @@ echo "========================================"
 BREW_PACKAGES=(
     "node"
     "nmap"
-    "traceroute"
     "wkhtmltopdf"
     "libxslt"
 )
@@ -61,13 +60,21 @@ verify_commands=(
     "python3:python3"
     "xsltproc:xsltproc"
     "wkhtmltopdf:wkhtmltopdf"
+    "express:node"
 )
 
 MISSING=0
 for cmd in "${verify_commands[@]}"; do
     BINARY="${cmd%%:*}"
     CHECK_CMD="${cmd##*:}"
-    if ! command -v "$CHECK_CMD" &> /dev/null; then
+    if [[ "$BINARY" == "express" ]]; then
+        if ! node -e "require('express')" &> /dev/null; then
+            echo "MISSING: express"
+            MISSING=1
+        else
+            echo "OK: express - installed"
+        fi
+    elif ! command -v "$CHECK_CMD" &> /dev/null; then
         echo "MISSING: $BINARY"
         MISSING=1
     else
