@@ -624,9 +624,10 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                                 customerProfile: profile
                             });
                             saveJSON(HISTORY_PATH, history.slice(0, 50));
-                            if (reportScanKind === 'complete') {
-                                uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, { label: 'Complete+PDF report' })
-                                    .catch(error => logEvent(socket, 'error', `Google Drive upload failed for Complete+PDF report: ${error.message}`));
+                            if (['complete', 'quick'].includes(reportScanKind)) {
+                                const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
+                                uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, { label: uploadLabel })
+                                    .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
                             }
                         });
                     } else {
