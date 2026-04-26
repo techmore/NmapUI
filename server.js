@@ -270,15 +270,16 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
         ? []
         : ['--min-hostgroup', '1', '--max-hostgroup', PHASE2_MAX_HOSTGROUP];
     const scripts = options.consolidateScripts ? ['default,vulners'] : ['vulners'];
-    const rate = options.minRate || '3000';
+    const rateArgs = options.minRate === false ? [] : ['--min-rate', options.minRate || '3000'];
+    const defaultScriptArgs = options.includeDefaultScripts === false || options.consolidateScripts ? [] : ['-sC'];
     const args = [
         ...(fullPortScan ? ['-p-'] : []),
         '-sS', '-sV',
-        ...(options.consolidateScripts ? [] : ['-sC']),
+        ...defaultScriptArgs,
         '-O',
         ...(usePn ? ['-Pn'] : []),
         '-T4',
-        '--min-rate', rate,
+        ...rateArgs,
         ...(options.maxParallelism ? ['--max-parallelism', String(options.maxParallelism)] : []),
         ...hostGroupArgs,
         '--open',
@@ -685,14 +686,13 @@ function startChainedScan(socket, target, usePn = false) {
         fs.writeFileSync('targets.tmp', targets);
 
         if (usePn) {
-            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with default,vulners. UI details will populate after XML parsing completes.`);
+            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners. UI details will populate after XML parsing completes.`);
             runNmap(
                 socket,
                 buildPhase2Args(true, false, {
                     allHostsAtOnce: true,
-                    consolidateScripts: true,
-                    minRate: '1000',
-                    maxParallelism: 20
+                    includeDefaultScripts: false,
+                    minRate: false
                 }),
                 2,
                 null,
