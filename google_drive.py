@@ -631,14 +631,14 @@ def main() -> int:
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(description="Google Drive helper for Gemini Nmap reports")
+    parser = argparse.ArgumentParser(description="Google Drive helper for NmapUI reports")
     parser.add_argument("command", choices=["status", "save-credentials", "auth-url", "exchange-code", "disconnect", "upload"])
     parser.add_argument("--root", default=str(Path(__file__).resolve().parent))
     parser.add_argument("--redirect-uri", default="")
     parser.add_argument("--code", default="")
     parser.add_argument("--state", default="")
     parser.add_argument("--folder-id", default="")
-    parser.add_argument("--folder-name", default="Gemini Nmap Reports")
+    parser.add_argument("--folder-name", default="Nmap Reports")
     parser.add_argument("--files", nargs="*", default=[])
     parser.add_argument("--credentials-json", default="")
     args = parser.parse_args()
