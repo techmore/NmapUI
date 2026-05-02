@@ -15,11 +15,16 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = process.env.PORT || 9000;
+const APP_IDENTITY = 'tm-network-scanner';
+const PORT = Number(process.env.PORT || 9000);
 
 app.use(express.static(path.join(__dirname)));
 app.use('/static', express.static(path.join(__dirname, 'static')));
 app.use('/reports', express.static(path.join(__dirname, 'reports_archive')));
+
+app.get('/api/app-identity', (req, res) => {
+    res.json({ app: APP_IDENTITY, name: 'TM-NMapUI', version: VERSION });
+});
 
 app.get('/google-drive/oauth2callback', async (req, res) => {
     const result = await runGoogleDriveHelper([
@@ -148,6 +153,69 @@ function describeMissingExecutable(name, envVar) {
 
 function isSudoAuthFailure(text) {
     return /sudo:.*password|a password is required|no tty present|permission denied/i.test(text || '');
+}
+
+function requestJSON(url, timeoutMs = 1000) {
+    return new Promise((resolve) => {
+        const request = http.get(url, { timeout: timeoutMs }, response => {
+            let raw = '';
+            response.on('data', chunk => { raw += chunk.toString(); });
+            response.on('end', () => {
+                try {
+                    resolve(JSON.parse(raw || '{}'));
+                } catch (error) {
+                    resolve(null);
+                }
+            });
+        });
+        request.on('timeout', () => {
+            request.destroy();
+            resolve(null);
+        });
+        request.on('error', () => resolve(null));
+    });
+}
+
+function getPortListenerPids(port) {
+    return new Promise((resolve) => {
+        exec(`lsof -ti tcp:${Number(port)} -sTCP:LISTEN`, (error, stdout) => {
+            if (error || !stdout.trim()) {
+                resolve([]);
+                return;
+            }
+            resolve(stdout.trim().split(/\s+/).map(pid => Number(pid)).filter(Boolean));
+        });
+    });
+}
+
+async function stopExistingAppOnPort(port) {
+    const identity = await requestJSON(`http://127.0.0.1:${port}/api/app-identity`);
+    if (identity?.app !== APP_IDENTITY) {
+        return false;
+    }
+
+    const pids = (await getPortListenerPids(port)).filter(pid => pid !== process.pid);
+    if (pids.length === 0) return false;
+
+    console.warn(`Port ${port} is already used by ${identity.name || APP_IDENTITY}; stopping pid(s): ${pids.join(', ')}`);
+    pids.forEach(pid => {
+        try {
+            process.kill(pid, 'SIGTERM');
+        } catch (error) {
+            console.warn(`Failed to stop pid ${pid}: ${error.message}`);
+        }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    const remaining = (await getPortListenerPids(port)).filter(pid => pid !== process.pid);
+    remaining.forEach(pid => {
+        try {
+            process.kill(pid, 'SIGKILL');
+        } catch (error) {
+            console.warn(`Failed to force stop pid ${pid}: ${error.message}`);
+        }
+    });
+    return true;
 }
 
 function shellQuote(value) {
@@ -1046,4 +1114,22 @@ if (NMAP_PATH) {
 
 setupAutoScan(loadJSON(CONFIG_PATH, {}));
 getNetworkInfo(); getPublicIP(); runTraceroute();
-server.listen(PORT, () => console.log(`${VERSION} Server running on http://localhost:${PORT}`));
+
+function listenWithPortGuard(retried = false) {
+    server.once('error', async error => {
+        if (error.code !== 'EADDRINUSE' || retried) {
+            console.error(`Failed to start server on port ${PORT}: ${error.message}`);
+            process.exit(1);
+        }
+        const stopped = await stopExistingAppOnPort(PORT);
+        if (!stopped) {
+            console.error(`Port ${PORT} is already in use by another service. Stop it or set PORT to a different value.`);
+            process.exit(1);
+        }
+        listenWithPortGuard(true);
+    });
+    server.listen(PORT);
+}
+
+server.on('listening', () => console.log(`${VERSION} Server running on http://localhost:${PORT}`));
+listenWithPortGuard();
