@@ -819,10 +819,19 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
     const reportBaseName = `${profile.reportLabel}-${reportTimestamp}`;
     const reportName = `${reportBaseName}.html`;
     const pdfName = `${reportBaseName}.pdf`;
+    const xmlName = `${reportBaseName}.xml`;
     const reportPath = path.join(reportDir, reportName);
     const pdfPath = path.join(reportDir, pdfName);
+    const xmlArchivePath = path.join(reportDir, xmlName);
     const reportUrl = `/reports/${profile.folderName}/${reportName}`;
     const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
+    const xmlUrl = `/reports/${profile.folderName}/${xmlName}`;
+    try {
+        fs.copyFileSync(xmlPath, xmlArchivePath);
+        logEvent(socket, 'report', `XML archived: ${xmlName}`);
+    } catch (error) {
+        logEvent(socket, 'error', `XML archive failed for ${xmlName}: ${error.message}`);
+    }
     const xslPath = path.join(__dirname, 'nmap-modern.xsl');
     const xsltCommand = [
         'xsltproc',
@@ -848,6 +857,8 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
                     pdfUrl: pdfReady ? pdfUrl : null,
                     name: reportName,
                     pdfName: pdfReady ? pdfName : null,
+                    xmlName,
+                    xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
                     customerProfile: profile
                 };
                 io.emit('report_ready', reportPayload);
@@ -859,6 +870,7 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
                     hostCount: discoveredHosts.length,
                     reportUrl,
                     pdfUrl: pdfReady ? pdfUrl : null,
+                    xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
                     customerProfile: profile
                 });
                 saveJSON(HISTORY_PATH, history.slice(0, 50));
@@ -1304,8 +1316,10 @@ io.on('connection', (socket) => {
                     : [entry.name];
                 files.forEach(f => {
                     const pdfName = f.replace(/\.html$/i, '.pdf');
+                    const xmlName = f.replace(/\.html$/i, '.xml');
                     const reportPath = path.join(folderPath, f);
                     const pdfPath = path.join(folderPath, pdfName);
+                    const xmlPath = path.join(folderPath, xmlName);
                     const driveMetadata = loadDriveMetadata(reportPath);
                     const urlBase = folder ? `/reports/${folder}` : '/reports';
                     reports.push({
@@ -1314,6 +1328,8 @@ io.on('connection', (socket) => {
                         url: `${urlBase}/${f}`,
                         pdfName: fs.existsSync(pdfPath) ? pdfName : null,
                         pdfUrl: fs.existsSync(pdfPath) ? `${urlBase}/${pdfName}` : null,
+                        xmlName: fs.existsSync(xmlPath) ? xmlName : null,
+                        xmlUrl: fs.existsSync(xmlPath) ? `${urlBase}/${xmlName}` : null,
                         driveHtmlUrl: findDriveLink(driveMetadata, f),
                         drivePdfUrl: fs.existsSync(pdfPath) ? findDriveLink(driveMetadata, pdfName) : null,
                         date: fs.statSync(reportPath).mtime
