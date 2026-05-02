@@ -1803,11 +1803,13 @@
             document.getElementById('lightbox-img').src = '';
             document.body.style.overflow = '';
         }
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeLightbox();
-        });
-        document.getElementById('lightbox').addEventListener('click', function(e) {
-            if (e.target === this) closeLightbox();
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeLightbox();
+            });
+            document.getElementById('lightbox')?.addEventListener('click', function(e) {
+                if (e.target === this) closeLightbox();
+            });
         });
     </script>
 

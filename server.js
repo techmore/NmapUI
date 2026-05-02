@@ -83,7 +83,7 @@ const GOWITNESS_PATH = resolveExecutable(process.env.GOWITNESS_PATH, [
     '/opt/homebrew/bin/gowitness',
     '/usr/local/bin/gowitness',
     'gowitness',
-    '~/go/bin/gowitness'
+    ...getGoExecutableCandidates('gowitness')
 ]);
 let customerProfileConfig = loadJSON(CONFIG_PATH, {}).customerProfile || {};
 let appConfig = loadJSON(CONFIG_PATH, {});
@@ -147,7 +147,30 @@ function resolveExecutable(explicitPath, candidates) {
     const pathCandidates = candidates
         .filter(candidate => !candidate.includes(path.sep))
         .flatMap(name => searchPaths.map(dir => path.join(dir, name)));
-    return [explicitPath, ...candidates, ...pathCandidates].find(isExecutable) || null;
+    return [explicitPath, ...candidates, ...pathCandidates]
+        .filter(Boolean)
+        .map(expandUserPath)
+        .find(isExecutable) || null;
+}
+
+function expandUserPath(filePath) {
+    if (!filePath || !filePath.startsWith('~')) return filePath;
+    const homeDir = process.env.HOME || (process.env.SUDO_USER ? `/Users/${process.env.SUDO_USER}` : '');
+    if (!homeDir) return filePath;
+    return path.join(homeDir, filePath.slice(1));
+}
+
+function getGoExecutableCandidates(binaryName) {
+    const candidates = [];
+    if (process.env.GOBIN) candidates.push(path.join(process.env.GOBIN, binaryName));
+    if (process.env.GOPATH) {
+        process.env.GOPATH.split(path.delimiter).filter(Boolean).forEach(goPath => {
+            candidates.push(path.join(goPath, 'bin', binaryName));
+        });
+    }
+    if (process.env.HOME) candidates.push(path.join(process.env.HOME, 'go', 'bin', binaryName));
+    if (process.env.SUDO_USER) candidates.push(path.join('/Users', process.env.SUDO_USER, 'go', 'bin', binaryName));
+    return candidates;
 }
 
 function getPrivilegedCommand(executablePath, args) {
@@ -903,17 +926,34 @@ async function captureGowitnessTarget(target, screenshotDir, reportBaseName) {
 }
 
 async function captureGowitnessScreenshots(socket, profile, reportBaseName) {
+    const startedAt = Date.now();
+    const finishPhase = (status, screenshotCount = 0) => {
+        const duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+        io.emit('phase_complete', { phase: 3, duration, ...getScanStats(), screenshotCount, status });
+        return duration;
+    };
+
+    currentScanPhase = 3;
+    scanStartTime = startedAt;
+    io.emit('scan_started', { phase: 3, target: 'Web Services', startTime: scanStartTime, scanKind: currentScanKind });
+
     if (!GOWITNESS_PATH) {
-        logEvent(socket, 'report', 'gowitness is not installed. Skipping web screenshot capture.');
+        logEvent(socket, 'report', 'Phase 3 gowitness skipped: gowitness is not installed.');
+        finishPhase('skipped');
         return [];
     }
 
     const targets = getWebTargetsFromDiscoveredHosts();
-    if (!targets.length) return [];
+    if (!targets.length) {
+        logEvent(socket, 'report', 'Phase 3 gowitness skipped: no web services were identified.');
+        finishPhase('skipped');
+        return [];
+    }
 
     const screenshotDir = path.join(REPORTS_DIR, profile.folderName, 'gowitness', reportBaseName);
     fs.mkdirSync(screenshotDir, { recursive: true });
-    logEvent(socket, 'report', `gowitness capturing ${targets.length} web service screenshot(s)...`);
+    logEvent(socket, 'job', `Starting Phase 3 gowitness capture for ${targets.length} web service(s)...`);
+    logEvent(socket, 'scan', `gowitness path: ${GOWITNESS_PATH}`);
 
     const results = [];
     for (const target of targets) {
@@ -942,8 +982,9 @@ async function captureGowitnessScreenshots(socket, profile, reportBaseName) {
 
     if (results.length) {
         fs.writeFileSync(path.join(screenshotDir, 'screenshots.json'), JSON.stringify(results, null, 2));
-        logEvent(socket, 'report', `gowitness captured ${results.length} screenshot(s).`);
     }
+    const duration = finishPhase('complete', results.length);
+    logEvent(socket, 'job', `Phase 3 gowitness complete in ${duration}s. Screenshots: ${results.length}.`);
     return results;
 }
 
@@ -993,7 +1034,7 @@ function injectGowitnessReportSection(reportPath, screenshots) {
     fs.writeFileSync(reportPath, html);
 }
 
-function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
+function generateReportFromXml(socket, xmlPath, duration, reportScanKind, onComplete = null) {
     const profile = getCustomerFingerprintProfile();
     const networkInfo = cachedNetworkInfo || {};
     const tracerouteSummary = cachedHops.length
@@ -1094,9 +1135,11 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
                             })
                             .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
                     }
+                    if (onComplete) onComplete({ success: true, screenshots });
                 });
             } else {
                 logEvent(socket, 'error', `HTML report generation failed: ${err.message}`);
+                if (onComplete) onComplete({ success: false, error: err.message, screenshots });
             }
         });
     });
@@ -1197,8 +1240,9 @@ async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
     });
 
     const totalDuration = (Number(originalDuration || 0) + Number(pass21.duration || 0) + Number(pass22.duration || 0)).toFixed(2);
-    generateReportFromXml(socket, pass22.xmlPath, totalDuration, reportScanKind);
-    io.emit('scan_complete', { phase: 2.2, duration: totalDuration, ...getScanStats(), status: 'fallback_complete' });
+    generateReportFromXml(socket, pass22.xmlPath, totalDuration, reportScanKind, () => {
+        io.emit('scan_complete', { phase: 3, duration: totalDuration, ...getScanStats(), status: 'fallback_complete' });
+    });
 }
 
 function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
@@ -1323,8 +1367,9 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                     logEvent(socket, 'job', `Phase ${phase} XML results parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
                     io.emit('phase_stats', { phase, ...parsedStats });
                 });
-                generateReportFromXml(socket, xmlPath, duration, reportScanKind);
-                if (options.deferScanComplete) io.emit('scan_complete', { phase, duration, ...phaseStats });
+                generateReportFromXml(socket, xmlPath, duration, reportScanKind, () => {
+                    if (options.deferScanComplete) io.emit('scan_complete', { phase: 3, duration, ...getScanStats() });
+                });
             }, 1000);
         }
         if (onComplete) onComplete();

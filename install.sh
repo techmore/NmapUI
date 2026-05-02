@@ -13,11 +13,11 @@ BREW_PACKAGES=(
     "node"
     "nmap"
     "libxslt"
+    "go"
 )
 
 OPTIONAL_BREW_PACKAGES=(
     "wkhtmltopdf"
-    "gowitness"
 )
 
 echo ""
@@ -54,6 +54,48 @@ for pkg in "${OPTIONAL_BREW_PACKAGES[@]}"; do
         fi
     fi
 done
+
+find_gowitness() {
+    if command -v gowitness &> /dev/null; then
+        command -v gowitness
+        return 0
+    fi
+    if command -v go &> /dev/null; then
+        local gobin
+        local gopath
+        gobin="$(go env GOBIN 2>/dev/null || true)"
+        gopath="$(go env GOPATH 2>/dev/null || true)"
+        if [ -n "$gobin" ] && [ -x "$gobin/gowitness" ]; then
+            echo "$gobin/gowitness"
+            return 0
+        fi
+        if [ -n "$gopath" ] && [ -x "$gopath/bin/gowitness" ]; then
+            echo "$gopath/bin/gowitness"
+            return 0
+        fi
+    fi
+    if [ -x "$HOME/go/bin/gowitness" ]; then
+        echo "$HOME/go/bin/gowitness"
+        return 0
+    fi
+    return 1
+}
+
+echo ""
+echo "Installing gowitness with Go when needed..."
+if GOWITNESS_BIN="$(find_gowitness)"; then
+    echo "gowitness already installed at $GOWITNESS_BIN"
+elif command -v go &> /dev/null; then
+    go install github.com/sensepost/gowitness@latest
+    GOWITNESS_BIN="$(find_gowitness || true)"
+    if [ -n "$GOWITNESS_BIN" ]; then
+        echo "gowitness installed at $GOWITNESS_BIN"
+    else
+        echo "WARNING: gowitness install completed, but the binary was not found under GOBIN or GOPATH/bin."
+    fi
+else
+    echo "WARNING: Go is unavailable. Web screenshot capture will be skipped until gowitness is installed."
+fi
 
 echo ""
 echo "[4/5] Installing npm packages..."
@@ -106,9 +148,12 @@ for cmd in "${verify_commands[@]}"; do
     fi
 done
 
-if command -v gowitness &> /dev/null; then
-    VERSION=$(gowitness --version 2>&1 | head -n1 || echo "installed")
+if GOWITNESS_BIN="$(find_gowitness)"; then
+    VERSION=$("$GOWITNESS_BIN" version 2>&1 | awk '/v[0-9]+/ { print; found=1; exit } END { if (!found) print "installed" }')
     echo "OK: gowitness - $VERSION"
+    echo "Path: $GOWITNESS_BIN"
+    echo "If your shell cannot run gowitness directly, add this to your shell profile:"
+    echo "  export PATH=\"\$PATH:$(dirname "$GOWITNESS_BIN")\""
 else
     echo "OPTIONAL MISSING: gowitness"
     echo "Web screenshot capture will be skipped until gowitness is installed."
