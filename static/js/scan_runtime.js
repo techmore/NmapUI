@@ -24,6 +24,18 @@ function formatDurationSeconds(totalSeconds) {
     return `${h}:${m}:${s}`;
 }
 
+function formatReportTimestamp(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown date';
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
 function startPhaseTimer(phase, startedAt) {
     activeScanPhase = phase;
     activePhaseStartedAt = startedAt ? new Date(startedAt).getTime() : Date.now();
@@ -66,6 +78,17 @@ function renderCVELink(cveText) {
     const cveId = String(cveText).match(/CVE-\d{4}-\d+/)?.[0];
     if (!cveId) return safeText;
     return `<a href="https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}" target="_blank" rel="noopener noreferrer" class="block text-red-700 underline decoration-red-300 underline-offset-2 hover:text-red-900">${safeText}</a>`;
+}
+
+function reportActionLink({ href, title, icon, download = false, disabled = false }) {
+    if (disabled || !href) {
+        return `<span title="${escapeHTML(title)}" class="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-400"><i data-lucide="${icon}" class="size-4"></i></span>`;
+    }
+    return `<a href="${escapeHTML(href)}" ${download ? 'download' : 'target="_blank" rel="noopener noreferrer"'} title="${escapeHTML(title)}" aria-label="${escapeHTML(title)}" class="inline-flex size-8 items-center justify-center rounded-lg border border-olive-200 bg-white text-olive-700 transition-colors hover:border-olive-300 hover:bg-olive-50 hover:text-olive-950"><i data-lucide="${icon}" class="size-4"></i></a>`;
+}
+
+function refreshLucideIcons() {
+    if (window.lucide?.createIcons) window.lucide.createIcons();
 }
 
 function getCVECountsFromRows() {
@@ -136,6 +159,7 @@ function initializeScanRuntime(socket) {
             const versionEl = document.getElementById('app-version');
             if (versionEl) versionEl.textContent = state.version;
         }
+        if (state.customerProfile && typeof renderCustomerFingerprint === 'function') {
             renderCustomerFingerprint(state.customerProfile);
         }
 
@@ -250,18 +274,20 @@ function initializeScanRuntime(socket) {
     socket.on('report_ready', (data) => {
         const reportStatus = document.getElementById('report-status');
         if (reportStatus) {
-            const pdfActions = data.pdfUrl ? `
-                <a href="${data.pdfUrl}" target="_blank" class="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors">VIEW PDF</a>
-                <a href="${data.pdfUrl}" download class="px-4 py-2 bg-white text-red-700 border border-red-200 text-xs font-bold rounded-lg hover:bg-red-50 transition-colors">DOWNLOAD PDF</a>
-            ` : '';
+            const actions = [
+                reportActionLink({ href: data.url, title: 'Open HTML report', icon: 'file-code-2' }),
+                reportActionLink({ href: data.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !data.pdfUrl }),
+                reportActionLink({ href: data.pdfUrl, title: 'Download PDF', icon: 'download', download: true, disabled: !data.pdfUrl }),
+                reportActionLink({ href: data.driveHtmlUrl || data.drivePdfUrl, title: 'Open in Google Drive', icon: 'cloud', disabled: !(data.driveHtmlUrl || data.drivePdfUrl) })
+            ].join('');
             reportStatus.classList.remove('hidden');
             document.getElementById('report-status-text').innerHTML = `
                 <div class="flex flex-wrap items-center gap-3">
-                    <span class="flex-1 text-emerald-900 font-medium">Report Ready: <strong>${data.name}</strong>${data.customerProfile ? `<span class="block text-xs text-emerald-700">${data.customerProfile.folderName}</span>` : ''}</span>
-                    <a href="${data.url}" target="_blank" class="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors">VIEW HTML</a>
-                    ${pdfActions}
+                    <span class="min-w-0 flex-1 text-sm text-emerald-900 font-medium">Report Ready: <strong>${escapeHTML(data.name)}</strong>${data.customerProfile ? `<span class="block truncate text-xs text-emerald-700">${escapeHTML(data.customerProfile.folderName)}</span>` : ''}</span>
+                    <div class="flex items-center gap-1.5">${actions}</div>
                 </div>
             `;
+            refreshLucideIcons();
         }
         socket.emit('get_reports');
     });
@@ -282,22 +308,26 @@ function initializeScanRuntime(socket) {
                 historyStatus.textContent = '';
                 historyStatus.classList.add('hidden');
             }
-            historyList.innerHTML = data.map(item => `
-                <div class="bg-white border border-olive-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            historyList.innerHTML = data.map(item => {
+                const failed = item.status === 'failed';
+                return `
+                <div class="bg-white border ${failed ? 'border-red-200' : 'border-olive-200'} rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div class="flex justify-between items-start mb-4">
-                        <span class="text-[10px] font-bold text-olive-400 uppercase tracking-widest">${new Date(item.timestamp).toLocaleString()}</span>
-                        <span class="px-2 py-1 bg-olive-100 text-olive-700 text-[10px] font-bold rounded-lg">${item.duration}s</span>
+                        <span class="text-[10px] font-bold ${failed ? 'text-red-500' : 'text-olive-400'} uppercase tracking-widest">${new Date(item.timestamp).toLocaleString()}</span>
+                        <span class="px-2 py-1 ${failed ? 'bg-red-100 text-red-700' : 'bg-olive-100 text-olive-700'} text-[10px] font-bold rounded-lg">${failed ? 'FAILED' : `${item.duration}s`}</span>
                     </div>
                     <div class="mb-4">
                         <h4 class="text-olive-900 font-bold text-lg">${item.customerProfile?.baseName || item.target}</h4>
                         <p class="text-xs text-olive-500">${item.hostCount} Hosts Discovered${item.customerProfile?.folderName ? ` | ${item.customerProfile.folderName}` : ''}</p>
+                        ${failed && item.error ? `<p class="mt-2 line-clamp-2 rounded-lg bg-red-50 p-2 font-mono text-[10px] text-red-700">${escapeHTML(item.error)}</p>` : ''}
                     </div>
                     <div class="grid gap-2 sm:grid-cols-2">
-                        <a href="${item.reportUrl}" target="_blank" class="block text-center py-2 bg-olive-50 text-olive-700 text-xs font-bold rounded-xl hover:bg-olive-100 transition-colors">OPEN HTML</a>
+                        ${item.reportUrl ? `<a href="${item.reportUrl}" target="_blank" class="block text-center py-2 bg-olive-50 text-olive-700 text-xs font-bold rounded-xl hover:bg-olive-100 transition-colors">OPEN HTML</a>` : ''}
                         ${item.pdfUrl ? `<a href="${item.pdfUrl}" target="_blank" class="block text-center py-2 bg-red-50 text-red-700 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors">OPEN PDF</a>` : ''}
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
     });
 
@@ -322,25 +352,43 @@ function initializeScanRuntime(socket) {
                 reportsStatus.textContent = '';
                 reportsStatus.classList.add('hidden');
             }
-            reportsList.innerHTML = data.map(report => `
-                <div class="bg-white border border-olive-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="size-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            reportsList.innerHTML = data.map(report => {
+                const failed = report.status === 'failed';
+                const reportTimestamp = formatReportTimestamp(report.date);
+                const durationText = report.duration ? formatDurationSeconds(report.duration) : '';
+                const actions = [
+                    reportActionLink({ href: report.url, title: 'Open HTML report', icon: 'file-code-2' }),
+                    reportActionLink({ href: report.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !report.pdfUrl }),
+                    reportActionLink({ href: report.xmlUrl, title: 'Open XML report', icon: 'braces', disabled: !report.xmlUrl }),
+                    reportActionLink({ href: report.pdfUrl, title: 'Download PDF', icon: 'download', download: true, disabled: !report.pdfUrl }),
+                    reportActionLink({ href: report.driveHtmlUrl || report.drivePdfUrl, title: 'Open in Google Drive', icon: 'cloud', disabled: !(report.driveHtmlUrl || report.drivePdfUrl) })
+                ].join('');
+                return `
+                    <div class="bg-white border ${failed ? 'border-red-200' : 'border-olive-200'} rounded-lg p-3 shadow-sm transition-shadow hover:shadow-md">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <h4 class="truncate text-sm font-bold text-olive-900" title="${escapeHTML(report.name)}">${escapeHTML(report.name)}</h4>
+                                <p class="mt-0.5 truncate font-mono text-[10px] text-olive-500" title="${escapeHTML(report.folder || '')}">${escapeHTML(report.folder || 'reports')}</p>
+                            </div>
+                            <span class="shrink-0 text-[10px] font-bold uppercase ${failed ? 'text-red-500' : 'text-olive-400'}">${failed ? 'Failed' : 'Report'}</span>
                         </div>
-                        <span class="text-[10px] font-bold text-olive-400 uppercase tracking-widest">${new Date(report.date).toLocaleDateString()}</span>
+                        <div class="mt-2 grid gap-1 text-[10px] leading-snug text-olive-600">
+                            <span>${escapeHTML(reportTimestamp)}</span>
+                            ${durationText ? `<span>Scan time ${escapeHTML(durationText)}</span>` : ''}
+                        </div>
+                        ${failed && report.error ? `<p class="mt-2 line-clamp-2 rounded-lg bg-red-50 p-2 font-mono text-[10px] text-red-700">${escapeHTML(report.error)}</p>` : ''}
+                        <div class="mt-3 flex items-center justify-between gap-2">
+                            <span class="text-[10px] font-medium ${failed ? 'text-red-600' : 'text-olive-500'}">${failed ? `Failed${report.duration ? ` after ${report.duration}s` : ''}` : (report.driveHtmlUrl || report.drivePdfUrl ? 'Drive synced' : 'Local only')}</span>
+                            <div class="flex items-center gap-1.5">${actions}</div>
+                        </div>
                     </div>
-                    <h4 class="text-olive-900 font-bold mb-1 truncate" title="${report.name}">${report.name}</h4>
-                    ${report.folder ? `<p class="mb-4 font-mono text-[10px] text-olive-500 truncate" title="${report.folder}">${report.folder}</p>` : '<div class="mb-4"></div>'}
-                    <div class="grid gap-2 sm:grid-cols-2">
-                        <a href="${report.url}" target="_blank" class="block text-center py-2 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors">VIEW HTML</a>
-                        ${report.pdfUrl ? `<a href="${report.pdfUrl}" target="_blank" class="block text-center py-2 bg-red-50 text-red-700 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors">VIEW PDF</a>` : ''}
-                        ${report.pdfUrl ? `<a href="${report.pdfUrl}" download class="block text-center py-2 bg-white text-red-700 border border-red-200 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors sm:col-span-2">DOWNLOAD PDF</a>` : `<span class="block text-center py-2 bg-zinc-50 text-zinc-500 text-xs font-bold rounded-xl sm:col-span-2">PDF NOT GENERATED</span>`}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
+            refreshLucideIcons();
         }
     });
+
+    socket.on('reports_refresh', () => socket.emit('get_reports'));
 }
 
 function renderHop(data) {
@@ -432,17 +480,17 @@ function updateHostRow(data) {
         row.id = `row-${data.ip.replace(/\./g, '-')}`;
         row.className = 'hover:bg-olive-50 transition-colors border-b border-olive-100';
         row.innerHTML = `
-            <td class="px-4 py-2 text-center"><span class="size-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span></td>
-            <td class="px-1.5 py-2 font-mono text-[11px] text-olive-900 ip-cell">${data.ip}</td>
-            <td class="px-1.5 py-2 font-mono text-[10px] text-olive-600 mac-cell">${data.mac || '--'}</td>
-            <td class="px-1.5 py-2 text-[10px] text-olive-700 truncate vendor-cell" title="${data.vendor || '--'}">${data.vendor || '--'}</td>
-            <td class="px-1.5 py-2 text-[10px] font-medium text-olive-900 truncate hostname-cell" title="${data.hostname || '--'}">${data.hostname || '--'}</td>
-            <td class="px-2 py-2 text-[10px] cve-cell">--</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 os-cell">${data.os || '--'}</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 latency-cell">${data.latency || '--'}</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 ports-cell">${data.ports || '--'}</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 version-cell">${data.version || '--'}</td>
-            <td class="px-4 py-2 text-right"><button class="text-[10px] font-bold text-olive-600 bg-olive-100 hover:bg-olive-200 px-3 py-1 rounded-full transition-all">DETAILS</button></td>
+            <td class="px-0 py-0.5 text-center"><span class="size-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span></td>
+            <td class="px-1 py-0.5 font-mono text-[11px] text-olive-900 ip-cell">${data.ip}</td>
+            <td class="px-1 py-0.5 font-mono text-[10px] text-olive-600 mac-cell">${data.mac || '--'}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 truncate vendor-cell" title="${data.vendor || '--'}">${data.vendor || '--'}</td>
+            <td class="px-0 py-0.5 text-[10px] font-medium text-olive-900 truncate hostname-cell" title="${data.hostname || '--'}">${data.hostname || '--'}</td>
+            <td class="px-0 py-0.5 text-[10px] cve-cell">--</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 os-cell">${data.os || '--'}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 latency-cell">${data.latency || '--'}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 ports-cell">${data.ports || '--'}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 version-cell">${data.version || '--'}</td>
+            <td class="px-0 py-0.5 text-right"><button class="text-[10px] font-bold text-olive-600 bg-olive-100 hover:bg-olive-200 px-0 py-0.5 rounded-full transition-all">DETAILS</button></td>
         `;
         tableBody.appendChild(row);
     }
@@ -496,7 +544,8 @@ function initializeDiscoveryUI(socket) {
     if (completeScanBtn) {
         completeScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
-            socket.emit('start_complete_scan', { target });
+            const vpnHelper = !!document.getElementById('vpn-helper-toggle')?.checked;
+            socket.emit('start_complete_scan', { target, vpnHelper });
         });
     }
     if (dragnetScanBtn) {

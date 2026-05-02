@@ -5,10 +5,10 @@ Network Scanner GUI - A web-based network scanning and monitoring tool powered b
 ## Quick Start
 
 ```bash
-git clone https://github.com/techmore/NMapUI-www.git
-cd NMapUI-www
+git clone https://github.com/techmore/TM-NmapUI.git
+cd TM-NmapUI
 ./install.sh
-sudo node server.js
+sudo npm start
 ```
 
 Then open http://localhost:9000 in your browser.
@@ -44,7 +44,7 @@ All dependencies are installed automatically by `install.sh`.
 ### Start the server
 
 ```bash
-sudo node server.js
+sudo npm start
 ```
 
 The server runs on port 9000 by default. Access at http://localhost:9000
