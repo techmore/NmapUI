@@ -515,6 +515,7 @@ def ensure_google_drive_reports_folder(
     key_path: Path | None = None,
     requests_module,
     folder_name: str = "nmapui-reports",
+    parent_id: str | None = None,
 ) -> dict:
     access_token = ensure_google_drive_access_token(
         credentials_path=credentials_path,
@@ -523,15 +524,20 @@ def ensure_google_drive_reports_folder(
         requests_module=requests_module,
     )
     headers = {"Authorization": f"Bearer {access_token}"}
-    query = (
-        "mimeType='application/vnd.google-apps.folder' "
-        f"and name='{folder_name}' and trashed=false"
-    )
+    escaped_name = folder_name.replace("\\", "\\\\").replace("'", "\\'")
+    query_parts = [
+        "mimeType='application/vnd.google-apps.folder'",
+        f"name='{escaped_name}'",
+        "trashed=false",
+    ]
+    if parent_id:
+        query_parts.append(f"'{parent_id}' in parents")
+    query = " and ".join(query_parts)
     try:
         response = requests_module.get(
             GOOGLE_DRIVE_FILES_ENDPOINT,
             headers=headers,
-            params={"q": query, "fields": "files(id,name)"},
+            params={"q": query, "fields": "files(id,name,webViewLink)"},
             timeout=10,
         )
     except Exception as exc:
@@ -547,13 +553,17 @@ def ensure_google_drive_reports_folder(
     files = payload.get("files") or []
     if files:
         folder_id = files[0].get("id")
-        return {"success": True, "folder_id": folder_id, "status": "Drive folder ready"}
+        return {"success": True, "folder_id": folder_id, "folder": files[0], "status": "Drive folder ready"}
 
     try:
         create_response = requests_module.post(
             GOOGLE_DRIVE_FILES_ENDPOINT,
             headers={**headers, "Content-Type": "application/json"},
-            json={"name": folder_name, "mimeType": GOOGLE_DRIVE_FOLDER_MIME},
+            json={
+                "name": folder_name,
+                "mimeType": GOOGLE_DRIVE_FOLDER_MIME,
+                **({"parents": [parent_id]} if parent_id else {}),
+            },
             timeout=10,
         )
     except Exception as exc:
@@ -568,6 +578,7 @@ def ensure_google_drive_reports_folder(
     return {
         "success": True,
         "folder_id": create_payload.get("id"),
+        "folder": create_payload,
         "status": "Drive folder created",
     }
 
@@ -631,14 +642,15 @@ def main() -> int:
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(description="Google Drive helper for Gemini Nmap reports")
+    parser = argparse.ArgumentParser(description="Google Drive helper for NmapUI reports")
     parser.add_argument("command", choices=["status", "save-credentials", "auth-url", "exchange-code", "disconnect", "upload"])
     parser.add_argument("--root", default=str(Path(__file__).resolve().parent))
     parser.add_argument("--redirect-uri", default="")
     parser.add_argument("--code", default="")
     parser.add_argument("--state", default="")
     parser.add_argument("--folder-id", default="")
-    parser.add_argument("--folder-name", default="Gemini Nmap Reports")
+    parser.add_argument("--folder-name", default="Nmap Reports")
+    parser.add_argument("--day-folder-name", default="")
     parser.add_argument("--files", nargs="*", default=[])
     parser.add_argument("--credentials-json", default="")
     args = parser.parse_args()
@@ -677,13 +689,28 @@ def main() -> int:
                     _print_json(folder_result)
                     return 1
                 folder_id = folder_result.get("folder_id") or ""
+            upload_folder_id = folder_id
+            day_folder_id = ""
+            if args.day_folder_name:
+                day_folder_result = ensure_google_drive_reports_folder(
+                    folder_name=args.day_folder_name,
+                    parent_id=folder_id,
+                    requests_module=requests_module,
+                    **paths,
+                )
+                if not day_folder_result.get("success"):
+                    _print_json(day_folder_result)
+                    return 1
+                day_folder_id = day_folder_result.get("folder_id") or ""
+                upload_folder_id = day_folder_id
             result = upload_files_to_google_drive(
                 file_paths=[Path(file_path).resolve() for file_path in args.files],
-                folder_id=folder_id,
+                folder_id=upload_folder_id,
                 requests_module=requests_module,
                 **paths,
             )
             result["folder_id"] = folder_id
+            result["day_folder_id"] = day_folder_id
             _print_json(result)
             return 0
     except Exception as exc:

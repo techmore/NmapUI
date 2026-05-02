@@ -87,7 +87,7 @@ function renderGoogleDriveSummary({ config = {}, status = {} } = {}) {
         connectedState.textContent = status.connected ? 'Connected' : (status.configured ? 'Not connected' : 'Credentials missing');
         connectedState.className = status.connected ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700';
     }
-    if (folderState) folderState.textContent = folderId || 'Auto-create Gemini Nmap Reports';
+    if (folderState) folderState.textContent = folderId || 'Auto-create Nmap Reports';
 }
 
 function applyGoogleDriveConfig(config = {}, status = {}) {

@@ -772,7 +772,7 @@ Updated: 2026
 	            }
 
 	            @page {
-	              size: Letter landscape;
+	              size: Letter portrait;
 	              margin: 3mm;
 	            }
           }

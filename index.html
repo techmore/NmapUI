@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Network Scanner GUI</title>
+    <title>TM-NMAPUI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
@@ -279,6 +279,7 @@
     }
 
     .results-band {
+        width: 100%;
         margin-top: 2rem;
         border-radius: 0.75rem;
         border: 1px solid oklch(75% 0.040 110);
@@ -287,6 +288,41 @@
         box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
         overflow-x: auto;
     }
+
+    #discovery-table {
+        width: 100%;
+        min-width: 100%;
+    }
+
+    #discovery-table th,
+    #discovery-table td {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #discovery-table th:nth-child(1),
+    #discovery-table td:nth-child(1) { width: 3%; }
+    #discovery-table th:nth-child(2),
+    #discovery-table td:nth-child(2) { width: 12%; }
+    #discovery-table th:nth-child(3),
+    #discovery-table td:nth-child(3) { width: 16%; }
+    #discovery-table th:nth-child(4),
+    #discovery-table td:nth-child(4) { width: 9%; }
+    #discovery-table th:nth-child(5),
+    #discovery-table td:nth-child(5) { width: 11%; }
+    #discovery-table th:nth-child(6),
+    #discovery-table td:nth-child(6) { width: 12%; }
+    #discovery-table th:nth-child(7),
+    #discovery-table td:nth-child(7) { width: 10%; }
+    #discovery-table th:nth-child(8),
+    #discovery-table td:nth-child(8) { width: 6%; }
+    #discovery-table th:nth-child(9),
+    #discovery-table td:nth-child(9) { width: 7%; }
+    #discovery-table th:nth-child(10),
+    #discovery-table td:nth-child(10) { width: 9%; }
+    #discovery-table th:nth-child(11),
+    #discovery-table td:nth-child(11) { width: 5%; }
 
     .modal-overlay {
         position: fixed;
@@ -417,7 +453,7 @@
         <div class="flex items-center gap-6">
             <img src="static/techmore.png" class="h-12 w-auto">
             <div>
-                <h1 class="text-4xl font-display italic text-olive-950">Network Scanner</h1>
+                <h1 class="text-4xl font-display italic text-olive-950">TM-NMAPUI</h1>
                 <div class="flex items-center gap-2">
                     <div id="app-version" class="text-sm text-olive-600 font-medium">v2026.4.26.4.00</div>
                     <a
@@ -621,7 +657,7 @@
         </div>
         <div id="reports-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
         <div id="reports-customer-filters" class="mt-4 flex flex-wrap gap-2"></div>
-        <div id="reports-tab-list" class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+        <div id="reports-tab-list" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"></div>
     </section>
 
     <section id="customers-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
@@ -1318,6 +1354,10 @@
                 <div id="last-scan-duration" class="text-center text-[10px] text-olive-500 font-bold uppercase tracking-widest hidden">
                     Last Duration: <span id="last-scan-time-val">--</span>
                 </div>
+                <label class="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 cursor-pointer">
+                    <input type="checkbox" id="vpn-helper-toggle" class="size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500" aria-label="Enable VPN helper scan mode">
+                    <span>VPN Helper</span>
+                </label>
             </div>
         </div>
 
@@ -1519,11 +1559,11 @@
     <!-- Results Table -->
     <section id="dashboard-results-panel" class="page-shell">
         <div class="results-band">
-        <table id="discovery-table" class="table-fixed min-w-[2400px]">
+        <table id="discovery-table" class="table-fixed">
                         <thead>
                             <tr>
-                                <th class="w-16 px-4 py-3 text-left" data-column="status" data-fixed="true"></th>
-                                <th class="sortable w-32 px-1.5 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip" title="Drag to reorder">
+                                <th class="w-8 px-0 py-0.5 text-left" data-column="status" data-fixed="true"></th>
+                                <th class="sortable w-24 px-1 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>IP Address</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1536,7 +1576,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable w-40 px-1.5 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac" title="Drag to reorder">
+                                <th class="sortable w-32 px-1 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>MAC Address</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1549,7 +1589,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable w-32 px-1.5 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="vendor" data-type="text" title="Drag to reorder">
+                                <th class="sortable w-24 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="vendor" data-type="text" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Vendor</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1562,7 +1602,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable w-32 px-1.5 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="hostname" data-type="text" title="Drag to reorder">
+                                <th class="sortable w-28 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="hostname" data-type="text" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Hostname</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1575,7 +1615,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable w-80 px-2 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="cves" data-type="number" title="Drag to reorder">
+                                <th class="sortable w-56 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="cves" data-type="number" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>CVEs</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1588,17 +1628,17 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable w-64 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="os" data-type="text">
+                                <th class="sortable w-48 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="os" data-type="text">
                                     <div class="flex items-center space-x-1">
                                         <span>OS / Device</span>
                                     </div>
                                 </th>
-                                <th class="sortable w-32 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="latency" data-type="text">
+                                <th class="sortable w-24 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="latency" data-type="text">
                                     <div class="flex items-center space-x-1">
                                         <span>Latency</span>
                                     </div>
                                 </th>
-                                <th class="sortable w-64 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="open_ports" data-type="ports" title="Drag to reorder">
+                                <th class="sortable w-48 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="open_ports" data-type="ports" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Open Ports</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1611,7 +1651,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable w-64 px-4 py-3 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="version" data-type="text" title="Drag to reorder">
+                                <th class="sortable w-56 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="version" data-type="text" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>Version</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1624,7 +1664,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="w-32 px-4 py-3 text-left" data-column="actions" data-fixed="true">Actions</th>
+                                <th class="w-20 px-0 py-0.5 text-left" data-column="actions" data-fixed="true">Actions</th>
                             </tr>
                         </thead>
 

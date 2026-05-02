@@ -15,11 +15,16 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = process.env.PORT || 9000;
+const APP_IDENTITY = 'tm-network-scanner';
+const PORT = Number(process.env.PORT || 9000);
 
 app.use(express.static(path.join(__dirname)));
 app.use('/static', express.static(path.join(__dirname, 'static')));
 app.use('/reports', express.static(path.join(__dirname, 'reports_archive')));
+
+app.get('/api/app-identity', (req, res) => {
+    res.json({ app: APP_IDENTITY, name: 'TM-NMapUI', version: VERSION });
+});
 
 app.get('/google-drive/oauth2callback', async (req, res) => {
     const result = await runGoogleDriveHelper([
@@ -31,7 +36,7 @@ app.get('/google-drive/oauth2callback', async (req, res) => {
         const googleDrive = saveGoogleDriveConfig({ enabled: true });
         logEvent(null, 'settings', 'Google Drive connected and sync enabled.');
         io.emit('google_drive_status', { ...result, config: googleDrive });
-        res.send('<html><body><h1>Google Drive connected</h1><p>You can close this window and return to Gemini Nmap.</p></body></html>');
+        res.send('<html><body><h1>Google Drive connected</h1><p>You can close this window and return to TM-NMapUI.</p></body></html>');
         return;
     }
     io.emit('google_drive_status', { ...result, config: getGoogleDriveConfig() });
@@ -55,7 +60,6 @@ let cachedPublicIP = null;
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const HISTORY_PATH = path.join(__dirname, 'history.json');
 const REPORTS_DIR = path.join(__dirname, 'reports_archive');
-const PHASE2_MAX_HOSTGROUP = String(Math.max(1, parseInt(process.env.NMAP_MAX_HOSTGROUP || '4', 10) || 4));
 const NMAP_PATH = resolveExecutable(process.env.NMAP_PATH, [
     '/opt/homebrew/bin/nmap',
     '/usr/local/bin/nmap',
@@ -69,6 +73,11 @@ const TRACEROUTE_PATH = resolveExecutable(process.env.TRACEROUTE_PATH, [
     '/opt/homebrew/bin/traceroute',
     '/usr/local/bin/traceroute',
     'traceroute'
+]);
+const BREW_PATH = resolveExecutable(process.env.BREW_PATH, [
+    '/opt/homebrew/bin/brew',
+    '/usr/local/bin/brew',
+    'brew'
 ]);
 let customerProfileConfig = loadJSON(CONFIG_PATH, {}).customerProfile || {};
 let appConfig = loadJSON(CONFIG_PATH, {});
@@ -146,8 +155,149 @@ function describeMissingExecutable(name, envVar) {
     return `${name} was not found. Install it or set ${envVar} to the executable path.`;
 }
 
+function getBrewCommand(args) {
+    if (process.getuid && process.getuid() === 0) {
+        const sudoUser = process.env.SUDO_USER;
+        if (!sudoUser || sudoUser === 'root') return null;
+        return {
+            command: 'sudo',
+            args: ['-u', sudoUser, BREW_PATH, ...args],
+            env: { ...process.env, HOME: `/Users/${sudoUser}`, USER: sudoUser }
+        };
+    }
+    return { command: BREW_PATH, args, env: process.env };
+}
+
+function runBrewStep(args) {
+    return new Promise((resolve) => {
+        const commandSpec = getBrewCommand(args);
+        if (!BREW_PATH || !commandSpec) {
+            resolve({ success: false, error: 'Homebrew is unavailable or cannot be run from the current user context.' });
+            return;
+        }
+
+        const brew = spawn(commandSpec.command, commandSpec.args, { env: commandSpec.env });
+        brew.stdout.on('data', data => {
+            const text = data.toString().trim();
+            if (text) console.log(`[BREW] ${text}`);
+        });
+        brew.stderr.on('data', data => {
+            const text = data.toString().trim();
+            if (text) console.warn(`[BREW] ${text}`);
+        });
+        brew.on('error', error => resolve({ success: false, error: error.message }));
+        brew.on('close', code => resolve({ success: code === 0, error: code === 0 ? '' : `brew ${args.join(' ')} exited with code ${code}` }));
+    });
+}
+
+async function updateNmapFromHomebrew() {
+    if (!BREW_PATH) {
+        console.warn('Skipping Homebrew nmap upgrade: brew was not found.');
+        return;
+    }
+    const commandSpec = getBrewCommand(['update']);
+    if (!commandSpec) {
+        console.warn('Skipping Homebrew nmap upgrade: brew cannot run as root without SUDO_USER.');
+        return;
+    }
+
+    console.log('Startup - Running brew update && brew upgrade nmap...');
+    const update = await runBrewStep(['update']);
+    if (!update.success) {
+        console.warn(`Skipping brew upgrade nmap: ${update.error}`);
+        return;
+    }
+    const upgrade = await runBrewStep(['upgrade', 'nmap']);
+    if (!upgrade.success) {
+        console.warn(`Homebrew nmap upgrade did not complete: ${upgrade.error}`);
+    }
+}
+
+function updateNmapScriptDatabase() {
+    if (!NMAP_PATH) {
+        console.warn(describeMissingExecutable('nmap', 'NMAP_PATH'));
+        return;
+    }
+
+    console.log('Prescan - Updating scripts...');
+    const updateCommand = getPrivilegedCommand(NMAP_PATH, ['--script-updatedb']);
+    const updateProcess = spawn(updateCommand.command, updateCommand.args);
+    updateProcess.stderr.on('data', data => {
+        const text = data.toString();
+        if (isSudoAuthFailure(text)) {
+            console.warn('Skipping nmap script update: passwordless sudo is required.');
+        } else if (!text.includes('Warning: ')) {
+            console.warn(`[NMAP UPDATE] ${text.trim()}`);
+        }
+    });
+    updateProcess.on('error', error => console.warn(`Skipping nmap script update: ${error.message}`));
+}
+
 function isSudoAuthFailure(text) {
     return /sudo:.*password|a password is required|no tty present|permission denied/i.test(text || '');
+}
+
+function requestJSON(url, timeoutMs = 1000) {
+    return new Promise((resolve) => {
+        const request = http.get(url, { timeout: timeoutMs }, response => {
+            let raw = '';
+            response.on('data', chunk => { raw += chunk.toString(); });
+            response.on('end', () => {
+                try {
+                    resolve(JSON.parse(raw || '{}'));
+                } catch (error) {
+                    resolve(null);
+                }
+            });
+        });
+        request.on('timeout', () => {
+            request.destroy();
+            resolve(null);
+        });
+        request.on('error', () => resolve(null));
+    });
+}
+
+function getPortListenerPids(port) {
+    return new Promise((resolve) => {
+        exec(`lsof -ti tcp:${Number(port)} -sTCP:LISTEN`, (error, stdout) => {
+            if (error || !stdout.trim()) {
+                resolve([]);
+                return;
+            }
+            resolve(stdout.trim().split(/\s+/).map(pid => Number(pid)).filter(Boolean));
+        });
+    });
+}
+
+async function stopExistingAppOnPort(port) {
+    const identity = await requestJSON(`http://127.0.0.1:${port}/api/app-identity`);
+    if (identity?.app !== APP_IDENTITY) {
+        return false;
+    }
+
+    const pids = (await getPortListenerPids(port)).filter(pid => pid !== process.pid);
+    if (pids.length === 0) return false;
+
+    console.warn(`Port ${port} is already used by ${identity.name || APP_IDENTITY}; stopping pid(s): ${pids.join(', ')}`);
+    pids.forEach(pid => {
+        try {
+            process.kill(pid, 'SIGTERM');
+        } catch (error) {
+            console.warn(`Failed to stop pid ${pid}: ${error.message}`);
+        }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    const remaining = (await getPortListenerPids(port)).filter(pid => pid !== process.pid);
+    remaining.forEach(pid => {
+        try {
+            process.kill(pid, 'SIGKILL');
+        } catch (error) {
+            console.warn(`Failed to force stop pid ${pid}: ${error.message}`);
+        }
+    });
+    return true;
 }
 
 function shellQuote(value) {
@@ -178,6 +328,7 @@ function generatePDF(reportPath, pdfPath, callback) {
             '--no-pdf-header-footer',
             '--run-all-compositor-stages-before-draw',
             '--virtual-time-budget=5000',
+            '--print-to-pdf-page-size=Letter',
             `--print-to-pdf=${shellQuote(pdfPath)}`,
             shellQuote(reportUrl)
         ].join(' ');
@@ -190,7 +341,7 @@ function generatePDF(reportPath, pdfPath, callback) {
         '--enable-local-file-access',
         '--print-media-type',
         '--page-size', 'Letter',
-        '--orientation', 'Landscape',
+        '--orientation', 'Portrait',
         '--margin-top', '8mm',
         '--margin-right', '8mm',
         '--margin-bottom', '8mm',
@@ -235,6 +386,46 @@ function formatReportDisplayTimestamp(date = new Date()) {
         hour12: false,
         timeZoneName: 'short'
     });
+}
+
+function formatDriveDayFolder(date = new Date()) {
+    const pad = value => String(value).padStart(2, '0');
+    return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate())
+    ].join('-');
+}
+
+function getDriveMetadataPath(reportPath) {
+    return `${reportPath}.drive.json`;
+}
+
+function saveDriveMetadata(reportPath, result) {
+    if (!reportPath || !result?.success) return null;
+    const metadataPath = getDriveMetadataPath(reportPath);
+    const metadata = {
+        uploadedAt: new Date().toISOString(),
+        folderId: result.folder_id || null,
+        dayFolderId: result.day_folder_id || null,
+        links: (result.uploaded || []).map(file => ({
+            name: file.name || '',
+            webViewLink: file.webViewLink || '',
+            id: file.id || ''
+        })).filter(file => file.name || file.webViewLink || file.id)
+    };
+    saveJSON(metadataPath, metadata);
+    return metadata;
+}
+
+function loadDriveMetadata(reportPath) {
+    const metadata = loadJSON(getDriveMetadataPath(reportPath), null);
+    if (!metadata || !Array.isArray(metadata.links)) return null;
+    return metadata;
+}
+
+function findDriveLink(metadata, fileName) {
+    return (metadata?.links || []).find(file => file.name === fileName)?.webViewLink || null;
 }
 
 function getTopologyFingerprintParts() {
@@ -313,8 +504,9 @@ async function uploadReportFilesToDrive(socket, filePaths, profile, context = {}
         return null;
     }
 
-    const folderName = profile?.folderName ? `Gemini Nmap Reports/${profile.folderName}` : 'Gemini Nmap Reports';
-    const args = ['upload', '--folder-name', folderName, '--files', ...existingFiles];
+    const folderName = 'Nmap Reports';
+    const dayFolderName = context.dayFolderName || formatDriveDayFolder();
+    const args = ['upload', '--folder-name', folderName, '--day-folder-name', dayFolderName, '--files', ...existingFiles];
     if (googleDrive.folderId) args.splice(1, 0, '--folder-id', googleDrive.folderId);
 
     const fileNames = existingFiles.map(filePath => path.basename(filePath)).join(', ');
@@ -330,6 +522,10 @@ async function uploadReportFilesToDrive(socket, filePaths, profile, context = {}
             .map(file => file.webViewLink)
             .filter(Boolean)
             .forEach(link => logEvent(socket, 'report', `Google Drive file link: ${link}`));
+        if (context.reportPath) {
+            saveDriveMetadata(context.reportPath, result);
+            io.emit('reports_refresh');
+        }
         io.emit('google_drive_upload_complete', { ...result, label });
     } else {
         logEvent(socket, 'error', `Google Drive upload failed for ${label}: ${result.error || 'Unknown error'}`);
@@ -345,29 +541,56 @@ function isCompleteNmapXML(xmlPath) {
 }
 
 function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
-    const hostGroupArgs = options.allHostsAtOnce
-        ? []
-        : ['--min-hostgroup', '1', '--max-hostgroup', PHASE2_MAX_HOSTGROUP];
-    const scripts = options.consolidateScripts ? ['default,vulners'] : ['vulners'];
-    const rateArgs = options.minRate === false ? [] : ['--min-rate', options.minRate || '3000'];
+    const hostGroupArgs = options.hostGroup
+        ? ['--min-hostgroup', '1', '--max-hostgroup', String(options.hostGroup)]
+        : [];
+    const scripts = options.disableScripts ? [] : (options.consolidateScripts ? ['default,vulners'] : ['vulners']);
+    const rateArgs = options.minRate ? ['--min-rate', String(options.minRate)] : [];
     const defaultScriptArgs = options.includeDefaultScripts === false || options.consolidateScripts ? [] : ['-sC'];
+    const scriptArgs = scripts.length && options.scriptArgs !== false
+        ? ['--script-args', options.scriptArgs || 'mincvss=0,threads=10']
+        : [];
     const args = [
         ...(fullPortScan ? ['-p-'] : []),
         '-sS', '-sV',
         ...defaultScriptArgs,
         '-O',
         ...(usePn ? ['-Pn'] : []),
-        '-T4',
+        options.timing || '-T3',
         ...rateArgs,
         ...(options.maxParallelism ? ['--max-parallelism', String(options.maxParallelism)] : []),
+        ...(options.maxRetries ? ['--max-retries', String(options.maxRetries)] : []),
         ...hostGroupArgs,
         '--open',
-        '--script', scripts.join(','),
+        ...(scripts.length ? ['--script', scripts.join(',')] : []),
+        ...scriptArgs,
         '--stylesheet', 'nmap-modern.xsl',
         '-oX', 'phase2_results.xml',
         '-iL', 'targets.tmp'
     ];
     return args;
+}
+
+function compactErrorText(value, maxLength = 4000) {
+    const text = String(value || '').replace(/\s+\n/g, '\n').trim();
+    if (text.length <= maxLength) return text;
+    return text.slice(-maxLength).trim();
+}
+
+function saveFailedScanHistory({ target, duration, hostCount, scanKind, customerProfile, error }) {
+    const history = loadJSON(HISTORY_PATH, []);
+    history.unshift({
+        timestamp: new Date().toISOString(),
+        target,
+        duration,
+        hostCount,
+        scanKind,
+        status: 'failed',
+        error: compactErrorText(error),
+        customerProfile
+    });
+    saveJSON(HISTORY_PATH, history.slice(0, 50));
+    io.emit('reports_refresh');
 }
 
 function setupAutoScan(config) {
@@ -588,6 +811,195 @@ function parseNmapXML(xmlPath, onParsed = null) {
     });
 }
 
+function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
+    const profile = getCustomerFingerprintProfile();
+    const reportDir = path.join(REPORTS_DIR, profile.folderName);
+    if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
+    const reportDate = new Date();
+    const reportTimestamp = formatReportTimestamp(reportDate);
+    const reportDisplayTimestamp = formatReportDisplayTimestamp(reportDate);
+    const reportBaseName = `${profile.reportLabel}-${reportTimestamp}`;
+    const reportName = `${reportBaseName}.html`;
+    const pdfName = `${reportBaseName}.pdf`;
+    const xmlName = `${reportBaseName}.xml`;
+    const reportPath = path.join(reportDir, reportName);
+    const pdfPath = path.join(reportDir, pdfName);
+    const xmlArchivePath = path.join(reportDir, xmlName);
+    const reportUrl = `/reports/${profile.folderName}/${reportName}`;
+    const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
+    const xmlUrl = `/reports/${profile.folderName}/${xmlName}`;
+    try {
+        fs.copyFileSync(xmlPath, xmlArchivePath);
+        logEvent(socket, 'report', `XML archived: ${xmlName}`);
+    } catch (error) {
+        logEvent(socket, 'error', `XML archive failed for ${xmlName}: ${error.message}`);
+    }
+    const xslPath = path.join(__dirname, 'nmap-modern.xsl');
+    const xsltCommand = [
+        'xsltproc',
+        '-o', shellQuote(reportPath),
+        '--stringparam', 'customer_name', shellQuote(profile.prefix),
+        '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
+        '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
+        '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
+        '--stringparam', 'public_ip', shellQuote(profile.publicIP),
+        shellQuote(xslPath),
+        shellQuote(xmlPath)
+    ].join(' ');
+    exec(xsltCommand, (err) => {
+        if (!err) {
+            generatePDF(reportPath, pdfPath, (pdfErr) => {
+                const pdfReady = !pdfErr && fs.existsSync(pdfPath);
+                if (pdfErr) {
+                    logEvent(socket, 'error', `PDF generation failed for ${reportName}: ${pdfErr.message}`);
+                }
+                logEvent(socket, 'report', `Report generated: ${reportName}${pdfReady ? ` and ${pdfName}` : ''}`);
+                const reportPayload = {
+                    url: reportUrl,
+                    pdfUrl: pdfReady ? pdfUrl : null,
+                    name: reportName,
+                    pdfName: pdfReady ? pdfName : null,
+                    xmlName,
+                    xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
+                    customerProfile: profile
+                };
+                io.emit('report_ready', reportPayload);
+                const history = loadJSON(HISTORY_PATH, []);
+                history.unshift({
+                    timestamp: new Date().toISOString(),
+                    target: currentTarget,
+                    duration,
+                    hostCount: discoveredHosts.length,
+                    reportUrl,
+                    pdfUrl: pdfReady ? pdfUrl : null,
+                    xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
+                    customerProfile: profile
+                });
+                saveJSON(HISTORY_PATH, history.slice(0, 50));
+                if (['complete', 'quick'].includes(reportScanKind)) {
+                    const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
+                    uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, {
+                        label: uploadLabel,
+                        reportPath,
+                        dayFolderName: formatDriveDayFolder(reportDate)
+                    })
+                        .then(result => {
+                            if (!result?.success) return;
+                            const metadata = loadDriveMetadata(reportPath);
+                            io.emit('report_ready', {
+                                ...reportPayload,
+                                driveHtmlUrl: findDriveLink(metadata, reportName),
+                                drivePdfUrl: pdfReady ? findDriveLink(metadata, pdfName) : null
+                            });
+                        })
+                        .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
+                }
+            });
+        } else {
+            logEvent(socket, 'error', `HTML report generation failed: ${err.message}`);
+        }
+    });
+}
+
+function runNmapFallbackPass(socket, args, phase, xmlFile, label, options = {}) {
+    return new Promise((resolve) => {
+        const startedAt = Date.now();
+        const commandSpec = getPrivilegedCommand(NMAP_PATH, args);
+        let stderrBuffer = '';
+
+        currentScanPhase = phase;
+        scanStartTime = startedAt;
+        io.emit('scan_started', { phase, target: 'Multiple Targets', startTime: scanStartTime, scanKind: options.scanKind || currentScanKind });
+        logEvent(socket, 'job', `Starting Phase ${phase} fallback pass: ${label}...`);
+        logEvent(socket, 'scan', `Nmap command: sudo -n ${NMAP_PATH} ${args.join(' ')}`);
+
+        const nmap = spawn(commandSpec.command, commandSpec.args);
+        currentScan = nmap;
+
+        nmap.stderr.on('data', data => {
+            const errText = data.toString();
+            stderrBuffer = compactErrorText(`${stderrBuffer}\n${errText}`);
+            if (!errText.includes('Warning: ')) console.error('[NMAP ERROR]', errText);
+            if (isSudoAuthFailure(errText)) {
+                logEvent(socket, 'error', 'Nmap requires passwordless sudo for this runtime. Configure sudoers for nmap or run with the required privileges.');
+            }
+        });
+
+        nmap.on('error', error => {
+            currentScan = null;
+            const duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+            logEvent(socket, 'error', `Failed to start Phase ${phase} fallback pass: ${error.message}`);
+            resolve({ success: false, duration, error: error.message, xmlPath: path.join(__dirname, xmlFile) });
+        });
+
+        nmap.on('close', (code, signal) => {
+            currentScan = null;
+            const duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+            const statusText = code === 0 ? 'complete' : `ended with code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`;
+            const xmlPath = path.join(__dirname, xmlFile);
+            const complete = isCompleteNmapXML(xmlPath);
+            logEvent(socket, complete ? 'job' : 'error', `Phase ${phase} fallback pass ${statusText} in ${duration}s. XML ${complete ? 'complete' : 'incomplete'}.`);
+            io.emit('phase_complete', { phase, duration, ...getScanStats() });
+            resolve({
+                success: complete,
+                duration,
+                error: compactErrorText(stderrBuffer || `Phase ${phase} fallback pass ${statusText}. XML ${complete ? 'complete' : 'incomplete'}.`),
+                xmlPath
+            });
+        });
+    });
+}
+
+async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
+    const noScriptXml = 'phase2_no_script.xml';
+    const vulnersXml = 'phase2_vulners.xml';
+    [noScriptXml, vulnersXml].forEach(file => {
+        const filePath = path.join(__dirname, file);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    });
+
+    logEvent(socket, 'job', 'Starting Phase 2 fallback recovery as two passes: 2.1 service/OS detection, then 2.2 vulners only.');
+    const pass21 = await runNmapFallbackPass(socket, [
+        '-sS', '-sV', '-O', '-Pn',
+        '-T3',
+        '--open',
+        '-oX', noScriptXml,
+        '-iL', 'targets.tmp'
+    ], 2.1, noScriptXml, 'service + OS detection without scripts', { scanKind: reportScanKind });
+    if (!pass21.success) {
+        logEvent(socket, 'error', `Phase 2.1 fallback failed: ${pass21.error}`);
+        io.emit('scan_complete', { phase: 2.1, duration: pass21.duration, ...getScanStats(), status: 'failed', error: pass21.error });
+        return;
+    }
+
+    parseNmapXML(pass21.xmlPath, (parsedStats) => {
+        logEvent(socket, 'job', `Phase 2.1 fallback XML parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
+        io.emit('phase_stats', { phase: 2.1, ...parsedStats });
+    });
+
+    const pass22 = await runNmapFallbackPass(socket, [
+        '-sV',
+        '--script', 'vulners',
+        '--script-args', 'threads=8',
+        '-iL', 'targets.tmp',
+        '-oX', vulnersXml
+    ], 2.2, vulnersXml, 'vulners only', { scanKind: reportScanKind });
+    if (!pass22.success) {
+        logEvent(socket, 'error', `Phase 2.2 fallback failed: ${pass22.error}`);
+        io.emit('scan_complete', { phase: 2.2, duration: pass22.duration, ...getScanStats(), status: 'failed', error: pass22.error });
+        return;
+    }
+
+    parseNmapXML(pass22.xmlPath, (parsedStats) => {
+        logEvent(socket, 'job', `Phase 2.2 fallback XML parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
+        io.emit('phase_stats', { phase: 2.2, ...parsedStats });
+    });
+
+    const totalDuration = (Number(originalDuration || 0) + Number(pass21.duration || 0) + Number(pass22.duration || 0)).toFixed(2);
+    generateReportFromXml(socket, pass22.xmlPath, totalDuration, reportScanKind);
+    io.emit('scan_complete', { phase: 2.2, duration: totalDuration, ...getScanStats(), status: 'fallback_complete' });
+}
+
 function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
     if (currentScan && phase === 1) {
         if (socket) logEvent(socket, 'error', 'A scan is already running.');
@@ -622,6 +1034,7 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
 
     let currentHostIP = null;
     let hostBuffer = [];
+    let stderrBuffer = '';
 
     nmap.stdout.on('data', (data) => {
         const text = data.toString();
@@ -659,6 +1072,7 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
 
     nmap.stderr.on('data', (data) => {
         const errText = data.toString();
+        stderrBuffer = compactErrorText(`${stderrBuffer}\n${errText}`);
         if (!errText.includes('Warning: ')) console.error('[NMAP ERROR]', errText);
         if (isSudoAuthFailure(errText)) {
             logEvent(socket, 'error', 'Nmap requires passwordless sudo for this runtime. Configure sudoers for nmap or run with the required privileges.');
@@ -684,78 +1098,36 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
             const reportScanKind = options.scanKind || currentScanKind;
             setTimeout(() => {
                 if (!isCompleteNmapXML(xmlPath)) {
-                    logEvent(socket, 'error', 'Phase 2 XML is incomplete, likely because Nmap/NSE crashed. Skipping XML parse and report/PDF generation for this run.');
+                    const failureError = compactErrorText(stderrBuffer || `Phase ${phase} scan ${statusText}. XML output was incomplete.`);
+                    logEvent(socket, 'error', 'Phase 2 XML is incomplete, likely because Nmap/NSE crashed. Recording this run as failed so it remains visible in history and reports.');
+                    saveFailedScanHistory({
+                        target: currentTarget,
+                        duration,
+                        hostCount: phaseStats.hostCount,
+                        scanKind: reportScanKind,
+                        customerProfile: getCustomerFingerprintProfile(),
+                        error: failureError
+                    });
+                    if (options.fallbackOnIncomplete) {
+                        runPhase2Fallback(socket, duration, reportScanKind).catch(error => {
+                            logEvent(socket, 'error', `Phase 2 fallback recovery failed: ${error.message}`);
+                            io.emit('scan_complete', { phase, duration, ...phaseStats, status: 'failed', error: error.message });
+                        });
+                        return;
+                    }
+                    io.emit('scan_complete', { phase, duration, ...phaseStats, status: 'failed', error: failureError });
                     return;
                 }
                 parseNmapXML(xmlPath, (parsedStats) => {
                     logEvent(socket, 'job', `Phase ${phase} XML results parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
                     io.emit('phase_stats', { phase, ...parsedStats });
                 });
-                const profile = getCustomerFingerprintProfile();
-                const reportDir = path.join(REPORTS_DIR, profile.folderName);
-                if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
-                const reportDate = new Date();
-                const reportTimestamp = formatReportTimestamp(reportDate);
-                const reportDisplayTimestamp = formatReportDisplayTimestamp(reportDate);
-                const reportBaseName = `${profile.reportLabel}-${reportTimestamp}`;
-                const reportName = `${reportBaseName}.html`;
-                const pdfName = `${reportBaseName}.pdf`;
-                const reportPath = path.join(reportDir, reportName);
-                const pdfPath = path.join(reportDir, pdfName);
-                const reportUrl = `/reports/${profile.folderName}/${reportName}`;
-                const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
-                const xslPath = path.join(__dirname, 'nmap-modern.xsl');
-                const xsltCommand = [
-                    'xsltproc',
-                    '-o', shellQuote(reportPath),
-                    '--stringparam', 'customer_name', shellQuote(profile.prefix),
-                    '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
-                    '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
-                    '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
-                    '--stringparam', 'public_ip', shellQuote(profile.publicIP),
-                    shellQuote(xslPath),
-                    shellQuote(xmlPath)
-                ].join(' ');
-                exec(xsltCommand, (err) => {
-                    if (!err) {
-                        generatePDF(reportPath, pdfPath, (pdfErr) => {
-                            const pdfReady = !pdfErr && fs.existsSync(pdfPath);
-                            if (pdfErr) {
-                                logEvent(socket, 'error', `PDF generation failed for ${reportName}: ${pdfErr.message}`);
-                            }
-                            logEvent(socket, 'report', `Report generated: ${reportName}${pdfReady ? ` and ${pdfName}` : ''}`);
-                            io.emit('report_ready', {
-                                url: reportUrl,
-                                pdfUrl: pdfReady ? pdfUrl : null,
-                                name: reportName,
-                                pdfName: pdfReady ? pdfName : null,
-                                customerProfile: profile
-                            });
-                            const history = loadJSON(HISTORY_PATH, []);
-                            history.unshift({
-                                timestamp: new Date().toISOString(),
-                                target: currentTarget,
-                                duration,
-                                hostCount: discoveredHosts.length,
-                                reportUrl,
-                                pdfUrl: pdfReady ? pdfUrl : null,
-                                customerProfile: profile
-                            });
-                            saveJSON(HISTORY_PATH, history.slice(0, 50));
-                            if (['complete', 'quick'].includes(reportScanKind)) {
-                                const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
-                                uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, { label: uploadLabel })
-                                    .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
-                            }
-                        });
-                    } else {
-                        logEvent(socket, 'error', `HTML report generation failed: ${err.message}`);
-                    }
-                });
+                generateReportFromXml(socket, xmlPath, duration, reportScanKind);
+                if (options.deferScanComplete) io.emit('scan_complete', { phase, duration, ...phaseStats });
             }, 1000);
         }
         if (onComplete) onComplete();
-        else io.emit('scan_complete', { phase, duration, ...phaseStats });
+        else if (!options.deferScanComplete) io.emit('scan_complete', { phase, duration, ...phaseStats });
     });
 }
 
@@ -833,7 +1205,7 @@ function getScanStats() {
     };
 }
 
-function startChainedScan(socket, target, usePn = false) {
+function startChainedScan(socket, target, usePn = false, options = {}) {
     const scanKind = usePn ? 'complete' : 'quick';
     runNmap(socket, ['-sn', '-T4', target], 1, () => {
         if (discoveredHosts.length === 0) {
@@ -844,17 +1216,27 @@ function startChainedScan(socket, target, usePn = false) {
         fs.writeFileSync('targets.tmp', targets);
 
         if (usePn) {
-            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners. UI details will populate after XML parsing completes.`);
-            runNmap(
-                socket,
-                buildPhase2Args(true, false, {
-                    allHostsAtOnce: true,
+            const vpnHelper = !!options.vpnHelper;
+            const phase2Options = vpnHelper
+                ? {
+                    includeDefaultScripts: false,
+                    minRate: false,
+                    timing: '-T2',
+                    scriptArgs: 'mincvss=0,threads=5',
+                    maxParallelism: 15,
+                    maxRetries: 2
+                }
+                : {
                     includeDefaultScripts: false,
                     minRate: false
-                }),
+                };
+            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners${vpnHelper ? ' using VPN helper timing' : ''}. UI details will populate after XML parsing completes.`);
+            runNmap(
+                socket,
+                buildPhase2Args(true, false, phase2Options),
                 2,
                 null,
-                { deferHostUpdates: true, scanKind }
+                { deferHostUpdates: true, scanKind, fallbackOnIncomplete: true, deferScanComplete: true }
             );
             return;
         }
@@ -873,7 +1255,7 @@ io.on('connection', (socket) => {
         cachedHops.forEach(hop => socket.emit('traceroute_hop', hop));
     });
     socket.on('start_quick_scan', (data) => startChainedScan(socket, data.target, false));
-    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true));
+    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true, { vpnHelper: !!data.vpnHelper }));
     socket.on('start_dragnet_scan', (data) => {
         if (discoveredHosts.length === 0) { logEvent(socket, 'error', 'No hosts discovered in Phase 1.'); return; }
         const targets = discoveredHosts.map(h => h.ip).join('\n');
@@ -936,51 +1318,83 @@ io.on('connection', (socket) => {
         io.emit('customer_profile', profile);
     });
     socket.on('get_reports', () => {
-        if (!fs.existsSync(REPORTS_DIR)) return;
         const reports = [];
-        fs.readdirSync(REPORTS_DIR, { withFileTypes: true }).forEach(entry => {
-            const folder = entry.isDirectory() ? entry.name : '';
-            const folderPath = folder ? path.join(REPORTS_DIR, folder) : REPORTS_DIR;
-            if (!entry.isDirectory() && !entry.name.endsWith('.html')) return;
-            const files = entry.isDirectory()
-                ? fs.readdirSync(folderPath).filter(f => f.endsWith('.html'))
-                : [entry.name];
-            files.forEach(f => {
-                const pdfName = f.replace(/\.html$/i, '.pdf');
-                const pdfPath = path.join(folderPath, pdfName);
-                const urlBase = folder ? `/reports/${folder}` : '/reports';
-                reports.push({
-                    name: f,
-                    folder,
-                    url: `${urlBase}/${f}`,
-                    pdfName: fs.existsSync(pdfPath) ? pdfName : null,
-                    pdfUrl: fs.existsSync(pdfPath) ? `${urlBase}/${pdfName}` : null,
-                    date: fs.statSync(path.join(folderPath, f)).mtime
+        if (fs.existsSync(REPORTS_DIR)) {
+            fs.readdirSync(REPORTS_DIR, { withFileTypes: true }).forEach(entry => {
+                const folder = entry.isDirectory() ? entry.name : '';
+                const folderPath = folder ? path.join(REPORTS_DIR, folder) : REPORTS_DIR;
+                if (!entry.isDirectory() && !entry.name.endsWith('.html')) return;
+                const files = entry.isDirectory()
+                    ? fs.readdirSync(folderPath).filter(f => f.endsWith('.html'))
+                    : [entry.name];
+                files.forEach(f => {
+                    const pdfName = f.replace(/\.html$/i, '.pdf');
+                    const xmlName = f.replace(/\.html$/i, '.xml');
+                    const reportPath = path.join(folderPath, f);
+                    const pdfPath = path.join(folderPath, pdfName);
+                    const xmlPath = path.join(folderPath, xmlName);
+                    const driveMetadata = loadDriveMetadata(reportPath);
+                    const urlBase = folder ? `/reports/${folder}` : '/reports';
+                    reports.push({
+                        name: f,
+                        folder,
+                        url: `${urlBase}/${f}`,
+                        pdfName: fs.existsSync(pdfPath) ? pdfName : null,
+                        pdfUrl: fs.existsSync(pdfPath) ? `${urlBase}/${pdfName}` : null,
+                        xmlName: fs.existsSync(xmlPath) ? xmlName : null,
+                        xmlUrl: fs.existsSync(xmlPath) ? `${urlBase}/${xmlName}` : null,
+                        driveHtmlUrl: findDriveLink(driveMetadata, f),
+                        drivePdfUrl: fs.existsSync(pdfPath) ? findDriveLink(driveMetadata, pdfName) : null,
+                        date: fs.statSync(reportPath).mtime
+                    });
                 });
             });
-        });
+        }
+        loadJSON(HISTORY_PATH, [])
+            .filter(entry => entry && entry.status === 'failed')
+            .forEach(entry => {
+                const date = entry.timestamp || new Date().toISOString();
+                const scanLabel = entry.scanKind === 'complete' ? 'Complete+PDF' : (entry.scanKind || 'Scan');
+                reports.push({
+                    name: `Failed ${scanLabel} scan - ${new Date(date).toLocaleString()}`,
+                    folder: entry.customerProfile?.folderName || '',
+                    url: null,
+                    pdfName: null,
+                    pdfUrl: null,
+                    driveHtmlUrl: null,
+                    drivePdfUrl: null,
+                    date,
+                    status: 'failed',
+                    error: entry.error || 'Nmap scan failed before a complete XML report was written.',
+                    hostCount: entry.hostCount,
+                    duration: entry.duration
+                });
+            });
         socket.emit('reports_data', reports.sort((a, b) => new Date(b.date) - new Date(a.date)));
     });
 });
 
 // Initialization
-if (NMAP_PATH) {
-    console.log('Prescan - Updating scripts...');
-    const updateCommand = getPrivilegedCommand(NMAP_PATH, ['--script-updatedb']);
-    const updateProcess = spawn(updateCommand.command, updateCommand.args);
-    updateProcess.stderr.on('data', data => {
-        const text = data.toString();
-        if (isSudoAuthFailure(text)) {
-            console.warn('Skipping nmap script update: passwordless sudo is required.');
-        } else if (!text.includes('Warning: ')) {
-            console.warn(`[NMAP UPDATE] ${text.trim()}`);
-        }
-    });
-    updateProcess.on('error', error => console.warn(`Skipping nmap script update: ${error.message}`));
-} else {
-    console.warn(describeMissingExecutable('nmap', 'NMAP_PATH'));
-}
+updateNmapFromHomebrew().finally(updateNmapScriptDatabase);
 
 setupAutoScan(loadJSON(CONFIG_PATH, {}));
 getNetworkInfo(); getPublicIP(); runTraceroute();
-server.listen(PORT, () => console.log(`${VERSION} Server running on http://localhost:${PORT}`));
+
+function listenWithPortGuard(retried = false) {
+    server.once('error', async error => {
+        if (error.code !== 'EADDRINUSE' || retried) {
+            console.error(`Failed to start server on port ${PORT}: ${error.message}`);
+            process.exit(1);
+        }
+        const stopped = await stopExistingAppOnPort(PORT);
+        if (!stopped) {
+            console.error(`Port ${PORT} is already in use by another service. Stop it or set PORT to a different value.`);
+            process.exit(1);
+        }
+        listenWithPortGuard(true);
+    });
+    server.listen(PORT);
+}
+
+server.on('listening', () => console.log(`${VERSION} Server running on http://localhost:${PORT}`));
+listenWithPortGuard();
