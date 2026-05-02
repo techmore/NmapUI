@@ -1,4 +1,4 @@
-const VERSION = 'v2026.4.26.4.00';
+const VERSION = 'v2026.5.2.15.58';
 
 const express = require('express');
 const http = require('http');
@@ -846,6 +846,7 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
     const xsltCommand = [
         'xsltproc',
         '-o', shellQuote(reportPath),
+        '--stringparam', 'techmore_version', shellQuote(VERSION),
         '--stringparam', 'customer_name', shellQuote(profile.prefix),
         '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
         '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
