@@ -60,7 +60,6 @@ let cachedPublicIP = null;
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const HISTORY_PATH = path.join(__dirname, 'history.json');
 const REPORTS_DIR = path.join(__dirname, 'reports_archive');
-const PHASE2_MAX_HOSTGROUP = String(Math.max(1, parseInt(process.env.NMAP_MAX_HOSTGROUP || '4', 10) || 4));
 const NMAP_PATH = resolveExecutable(process.env.NMAP_PATH, [
     '/opt/homebrew/bin/nmap',
     '/usr/local/bin/nmap',
@@ -74,6 +73,11 @@ const TRACEROUTE_PATH = resolveExecutable(process.env.TRACEROUTE_PATH, [
     '/opt/homebrew/bin/traceroute',
     '/usr/local/bin/traceroute',
     'traceroute'
+]);
+const BREW_PATH = resolveExecutable(process.env.BREW_PATH, [
+    '/opt/homebrew/bin/brew',
+    '/usr/local/bin/brew',
+    'brew'
 ]);
 let customerProfileConfig = loadJSON(CONFIG_PATH, {}).customerProfile || {};
 let appConfig = loadJSON(CONFIG_PATH, {});
@@ -149,6 +153,84 @@ function getPrivilegedCommand(executablePath, args) {
 
 function describeMissingExecutable(name, envVar) {
     return `${name} was not found. Install it or set ${envVar} to the executable path.`;
+}
+
+function getBrewCommand(args) {
+    if (process.getuid && process.getuid() === 0) {
+        const sudoUser = process.env.SUDO_USER;
+        if (!sudoUser || sudoUser === 'root') return null;
+        return {
+            command: 'sudo',
+            args: ['-u', sudoUser, BREW_PATH, ...args],
+            env: { ...process.env, HOME: `/Users/${sudoUser}`, USER: sudoUser }
+        };
+    }
+    return { command: BREW_PATH, args, env: process.env };
+}
+
+function runBrewStep(args) {
+    return new Promise((resolve) => {
+        const commandSpec = getBrewCommand(args);
+        if (!BREW_PATH || !commandSpec) {
+            resolve({ success: false, error: 'Homebrew is unavailable or cannot be run from the current user context.' });
+            return;
+        }
+
+        const brew = spawn(commandSpec.command, commandSpec.args, { env: commandSpec.env });
+        brew.stdout.on('data', data => {
+            const text = data.toString().trim();
+            if (text) console.log(`[BREW] ${text}`);
+        });
+        brew.stderr.on('data', data => {
+            const text = data.toString().trim();
+            if (text) console.warn(`[BREW] ${text}`);
+        });
+        brew.on('error', error => resolve({ success: false, error: error.message }));
+        brew.on('close', code => resolve({ success: code === 0, error: code === 0 ? '' : `brew ${args.join(' ')} exited with code ${code}` }));
+    });
+}
+
+async function updateNmapFromHomebrew() {
+    if (!BREW_PATH) {
+        console.warn('Skipping Homebrew nmap upgrade: brew was not found.');
+        return;
+    }
+    const commandSpec = getBrewCommand(['update']);
+    if (!commandSpec) {
+        console.warn('Skipping Homebrew nmap upgrade: brew cannot run as root without SUDO_USER.');
+        return;
+    }
+
+    console.log('Startup - Running brew update && brew upgrade nmap...');
+    const update = await runBrewStep(['update']);
+    if (!update.success) {
+        console.warn(`Skipping brew upgrade nmap: ${update.error}`);
+        return;
+    }
+    const upgrade = await runBrewStep(['upgrade', 'nmap']);
+    if (!upgrade.success) {
+        console.warn(`Homebrew nmap upgrade did not complete: ${upgrade.error}`);
+    }
+}
+
+function updateNmapScriptDatabase() {
+    if (!NMAP_PATH) {
+        console.warn(describeMissingExecutable('nmap', 'NMAP_PATH'));
+        return;
+    }
+
+    console.log('Prescan - Updating scripts...');
+    const updateCommand = getPrivilegedCommand(NMAP_PATH, ['--script-updatedb']);
+    const updateProcess = spawn(updateCommand.command, updateCommand.args);
+    updateProcess.stderr.on('data', data => {
+        const text = data.toString();
+        if (isSudoAuthFailure(text)) {
+            console.warn('Skipping nmap script update: passwordless sudo is required.');
+        } else if (!text.includes('Warning: ')) {
+            console.warn(`[NMAP UPDATE] ${text.trim()}`);
+        }
+    });
+    updateProcess.on('error', error => console.warn(`Skipping nmap script update: ${error.message}`));
 }
 
 function isSudoAuthFailure(text) {
@@ -458,24 +540,28 @@ function isCompleteNmapXML(xmlPath) {
 }
 
 function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
-    const hostGroupArgs = options.allHostsAtOnce
-        ? []
-        : ['--min-hostgroup', '1', '--max-hostgroup', PHASE2_MAX_HOSTGROUP];
+    const hostGroupArgs = options.hostGroup
+        ? ['--min-hostgroup', '1', '--max-hostgroup', String(options.hostGroup)]
+        : [];
     const scripts = options.disableScripts ? [] : (options.consolidateScripts ? ['default,vulners'] : ['vulners']);
-    const rateArgs = options.minRate === false ? [] : ['--min-rate', options.minRate || '3000'];
+    const rateArgs = options.minRate ? ['--min-rate', String(options.minRate)] : [];
     const defaultScriptArgs = options.includeDefaultScripts === false || options.consolidateScripts ? [] : ['-sC'];
+    const scriptArgs = scripts.length && options.scriptArgs !== false
+        ? ['--script-args', options.scriptArgs || 'mincvss=0,threads=10']
+        : [];
     const args = [
         ...(fullPortScan ? ['-p-'] : []),
         '-sS', '-sV',
         ...defaultScriptArgs,
         '-O',
         ...(usePn ? ['-Pn'] : []),
-        '-T4',
+        options.timing || '-T3',
         ...rateArgs,
         ...(options.maxParallelism ? ['--max-parallelism', String(options.maxParallelism)] : []),
         ...hostGroupArgs,
         '--open',
         ...(scripts.length ? ['--script', scripts.join(',')] : []),
+        ...scriptArgs,
         '--stylesheet', 'nmap-modern.xsl',
         '-oX', 'phase2_results.xml',
         '-iL', 'targets.tmp'
@@ -1010,8 +1096,7 @@ function startChainedScan(socket, target, usePn = false) {
                 socket,
                 buildPhase2Args(true, false, {
                     includeDefaultScripts: false,
-                    minRate: false,
-                    allHostsAtOnce: true
+                    minRate: false
                 }),
                 2,
                 null,
@@ -1150,22 +1235,7 @@ io.on('connection', (socket) => {
 });
 
 // Initialization
-if (NMAP_PATH) {
-    console.log('Prescan - Updating scripts...');
-    const updateCommand = getPrivilegedCommand(NMAP_PATH, ['--script-updatedb']);
-    const updateProcess = spawn(updateCommand.command, updateCommand.args);
-    updateProcess.stderr.on('data', data => {
-        const text = data.toString();
-        if (isSudoAuthFailure(text)) {
-            console.warn('Skipping nmap script update: passwordless sudo is required.');
-        } else if (!text.includes('Warning: ')) {
-            console.warn(`[NMAP UPDATE] ${text.trim()}`);
-        }
-    });
-    updateProcess.on('error', error => console.warn(`Skipping nmap script update: ${error.message}`));
-} else {
-    console.warn(describeMissingExecutable('nmap', 'NMAP_PATH'));
-}
+updateNmapFromHomebrew().finally(updateNmapScriptDatabase);
 
 setupAutoScan(loadJSON(CONFIG_PATH, {}));
 getNetworkInfo(); getPublicIP(); runTraceroute();
