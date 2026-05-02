@@ -8,7 +8,7 @@ Network Scanner GUI - A web-based network scanning and monitoring tool powered b
 git clone https://github.com/techmore/NMapUI-www.git
 cd NMapUI-www
 ./install.sh
-sudo node server.js
+sudo npm start
 ```
 
 Then open http://localhost:9000 in your browser.
