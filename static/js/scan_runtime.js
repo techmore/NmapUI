@@ -24,6 +24,18 @@ function formatDurationSeconds(totalSeconds) {
     return `${h}:${m}:${s}`;
 }
 
+function formatReportTimestamp(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown date';
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
 function startPhaseTimer(phase, startedAt) {
     activeScanPhase = phase;
     activePhaseStartedAt = startedAt ? new Date(startedAt).getTime() : Date.now();
@@ -342,6 +354,8 @@ function initializeScanRuntime(socket) {
             }
             reportsList.innerHTML = data.map(report => {
                 const failed = report.status === 'failed';
+                const reportTimestamp = formatReportTimestamp(report.date);
+                const durationText = report.duration ? formatDurationSeconds(report.duration) : '';
                 const actions = [
                     reportActionLink({ href: report.url, title: 'Open HTML report', icon: 'file-code-2' }),
                     reportActionLink({ href: report.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !report.pdfUrl }),
@@ -356,7 +370,11 @@ function initializeScanRuntime(socket) {
                                 <h4 class="truncate text-sm font-bold text-olive-900" title="${escapeHTML(report.name)}">${escapeHTML(report.name)}</h4>
                                 <p class="mt-0.5 truncate font-mono text-[10px] text-olive-500" title="${escapeHTML(report.folder || '')}">${escapeHTML(report.folder || 'reports')}</p>
                             </div>
-                            <span class="shrink-0 text-[10px] font-bold uppercase ${failed ? 'text-red-500' : 'text-olive-400'}">${failed ? 'Failed' : new Date(report.date).toLocaleDateString()}</span>
+                            <span class="shrink-0 text-[10px] font-bold uppercase ${failed ? 'text-red-500' : 'text-olive-400'}">${failed ? 'Failed' : 'Report'}</span>
+                        </div>
+                        <div class="mt-2 grid gap-1 text-[10px] leading-snug text-olive-600">
+                            <span>${escapeHTML(reportTimestamp)}</span>
+                            ${durationText ? `<span>Scan time ${escapeHTML(durationText)}</span>` : ''}
                         </div>
                         ${failed && report.error ? `<p class="mt-2 line-clamp-2 rounded-lg bg-red-50 p-2 font-mono text-[10px] text-red-700">${escapeHTML(report.error)}</p>` : ''}
                         <div class="mt-3 flex items-center justify-between gap-2">

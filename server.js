@@ -1331,6 +1331,12 @@ io.on('connection', (socket) => {
     });
     socket.on('get_reports', () => {
         const reports = [];
+        const history = loadJSON(HISTORY_PATH, []);
+        const historyByReportUrl = new Map(
+            history
+                .filter(entry => entry?.reportUrl)
+                .map(entry => [entry.reportUrl, entry])
+        );
         if (fs.existsSync(REPORTS_DIR)) {
             fs.readdirSync(REPORTS_DIR, { withFileTypes: true }).forEach(entry => {
                 const folder = entry.isDirectory() ? entry.name : '';
@@ -1347,22 +1353,27 @@ io.on('connection', (socket) => {
                     const xmlPath = path.join(folderPath, xmlName);
                     const driveMetadata = loadDriveMetadata(reportPath);
                     const urlBase = folder ? `/reports/${folder}` : '/reports';
+                    const reportUrl = `${urlBase}/${f}`;
+                    const historyEntry = historyByReportUrl.get(reportUrl);
+                    const fileMtime = fs.statSync(reportPath).mtime;
                     reports.push({
                         name: f,
                         folder,
-                        url: `${urlBase}/${f}`,
+                        url: reportUrl,
                         pdfName: fs.existsSync(pdfPath) ? pdfName : null,
                         pdfUrl: fs.existsSync(pdfPath) ? `${urlBase}/${pdfName}` : null,
                         xmlName: fs.existsSync(xmlPath) ? xmlName : null,
                         xmlUrl: fs.existsSync(xmlPath) ? `${urlBase}/${xmlName}` : null,
                         driveHtmlUrl: findDriveLink(driveMetadata, f),
                         drivePdfUrl: fs.existsSync(pdfPath) ? findDriveLink(driveMetadata, pdfName) : null,
-                        date: fs.statSync(reportPath).mtime
+                        date: historyEntry?.timestamp || fileMtime,
+                        duration: historyEntry?.duration || null,
+                        hostCount: historyEntry?.hostCount || null
                     });
                 });
             });
         }
-        loadJSON(HISTORY_PATH, [])
+        history
             .filter(entry => entry && entry.status === 'failed')
             .forEach(entry => {
                 const date = entry.timestamp || new Date().toISOString();
