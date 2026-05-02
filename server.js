@@ -813,6 +813,14 @@ function parseNmapXML(xmlPath, onParsed = null) {
 
 function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
     const profile = getCustomerFingerprintProfile();
+    const networkInfo = cachedNetworkInfo || {};
+    const tracerouteSummary = cachedHops.length
+        ? cachedHops
+            .slice()
+            .sort((a, b) => Number(a.hop) - Number(b.hop))
+            .map(hop => `${hop.hop}: ${hop.ip}`)
+            .join('  ->  ')
+        : '';
     const reportDir = path.join(REPORTS_DIR, profile.folderName);
     if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
     const reportDate = new Date();
@@ -843,6 +851,10 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
         '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
         '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
         '--stringparam', 'public_ip', shellQuote(profile.publicIP),
+        '--stringparam', 'local_ip', shellQuote(networkInfo.localIP || ''),
+        '--stringparam', 'subnet_mask', shellQuote(networkInfo.mask || ''),
+        '--stringparam', 'cidr', shellQuote(networkInfo.cidr || ''),
+        '--stringparam', 'traceroute_summary', shellQuote(tracerouteSummary),
         shellQuote(xslPath),
         shellQuote(xmlPath)
     ].join(' ');

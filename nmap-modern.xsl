@@ -15,6 +15,10 @@ Updated: 2026
   <xsl:param name="report_timestamp"/>
   <xsl:param name="report_display_timestamp"/>
   <xsl:param name="public_ip"/>
+  <xsl:param name="local_ip"/>
+  <xsl:param name="subnet_mask"/>
+  <xsl:param name="cidr"/>
+  <xsl:param name="traceroute_summary"/>
 
    <!-- Services that have both product and version -->
   <xsl:key name="svcByProduct"
@@ -428,8 +432,8 @@ Updated: 2026
 	              display: flex !important;
 	              box-sizing: border-box !important;
 	              width: 100% !important;
-	              height: 187mm !important;
-	              min-height: 0 !important;
+	              height: 273mm !important;
+	              min-height: 273mm !important;
 	              page-break-after: always !important;
 	              break-after: page !important;
 	              background: #414637 !important;
@@ -763,8 +767,36 @@ Updated: 2026
 	            }
 
 	            .pdf-page-two {
+	              box-sizing: border-box !important;
+	              min-height: 273mm !important;
+	              background: #e9ebe0 !important;
+	              border-color: #bcc2a9 !important;
 	              page-break-after: auto !important;
 	              break-after: auto !important;
+	              -webkit-print-color-adjust: exact !important;
+	              print-color-adjust: exact !important;
+            }
+
+	            .pdf-page-two .card {
+	              background: #f5f6f3 !important;
+	              border-color: #bcc2a9 !important;
+            }
+
+	            .pdf-network-grid {
+	              display: grid !important;
+	              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+	              gap: 2px !important;
+	              margin-bottom: 2px !important;
+            }
+
+	            .pdf-network-grid div,
+	            .pdf-traceroute-summary {
+	              background: #f5f6f3 !important;
+	              border: 1px solid #bcc2a9 !important;
+	              border-radius: 3px !important;
+	              padding: 3px !important;
+	              -webkit-print-color-adjust: exact !important;
+	              print-color-adjust: exact !important;
             }
 
 	            .flex-shrink-0 {
@@ -875,6 +907,55 @@ Updated: 2026
               Version <xsl:value-of select="/nmaprun/@version"/> ·
               <xsl:value-of select="/nmaprun/@startstr"/> – <xsl:value-of select="/nmaprun/runstats/finished/@timestr"/>
             </p>
+
+            <div class="pdf-only pdf-network-grid">
+              <div>
+                <span class="block text-[7px] uppercase tracking-wide text-olive-600">Local IP</span>
+                <strong class="block text-[8px] text-olive-900">
+                  <xsl:choose>
+                    <xsl:when test="string-length(normalize-space($local_ip)) &gt; 0"><xsl:value-of select="$local_ip"/></xsl:when>
+                    <xsl:otherwise>Unknown</xsl:otherwise>
+                  </xsl:choose>
+                </strong>
+              </div>
+              <div>
+                <span class="block text-[7px] uppercase tracking-wide text-olive-600">Subnet Mask</span>
+                <strong class="block text-[8px] text-olive-900">
+                  <xsl:choose>
+                    <xsl:when test="string-length(normalize-space($subnet_mask)) &gt; 0"><xsl:value-of select="$subnet_mask"/></xsl:when>
+                    <xsl:otherwise>Unknown</xsl:otherwise>
+                  </xsl:choose>
+                </strong>
+              </div>
+              <div>
+                <span class="block text-[7px] uppercase tracking-wide text-olive-600">CIDR</span>
+                <strong class="block text-[8px] text-olive-900">
+                  <xsl:choose>
+                    <xsl:when test="string-length(normalize-space($cidr)) &gt; 0"><xsl:value-of select="$cidr"/></xsl:when>
+                    <xsl:otherwise>Unknown</xsl:otherwise>
+                  </xsl:choose>
+                </strong>
+              </div>
+              <div>
+                <span class="block text-[7px] uppercase tracking-wide text-olive-600">Public IP</span>
+                <strong class="block text-[8px] text-olive-900">
+                  <xsl:choose>
+                    <xsl:when test="string-length(normalize-space($public_ip)) &gt; 0"><xsl:value-of select="$public_ip"/></xsl:when>
+                    <xsl:otherwise>Unknown</xsl:otherwise>
+                  </xsl:choose>
+                </strong>
+              </div>
+            </div>
+
+            <div class="pdf-only pdf-traceroute-summary mb-6">
+              <span class="block text-[7px] uppercase tracking-wide text-olive-600">Traceroute</span>
+              <strong class="block text-[8px] text-olive-900">
+                <xsl:choose>
+                  <xsl:when test="string-length(normalize-space($traceroute_summary)) &gt; 0"><xsl:value-of select="$traceroute_summary"/></xsl:when>
+                  <xsl:otherwise>No traceroute hops were cached when this report was generated.</xsl:otherwise>
+                </xsl:choose>
+              </strong>
+            </div>
             
             <div class="bg-olive-50 border border-olive-200 rounded-lg p-4 mb-6 no-print">
               <pre class="text-xs overflow-x-auto"><a target="_blank" class="text-olive-700 hover:text-olive-900"><xsl:attribute name="href">https://explainshell.com/explain?cmd=<xsl:value-of select="/nmaprun/@args"/></xsl:attribute><xsl:value-of select="/nmaprun/@args"/></a></pre>
