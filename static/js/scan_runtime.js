@@ -526,7 +526,8 @@ function initializeDiscoveryUI(socket) {
     if (completeScanBtn) {
         completeScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
-            socket.emit('start_complete_scan', { target });
+            const vpnHelper = !!document.getElementById('vpn-helper-toggle')?.checked;
+            socket.emit('start_complete_scan', { target, vpnHelper });
         });
     }
     if (dragnetScanBtn) {

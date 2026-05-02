@@ -558,6 +558,7 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
         options.timing || '-T3',
         ...rateArgs,
         ...(options.maxParallelism ? ['--max-parallelism', String(options.maxParallelism)] : []),
+        ...(options.maxRetries ? ['--max-retries', String(options.maxRetries)] : []),
         ...hostGroupArgs,
         '--open',
         ...(scripts.length ? ['--script', scripts.join(',')] : []),
@@ -1203,7 +1204,7 @@ function getScanStats() {
     };
 }
 
-function startChainedScan(socket, target, usePn = false) {
+function startChainedScan(socket, target, usePn = false, options = {}) {
     const scanKind = usePn ? 'complete' : 'quick';
     runNmap(socket, ['-sn', '-T4', target], 1, () => {
         if (discoveredHosts.length === 0) {
@@ -1214,13 +1215,24 @@ function startChainedScan(socket, target, usePn = false) {
         fs.writeFileSync('targets.tmp', targets);
 
         if (usePn) {
-            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners. UI details will populate after XML parsing completes.`);
-            runNmap(
-                socket,
-                buildPhase2Args(true, false, {
+            const vpnHelper = !!options.vpnHelper;
+            const phase2Options = vpnHelper
+                ? {
+                    includeDefaultScripts: false,
+                    minRate: false,
+                    timing: '-T2',
+                    scriptArgs: 'mincvss=0,threads=5',
+                    maxParallelism: 15,
+                    maxRetries: 2
+                }
+                : {
                     includeDefaultScripts: false,
                     minRate: false
-                }),
+                };
+            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners${vpnHelper ? ' using VPN helper timing' : ''}. UI details will populate after XML parsing completes.`);
+            runNmap(
+                socket,
+                buildPhase2Args(true, false, phase2Options),
                 2,
                 null,
                 { deferHostUpdates: true, scanKind, fallbackOnIncomplete: true, deferScanComplete: true }
@@ -1242,7 +1254,7 @@ io.on('connection', (socket) => {
         cachedHops.forEach(hop => socket.emit('traceroute_hop', hop));
     });
     socket.on('start_quick_scan', (data) => startChainedScan(socket, data.target, false));
-    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true));
+    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true, { vpnHelper: !!data.vpnHelper }));
     socket.on('start_dragnet_scan', (data) => {
         if (discoveredHosts.length === 0) { logEvent(socket, 'error', 'No hosts discovered in Phase 1.'); return; }
         const targets = discoveredHosts.map(h => h.ip).join('\n');
