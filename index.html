@@ -279,6 +279,7 @@
     }
 
     .results-band {
+        width: 100%;
         margin-top: 2rem;
         border-radius: 0.75rem;
         border: 1px solid oklch(75% 0.040 110);
@@ -290,8 +291,38 @@
 
     #discovery-table {
         width: 100%;
-        min-width: 1180px;
+        min-width: 100%;
     }
+
+    #discovery-table th,
+    #discovery-table td {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #discovery-table th:nth-child(1),
+    #discovery-table td:nth-child(1) { width: 3%; }
+    #discovery-table th:nth-child(2),
+    #discovery-table td:nth-child(2) { width: 12%; }
+    #discovery-table th:nth-child(3),
+    #discovery-table td:nth-child(3) { width: 16%; }
+    #discovery-table th:nth-child(4),
+    #discovery-table td:nth-child(4) { width: 9%; }
+    #discovery-table th:nth-child(5),
+    #discovery-table td:nth-child(5) { width: 11%; }
+    #discovery-table th:nth-child(6),
+    #discovery-table td:nth-child(6) { width: 12%; }
+    #discovery-table th:nth-child(7),
+    #discovery-table td:nth-child(7) { width: 10%; }
+    #discovery-table th:nth-child(8),
+    #discovery-table td:nth-child(8) { width: 6%; }
+    #discovery-table th:nth-child(9),
+    #discovery-table td:nth-child(9) { width: 7%; }
+    #discovery-table th:nth-child(10),
+    #discovery-table td:nth-child(10) { width: 9%; }
+    #discovery-table th:nth-child(11),
+    #discovery-table td:nth-child(11) { width: 5%; }
 
     .modal-overlay {
         position: fixed;
@@ -1528,7 +1559,7 @@
                         <thead>
                             <tr>
                                 <th class="w-8 px-0 py-0.5 text-left" data-column="status" data-fixed="true"></th>
-                                <th class="sortable w-24 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip" title="Drag to reorder">
+                                <th class="sortable w-24 px-1 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>IP Address</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1541,7 +1572,7 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th class="sortable w-32 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac" title="Drag to reorder">
+                                <th class="sortable w-32 px-1 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac" title="Drag to reorder">
                                     <div class="flex items-center space-x-1">
                                         <span>MAC Address</span>
                                         <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">

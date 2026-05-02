@@ -462,8 +462,8 @@ function updateHostRow(data) {
         row.className = 'hover:bg-olive-50 transition-colors border-b border-olive-100';
         row.innerHTML = `
             <td class="px-0 py-0.5 text-center"><span class="size-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span></td>
-            <td class="px-0 py-0.5 font-mono text-[11px] text-olive-900 ip-cell">${data.ip}</td>
-            <td class="px-0 py-0.5 font-mono text-[10px] text-olive-600 mac-cell">${data.mac || '--'}</td>
+            <td class="px-1 py-0.5 font-mono text-[11px] text-olive-900 ip-cell">${data.ip}</td>
+            <td class="px-1 py-0.5 font-mono text-[10px] text-olive-600 mac-cell">${data.mac || '--'}</td>
             <td class="px-0 py-0.5 text-[10px] text-olive-700 truncate vendor-cell" title="${data.vendor || '--'}">${data.vendor || '--'}</td>
             <td class="px-0 py-0.5 text-[10px] font-medium text-olive-900 truncate hostname-cell" title="${data.hostname || '--'}">${data.hostname || '--'}</td>
             <td class="px-0 py-0.5 text-[10px] cve-cell">--</td>
