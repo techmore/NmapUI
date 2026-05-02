@@ -31,7 +31,7 @@ app.get('/google-drive/oauth2callback', async (req, res) => {
         const googleDrive = saveGoogleDriveConfig({ enabled: true });
         logEvent(null, 'settings', 'Google Drive connected and sync enabled.');
         io.emit('google_drive_status', { ...result, config: googleDrive });
-        res.send('<html><body><h1>Google Drive connected</h1><p>You can close this window and return to Gemini Nmap.</p></body></html>');
+        res.send('<html><body><h1>Google Drive connected</h1><p>You can close this window and return to TM-NMapUI.</p></body></html>');
         return;
     }
     io.emit('google_drive_status', { ...result, config: getGoogleDriveConfig() });
@@ -190,7 +190,7 @@ function generatePDF(reportPath, pdfPath, callback) {
         '--enable-local-file-access',
         '--print-media-type',
         '--page-size', 'Letter',
-        '--orientation', 'Landscape',
+        '--orientation', 'Portrait',
         '--margin-top', '8mm',
         '--margin-right', '8mm',
         '--margin-bottom', '8mm',
@@ -235,6 +235,46 @@ function formatReportDisplayTimestamp(date = new Date()) {
         hour12: false,
         timeZoneName: 'short'
     });
+}
+
+function formatDriveDayFolder(date = new Date()) {
+    const pad = value => String(value).padStart(2, '0');
+    return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate())
+    ].join('-');
+}
+
+function getDriveMetadataPath(reportPath) {
+    return `${reportPath}.drive.json`;
+}
+
+function saveDriveMetadata(reportPath, result) {
+    if (!reportPath || !result?.success) return null;
+    const metadataPath = getDriveMetadataPath(reportPath);
+    const metadata = {
+        uploadedAt: new Date().toISOString(),
+        folderId: result.folder_id || null,
+        dayFolderId: result.day_folder_id || null,
+        links: (result.uploaded || []).map(file => ({
+            name: file.name || '',
+            webViewLink: file.webViewLink || '',
+            id: file.id || ''
+        })).filter(file => file.name || file.webViewLink || file.id)
+    };
+    saveJSON(metadataPath, metadata);
+    return metadata;
+}
+
+function loadDriveMetadata(reportPath) {
+    const metadata = loadJSON(getDriveMetadataPath(reportPath), null);
+    if (!metadata || !Array.isArray(metadata.links)) return null;
+    return metadata;
+}
+
+function findDriveLink(metadata, fileName) {
+    return (metadata?.links || []).find(file => file.name === fileName)?.webViewLink || null;
 }
 
 function getTopologyFingerprintParts() {
@@ -313,8 +353,9 @@ async function uploadReportFilesToDrive(socket, filePaths, profile, context = {}
         return null;
     }
 
-    const folderName = profile?.folderName ? `Gemini Nmap Reports/${profile.folderName}` : 'Gemini Nmap Reports';
-    const args = ['upload', '--folder-name', folderName, '--files', ...existingFiles];
+    const folderName = 'Nmap Reports';
+    const dayFolderName = context.dayFolderName || formatDriveDayFolder();
+    const args = ['upload', '--folder-name', folderName, '--day-folder-name', dayFolderName, '--files', ...existingFiles];
     if (googleDrive.folderId) args.splice(1, 0, '--folder-id', googleDrive.folderId);
 
     const fileNames = existingFiles.map(filePath => path.basename(filePath)).join(', ');
@@ -330,6 +371,10 @@ async function uploadReportFilesToDrive(socket, filePaths, profile, context = {}
             .map(file => file.webViewLink)
             .filter(Boolean)
             .forEach(link => logEvent(socket, 'report', `Google Drive file link: ${link}`));
+        if (context.reportPath) {
+            saveDriveMetadata(context.reportPath, result);
+            io.emit('reports_refresh');
+        }
         io.emit('google_drive_upload_complete', { ...result, label });
     } else {
         logEvent(socket, 'error', `Google Drive upload failed for ${label}: ${result.error || 'Unknown error'}`);
@@ -724,13 +769,14 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                                 logEvent(socket, 'error', `PDF generation failed for ${reportName}: ${pdfErr.message}`);
                             }
                             logEvent(socket, 'report', `Report generated: ${reportName}${pdfReady ? ` and ${pdfName}` : ''}`);
-                            io.emit('report_ready', {
+                            const reportPayload = {
                                 url: reportUrl,
                                 pdfUrl: pdfReady ? pdfUrl : null,
                                 name: reportName,
                                 pdfName: pdfReady ? pdfName : null,
                                 customerProfile: profile
-                            });
+                            };
+                            io.emit('report_ready', reportPayload);
                             const history = loadJSON(HISTORY_PATH, []);
                             history.unshift({
                                 timestamp: new Date().toISOString(),
@@ -744,7 +790,20 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                             saveJSON(HISTORY_PATH, history.slice(0, 50));
                             if (['complete', 'quick'].includes(reportScanKind)) {
                                 const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
-                                uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, { label: uploadLabel })
+                                uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, {
+                                    label: uploadLabel,
+                                    reportPath,
+                                    dayFolderName: formatDriveDayFolder(reportDate)
+                                })
+                                    .then(result => {
+                                        if (!result?.success) return;
+                                        const metadata = loadDriveMetadata(reportPath);
+                                        io.emit('report_ready', {
+                                            ...reportPayload,
+                                            driveHtmlUrl: findDriveLink(metadata, reportName),
+                                            drivePdfUrl: pdfReady ? findDriveLink(metadata, pdfName) : null
+                                        });
+                                    })
                                     .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
                             }
                         });
@@ -947,7 +1006,9 @@ io.on('connection', (socket) => {
                 : [entry.name];
             files.forEach(f => {
                 const pdfName = f.replace(/\.html$/i, '.pdf');
+                const reportPath = path.join(folderPath, f);
                 const pdfPath = path.join(folderPath, pdfName);
+                const driveMetadata = loadDriveMetadata(reportPath);
                 const urlBase = folder ? `/reports/${folder}` : '/reports';
                 reports.push({
                     name: f,
@@ -955,7 +1016,9 @@ io.on('connection', (socket) => {
                     url: `${urlBase}/${f}`,
                     pdfName: fs.existsSync(pdfPath) ? pdfName : null,
                     pdfUrl: fs.existsSync(pdfPath) ? `${urlBase}/${pdfName}` : null,
-                    date: fs.statSync(path.join(folderPath, f)).mtime
+                    driveHtmlUrl: findDriveLink(driveMetadata, f),
+                    drivePdfUrl: fs.existsSync(pdfPath) ? findDriveLink(driveMetadata, pdfName) : null,
+                    date: fs.statSync(reportPath).mtime
                 });
             });
         });

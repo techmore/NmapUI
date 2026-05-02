@@ -68,6 +68,17 @@ function renderCVELink(cveText) {
     return `<a href="https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}" target="_blank" rel="noopener noreferrer" class="block text-red-700 underline decoration-red-300 underline-offset-2 hover:text-red-900">${safeText}</a>`;
 }
 
+function reportActionLink({ href, title, icon, download = false, disabled = false }) {
+    if (disabled || !href) {
+        return `<span title="${escapeHTML(title)}" class="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-400"><i data-lucide="${icon}" class="size-4"></i></span>`;
+    }
+    return `<a href="${escapeHTML(href)}" ${download ? 'download' : 'target="_blank" rel="noopener noreferrer"'} title="${escapeHTML(title)}" aria-label="${escapeHTML(title)}" class="inline-flex size-8 items-center justify-center rounded-lg border border-olive-200 bg-white text-olive-700 transition-colors hover:border-olive-300 hover:bg-olive-50 hover:text-olive-950"><i data-lucide="${icon}" class="size-4"></i></a>`;
+}
+
+function refreshLucideIcons() {
+    if (window.lucide?.createIcons) window.lucide.createIcons();
+}
+
 function getCVECountsFromRows() {
     return Array.from(document.querySelectorAll('#discovery-table tbody tr')).reduce((totals, row) => {
         totals.high += Number(row.dataset.highCveCount || 0);
@@ -251,18 +262,20 @@ function initializeScanRuntime(socket) {
     socket.on('report_ready', (data) => {
         const reportStatus = document.getElementById('report-status');
         if (reportStatus) {
-            const pdfActions = data.pdfUrl ? `
-                <a href="${data.pdfUrl}" target="_blank" class="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors">VIEW PDF</a>
-                <a href="${data.pdfUrl}" download class="px-4 py-2 bg-white text-red-700 border border-red-200 text-xs font-bold rounded-lg hover:bg-red-50 transition-colors">DOWNLOAD PDF</a>
-            ` : '';
+            const actions = [
+                reportActionLink({ href: data.url, title: 'Open HTML report', icon: 'file-code-2' }),
+                reportActionLink({ href: data.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !data.pdfUrl }),
+                reportActionLink({ href: data.pdfUrl, title: 'Download PDF', icon: 'download', download: true, disabled: !data.pdfUrl }),
+                reportActionLink({ href: data.driveHtmlUrl || data.drivePdfUrl, title: 'Open in Google Drive', icon: 'cloud', disabled: !(data.driveHtmlUrl || data.drivePdfUrl) })
+            ].join('');
             reportStatus.classList.remove('hidden');
             document.getElementById('report-status-text').innerHTML = `
                 <div class="flex flex-wrap items-center gap-3">
-                    <span class="flex-1 text-emerald-900 font-medium">Report Ready: <strong>${data.name}</strong>${data.customerProfile ? `<span class="block text-xs text-emerald-700">${data.customerProfile.folderName}</span>` : ''}</span>
-                    <a href="${data.url}" target="_blank" class="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors">VIEW HTML</a>
-                    ${pdfActions}
+                    <span class="min-w-0 flex-1 text-sm text-emerald-900 font-medium">Report Ready: <strong>${escapeHTML(data.name)}</strong>${data.customerProfile ? `<span class="block truncate text-xs text-emerald-700">${escapeHTML(data.customerProfile.folderName)}</span>` : ''}</span>
+                    <div class="flex items-center gap-1.5">${actions}</div>
                 </div>
             `;
+            refreshLucideIcons();
         }
         socket.emit('get_reports');
     });
@@ -323,25 +336,34 @@ function initializeScanRuntime(socket) {
                 reportsStatus.textContent = '';
                 reportsStatus.classList.add('hidden');
             }
-            reportsList.innerHTML = data.map(report => `
-                <div class="bg-white border border-olive-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="size-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            reportsList.innerHTML = data.map(report => {
+                const actions = [
+                    reportActionLink({ href: report.url, title: 'Open HTML report', icon: 'file-code-2' }),
+                    reportActionLink({ href: report.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !report.pdfUrl }),
+                    reportActionLink({ href: report.pdfUrl, title: 'Download PDF', icon: 'download', download: true, disabled: !report.pdfUrl }),
+                    reportActionLink({ href: report.driveHtmlUrl || report.drivePdfUrl, title: 'Open in Google Drive', icon: 'cloud', disabled: !(report.driveHtmlUrl || report.drivePdfUrl) })
+                ].join('');
+                return `
+                    <div class="bg-white border border-olive-200 rounded-lg p-3 shadow-sm transition-shadow hover:shadow-md">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <h4 class="truncate text-sm font-bold text-olive-900" title="${escapeHTML(report.name)}">${escapeHTML(report.name)}</h4>
+                                <p class="mt-0.5 truncate font-mono text-[10px] text-olive-500" title="${escapeHTML(report.folder || '')}">${escapeHTML(report.folder || 'reports')}</p>
+                            </div>
+                            <span class="shrink-0 text-[10px] font-bold uppercase text-olive-400">${new Date(report.date).toLocaleDateString()}</span>
                         </div>
-                        <span class="text-[10px] font-bold text-olive-400 uppercase tracking-widest">${new Date(report.date).toLocaleDateString()}</span>
+                        <div class="mt-3 flex items-center justify-between gap-2">
+                            <span class="text-[10px] font-medium text-olive-500">${report.driveHtmlUrl || report.drivePdfUrl ? 'Drive synced' : 'Local only'}</span>
+                            <div class="flex items-center gap-1.5">${actions}</div>
+                        </div>
                     </div>
-                    <h4 class="text-olive-900 font-bold mb-1 truncate" title="${report.name}">${report.name}</h4>
-                    ${report.folder ? `<p class="mb-4 font-mono text-[10px] text-olive-500 truncate" title="${report.folder}">${report.folder}</p>` : '<div class="mb-4"></div>'}
-                    <div class="grid gap-2 sm:grid-cols-2">
-                        <a href="${report.url}" target="_blank" class="block text-center py-2 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl hover:bg-emerald-100 transition-colors">VIEW HTML</a>
-                        ${report.pdfUrl ? `<a href="${report.pdfUrl}" target="_blank" class="block text-center py-2 bg-red-50 text-red-700 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors">VIEW PDF</a>` : ''}
-                        ${report.pdfUrl ? `<a href="${report.pdfUrl}" download class="block text-center py-2 bg-white text-red-700 border border-red-200 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors sm:col-span-2">DOWNLOAD PDF</a>` : `<span class="block text-center py-2 bg-zinc-50 text-zinc-500 text-xs font-bold rounded-xl sm:col-span-2">PDF NOT GENERATED</span>`}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
+            refreshLucideIcons();
         }
     });
+
+    socket.on('reports_refresh', () => socket.emit('get_reports'));
 }
 
 function renderHop(data) {
