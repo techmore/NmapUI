@@ -809,6 +809,183 @@ function parseNmapXML(xmlPath, onParsed = null) {
     });
 }
 
+function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
+    const profile = getCustomerFingerprintProfile();
+    const reportDir = path.join(REPORTS_DIR, profile.folderName);
+    if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
+    const reportDate = new Date();
+    const reportTimestamp = formatReportTimestamp(reportDate);
+    const reportDisplayTimestamp = formatReportDisplayTimestamp(reportDate);
+    const reportBaseName = `${profile.reportLabel}-${reportTimestamp}`;
+    const reportName = `${reportBaseName}.html`;
+    const pdfName = `${reportBaseName}.pdf`;
+    const reportPath = path.join(reportDir, reportName);
+    const pdfPath = path.join(reportDir, pdfName);
+    const reportUrl = `/reports/${profile.folderName}/${reportName}`;
+    const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
+    const xslPath = path.join(__dirname, 'nmap-modern.xsl');
+    const xsltCommand = [
+        'xsltproc',
+        '-o', shellQuote(reportPath),
+        '--stringparam', 'customer_name', shellQuote(profile.prefix),
+        '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
+        '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
+        '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
+        '--stringparam', 'public_ip', shellQuote(profile.publicIP),
+        shellQuote(xslPath),
+        shellQuote(xmlPath)
+    ].join(' ');
+    exec(xsltCommand, (err) => {
+        if (!err) {
+            generatePDF(reportPath, pdfPath, (pdfErr) => {
+                const pdfReady = !pdfErr && fs.existsSync(pdfPath);
+                if (pdfErr) {
+                    logEvent(socket, 'error', `PDF generation failed for ${reportName}: ${pdfErr.message}`);
+                }
+                logEvent(socket, 'report', `Report generated: ${reportName}${pdfReady ? ` and ${pdfName}` : ''}`);
+                const reportPayload = {
+                    url: reportUrl,
+                    pdfUrl: pdfReady ? pdfUrl : null,
+                    name: reportName,
+                    pdfName: pdfReady ? pdfName : null,
+                    customerProfile: profile
+                };
+                io.emit('report_ready', reportPayload);
+                const history = loadJSON(HISTORY_PATH, []);
+                history.unshift({
+                    timestamp: new Date().toISOString(),
+                    target: currentTarget,
+                    duration,
+                    hostCount: discoveredHosts.length,
+                    reportUrl,
+                    pdfUrl: pdfReady ? pdfUrl : null,
+                    customerProfile: profile
+                });
+                saveJSON(HISTORY_PATH, history.slice(0, 50));
+                if (['complete', 'quick'].includes(reportScanKind)) {
+                    const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
+                    uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, {
+                        label: uploadLabel,
+                        reportPath,
+                        dayFolderName: formatDriveDayFolder(reportDate)
+                    })
+                        .then(result => {
+                            if (!result?.success) return;
+                            const metadata = loadDriveMetadata(reportPath);
+                            io.emit('report_ready', {
+                                ...reportPayload,
+                                driveHtmlUrl: findDriveLink(metadata, reportName),
+                                drivePdfUrl: pdfReady ? findDriveLink(metadata, pdfName) : null
+                            });
+                        })
+                        .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
+                }
+            });
+        } else {
+            logEvent(socket, 'error', `HTML report generation failed: ${err.message}`);
+        }
+    });
+}
+
+function runNmapFallbackPass(socket, args, phase, xmlFile, label, options = {}) {
+    return new Promise((resolve) => {
+        const startedAt = Date.now();
+        const commandSpec = getPrivilegedCommand(NMAP_PATH, args);
+        let stderrBuffer = '';
+
+        currentScanPhase = phase;
+        scanStartTime = startedAt;
+        io.emit('scan_started', { phase, target: 'Multiple Targets', startTime: scanStartTime, scanKind: options.scanKind || currentScanKind });
+        logEvent(socket, 'job', `Starting Phase ${phase} fallback pass: ${label}...`);
+        logEvent(socket, 'scan', `Nmap command: sudo -n ${NMAP_PATH} ${args.join(' ')}`);
+
+        const nmap = spawn(commandSpec.command, commandSpec.args);
+        currentScan = nmap;
+
+        nmap.stderr.on('data', data => {
+            const errText = data.toString();
+            stderrBuffer = compactErrorText(`${stderrBuffer}\n${errText}`);
+            if (!errText.includes('Warning: ')) console.error('[NMAP ERROR]', errText);
+            if (isSudoAuthFailure(errText)) {
+                logEvent(socket, 'error', 'Nmap requires passwordless sudo for this runtime. Configure sudoers for nmap or run with the required privileges.');
+            }
+        });
+
+        nmap.on('error', error => {
+            currentScan = null;
+            const duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+            logEvent(socket, 'error', `Failed to start Phase ${phase} fallback pass: ${error.message}`);
+            resolve({ success: false, duration, error: error.message, xmlPath: path.join(__dirname, xmlFile) });
+        });
+
+        nmap.on('close', (code, signal) => {
+            currentScan = null;
+            const duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+            const statusText = code === 0 ? 'complete' : `ended with code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`;
+            const xmlPath = path.join(__dirname, xmlFile);
+            const complete = isCompleteNmapXML(xmlPath);
+            logEvent(socket, complete ? 'job' : 'error', `Phase ${phase} fallback pass ${statusText} in ${duration}s. XML ${complete ? 'complete' : 'incomplete'}.`);
+            io.emit('phase_complete', { phase, duration, ...getScanStats() });
+            resolve({
+                success: complete,
+                duration,
+                error: compactErrorText(stderrBuffer || `Phase ${phase} fallback pass ${statusText}. XML ${complete ? 'complete' : 'incomplete'}.`),
+                xmlPath
+            });
+        });
+    });
+}
+
+async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
+    const noScriptXml = 'phase2_no_script.xml';
+    const vulnersXml = 'phase2_vulners.xml';
+    [noScriptXml, vulnersXml].forEach(file => {
+        const filePath = path.join(__dirname, file);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    });
+
+    logEvent(socket, 'job', 'Starting Phase 2 fallback recovery as two passes: 2.1 service/OS detection, then 2.2 vulners only.');
+    const pass21 = await runNmapFallbackPass(socket, [
+        '-sS', '-sV', '-O', '-Pn',
+        '-T3',
+        '--open',
+        '-oX', noScriptXml,
+        '-iL', 'targets.tmp'
+    ], 2.1, noScriptXml, 'service + OS detection without scripts', { scanKind: reportScanKind });
+    if (!pass21.success) {
+        logEvent(socket, 'error', `Phase 2.1 fallback failed: ${pass21.error}`);
+        io.emit('scan_complete', { phase: 2.1, duration: pass21.duration, ...getScanStats(), status: 'failed', error: pass21.error });
+        return;
+    }
+
+    parseNmapXML(pass21.xmlPath, (parsedStats) => {
+        logEvent(socket, 'job', `Phase 2.1 fallback XML parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
+        io.emit('phase_stats', { phase: 2.1, ...parsedStats });
+    });
+
+    const pass22 = await runNmapFallbackPass(socket, [
+        '-sV',
+        '--script', 'vulners',
+        '--script-args', 'threads=8',
+        '-iL', 'targets.tmp',
+        '-oX', vulnersXml
+    ], 2.2, vulnersXml, 'vulners only', { scanKind: reportScanKind });
+    if (!pass22.success) {
+        logEvent(socket, 'error', `Phase 2.2 fallback failed: ${pass22.error}`);
+        io.emit('scan_complete', { phase: 2.2, duration: pass22.duration, ...getScanStats(), status: 'failed', error: pass22.error });
+        return;
+    }
+
+    parseNmapXML(pass22.xmlPath, (parsedStats) => {
+        logEvent(socket, 'job', `Phase 2.2 fallback XML parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
+        io.emit('phase_stats', { phase: 2.2, ...parsedStats });
+    });
+
+    const totalDuration = (Number(originalDuration || 0) + Number(pass21.duration || 0) + Number(pass22.duration || 0)).toFixed(2);
+    generateReportFromXml(socket, pass22.xmlPath, totalDuration, reportScanKind);
+    io.emit('scan_complete', { phase: 2.2, duration: totalDuration, ...getScanStats(), status: 'fallback_complete' });
+}
+
 function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
     if (currentScan && phase === 1) {
         if (socket) logEvent(socket, 'error', 'A scan is already running.');
@@ -917,6 +1094,13 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                         customerProfile: getCustomerFingerprintProfile(),
                         error: failureError
                     });
+                    if (options.fallbackOnIncomplete) {
+                        runPhase2Fallback(socket, duration, reportScanKind).catch(error => {
+                            logEvent(socket, 'error', `Phase 2 fallback recovery failed: ${error.message}`);
+                            io.emit('scan_complete', { phase, duration, ...phaseStats, status: 'failed', error: error.message });
+                        });
+                        return;
+                    }
                     io.emit('scan_complete', { phase, duration, ...phaseStats, status: 'failed', error: failureError });
                     return;
                 }
@@ -924,85 +1108,12 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                     logEvent(socket, 'job', `Phase ${phase} XML results parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
                     io.emit('phase_stats', { phase, ...parsedStats });
                 });
-                const profile = getCustomerFingerprintProfile();
-                const reportDir = path.join(REPORTS_DIR, profile.folderName);
-                if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
-                const reportDate = new Date();
-                const reportTimestamp = formatReportTimestamp(reportDate);
-                const reportDisplayTimestamp = formatReportDisplayTimestamp(reportDate);
-                const reportBaseName = `${profile.reportLabel}-${reportTimestamp}`;
-                const reportName = `${reportBaseName}.html`;
-                const pdfName = `${reportBaseName}.pdf`;
-                const reportPath = path.join(reportDir, reportName);
-                const pdfPath = path.join(reportDir, pdfName);
-                const reportUrl = `/reports/${profile.folderName}/${reportName}`;
-                const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
-                const xslPath = path.join(__dirname, 'nmap-modern.xsl');
-                const xsltCommand = [
-                    'xsltproc',
-                    '-o', shellQuote(reportPath),
-                    '--stringparam', 'customer_name', shellQuote(profile.prefix),
-                    '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
-                    '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
-                    '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
-                    '--stringparam', 'public_ip', shellQuote(profile.publicIP),
-                    shellQuote(xslPath),
-                    shellQuote(xmlPath)
-                ].join(' ');
-                exec(xsltCommand, (err) => {
-                    if (!err) {
-                        generatePDF(reportPath, pdfPath, (pdfErr) => {
-                            const pdfReady = !pdfErr && fs.existsSync(pdfPath);
-                            if (pdfErr) {
-                                logEvent(socket, 'error', `PDF generation failed for ${reportName}: ${pdfErr.message}`);
-                            }
-                            logEvent(socket, 'report', `Report generated: ${reportName}${pdfReady ? ` and ${pdfName}` : ''}`);
-                            const reportPayload = {
-                                url: reportUrl,
-                                pdfUrl: pdfReady ? pdfUrl : null,
-                                name: reportName,
-                                pdfName: pdfReady ? pdfName : null,
-                                customerProfile: profile
-                            };
-                            io.emit('report_ready', reportPayload);
-                            const history = loadJSON(HISTORY_PATH, []);
-                            history.unshift({
-                                timestamp: new Date().toISOString(),
-                                target: currentTarget,
-                                duration,
-                                hostCount: discoveredHosts.length,
-                                reportUrl,
-                                pdfUrl: pdfReady ? pdfUrl : null,
-                                customerProfile: profile
-                            });
-                            saveJSON(HISTORY_PATH, history.slice(0, 50));
-                            if (['complete', 'quick'].includes(reportScanKind)) {
-                                const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
-                                uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, {
-                                    label: uploadLabel,
-                                    reportPath,
-                                    dayFolderName: formatDriveDayFolder(reportDate)
-                                })
-                                    .then(result => {
-                                        if (!result?.success) return;
-                                        const metadata = loadDriveMetadata(reportPath);
-                                        io.emit('report_ready', {
-                                            ...reportPayload,
-                                            driveHtmlUrl: findDriveLink(metadata, reportName),
-                                            drivePdfUrl: pdfReady ? findDriveLink(metadata, pdfName) : null
-                                        });
-                                    })
-                                    .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
-                            }
-                        });
-                    } else {
-                        logEvent(socket, 'error', `HTML report generation failed: ${err.message}`);
-                    }
-                });
+                generateReportFromXml(socket, xmlPath, duration, reportScanKind);
+                if (options.deferScanComplete) io.emit('scan_complete', { phase, duration, ...phaseStats });
             }, 1000);
         }
         if (onComplete) onComplete();
-        else io.emit('scan_complete', { phase, duration, ...phaseStats });
+        else if (!options.deferScanComplete) io.emit('scan_complete', { phase, duration, ...phaseStats });
     });
 }
 
@@ -1100,7 +1211,7 @@ function startChainedScan(socket, target, usePn = false) {
                 }),
                 2,
                 null,
-                { deferHostUpdates: true, scanKind }
+                { deferHostUpdates: true, scanKind, fallbackOnIncomplete: true, deferScanComplete: true }
             );
             return;
         }
