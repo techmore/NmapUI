@@ -82,7 +82,8 @@ const BREW_PATH = resolveExecutable(process.env.BREW_PATH, [
 const GOWITNESS_PATH = resolveExecutable(process.env.GOWITNESS_PATH, [
     '/opt/homebrew/bin/gowitness',
     '/usr/local/bin/gowitness',
-    'gowitness'
+    'gowitness',
+    '~/go/bin/gowitness'
 ]);
 let customerProfileConfig = loadJSON(CONFIG_PATH, {}).customerProfile || {};
 let appConfig = loadJSON(CONFIG_PATH, {});

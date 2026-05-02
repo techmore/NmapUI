@@ -327,12 +327,64 @@
     #discovery-table td:nth-child(12) { width: 5%; }
 
     #discovery-table .screenshot-cell img {
-        width: 72px;
-        height: 40px;
+        width: 108px;
+        height: 60px;
         object-fit: cover;
         border-radius: 4px;
         border: 1px solid oklch(80% 0.035 110);
         background-color: oklch(94% 0.018 110);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #discovery-table .screenshot-cell img:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Lightbox */
+    #lightbox {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgb(0 0 0 / 0.9);
+        padding: 2rem;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #lightbox.active {
+        display: flex;
+    }
+
+    #lightbox img {
+        max-width: 90vw;
+        max-height: 90vh;
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    #lightbox-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: white;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: oklch(22% 0.025 110);
+        transition: background-color 0.2s ease;
+    }
+
+    #lightbox-close:hover {
+        background: oklch(91% 0.020 110);
     }
 
     #discovery-table .screenshot-cell span {
@@ -1473,7 +1525,7 @@
             </div>
         </div>
     </div>
-
+<!--
     <div id="scan-console-panel" class="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 shadow-inner">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
             <div>
@@ -1490,7 +1542,7 @@
             <div class="text-zinc-600">No scan events yet.</div>
         </div>
     </div>
-
+-->
     <!-- Scan Feedback Container -->
     <div class="relative mt-6 hidden">
         <div id="feedback-container" class="p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-900 space-y-2 empty:hidden min-h-[3rem] transition-all duration-500">
@@ -1738,6 +1790,27 @@
     </div>
     </div>
 
+    <script>
+        function openLightbox(src) {
+            document.getElementById('lightbox-img').src = src;
+            document.getElementById('lightbox').classList.remove('hidden');
+            document.getElementById('lightbox').classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.add('hidden');
+            document.getElementById('lightbox').classList.remove('flex');
+            document.getElementById('lightbox-img').src = '';
+            document.body.style.overflow = '';
+        }
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeLightbox();
+        });
+        document.getElementById('lightbox').addEventListener('click', function(e) {
+            if (e.target === this) closeLightbox();
+        });
+    </script>
+
     <script src="/static/js/scan_runtime.js"></script>
     <script src="/static/js/scan_banners.js"></script>
     <script src="/static/js/report_status.js"></script>
@@ -1770,6 +1843,12 @@
         <div id="log-entries" class="flex-1 overflow-y-auto bg-olive-950 font-mono text-xs px-4 py-2 space-y-0.5"></div>
     </div>
     <!-- ── /Audit Log Panel ─────────────────────────────────────────────── -->
+
+<!-- Lightbox for screenshots -->
+    <div id="lightbox" class="fixed inset-0 z-[9999] bg-black/90 hidden" role="dialog" aria-modal="true" aria-label="Enlarged screenshot">
+        <button id="lightbox-close" onclick="closeLightbox()" class="absolute top-4 right-4 w-12 h-12 rounded-full bg-white border-none cursor-pointer flex items-center justify-center text-2xl text-olive-950 hover:bg-olive-100 transition-colors" aria-label="Close lightbox">&times;</button>
+        <img id="lightbox-img" src="" alt="Enlarged screenshot" class="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl">
+    </div>
 
 </body>
 </html>

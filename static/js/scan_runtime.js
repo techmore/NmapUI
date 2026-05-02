@@ -88,10 +88,8 @@ function renderScreenshotCell(data) {
     } : null);
     if (!shot?.dashboardUrl) return '<span>--</span>';
     const title = shot.url || 'Open gowitness screenshot';
-    return `
-        <a href="${escapeHTML(shot.dashboardUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHTML(title)}">
-            <img src="${escapeHTML(shot.dashboardUrl)}" alt="${escapeHTML(title)}">
-        </a>`;
+    const dashUrl = escapeHTML(shot.dashboardUrl);
+    return `<img src="${dashUrl}" alt="${escapeHTML(title)}" title="${escapeHTML(title)}" onclick="openLightbox(this.src)">`;
 }
 
 function reportActionLink({ href, title, icon, download = false, disabled = false }) {
