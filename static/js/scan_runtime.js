@@ -448,8 +448,14 @@ function setScanUIActive(phase, scanKind = activeScanKind || 'quick') {
         button.querySelector('.scan-button-pulse')?.classList.toggle('hidden', button !== activeButton);
     });
 
-    if (phase === 1) document.getElementById('quick-scan-indicator').classList.remove('hidden');
-    if (phase >= 2) document.getElementById('deep-scan-indicator').classList.remove('hidden');
+    if (phase === 1) {
+        document.getElementById('quick-scan-indicator')?.classList.remove('hidden');
+        document.getElementById('deep-scan-indicator')?.classList.add('hidden');
+    }
+    if (phase >= 2) {
+        document.getElementById('quick-scan-indicator')?.classList.add('hidden');
+        document.getElementById('deep-scan-indicator')?.classList.remove('hidden');
+    }
 }
 
 function resetScanUI() {

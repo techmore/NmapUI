@@ -410,6 +410,44 @@ Updated: 2026
 	            display: none;
 	          }
 
+          .report-network-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+          }
+
+          .report-network-grid div,
+          .report-traceroute-summary {
+            background: #f5f6f3;
+            border: 1px solid #d8dbc7;
+            border-radius: 10px;
+            padding: 12px;
+          }
+
+          .report-network-grid span,
+          .report-traceroute-summary span {
+            display: block;
+            font-size: 0.7rem;
+            color: #636b54;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 4px;
+          }
+
+          .report-network-grid strong,
+          .report-traceroute-summary strong {
+            display: block;
+            color: #25291f;
+            font-size: 0.9rem;
+            overflow-wrap: anywhere;
+          }
+
+          .pdf-fixed-header,
+          .pdf-fixed-footer {
+            display: none;
+          }
+
 	          @media print {
 	            html {
 	              font-size: 7px !important;
@@ -445,6 +483,44 @@ Updated: 2026
 	              -webkit-print-color-adjust: exact !important;
 	              print-color-adjust: exact !important;
 	            }
+
+            .pdf-fixed-header {
+              display: flex !important;
+              position: fixed !important;
+              top: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              z-index: 1 !important;
+              height: 8mm !important;
+              align-items: center !important;
+              justify-content: space-between !important;
+              color: #636b54 !important;
+              font-size: 6px !important;
+              padding: 0 2mm !important;
+              background: rgba(233,235,224,0.92) !important;
+              border-bottom: 1px solid #d8dbc7 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            .pdf-fixed-header a {
+              color: #636b54 !important;
+              text-decoration: none !important;
+            }
+
+            .pdf-fixed-footer {
+              display: block !important;
+              position: fixed !important;
+              right: 2mm !important;
+              bottom: 1.5mm !important;
+              z-index: 1 !important;
+              color: #636b54 !important;
+              font-size: 6px !important;
+            }
+
+            .pdf-fixed-footer::after {
+              content: counter(page) "/" counter(pages);
+            }
 
 	            .pdf-cover * {
 	              color: inherit !important;
@@ -782,15 +858,15 @@ Updated: 2026
 	              border-color: #bcc2a9 !important;
             }
 
-	            .pdf-network-grid {
+	            .report-network-grid {
 	              display: grid !important;
 	              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 	              gap: 2px !important;
 	              margin-bottom: 2px !important;
             }
 
-	            .pdf-network-grid div,
-	            .pdf-traceroute-summary {
+	            .report-network-grid div,
+	            .report-traceroute-summary {
 	              background: #f5f6f3 !important;
 	              border: 1px solid #bcc2a9 !important;
 	              border-radius: 3px !important;
@@ -805,7 +881,7 @@ Updated: 2026
 
 	            @page {
 	              size: Letter portrait;
-	              margin: 3mm;
+	              margin: 10mm 3mm 8mm 3mm;
 	            }
           }
         </style>
@@ -864,6 +940,12 @@ Updated: 2026
           </div>
         </section>
 
+        <div class="pdf-fixed-header">
+          <span>TM-NmapUI <xsl:value-of select="$techmore_version"/></span>
+          <a href="https://techmore.github.io/TM-NMapUI-www">https://techmore.github.io/TM-NMapUI-www</a>
+        </div>
+        <div class="pdf-fixed-footer"></div>
+
         <!-- Fixed Navigation -->
         <nav class="fixed top-0 left-0 right-0 bg-white border-b border-olive-200 z-50 shadow-sm">
 	          <div class="report-shell">
@@ -908,7 +990,7 @@ Updated: 2026
               <xsl:value-of select="/nmaprun/@startstr"/> – <xsl:value-of select="/nmaprun/runstats/finished/@timestr"/>
             </p>
 
-            <div class="pdf-only pdf-network-grid">
+            <div class="report-network-grid">
               <div>
                 <span class="block text-[7px] uppercase tracking-wide text-olive-600">Local IP</span>
                 <strong class="block text-[8px] text-olive-900">
@@ -947,7 +1029,7 @@ Updated: 2026
               </div>
             </div>
 
-            <div class="pdf-only pdf-traceroute-summary mb-6">
+            <div class="report-traceroute-summary mb-6">
               <span class="block text-[7px] uppercase tracking-wide text-olive-600">Traceroute</span>
               <strong class="block text-[8px] text-olive-900">
                 <xsl:choose>
