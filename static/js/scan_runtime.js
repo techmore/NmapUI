@@ -80,6 +80,20 @@ function renderCVELink(cveText) {
     return `<a href="https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}" target="_blank" rel="noopener noreferrer" class="block text-red-700 underline decoration-red-300 underline-offset-2 hover:text-red-900">${safeText}</a>`;
 }
 
+function renderScreenshotCell(data) {
+    const screenshots = Array.isArray(data.screenshots) ? data.screenshots : [];
+    const shot = screenshots[screenshots.length - 1] || (data.screenshotUrl ? {
+        dashboardUrl: data.screenshotUrl,
+        url: data.screenshotTarget || data.screenshotUrl
+    } : null);
+    if (!shot?.dashboardUrl) return '<span>--</span>';
+    const title = shot.url || 'Open gowitness screenshot';
+    return `
+        <a href="${escapeHTML(shot.dashboardUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHTML(title)}">
+            <img src="${escapeHTML(shot.dashboardUrl)}" alt="${escapeHTML(title)}">
+        </a>`;
+}
+
 function reportActionLink({ href, title, icon, download = false, disabled = false }) {
     if (disabled || !href) {
         return `<span title="${escapeHTML(title)}" class="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-400"><i data-lucide="${icon}" class="size-4"></i></span>`;
@@ -496,6 +510,7 @@ function updateHostRow(data) {
             <td class="px-0 py-0.5 text-[10px] text-olive-700 latency-cell">${data.latency || '--'}</td>
             <td class="px-0 py-0.5 text-[10px] text-olive-700 ports-cell">${data.ports || '--'}</td>
             <td class="px-0 py-0.5 text-[10px] text-olive-700 version-cell">${data.version || '--'}</td>
+            <td class="px-0 py-0.5 screenshot-cell">${renderScreenshotCell(data)}</td>
             <td class="px-0 py-0.5 text-right"><button class="text-[10px] font-bold text-olive-600 bg-olive-100 hover:bg-olive-200 px-0 py-0.5 rounded-full transition-all">DETAILS</button></td>
         `;
         tableBody.appendChild(row);
@@ -516,6 +531,7 @@ function updateHostRow(data) {
     if (data.latency) row.querySelector('.latency-cell').textContent = data.latency;
     if (data.ports) row.querySelector('.ports-cell').textContent = data.ports;
     if (data.version) row.querySelector('.version-cell').textContent = data.version;
+    if (data.screenshots || data.screenshotUrl) row.querySelector('.screenshot-cell').innerHTML = renderScreenshotCell(data);
     
     const highCVEs = getHighCVEList(data);
     const lowCVECount = Number(data.lowCVECount || 0);

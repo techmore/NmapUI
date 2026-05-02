@@ -17,6 +17,7 @@ BREW_PACKAGES=(
 
 OPTIONAL_BREW_PACKAGES=(
     "wkhtmltopdf"
+    "gowitness"
 )
 
 echo ""
@@ -104,6 +105,14 @@ for cmd in "${verify_commands[@]}"; do
         echo "OK: $BINARY - $VERSION"
     fi
 done
+
+if command -v gowitness &> /dev/null; then
+    VERSION=$(gowitness --version 2>&1 | head -n1 || echo "installed")
+    echo "OK: gowitness - $VERSION"
+else
+    echo "OPTIONAL MISSING: gowitness"
+    echo "Web screenshot capture will be skipped until gowitness is installed."
+fi
 
 echo ""
 echo "========================================"

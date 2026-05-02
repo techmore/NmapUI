@@ -304,25 +304,41 @@
     #discovery-table th:nth-child(1),
     #discovery-table td:nth-child(1) { width: 3%; }
     #discovery-table th:nth-child(2),
-    #discovery-table td:nth-child(2) { width: 12%; }
+    #discovery-table td:nth-child(2) { width: 11%; }
     #discovery-table th:nth-child(3),
-    #discovery-table td:nth-child(3) { width: 16%; }
+    #discovery-table td:nth-child(3) { width: 14%; }
     #discovery-table th:nth-child(4),
-    #discovery-table td:nth-child(4) { width: 9%; }
+    #discovery-table td:nth-child(4) { width: 8%; }
     #discovery-table th:nth-child(5),
-    #discovery-table td:nth-child(5) { width: 11%; }
+    #discovery-table td:nth-child(5) { width: 10%; }
     #discovery-table th:nth-child(6),
-    #discovery-table td:nth-child(6) { width: 12%; }
+    #discovery-table td:nth-child(6) { width: 11%; }
     #discovery-table th:nth-child(7),
     #discovery-table td:nth-child(7) { width: 10%; }
     #discovery-table th:nth-child(8),
-    #discovery-table td:nth-child(8) { width: 6%; }
+    #discovery-table td:nth-child(8) { width: 5%; }
     #discovery-table th:nth-child(9),
     #discovery-table td:nth-child(9) { width: 7%; }
     #discovery-table th:nth-child(10),
-    #discovery-table td:nth-child(10) { width: 9%; }
+    #discovery-table td:nth-child(10) { width: 8%; }
     #discovery-table th:nth-child(11),
-    #discovery-table td:nth-child(11) { width: 5%; }
+    #discovery-table td:nth-child(11) { width: 8%; }
+    #discovery-table th:nth-child(12),
+    #discovery-table td:nth-child(12) { width: 5%; }
+
+    #discovery-table .screenshot-cell img {
+        width: 72px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid oklch(80% 0.035 110);
+        background-color: oklch(94% 0.018 110);
+    }
+
+    #discovery-table .screenshot-cell span {
+        font-size: 10px;
+        color: oklch(46% 0.045 110);
+    }
 
     .modal-overlay {
         position: fixed;
@@ -1664,6 +1680,7 @@
                                         </div>
                                     </div>
                                 </th>
+                                <th class="w-28 px-0 py-0.5 text-left" data-column="screenshot" data-fixed="true">Screenshot</th>
                                 <th class="w-20 px-0 py-0.5 text-left" data-column="actions" data-fixed="true">Actions</th>
                             </tr>
                         </thead>
