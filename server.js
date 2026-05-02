@@ -483,6 +483,28 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
     return args;
 }
 
+function compactErrorText(value, maxLength = 4000) {
+    const text = String(value || '').replace(/\s+\n/g, '\n').trim();
+    if (text.length <= maxLength) return text;
+    return text.slice(-maxLength).trim();
+}
+
+function saveFailedScanHistory({ target, duration, hostCount, scanKind, customerProfile, error }) {
+    const history = loadJSON(HISTORY_PATH, []);
+    history.unshift({
+        timestamp: new Date().toISOString(),
+        target,
+        duration,
+        hostCount,
+        scanKind,
+        status: 'failed',
+        error: compactErrorText(error),
+        customerProfile
+    });
+    saveJSON(HISTORY_PATH, history.slice(0, 50));
+    io.emit('reports_refresh');
+}
+
 function setupAutoScan(config) {
     if (autoScanTask) autoScanTask.stop();
     autoScanTask = null;
@@ -735,6 +757,7 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
 
     let currentHostIP = null;
     let hostBuffer = [];
+    let stderrBuffer = '';
 
     nmap.stdout.on('data', (data) => {
         const text = data.toString();
@@ -772,6 +795,7 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
 
     nmap.stderr.on('data', (data) => {
         const errText = data.toString();
+        stderrBuffer = compactErrorText(`${stderrBuffer}\n${errText}`);
         if (!errText.includes('Warning: ')) console.error('[NMAP ERROR]', errText);
         if (isSudoAuthFailure(errText)) {
             logEvent(socket, 'error', 'Nmap requires passwordless sudo for this runtime. Configure sudoers for nmap or run with the required privileges.');
@@ -797,27 +821,17 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
             const reportScanKind = options.scanKind || currentScanKind;
             setTimeout(() => {
                 if (!isCompleteNmapXML(xmlPath)) {
-                    if (options.retryWithoutVulners && !options.retriedWithoutVulners) {
-                        logEvent(socket, 'error', 'Phase 2 XML is incomplete after the vulners/NSE run. Retrying once without NSE scripts so a report can still be generated.');
-                        runNmap(
-                            socket,
-                            buildPhase2Args(true, false, {
-                                includeDefaultScripts: false,
-                                disableScripts: true,
-                                minRate: false,
-                                maxParallelism: 4
-                            }),
-                            phase,
-                            onComplete,
-                            {
-                                deferHostUpdates: true,
-                                scanKind: reportScanKind,
-                                retriedWithoutVulners: true
-                            }
-                        );
-                        return;
-                    }
-                    logEvent(socket, 'error', 'Phase 2 XML is incomplete, likely because Nmap/NSE crashed. Skipping XML parse and report/PDF generation for this run.');
+                    const failureError = compactErrorText(stderrBuffer || `Phase ${phase} scan ${statusText}. XML output was incomplete.`);
+                    logEvent(socket, 'error', 'Phase 2 XML is incomplete, likely because Nmap/NSE crashed. Recording this run as failed so it remains visible in history and reports.');
+                    saveFailedScanHistory({
+                        target: currentTarget,
+                        duration,
+                        hostCount: phaseStats.hostCount,
+                        scanKind: reportScanKind,
+                        customerProfile: getCustomerFingerprintProfile(),
+                        error: failureError
+                    });
+                    io.emit('scan_complete', { phase, duration, ...phaseStats, status: 'failed', error: failureError });
                     return;
                 }
                 parseNmapXML(xmlPath, (parsedStats) => {
@@ -991,17 +1005,17 @@ function startChainedScan(socket, target, usePn = false) {
         fs.writeFileSync('targets.tmp', targets);
 
         if (usePn) {
-            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning ${discoveredHosts.length} host(s) with bounded hostgroups to reduce NSE/vulners crashes. UI details will populate after XML parsing completes.`);
+            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners. UI details will populate after XML parsing completes.`);
             runNmap(
                 socket,
                 buildPhase2Args(true, false, {
                     includeDefaultScripts: false,
                     minRate: false,
-                    maxParallelism: 4
+                    allHostsAtOnce: true
                 }),
                 2,
                 null,
-                { deferHostUpdates: true, scanKind, retryWithoutVulners: true }
+                { deferHostUpdates: true, scanKind }
             );
             return;
         }
@@ -1083,33 +1097,54 @@ io.on('connection', (socket) => {
         io.emit('customer_profile', profile);
     });
     socket.on('get_reports', () => {
-        if (!fs.existsSync(REPORTS_DIR)) return;
         const reports = [];
-        fs.readdirSync(REPORTS_DIR, { withFileTypes: true }).forEach(entry => {
-            const folder = entry.isDirectory() ? entry.name : '';
-            const folderPath = folder ? path.join(REPORTS_DIR, folder) : REPORTS_DIR;
-            if (!entry.isDirectory() && !entry.name.endsWith('.html')) return;
-            const files = entry.isDirectory()
-                ? fs.readdirSync(folderPath).filter(f => f.endsWith('.html'))
-                : [entry.name];
-            files.forEach(f => {
-                const pdfName = f.replace(/\.html$/i, '.pdf');
-                const reportPath = path.join(folderPath, f);
-                const pdfPath = path.join(folderPath, pdfName);
-                const driveMetadata = loadDriveMetadata(reportPath);
-                const urlBase = folder ? `/reports/${folder}` : '/reports';
-                reports.push({
-                    name: f,
-                    folder,
-                    url: `${urlBase}/${f}`,
-                    pdfName: fs.existsSync(pdfPath) ? pdfName : null,
-                    pdfUrl: fs.existsSync(pdfPath) ? `${urlBase}/${pdfName}` : null,
-                    driveHtmlUrl: findDriveLink(driveMetadata, f),
-                    drivePdfUrl: fs.existsSync(pdfPath) ? findDriveLink(driveMetadata, pdfName) : null,
-                    date: fs.statSync(reportPath).mtime
+        if (fs.existsSync(REPORTS_DIR)) {
+            fs.readdirSync(REPORTS_DIR, { withFileTypes: true }).forEach(entry => {
+                const folder = entry.isDirectory() ? entry.name : '';
+                const folderPath = folder ? path.join(REPORTS_DIR, folder) : REPORTS_DIR;
+                if (!entry.isDirectory() && !entry.name.endsWith('.html')) return;
+                const files = entry.isDirectory()
+                    ? fs.readdirSync(folderPath).filter(f => f.endsWith('.html'))
+                    : [entry.name];
+                files.forEach(f => {
+                    const pdfName = f.replace(/\.html$/i, '.pdf');
+                    const reportPath = path.join(folderPath, f);
+                    const pdfPath = path.join(folderPath, pdfName);
+                    const driveMetadata = loadDriveMetadata(reportPath);
+                    const urlBase = folder ? `/reports/${folder}` : '/reports';
+                    reports.push({
+                        name: f,
+                        folder,
+                        url: `${urlBase}/${f}`,
+                        pdfName: fs.existsSync(pdfPath) ? pdfName : null,
+                        pdfUrl: fs.existsSync(pdfPath) ? `${urlBase}/${pdfName}` : null,
+                        driveHtmlUrl: findDriveLink(driveMetadata, f),
+                        drivePdfUrl: fs.existsSync(pdfPath) ? findDriveLink(driveMetadata, pdfName) : null,
+                        date: fs.statSync(reportPath).mtime
+                    });
                 });
             });
-        });
+        }
+        loadJSON(HISTORY_PATH, [])
+            .filter(entry => entry && entry.status === 'failed')
+            .forEach(entry => {
+                const date = entry.timestamp || new Date().toISOString();
+                const scanLabel = entry.scanKind === 'complete' ? 'Complete+PDF' : (entry.scanKind || 'Scan');
+                reports.push({
+                    name: `Failed ${scanLabel} scan - ${new Date(date).toLocaleString()}`,
+                    folder: entry.customerProfile?.folderName || '',
+                    url: null,
+                    pdfName: null,
+                    pdfUrl: null,
+                    driveHtmlUrl: null,
+                    drivePdfUrl: null,
+                    date,
+                    status: 'failed',
+                    error: entry.error || 'Nmap scan failed before a complete XML report was written.',
+                    hostCount: entry.hostCount,
+                    duration: entry.duration
+                });
+            });
         socket.emit('reports_data', reports.sort((a, b) => new Date(b.date) - new Date(a.date)));
     });
 });

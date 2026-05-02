@@ -296,22 +296,26 @@ function initializeScanRuntime(socket) {
                 historyStatus.textContent = '';
                 historyStatus.classList.add('hidden');
             }
-            historyList.innerHTML = data.map(item => `
-                <div class="bg-white border border-olive-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            historyList.innerHTML = data.map(item => {
+                const failed = item.status === 'failed';
+                return `
+                <div class="bg-white border ${failed ? 'border-red-200' : 'border-olive-200'} rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div class="flex justify-between items-start mb-4">
-                        <span class="text-[10px] font-bold text-olive-400 uppercase tracking-widest">${new Date(item.timestamp).toLocaleString()}</span>
-                        <span class="px-2 py-1 bg-olive-100 text-olive-700 text-[10px] font-bold rounded-lg">${item.duration}s</span>
+                        <span class="text-[10px] font-bold ${failed ? 'text-red-500' : 'text-olive-400'} uppercase tracking-widest">${new Date(item.timestamp).toLocaleString()}</span>
+                        <span class="px-2 py-1 ${failed ? 'bg-red-100 text-red-700' : 'bg-olive-100 text-olive-700'} text-[10px] font-bold rounded-lg">${failed ? 'FAILED' : `${item.duration}s`}</span>
                     </div>
                     <div class="mb-4">
                         <h4 class="text-olive-900 font-bold text-lg">${item.customerProfile?.baseName || item.target}</h4>
                         <p class="text-xs text-olive-500">${item.hostCount} Hosts Discovered${item.customerProfile?.folderName ? ` | ${item.customerProfile.folderName}` : ''}</p>
+                        ${failed && item.error ? `<p class="mt-2 line-clamp-2 rounded-lg bg-red-50 p-2 font-mono text-[10px] text-red-700">${escapeHTML(item.error)}</p>` : ''}
                     </div>
                     <div class="grid gap-2 sm:grid-cols-2">
-                        <a href="${item.reportUrl}" target="_blank" class="block text-center py-2 bg-olive-50 text-olive-700 text-xs font-bold rounded-xl hover:bg-olive-100 transition-colors">OPEN HTML</a>
+                        ${item.reportUrl ? `<a href="${item.reportUrl}" target="_blank" class="block text-center py-2 bg-olive-50 text-olive-700 text-xs font-bold rounded-xl hover:bg-olive-100 transition-colors">OPEN HTML</a>` : ''}
                         ${item.pdfUrl ? `<a href="${item.pdfUrl}" target="_blank" class="block text-center py-2 bg-red-50 text-red-700 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors">OPEN PDF</a>` : ''}
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
     });
 
@@ -337,6 +341,7 @@ function initializeScanRuntime(socket) {
                 reportsStatus.classList.add('hidden');
             }
             reportsList.innerHTML = data.map(report => {
+                const failed = report.status === 'failed';
                 const actions = [
                     reportActionLink({ href: report.url, title: 'Open HTML report', icon: 'file-code-2' }),
                     reportActionLink({ href: report.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !report.pdfUrl }),
@@ -344,16 +349,17 @@ function initializeScanRuntime(socket) {
                     reportActionLink({ href: report.driveHtmlUrl || report.drivePdfUrl, title: 'Open in Google Drive', icon: 'cloud', disabled: !(report.driveHtmlUrl || report.drivePdfUrl) })
                 ].join('');
                 return `
-                    <div class="bg-white border border-olive-200 rounded-lg p-3 shadow-sm transition-shadow hover:shadow-md">
+                    <div class="bg-white border ${failed ? 'border-red-200' : 'border-olive-200'} rounded-lg p-3 shadow-sm transition-shadow hover:shadow-md">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <h4 class="truncate text-sm font-bold text-olive-900" title="${escapeHTML(report.name)}">${escapeHTML(report.name)}</h4>
                                 <p class="mt-0.5 truncate font-mono text-[10px] text-olive-500" title="${escapeHTML(report.folder || '')}">${escapeHTML(report.folder || 'reports')}</p>
                             </div>
-                            <span class="shrink-0 text-[10px] font-bold uppercase text-olive-400">${new Date(report.date).toLocaleDateString()}</span>
+                            <span class="shrink-0 text-[10px] font-bold uppercase ${failed ? 'text-red-500' : 'text-olive-400'}">${failed ? 'Failed' : new Date(report.date).toLocaleDateString()}</span>
                         </div>
+                        ${failed && report.error ? `<p class="mt-2 line-clamp-2 rounded-lg bg-red-50 p-2 font-mono text-[10px] text-red-700">${escapeHTML(report.error)}</p>` : ''}
                         <div class="mt-3 flex items-center justify-between gap-2">
-                            <span class="text-[10px] font-medium text-olive-500">${report.driveHtmlUrl || report.drivePdfUrl ? 'Drive synced' : 'Local only'}</span>
+                            <span class="text-[10px] font-medium ${failed ? 'text-red-600' : 'text-olive-500'}">${failed ? `Failed${report.duration ? ` after ${report.duration}s` : ''}` : (report.driveHtmlUrl || report.drivePdfUrl ? 'Drive synced' : 'Local only')}</span>
                             <div class="flex items-center gap-1.5">${actions}</div>
                         </div>
                     </div>
