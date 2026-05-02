@@ -328,6 +328,7 @@ function generatePDF(reportPath, pdfPath, callback) {
             '--no-pdf-header-footer',
             '--run-all-compositor-stages-before-draw',
             '--virtual-time-budget=5000',
+            '--print-to-pdf-page-size=Letter',
             `--print-to-pdf=${shellQuote(pdfPath)}`,
             shellQuote(reportUrl)
         ].join(' ');
