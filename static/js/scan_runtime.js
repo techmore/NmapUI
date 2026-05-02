@@ -136,6 +136,7 @@ function initializeScanRuntime(socket) {
             const versionEl = document.getElementById('app-version');
             if (versionEl) versionEl.textContent = state.version;
         }
+        if (state.customerProfile && typeof renderCustomerFingerprint === 'function') {
             renderCustomerFingerprint(state.customerProfile);
         }
 
