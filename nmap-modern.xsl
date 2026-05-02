@@ -480,6 +480,8 @@ Updated: 2026
 	              padding: 16mm !important;
 	              flex-direction: column !important;
 	              justify-content: space-between !important;
+	              position: relative !important;
+	              z-index: 5 !important;
 	              -webkit-print-color-adjust: exact !important;
 	              print-color-adjust: exact !important;
 	            }
@@ -491,21 +493,23 @@ Updated: 2026
               left: 0 !important;
               right: 0 !important;
               z-index: 1 !important;
-              height: 8mm !important;
+              height: 12mm !important;
               align-items: center !important;
               justify-content: space-between !important;
-              color: #636b54 !important;
-              font-size: 6px !important;
-              padding: 0 2mm !important;
-              background: rgba(233,235,224,0.92) !important;
-              border-bottom: 1px solid #d8dbc7 !important;
+              color: #f5f6f3 !important;
+              font-size: 8px !important;
+              font-weight: 700 !important;
+              padding: 0 4mm !important;
+              background: #414637 !important;
+              border-bottom: 1px solid #636b54 !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
 
             .pdf-fixed-header a {
-              color: #636b54 !important;
+              color: #d8dbc7 !important;
               text-decoration: none !important;
+              font-weight: 500 !important;
             }
 
             .pdf-fixed-footer {
@@ -515,11 +519,11 @@ Updated: 2026
               bottom: 1.5mm !important;
               z-index: 1 !important;
               color: #636b54 !important;
-              font-size: 6px !important;
+              font-size: 7px !important;
             }
 
             .pdf-fixed-footer::after {
-              content: counter(page) "/" counter(pages);
+              content: "Page " counter(page);
             }
 
 	            .pdf-cover * {
@@ -881,7 +885,7 @@ Updated: 2026
 
 	            @page {
 	              size: Letter portrait;
-	              margin: 10mm 3mm 8mm 3mm;
+	              margin: 14mm 3mm 8mm 3mm;
 	            }
           }
         </style>
