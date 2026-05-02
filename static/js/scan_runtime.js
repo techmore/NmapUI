@@ -455,17 +455,17 @@ function updateHostRow(data) {
         row.id = `row-${data.ip.replace(/\./g, '-')}`;
         row.className = 'hover:bg-olive-50 transition-colors border-b border-olive-100';
         row.innerHTML = `
-            <td class="px-4 py-2 text-center"><span class="size-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span></td>
-            <td class="px-1.5 py-2 font-mono text-[11px] text-olive-900 ip-cell">${data.ip}</td>
-            <td class="px-1.5 py-2 font-mono text-[10px] text-olive-600 mac-cell">${data.mac || '--'}</td>
-            <td class="px-1.5 py-2 text-[10px] text-olive-700 truncate vendor-cell" title="${data.vendor || '--'}">${data.vendor || '--'}</td>
-            <td class="px-1.5 py-2 text-[10px] font-medium text-olive-900 truncate hostname-cell" title="${data.hostname || '--'}">${data.hostname || '--'}</td>
-            <td class="px-2 py-2 text-[10px] cve-cell">--</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 os-cell">${data.os || '--'}</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 latency-cell">${data.latency || '--'}</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 ports-cell">${data.ports || '--'}</td>
-            <td class="px-4 py-2 text-[10px] text-olive-700 version-cell">${data.version || '--'}</td>
-            <td class="px-4 py-2 text-right"><button class="text-[10px] font-bold text-olive-600 bg-olive-100 hover:bg-olive-200 px-3 py-1 rounded-full transition-all">DETAILS</button></td>
+            <td class="px-2 py-1 text-center"><span class="size-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span></td>
+            <td class="px-1 py-1 font-mono text-[11px] text-olive-900 ip-cell">${data.ip}</td>
+            <td class="px-1 py-1 font-mono text-[10px] text-olive-600 mac-cell">${data.mac || '--'}</td>
+            <td class="px-1 py-1 text-[10px] text-olive-700 truncate vendor-cell" title="${data.vendor || '--'}">${data.vendor || '--'}</td>
+            <td class="px-1 py-1 text-[10px] font-medium text-olive-900 truncate hostname-cell" title="${data.hostname || '--'}">${data.hostname || '--'}</td>
+            <td class="px-1 py-1 text-[10px] cve-cell">--</td>
+            <td class="px-2 py-1 text-[10px] text-olive-700 os-cell">${data.os || '--'}</td>
+            <td class="px-2 py-1 text-[10px] text-olive-700 latency-cell">${data.latency || '--'}</td>
+            <td class="px-2 py-1 text-[10px] text-olive-700 ports-cell">${data.ports || '--'}</td>
+            <td class="px-2 py-1 text-[10px] text-olive-700 version-cell">${data.version || '--'}</td>
+            <td class="px-2 py-1 text-right"><button class="text-[10px] font-bold text-olive-600 bg-olive-100 hover:bg-olive-200 px-1.5 py-0.5 rounded-full transition-all">DETAILS</button></td>
         `;
         tableBody.appendChild(row);
     }

@@ -461,7 +461,7 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
     const hostGroupArgs = options.allHostsAtOnce
         ? []
         : ['--min-hostgroup', '1', '--max-hostgroup', PHASE2_MAX_HOSTGROUP];
-    const scripts = options.consolidateScripts ? ['default,vulners'] : ['vulners'];
+    const scripts = options.disableScripts ? [] : (options.consolidateScripts ? ['default,vulners'] : ['vulners']);
     const rateArgs = options.minRate === false ? [] : ['--min-rate', options.minRate || '3000'];
     const defaultScriptArgs = options.includeDefaultScripts === false || options.consolidateScripts ? [] : ['-sC'];
     const args = [
@@ -475,7 +475,7 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
         ...(options.maxParallelism ? ['--max-parallelism', String(options.maxParallelism)] : []),
         ...hostGroupArgs,
         '--open',
-        '--script', scripts.join(','),
+        ...(scripts.length ? ['--script', scripts.join(',')] : []),
         '--stylesheet', 'nmap-modern.xsl',
         '-oX', 'phase2_results.xml',
         '-iL', 'targets.tmp'
@@ -797,6 +797,26 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
             const reportScanKind = options.scanKind || currentScanKind;
             setTimeout(() => {
                 if (!isCompleteNmapXML(xmlPath)) {
+                    if (options.retryWithoutVulners && !options.retriedWithoutVulners) {
+                        logEvent(socket, 'error', 'Phase 2 XML is incomplete after the vulners/NSE run. Retrying once without NSE scripts so a report can still be generated.');
+                        runNmap(
+                            socket,
+                            buildPhase2Args(true, false, {
+                                includeDefaultScripts: false,
+                                disableScripts: true,
+                                minRate: false,
+                                maxParallelism: 4
+                            }),
+                            phase,
+                            onComplete,
+                            {
+                                deferHostUpdates: true,
+                                scanKind: reportScanKind,
+                                retriedWithoutVulners: true
+                            }
+                        );
+                        return;
+                    }
                     logEvent(socket, 'error', 'Phase 2 XML is incomplete, likely because Nmap/NSE crashed. Skipping XML parse and report/PDF generation for this run.');
                     return;
                 }
@@ -971,17 +991,17 @@ function startChainedScan(socket, target, usePn = false) {
         fs.writeFileSync('targets.tmp', targets);
 
         if (usePn) {
-            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners. UI details will populate after XML parsing completes.`);
+            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning ${discoveredHosts.length} host(s) with bounded hostgroups to reduce NSE/vulners crashes. UI details will populate after XML parsing completes.`);
             runNmap(
                 socket,
                 buildPhase2Args(true, false, {
-                    allHostsAtOnce: true,
                     includeDefaultScripts: false,
-                    minRate: false
+                    minRate: false,
+                    maxParallelism: 4
                 }),
                 2,
                 null,
-                { deferHostUpdates: true, scanKind }
+                { deferHostUpdates: true, scanKind, retryWithoutVulners: true }
             );
             return;
         }
