@@ -56,6 +56,20 @@ const CONFIG_PATH = path.join(__dirname, 'config.json');
 const HISTORY_PATH = path.join(__dirname, 'history.json');
 const REPORTS_DIR = path.join(__dirname, 'reports_archive');
 const PHASE2_MAX_HOSTGROUP = String(Math.max(1, parseInt(process.env.NMAP_MAX_HOSTGROUP || '4', 10) || 4));
+const NMAP_PATH = resolveExecutable(process.env.NMAP_PATH, [
+    '/opt/homebrew/bin/nmap',
+    '/usr/local/bin/nmap',
+    '/usr/bin/nmap',
+    '/bin/nmap',
+    'nmap'
+]);
+const TRACEROUTE_PATH = resolveExecutable(process.env.TRACEROUTE_PATH, [
+    '/usr/sbin/traceroute',
+    '/sbin/traceroute',
+    '/opt/homebrew/bin/traceroute',
+    '/usr/local/bin/traceroute',
+    'traceroute'
+]);
 let customerProfileConfig = loadJSON(CONFIG_PATH, {}).customerProfile || {};
 let appConfig = loadJSON(CONFIG_PATH, {});
 
@@ -99,6 +113,41 @@ function saveAutoScanConfig(autoScanConfig) {
 
 function getGoogleDriveConfig() {
     return appConfig.googleDrive || {};
+}
+
+function isExecutable(filePath) {
+    if (!filePath) return false;
+    try {
+        fs.accessSync(filePath, fs.constants.X_OK);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+function resolveExecutable(explicitPath, candidates) {
+    const searchPaths = (process.env.PATH || '')
+        .split(path.delimiter)
+        .filter(Boolean);
+    const pathCandidates = candidates
+        .filter(candidate => !candidate.includes(path.sep))
+        .flatMap(name => searchPaths.map(dir => path.join(dir, name)));
+    return [explicitPath, ...candidates, ...pathCandidates].find(isExecutable) || null;
+}
+
+function getPrivilegedCommand(executablePath, args) {
+    if (process.getuid && process.getuid() === 0) {
+        return { command: executablePath, args };
+    }
+    return { command: 'sudo', args: ['-n', executablePath, ...args] };
+}
+
+function describeMissingExecutable(name, envVar) {
+    return `${name} was not found. Install it or set ${envVar} to the executable path.`;
+}
+
+function isSudoAuthFailure(text) {
+    return /sudo:.*password|a password is required|no tty present|permission denied/i.test(text || '');
 }
 
 function shellQuote(value) {
@@ -422,9 +471,13 @@ async function getPublicIP() {
 
 function runTraceroute() {
     if (isTracerouteRunning) return;
+    if (!TRACEROUTE_PATH) {
+        console.warn(describeMissingExecutable('traceroute', 'TRACEROUTE_PATH'));
+        return;
+    }
     isTracerouteRunning = true;
     cachedHops = [];
-    const traceroute = spawn('traceroute', ['-m', '15', '-n', '-q', '1', '8.8.8.8']);
+    const traceroute = spawn(TRACEROUTE_PATH, ['-m', '15', '-n', '-q', '1', '8.8.8.8']);
     traceroute.stdout.on('data', (data) => {
         const lines = data.toString().split('\n');
         lines.forEach(line => {
@@ -437,6 +490,10 @@ function runTraceroute() {
                 }
             }
         });
+    });
+    traceroute.on('error', error => {
+        console.error(`[TRACEROUTE ERROR] ${error.message}`);
+        isTracerouteRunning = false;
     });
     traceroute.on('close', () => { isTracerouteRunning = false; });
 }
@@ -536,6 +593,10 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
         if (socket) logEvent(socket, 'error', 'A scan is already running.');
         return;
     }
+    if (!NMAP_PATH) {
+        logEvent(socket, 'error', describeMissingExecutable('nmap', 'NMAP_PATH'));
+        return;
+    }
 
     if (phase === 1) {
         discoveredHosts = [];
@@ -552,10 +613,11 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
     io.emit('scan_started', { phase, target: currentTarget, startTime: scanStartTime, scanKind: currentScanKind });
     logEvent(socket, 'job', `Starting Phase ${phase} scan...`);
     if (phase >= 2) {
-        logEvent(socket, 'scan', `Nmap command: sudo nmap ${args.join(' ')}`);
+        logEvent(socket, 'scan', `Nmap command: sudo -n ${NMAP_PATH} ${args.join(' ')}`);
     }
-    
-    const nmap = spawn('sudo', ['nmap', ...args]);
+
+    const commandSpec = getPrivilegedCommand(NMAP_PATH, args);
+    const nmap = spawn(commandSpec.command, commandSpec.args);
     currentScan = nmap;
 
     let currentHostIP = null;
@@ -598,6 +660,14 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
     nmap.stderr.on('data', (data) => {
         const errText = data.toString();
         if (!errText.includes('Warning: ')) console.error('[NMAP ERROR]', errText);
+        if (isSudoAuthFailure(errText)) {
+            logEvent(socket, 'error', 'Nmap requires passwordless sudo for this runtime. Configure sudoers for nmap or run with the required privileges.');
+        }
+    });
+
+    nmap.on('error', error => {
+        currentScan = null;
+        logEvent(socket, 'error', `Failed to start Nmap: ${error.message}`);
     });
 
     nmap.on('close', (code, signal) => {
@@ -799,6 +869,7 @@ io.on('connection', (socket) => {
         const network = cachedNetworkInfo || await getNetworkInfo();
         const publicIP = cachedPublicIP || await getPublicIP();
         socket.emit('initial_data', { ...network, publicIP, customerProfile: getCustomerFingerprintProfile(), googleDrive: appConfig.googleDrive || {}, autoScan: appConfig.autoScan || {} });
+        if (cachedHops.length === 0 && !isTracerouteRunning) runTraceroute();
         cachedHops.forEach(hop => socket.emit('traceroute_hop', hop));
     });
     socket.on('start_quick_scan', (data) => startChainedScan(socket, data.target, false));
@@ -893,8 +964,22 @@ io.on('connection', (socket) => {
 });
 
 // Initialization
-console.log('Prescan - Updating scripts...');
-exec('sudo nmap --script-updatedb');
+if (NMAP_PATH) {
+    console.log('Prescan - Updating scripts...');
+    const updateCommand = getPrivilegedCommand(NMAP_PATH, ['--script-updatedb']);
+    const updateProcess = spawn(updateCommand.command, updateCommand.args);
+    updateProcess.stderr.on('data', data => {
+        const text = data.toString();
+        if (isSudoAuthFailure(text)) {
+            console.warn('Skipping nmap script update: passwordless sudo is required.');
+        } else if (!text.includes('Warning: ')) {
+            console.warn(`[NMAP UPDATE] ${text.trim()}`);
+        }
+    });
+    updateProcess.on('error', error => console.warn(`Skipping nmap script update: ${error.message}`));
+} else {
+    console.warn(describeMissingExecutable('nmap', 'NMAP_PATH'));
+}
 
 setupAutoScan(loadJSON(CONFIG_PATH, {}));
 getNetworkInfo(); getPublicIP(); runTraceroute();

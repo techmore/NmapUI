@@ -2,6 +2,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "========================================"
 echo "TM-NMapUI - Dependency Installer"
 echo "========================================"
@@ -9,8 +12,11 @@ echo "========================================"
 BREW_PACKAGES=(
     "node"
     "nmap"
-    "wkhtmltopdf"
     "libxslt"
+)
+
+OPTIONAL_BREW_PACKAGES=(
+    "wkhtmltopdf"
 )
 
 echo ""
@@ -37,11 +43,26 @@ for pkg in "${BREW_PACKAGES[@]}"; do
     fi
 done
 
+for pkg in "${OPTIONAL_BREW_PACKAGES[@]}"; do
+    if brew list "$pkg" &> /dev/null; then
+        echo "$pkg already installed."
+    else
+        echo "Installing optional package $pkg..."
+        if ! brew install "$pkg"; then
+            echo "WARNING: optional package $pkg is unavailable. PDF export can still use Chromium/Chrome when installed."
+        fi
+    fi
+done
+
 echo ""
 echo "[4/5] Installing npm packages..."
 if [ -f "package.json" ]; then
     if command -v npm &> /dev/null; then
-        npm install
+        if [ -f "package-lock.json" ]; then
+            npm ci
+        else
+            npm install
+        fi
         echo "npm packages installed."
     else
         echo "ERROR: npm not found. Please install Node.js via Homebrew: brew install node"
@@ -59,7 +80,6 @@ verify_commands=(
     "nmap:nmap"
     "python3:python3"
     "xsltproc:xsltproc"
-    "wkhtmltopdf:wkhtmltopdf"
     "express:node"
 )
 
@@ -70,6 +90,8 @@ for cmd in "${verify_commands[@]}"; do
     if [[ "$BINARY" == "express" ]]; then
         if ! node -e "require('express')" &> /dev/null; then
             echo "MISSING: express"
+            echo "Expected Express under: $(npm root 2>/dev/null || echo "$SCRIPT_DIR/node_modules")"
+            echo "Try re-running ./install.sh from $SCRIPT_DIR"
             MISSING=1
         else
             echo "OK: express - installed"
@@ -87,7 +109,7 @@ echo ""
 echo "========================================"
 if [ $MISSING -eq 0 ]; then
     echo "Installation complete!"
-    echo "Run 'npm start' to start the application."
+    echo "Run 'sudo npm start' to start the application."
 else
     echo "Some dependencies are missing."
     echo "Please restart your terminal and re-run this script."
