@@ -610,6 +610,17 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
     return args;
 }
 
+function parseTargetInput(target) {
+    return String(target || '')
+        .split(/[,\n]+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function formatTargetLabel(targets) {
+    return targets.length > 1 ? targets.join(', ') : targets[0];
+}
+
 function compactErrorText(value, maxLength = 4000) {
     const text = String(value || '').replace(/\s+\n/g, '\n').trim();
     if (text.length <= maxLength) return text;
@@ -1263,7 +1274,7 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
     }
     
     currentScanPhase = phase;
-    currentTarget = args.includes('-iL') ? 'Multiple Targets' : args[args.length - 1];
+    currentTarget = options.targetLabel || (args.includes('-iL') ? 'Multiple Targets' : args[args.length - 1]);
     currentScanKind = options.scanKind || currentScanKind || (phase >= 3 ? 'dragnet' : 'quick');
     scanStartTime = Date.now();
     
@@ -1453,13 +1464,19 @@ function getScanStats() {
 
 function startChainedScan(socket, target, usePn = false, options = {}) {
     const scanKind = usePn ? 'complete' : 'quick';
-    runNmap(socket, ['-sn', '-T4', target], 1, () => {
+    const targets = parseTargetInput(target);
+    if (targets.length === 0) {
+        logEvent(socket, 'error', 'No scan target provided.');
+        return;
+    }
+    const targetLabel = formatTargetLabel(targets);
+    runNmap(socket, ['-sn', '-T4', ...targets], 1, () => {
         if (discoveredHosts.length === 0) {
             logEvent(socket, 'error', 'No hosts found in Phase 1. Stopping.');
             return;
         }
-        const targets = discoveredHosts.map(h => h.ip).join('\n');
-        fs.writeFileSync('targets.tmp', targets);
+        const discoveredTargets = discoveredHosts.map(h => h.ip).join('\n');
+        fs.writeFileSync('targets.tmp', discoveredTargets);
 
         if (usePn) {
             const vpnHelper = !!options.vpnHelper;
@@ -1488,7 +1505,7 @@ function startChainedScan(socket, target, usePn = false, options = {}) {
         }
 
         runNmap(socket, buildPhase2Args(false), 2, null, { scanKind });
-    }, { scanKind });
+    }, { scanKind, targetLabel });
 }
 
 io.on('connection', (socket) => {
