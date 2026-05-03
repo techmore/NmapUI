@@ -3,7 +3,7 @@ const VERSION = 'v2026.5.2.15.58';
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const cron = require('node-cron');
@@ -79,6 +79,12 @@ const BREW_PATH = resolveExecutable(process.env.BREW_PATH, [
     '/usr/local/bin/brew',
     'brew'
 ]);
+const GOWITNESS_PATH = resolveExecutable(process.env.GOWITNESS_PATH, [
+    '/opt/homebrew/bin/gowitness',
+    '/usr/local/bin/gowitness',
+    'gowitness',
+    ...getGoExecutableCandidates('gowitness')
+]);
 let customerProfileConfig = loadJSON(CONFIG_PATH, {}).customerProfile || {};
 let appConfig = loadJSON(CONFIG_PATH, {});
 
@@ -141,7 +147,30 @@ function resolveExecutable(explicitPath, candidates) {
     const pathCandidates = candidates
         .filter(candidate => !candidate.includes(path.sep))
         .flatMap(name => searchPaths.map(dir => path.join(dir, name)));
-    return [explicitPath, ...candidates, ...pathCandidates].find(isExecutable) || null;
+    return [explicitPath, ...candidates, ...pathCandidates]
+        .filter(Boolean)
+        .map(expandUserPath)
+        .find(isExecutable) || null;
+}
+
+function expandUserPath(filePath) {
+    if (!filePath || !filePath.startsWith('~')) return filePath;
+    const homeDir = process.env.HOME || (process.env.SUDO_USER ? `/Users/${process.env.SUDO_USER}` : '');
+    if (!homeDir) return filePath;
+    return path.join(homeDir, filePath.slice(1));
+}
+
+function getGoExecutableCandidates(binaryName) {
+    const candidates = [];
+    if (process.env.GOBIN) candidates.push(path.join(process.env.GOBIN, binaryName));
+    if (process.env.GOPATH) {
+        process.env.GOPATH.split(path.delimiter).filter(Boolean).forEach(goPath => {
+            candidates.push(path.join(goPath, 'bin', binaryName));
+        });
+    }
+    if (process.env.HOME) candidates.push(path.join(process.env.HOME, 'go', 'bin', binaryName));
+    if (process.env.SUDO_USER) candidates.push(path.join('/Users', process.env.SUDO_USER, 'go', 'bin', binaryName));
+    return candidates;
 }
 
 function getPrivilegedCommand(executablePath, args) {
@@ -302,6 +331,16 @@ async function stopExistingAppOnPort(port) {
 
 function shellQuote(value) {
     return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[char]);
 }
 
 function getChromeExecutable() {
@@ -811,7 +850,191 @@ function parseNmapXML(xmlPath, onParsed = null) {
     });
 }
 
-function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
+function getWebTargetsFromDiscoveredHosts() {
+    const webPorts = new Set([80, 443, 3000, 5000, 8000, 8080, 8443, 8888, 9000, 9443]);
+    const targets = [];
+    discoveredHosts.forEach(host => {
+        const versionText = String(host.version || '').toLowerCase();
+        const serviceByPort = new Map();
+        versionText.split('|').forEach(chunk => {
+            const match = chunk.trim().match(/^(\d+):(.+)$/);
+            if (match) serviceByPort.set(Number(match[1]), match[2]);
+        });
+        const ports = String(host.ports || '')
+            .split(',')
+            .map(port => Number(String(port).trim()))
+            .filter(port => {
+                if (!Number.isInteger(port)) return false;
+                const serviceHint = serviceByPort.get(port) || '';
+                return webPorts.has(port) || /\bhttp\b|\bhttps\b/.test(serviceHint);
+            });
+        ports.forEach(port => {
+            const portHint = serviceByPort.get(port) || '';
+            const isHttps = [443, 8443, 9443].includes(port) || /\bssl\b|\bhttps\b/.test(portHint);
+            const scheme = isHttps ? 'https' : 'http';
+            const defaultPort = (scheme === 'http' && port === 80) || (scheme === 'https' && port === 443);
+            targets.push({
+                ip: host.ip,
+                port,
+                url: `${scheme}://${host.ip}${defaultPort ? '' : `:${port}`}`
+            });
+        });
+    });
+    return targets.slice(0, 40);
+}
+
+function listImageFiles(dirPath) {
+    if (!fs.existsSync(dirPath)) return [];
+    return fs.readdirSync(dirPath)
+        .filter(file => /\.(png|jpe?g|webp)$/i.test(file))
+        .map(file => ({
+            file,
+            path: path.join(dirPath, file),
+            mtime: fs.statSync(path.join(dirPath, file)).mtimeMs
+        }))
+        .sort((a, b) => b.mtime - a.mtime);
+}
+
+function runGowitnessCommand(args) {
+    return new Promise(resolve => {
+        execFile(GOWITNESS_PATH, args, { cwd: __dirname, timeout: 90000 }, (error, stdout, stderr) => {
+            resolve({ success: !error, error, stdout, stderr });
+        });
+    });
+}
+
+async function captureGowitnessTarget(target, screenshotDir, reportBaseName) {
+    const beforeFiles = new Set(listImageFiles(screenshotDir).map(item => item.file));
+    const safeName = sanitizeReportSegment(`${target.ip}_${target.port}`);
+    const explicitPath = path.join(screenshotDir, `${safeName}.png`);
+    const metaPath = path.join(screenshotDir, `${safeName}.jsonl`);
+    const commandAttempts = [
+        ['scan', 'single', '--url', target.url, '--screenshot-path', screenshotDir, '--write-jsonl', '--write-jsonl-file', metaPath],
+        ['single', '--url', target.url, '--screenshot-path', screenshotDir, '--write-jsonl', '--write-jsonl-file', metaPath],
+        ['single', '--disable-db', '--screenshot-path', screenshotDir, target.url],
+        ['single', '-o', explicitPath, target.url]
+    ];
+
+    for (const args of commandAttempts) {
+        const result = await runGowitnessCommand(args);
+        if (!result.success) continue;
+        const files = listImageFiles(screenshotDir);
+        const created = files.find(item => !beforeFiles.has(item.file));
+        if (created) return created;
+    }
+    return null;
+}
+
+async function captureGowitnessScreenshots(socket, profile, reportBaseName) {
+    const startedAt = Date.now();
+    const finishPhase = (status, screenshotCount = 0) => {
+        const duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+        io.emit('phase_complete', { phase: 3, duration, ...getScanStats(), screenshotCount, status });
+        return duration;
+    };
+
+    currentScanPhase = 3;
+    scanStartTime = startedAt;
+    io.emit('scan_started', { phase: 3, target: 'Web Services', startTime: scanStartTime, scanKind: currentScanKind });
+
+    if (!GOWITNESS_PATH) {
+        logEvent(socket, 'report', 'Phase 3 gowitness skipped: gowitness is not installed.');
+        finishPhase('skipped');
+        return [];
+    }
+
+    const targets = getWebTargetsFromDiscoveredHosts();
+    if (!targets.length) {
+        logEvent(socket, 'report', 'Phase 3 gowitness skipped: no web services were identified.');
+        finishPhase('skipped');
+        return [];
+    }
+
+    const screenshotDir = path.join(REPORTS_DIR, profile.folderName, 'gowitness', reportBaseName);
+    fs.mkdirSync(screenshotDir, { recursive: true });
+    logEvent(socket, 'job', `Starting Phase 3 gowitness capture for ${targets.length} web service(s)...`);
+    logEvent(socket, 'scan', `gowitness path: ${GOWITNESS_PATH}`);
+
+    const results = [];
+    for (const target of targets) {
+        const image = await captureGowitnessTarget(target, screenshotDir, reportBaseName);
+        if (!image) {
+            logEvent(socket, 'error', `gowitness did not capture ${target.url}`);
+            continue;
+        }
+        const encodedFileName = encodeURIComponent(image.file);
+        const screenshot = {
+            ip: target.ip,
+            port: target.port,
+            url: target.url,
+            fileName: image.file,
+            reportSrc: `gowitness/${reportBaseName}/${encodedFileName}`,
+            dashboardUrl: `/reports/${profile.folderName}/gowitness/${reportBaseName}/${encodedFileName}`
+        };
+        results.push(screenshot);
+        const host = discoveredHosts.find(item => item.ip === target.ip) || {};
+        updateDiscoveredHost(target.ip, {
+            screenshots: [...(host.screenshots || []), screenshot],
+            screenshotUrl: screenshot.dashboardUrl,
+            screenshotTarget: screenshot.url
+        });
+    }
+
+    if (results.length) {
+        fs.writeFileSync(path.join(screenshotDir, 'screenshots.json'), JSON.stringify(results, null, 2));
+    }
+    const duration = finishPhase('complete', results.length);
+    logEvent(socket, 'job', `Phase 3 gowitness complete in ${duration}s. Screenshots: ${results.length}.`);
+    return results;
+}
+
+function buildGowitnessReportSection(screenshots) {
+    if (!screenshots.length) return '';
+    const cards = screenshots.map(item => `
+                    <article class="gowitness-card">
+                        <a href="${escapeHtml(item.reportSrc)}" target="_blank" rel="noopener noreferrer">
+                            <img src="${escapeHtml(item.reportSrc)}" alt="Screenshot of ${escapeHtml(item.url)}" />
+                        </a>
+                        <div>
+                            <strong>${escapeHtml(item.ip)}:${escapeHtml(item.port)}</strong>
+                            <span>${escapeHtml(item.url)}</span>
+                        </div>
+                    </article>`).join('');
+    return `
+            <section class="gowitness-section">
+                <h2>Web Service Screenshots</h2>
+                <div class="gowitness-grid">${cards}
+                </div>
+            </section>`;
+}
+
+function injectGowitnessReportSection(reportPath, screenshots) {
+    const section = buildGowitnessReportSection(screenshots);
+    if (!section) return;
+    const style = `
+        <style>
+            .gowitness-section { break-before: page; page-break-before: always; margin: 24px 0; }
+            .gowitness-section h2 { margin: 0 0 16px; color: #2f331b; font-size: 22px; }
+            .gowitness-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+            .gowitness-card { overflow: hidden; border: 1px solid #c8cf9b; border-radius: 8px; background: #fff; }
+            .gowitness-card img { display: block; width: 100%; height: 180px; object-fit: cover; background: #eef0df; }
+            .gowitness-card div { padding: 10px 12px; font-size: 11px; color: #444827; }
+            .gowitness-card strong, .gowitness-card span { display: block; overflow-wrap: anywhere; }
+        </style>`;
+    let html = fs.readFileSync(reportPath, 'utf8');
+    if (!html.includes('.gowitness-section')) {
+        html = html.replace('</head>', `${style}\n    </head>`);
+    }
+    const footerMarker = '        <!-- Footer -->';
+    if (html.includes(footerMarker)) {
+        html = html.replace(footerMarker, `${section}\n\n${footerMarker}`);
+    } else {
+        html = html.replace('</body>', `${section}\n</body>`);
+    }
+    fs.writeFileSync(reportPath, html);
+}
+
+function generateReportFromXml(socket, xmlPath, duration, reportScanKind, onComplete = null) {
     const profile = getCustomerFingerprintProfile();
     const networkInfo = cachedNetworkInfo || {};
     const tracerouteSummary = cachedHops.length
@@ -842,75 +1065,83 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind) {
     } catch (error) {
         logEvent(socket, 'error', `XML archive failed for ${xmlName}: ${error.message}`);
     }
-    const xslPath = path.join(__dirname, 'nmap-modern.xsl');
-    const xsltCommand = [
-        'xsltproc',
-        '-o', shellQuote(reportPath),
-        '--stringparam', 'techmore_version', shellQuote(VERSION),
-        '--stringparam', 'customer_name', shellQuote(profile.prefix),
-        '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
-        '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
-        '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
-        '--stringparam', 'public_ip', shellQuote(profile.publicIP),
-        '--stringparam', 'local_ip', shellQuote(networkInfo.localIP || ''),
-        '--stringparam', 'subnet_mask', shellQuote(networkInfo.mask || ''),
-        '--stringparam', 'cidr', shellQuote(networkInfo.cidr || ''),
-        '--stringparam', 'traceroute_summary', shellQuote(tracerouteSummary),
-        shellQuote(xslPath),
-        shellQuote(xmlPath)
-    ].join(' ');
-    exec(xsltCommand, (err) => {
-        if (!err) {
-            generatePDF(reportPath, pdfPath, (pdfErr) => {
-                const pdfReady = !pdfErr && fs.existsSync(pdfPath);
-                if (pdfErr) {
-                    logEvent(socket, 'error', `PDF generation failed for ${reportName}: ${pdfErr.message}`);
-                }
-                logEvent(socket, 'report', `Report generated: ${reportName}${pdfReady ? ` and ${pdfName}` : ''}`);
-                const reportPayload = {
-                    url: reportUrl,
-                    pdfUrl: pdfReady ? pdfUrl : null,
-                    name: reportName,
-                    pdfName: pdfReady ? pdfName : null,
-                    xmlName,
-                    xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
-                    customerProfile: profile
-                };
-                io.emit('report_ready', reportPayload);
-                const history = loadJSON(HISTORY_PATH, []);
-                history.unshift({
-                    timestamp: new Date().toISOString(),
-                    target: currentTarget,
-                    duration,
-                    hostCount: discoveredHosts.length,
-                    reportUrl,
-                    pdfUrl: pdfReady ? pdfUrl : null,
-                    xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
-                    customerProfile: profile
-                });
-                saveJSON(HISTORY_PATH, history.slice(0, 50));
-                if (['complete', 'quick'].includes(reportScanKind)) {
-                    const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
-                    uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, {
-                        label: uploadLabel,
-                        reportPath,
-                        dayFolderName: formatDriveDayFolder(reportDate)
-                    })
-                        .then(result => {
-                            if (!result?.success) return;
-                            const metadata = loadDriveMetadata(reportPath);
-                            io.emit('report_ready', {
-                                ...reportPayload,
-                                driveHtmlUrl: findDriveLink(metadata, reportName),
-                                drivePdfUrl: pdfReady ? findDriveLink(metadata, pdfName) : null
-                            });
+    captureGowitnessScreenshots(socket, profile, reportBaseName).catch(error => {
+        logEvent(socket, 'error', `gowitness capture failed: ${error.message}`);
+        return [];
+    }).then((screenshots) => {
+        const xslPath = path.join(__dirname, 'nmap-modern.xsl');
+        const xsltCommand = [
+            'xsltproc',
+            '-o', shellQuote(reportPath),
+            '--stringparam', 'techmore_version', shellQuote(VERSION),
+            '--stringparam', 'customer_name', shellQuote(profile.prefix),
+            '--stringparam', 'report_identifier', shellQuote(profile.reportLabel),
+            '--stringparam', 'report_timestamp', shellQuote(reportTimestamp),
+            '--stringparam', 'report_display_timestamp', shellQuote(reportDisplayTimestamp),
+            '--stringparam', 'public_ip', shellQuote(profile.publicIP),
+            '--stringparam', 'local_ip', shellQuote(networkInfo.localIP || ''),
+            '--stringparam', 'subnet_mask', shellQuote(networkInfo.mask || ''),
+            '--stringparam', 'cidr', shellQuote(networkInfo.cidr || ''),
+            '--stringparam', 'traceroute_summary', shellQuote(tracerouteSummary),
+            shellQuote(xslPath),
+            shellQuote(xmlPath)
+        ].join(' ');
+        exec(xsltCommand, (err) => {
+            if (!err) {
+                injectGowitnessReportSection(reportPath, screenshots);
+                generatePDF(reportPath, pdfPath, (pdfErr) => {
+                    const pdfReady = !pdfErr && fs.existsSync(pdfPath);
+                    if (pdfErr) {
+                        logEvent(socket, 'error', `PDF generation failed for ${reportName}: ${pdfErr.message}`);
+                    }
+                    logEvent(socket, 'report', `Report generated: ${reportName}${pdfReady ? ` and ${pdfName}` : ''}`);
+                    const reportPayload = {
+                        url: reportUrl,
+                        pdfUrl: pdfReady ? pdfUrl : null,
+                        name: reportName,
+                        pdfName: pdfReady ? pdfName : null,
+                        xmlName,
+                        xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
+                        customerProfile: profile
+                    };
+                    io.emit('report_ready', reportPayload);
+                    const history = loadJSON(HISTORY_PATH, []);
+                    history.unshift({
+                        timestamp: new Date().toISOString(),
+                        target: currentTarget,
+                        duration,
+                        hostCount: discoveredHosts.length,
+                        reportUrl,
+                        pdfUrl: pdfReady ? pdfUrl : null,
+                        xmlUrl: fs.existsSync(xmlArchivePath) ? xmlUrl : null,
+                        customerProfile: profile
+                    });
+                    saveJSON(HISTORY_PATH, history.slice(0, 50));
+                    if (['complete', 'quick'].includes(reportScanKind)) {
+                        const uploadLabel = reportScanKind === 'quick' ? 'Quick Scan report' : 'Complete+PDF report';
+                        uploadReportFilesToDrive(socket, [reportPath, pdfReady ? pdfPath : null], profile, {
+                            label: uploadLabel,
+                            reportPath,
+                            dayFolderName: formatDriveDayFolder(reportDate)
                         })
-                        .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
-                }
-            });
-        } else {
-            logEvent(socket, 'error', `HTML report generation failed: ${err.message}`);
-        }
+                            .then(result => {
+                                if (!result?.success) return;
+                                const metadata = loadDriveMetadata(reportPath);
+                                io.emit('report_ready', {
+                                    ...reportPayload,
+                                    driveHtmlUrl: findDriveLink(metadata, reportName),
+                                    drivePdfUrl: pdfReady ? findDriveLink(metadata, pdfName) : null
+                                });
+                            })
+                            .catch(error => logEvent(socket, 'error', `Google Drive upload failed for ${uploadLabel}: ${error.message}`));
+                    }
+                    if (onComplete) onComplete({ success: true, screenshots });
+                });
+            } else {
+                logEvent(socket, 'error', `HTML report generation failed: ${err.message}`);
+                if (onComplete) onComplete({ success: false, error: err.message, screenshots });
+            }
+        });
     });
 }
 
@@ -1009,8 +1240,9 @@ async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
     });
 
     const totalDuration = (Number(originalDuration || 0) + Number(pass21.duration || 0) + Number(pass22.duration || 0)).toFixed(2);
-    generateReportFromXml(socket, pass22.xmlPath, totalDuration, reportScanKind);
-    io.emit('scan_complete', { phase: 2.2, duration: totalDuration, ...getScanStats(), status: 'fallback_complete' });
+    generateReportFromXml(socket, pass22.xmlPath, totalDuration, reportScanKind, () => {
+        io.emit('scan_complete', { phase: 3, duration: totalDuration, ...getScanStats(), status: 'fallback_complete' });
+    });
 }
 
 function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
@@ -1135,8 +1367,9 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
                     logEvent(socket, 'job', `Phase ${phase} XML results parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
                     io.emit('phase_stats', { phase, ...parsedStats });
                 });
-                generateReportFromXml(socket, xmlPath, duration, reportScanKind);
-                if (options.deferScanComplete) io.emit('scan_complete', { phase, duration, ...phaseStats });
+                generateReportFromXml(socket, xmlPath, duration, reportScanKind, () => {
+                    if (options.deferScanComplete) io.emit('scan_complete', { phase: 3, duration, ...getScanStats() });
+                });
             }, 1000);
         }
         if (onComplete) onComplete();

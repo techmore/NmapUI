@@ -80,6 +80,56 @@ function renderCVELink(cveText) {
     return `<a href="https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}" target="_blank" rel="noopener noreferrer" class="block text-red-700 underline decoration-red-300 underline-offset-2 hover:text-red-900">${safeText}</a>`;
 }
 
+function renderScreenshotCell(data) {
+    const screenshots = Array.isArray(data.screenshots) ? data.screenshots : [];
+    const shot = screenshots[screenshots.length - 1] || (data.screenshotUrl ? {
+        dashboardUrl: data.screenshotUrl,
+        url: data.screenshotTarget || data.screenshotUrl
+    } : null);
+    if (!shot?.dashboardUrl) return '<span>--</span>';
+    const title = shot.url || 'Open gowitness screenshot';
+    const dashUrl = escapeHTML(shot.dashboardUrl);
+    return `
+        <a href="${dashUrl}" target="_blank" rel="noopener noreferrer" title="${escapeHTML(title)}" data-screenshot-url="${dashUrl}" data-screenshot-title="${escapeHTML(title)}">
+            <img src="${dashUrl}" alt="${escapeHTML(title)}">
+        </a>`;
+}
+
+function openScreenshotPreview(imageUrl, title) {
+    let overlay = document.getElementById('screenshot-preview-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'screenshot-preview-overlay';
+        overlay.className = 'fixed inset-0 z-[80] hidden items-center justify-center bg-black/75 p-4';
+        overlay.innerHTML = `
+            <div class="max-h-full w-full max-w-6xl overflow-hidden rounded-lg bg-white shadow-2xl">
+                <div class="flex items-center justify-between gap-3 border-b border-olive-100 px-4 py-3">
+                    <p class="screenshot-preview-title min-w-0 truncate text-sm font-semibold text-olive-900"></p>
+                    <div class="flex items-center gap-2">
+                        <a class="screenshot-preview-open rounded-md border border-olive-200 px-3 py-1.5 text-xs font-semibold text-olive-700 hover:bg-olive-50" target="_blank" rel="noopener noreferrer">Open image</a>
+                        <button class="screenshot-preview-close rounded-md border border-olive-200 px-3 py-1.5 text-xs font-semibold text-olive-700 hover:bg-olive-50" type="button">Close</button>
+                    </div>
+                </div>
+                <div class="max-h-[82vh] overflow-auto bg-zinc-950 p-3">
+                    <img class="mx-auto max-h-[78vh] max-w-full object-contain" alt="">
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay || event.target.closest('.screenshot-preview-close')) {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        });
+    }
+    overlay.querySelector('img').src = imageUrl;
+    overlay.querySelector('img').alt = title || 'gowitness screenshot';
+    overlay.querySelector('.screenshot-preview-title').textContent = title || imageUrl;
+    overlay.querySelector('.screenshot-preview-open').href = imageUrl;
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+}
+
 function reportActionLink({ href, title, icon, download = false, disabled = false }) {
     if (disabled || !href) {
         return `<span title="${escapeHTML(title)}" class="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-400"><i data-lucide="${icon}" class="size-4"></i></span>`;
@@ -496,6 +546,7 @@ function updateHostRow(data) {
             <td class="px-0 py-0.5 text-[10px] text-olive-700 latency-cell">${data.latency || '--'}</td>
             <td class="px-0 py-0.5 text-[10px] text-olive-700 ports-cell">${data.ports || '--'}</td>
             <td class="px-0 py-0.5 text-[10px] text-olive-700 version-cell">${data.version || '--'}</td>
+            <td class="px-0 py-0.5 screenshot-cell">${renderScreenshotCell(data)}</td>
             <td class="px-0 py-0.5 text-right"><button class="text-[10px] font-bold text-olive-600 bg-olive-100 hover:bg-olive-200 px-0 py-0.5 rounded-full transition-all">DETAILS</button></td>
         `;
         tableBody.appendChild(row);
@@ -516,6 +567,7 @@ function updateHostRow(data) {
     if (data.latency) row.querySelector('.latency-cell').textContent = data.latency;
     if (data.ports) row.querySelector('.ports-cell').textContent = data.ports;
     if (data.version) row.querySelector('.version-cell').textContent = data.version;
+    if (data.screenshots || data.screenshotUrl) row.querySelector('.screenshot-cell').innerHTML = renderScreenshotCell(data);
     
     const highCVEs = getHighCVEList(data);
     const lowCVECount = Number(data.lowCVECount || 0);
@@ -565,6 +617,12 @@ function initializeDiscoveryUI(socket) {
             socket.emit('stop_scan');
         });
     }
+    document.getElementById('discovery-table')?.addEventListener('click', event => {
+        const link = event.target.closest('[data-screenshot-url]');
+        if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        event.preventDefault();
+        openScreenshotPreview(link.dataset.screenshotUrl, link.dataset.screenshotTitle);
+    });
 
     socket.on('discovery_update', (data) => {
         updateHostRow(data);
