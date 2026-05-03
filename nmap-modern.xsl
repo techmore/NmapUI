@@ -470,13 +470,14 @@ Updated: 2026
 	              display: flex !important;
 	              box-sizing: border-box !important;
 	              width: 100% !important;
-	              height: 273mm !important;
-	              min-height: 273mm !important;
+	              height: 279.4mm !important;
+	              min-height: 279.4mm !important;
 	              page-break-after: always !important;
 	              break-after: page !important;
 	              background: #414637 !important;
 	              color: #f5f6f3 !important;
 	              border: 1px solid #636b54 !important;
+	              margin: 0 !important;
 	              padding: 16mm !important;
 	              flex-direction: column !important;
 	              justify-content: space-between !important;
@@ -679,6 +680,12 @@ Updated: 2026
 	              padding-top: 0 !important;
 	              padding-bottom: 0 !important;
 	            }
+
+            .report-shell.pt-24 {
+              padding-top: 15mm !important;
+              padding-left: 4mm !important;
+              padding-right: 4mm !important;
+            }
 
 	            .gap-6,
 	            .gap-4,
@@ -885,7 +892,7 @@ Updated: 2026
 
 	            @page {
 	              size: Letter portrait;
-	              margin: 14mm 3mm 8mm 3mm;
+	              margin: 0;
 	            }
           }
         </style>
