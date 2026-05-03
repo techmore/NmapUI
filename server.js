@@ -1501,6 +1501,12 @@ function getScanStats() {
 
 function startChainedScan(socket, target, usePn = false, options = {}) {
     const scanKind = usePn ? 'complete' : 'quick';
+    if (options.customerProfilePrefix) {
+        saveCustomerProfileConfig({ ...customerProfileConfig, prefix: options.customerProfilePrefix });
+        const profile = getCustomerFingerprintProfile();
+        logEvent(socket, 'settings', `Customer profile selected for scan: ${profile.prefix}.`);
+        io.emit('customer_profile', profile);
+    }
     const targets = parseTargetInput(target);
     if (targets.length === 0) {
         logEvent(socket, 'error', 'No scan target provided.');
@@ -1554,8 +1560,8 @@ io.on('connection', (socket) => {
         if (cachedHops.length === 0 && !isTracerouteRunning) runTraceroute();
         cachedHops.forEach(hop => socket.emit('traceroute_hop', hop));
     });
-    socket.on('start_quick_scan', (data) => startChainedScan(socket, data.target, false));
-    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true, { vpnHelper: !!data.vpnHelper }));
+    socket.on('start_quick_scan', (data) => startChainedScan(socket, data.target, false, { customerProfilePrefix: data.customerProfilePrefix || '' }));
+    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true, { vpnHelper: !!data.vpnHelper, customerProfilePrefix: data.customerProfilePrefix || '' }));
     socket.on('start_dragnet_scan', (data) => {
         if (discoveredHosts.length === 0) { logEvent(socket, 'error', 'No hosts discovered in Phase 1.'); return; }
         const targets = discoveredHosts.map(h => h.ip).join('\n');
