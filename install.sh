@@ -20,6 +20,27 @@ OPTIONAL_BREW_PACKAGES=(
     "wkhtmltopdf"
 )
 
+find_chrome() {
+    if [ -n "${CHROME_PATH:-}" ] && [ -x "$CHROME_PATH" ]; then
+        echo "$CHROME_PATH"
+        return 0
+    fi
+    local candidates=(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        "/Applications/Chromium.app/Contents/MacOS/Chromium"
+        "/usr/bin/google-chrome"
+        "/usr/bin/chromium"
+        "/usr/bin/chromium-browser"
+    )
+    for candidate in "${candidates[@]}"; do
+        if [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 echo ""
 echo "[1/5] Checking for Homebrew..."
 if ! command -v brew &> /dev/null; then
@@ -54,6 +75,23 @@ for pkg in "${OPTIONAL_BREW_PACKAGES[@]}"; do
         fi
     fi
 done
+
+echo ""
+echo "Checking for Chrome/Chromium PDF renderer..."
+if CHROME_BIN="$(find_chrome)"; then
+    echo "Chrome/Chromium found at $CHROME_BIN"
+else
+    echo "Chrome/Chromium not found. Attempting to install Google Chrome with Homebrew cask..."
+    if brew list --cask google-chrome &> /dev/null; then
+        echo "google-chrome cask already installed."
+    elif brew install --cask google-chrome; then
+        echo "Google Chrome installed."
+    else
+        echo "WARNING: Google Chrome could not be installed automatically."
+        echo "PDF export can fall back to wkhtmltopdf, but Chrome produces the most reliable cover/header rendering."
+        echo "Install manually from https://www.google.com/chrome/ or set CHROME_PATH to a Chromium-compatible executable."
+    fi
+fi
 
 find_gowitness() {
     if command -v gowitness &> /dev/null; then
@@ -157,6 +195,15 @@ if GOWITNESS_BIN="$(find_gowitness)"; then
 else
     echo "OPTIONAL MISSING: gowitness"
     echo "Web screenshot capture will be skipped until gowitness is installed."
+fi
+
+if CHROME_BIN="$(find_chrome)"; then
+    VERSION=$("$CHROME_BIN" --version 2>&1 | head -n1 || echo "installed")
+    echo "OK: Chrome/Chromium - $VERSION"
+    echo "Path: $CHROME_BIN"
+else
+    echo "OPTIONAL MISSING: Chrome/Chromium"
+    echo "PDF export will use wkhtmltopdf if available, but Chrome is recommended for reliable cover-page rendering."
 fi
 
 echo ""
