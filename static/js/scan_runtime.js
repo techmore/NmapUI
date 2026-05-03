@@ -141,6 +141,13 @@ function refreshLucideIcons() {
     if (window.lucide?.createIcons) window.lucide.createIcons();
 }
 
+function getScanCustomerProfilePrefix() {
+    if (typeof window.getSelectedCustomerProfilePrefix === 'function') {
+        return window.getSelectedCustomerProfilePrefix();
+    }
+    return window.currentCustomerProfile?.prefix || '';
+}
+
 function getCVECountsFromRows() {
     return Array.from(document.querySelectorAll('#discovery-table tbody tr')).reduce((totals, row) => {
         totals.high += Number(row.dataset.highCveCount || 0);
@@ -596,14 +603,14 @@ function initializeDiscoveryUI(socket) {
     if (startScanBtn) {
         startScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
-            socket.emit('start_quick_scan', { target });
+            socket.emit('start_quick_scan', { target, customerProfilePrefix: getScanCustomerProfilePrefix() });
         });
     }
     if (completeScanBtn) {
         completeScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
             const vpnHelper = !!document.getElementById('vpn-helper-toggle')?.checked;
-            socket.emit('start_complete_scan', { target, vpnHelper });
+            socket.emit('start_complete_scan', { target, vpnHelper, customerProfilePrefix: getScanCustomerProfilePrefix() });
         });
     }
     if (dragnetScanBtn) {

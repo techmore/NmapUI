@@ -163,6 +163,13 @@ function showCustomerForm() {
     syncCustomerSelectors();
 }
 
+function getSelectedCustomerProfilePrefix() {
+    const selectedId = document.getElementById('customer-quick-add')?.value || window.currentMatchedCustomerId || '';
+    if (!selectedId || selectedId.startsWith('profile:')) return window.currentCustomerProfile?.prefix || '';
+    const customer = loadLocalCustomers().find(item => item.id === selectedId);
+    return customer?.prefix || customer?.name || '';
+}
+
 function initializeCustomerUI() {
     if (customersTabInitialized) return;
     customersTabInitialized = true;
@@ -196,3 +203,4 @@ window.loadCustomersTab = loadCustomersTab;
 window.showCustomerForm = showCustomerForm;
 window.renderCustomerFingerprint = renderCustomerFingerprint;
 window.syncCustomerSelectors = syncCustomerSelectors;
+window.getSelectedCustomerProfilePrefix = getSelectedCustomerProfilePrefix;
