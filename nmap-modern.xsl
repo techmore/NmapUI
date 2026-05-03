@@ -410,6 +410,10 @@ Updated: 2026
 	            display: none;
 	          }
 
+          .end-of-report-page {
+            display: none;
+          }
+
           .report-network-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -601,6 +605,27 @@ Updated: 2026
 	            .pdf-only {
 	              display: block !important;
 	            }
+
+            .end-of-report-page {
+              display: flex !important;
+              box-sizing: border-box !important;
+              width: 100% !important;
+              height: 279.4mm !important;
+              min-height: 279.4mm !important;
+              margin: 0 !important;
+              break-before: page !important;
+              page-break-before: always !important;
+              align-items: center !important;
+              justify-content: center !important;
+              background: #e9ebe0 !important;
+              color: #414637 !important;
+              font-size: 24px !important;
+              font-weight: 700 !important;
+              letter-spacing: 0.14em !important;
+              text-transform: uppercase !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
 
 	            .pdf-section-label {
 	              font-size: 7px !important;
@@ -2120,6 +2145,10 @@ Updated: 2026
             -->
           </div>
         </footer>
+
+        <section class="end-of-report-page">
+          End Of Report
+        </section>
 
         <!-- Scripts -->
         <script>
