@@ -355,6 +355,38 @@ function getChromeExecutable() {
     return candidates.find(candidate => fs.existsSync(candidate)) || null;
 }
 
+function createPdfExportHtml(reportPath) {
+    const source = fs.readFileSync(reportPath, 'utf8');
+    const exportStyle = `
+        <style id="tm-pdf-export-style">
+            .pdf-export nav { display: none !important; }
+            .pdf-export { background: #e9ebe0 !important; color: #25291f !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .pdf-export .pdf-cover { display: flex !important; box-sizing: border-box !important; width: 100% !important; height: 279.4mm !important; min-height: 279.4mm !important; page-break-after: always !important; background: #414637 !important; color: #f5f6f3 !important; border: 1px solid #636b54 !important; margin: 0 !important; padding: 16mm !important; flex-direction: column !important; justify-content: space-between !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .pdf-export .pdf-cover * { color: inherit !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .pdf-export .pdf-cover-label { font-size: 10px !important; letter-spacing: 0.14em !important; text-transform: uppercase !important; color: #d8dbc7 !important; }
+            .pdf-export .pdf-cover-title { font-size: 38px !important; line-height: 0.95 !important; font-weight: 700 !important; margin-top: 8mm !important; margin-bottom: 4mm !important; }
+            .pdf-export .pdf-cover-subtitle { font-size: 16px !important; line-height: 1.1 !important; color: #e9ebe0 !important; }
+            .pdf-export .pdf-cover-meta { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 3mm !important; border-top: 1px solid #979f83 !important; padding-top: 5mm !important; }
+            .pdf-export .pdf-cover-meta div { background: rgba(245,246,243,0.08) !important; border: 1px solid rgba(216,219,199,0.35) !important; padding: 3.5mm !important; }
+            .pdf-export .pdf-cover-meta span { display: block !important; font-size: 7px !important; color: #d8dbc7 !important; text-transform: uppercase !important; letter-spacing: 0.08em !important; }
+            .pdf-export .pdf-cover-meta strong { display: block !important; font-size: 10px !important; line-height: 1.15 !important; margin-top: 2mm !important; word-break: break-word !important; }
+            .pdf-export .pdf-only { display: block !important; }
+            .pdf-export .pdf-fixed-header { display: flex !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; z-index: 1 !important; height: 12mm !important; align-items: center !important; justify-content: space-between !important; color: #f5f6f3 !important; font-size: 8px !important; font-weight: 700 !important; padding: 0 4mm !important; background: #414637 !important; border-bottom: 1px solid #636b54 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .pdf-export .pdf-fixed-header a { color: #d8dbc7 !important; text-decoration: none !important; font-weight: 500 !important; }
+            .pdf-export .pdf-fixed-footer { display: block !important; position: fixed !important; right: 2mm !important; bottom: 1.5mm !important; z-index: 1 !important; color: #636b54 !important; font-size: 7px !important; }
+            .pdf-export .report-shell.pt-24 { padding-top: 15mm !important; padding-left: 4mm !important; padding-right: 4mm !important; }
+            .pdf-export .end-of-report-page { display: flex !important; box-sizing: border-box !important; width: 100% !important; height: 279.4mm !important; min-height: 279.4mm !important; margin: 0 !important; page-break-before: always !important; align-items: center !important; justify-content: center !important; background: #e9ebe0 !important; color: #414637 !important; font-size: 24px !important; font-weight: 700 !important; letter-spacing: 0.14em !important; text-transform: uppercase !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        </style>`;
+    let html = source.includes('tm-pdf-export-style') ? source : source.replace('</head>', `${exportStyle}\n</head>`);
+    html = html.replace(/<body([^>]*)class="([^"]*)"/i, '<body$1class="pdf-export $2"');
+    if (html === source || !/class="pdf-export /.test(html)) {
+        html = html.replace(/<body([^>]*)>/i, '<body$1 class="pdf-export">');
+    }
+    const tempPath = path.join(path.dirname(reportPath), `.pdf-export-${path.basename(reportPath)}`);
+    fs.writeFileSync(tempPath, html);
+    return tempPath;
+}
+
 function generatePDF(reportPath, pdfPath, callback) {
     const chromePath = getChromeExecutable();
     if (chromePath) {
@@ -375,22 +407,27 @@ function generatePDF(reportPath, pdfPath, callback) {
         return;
     }
 
+    const pdfSourcePath = createPdfExportHtml(reportPath);
+    const cleanupCallback = (...args) => {
+        try { fs.unlinkSync(pdfSourcePath); } catch (error) {}
+        callback(...args);
+    };
     const wkhtmltopdfCommand = [
         'wkhtmltopdf',
         '--enable-local-file-access',
         '--print-media-type',
         '--page-size', 'Letter',
         '--orientation', 'Portrait',
-        '--margin-top', '8mm',
-        '--margin-right', '8mm',
-        '--margin-bottom', '8mm',
-        '--margin-left', '8mm',
+        '--margin-top', '0',
+        '--margin-right', '0',
+        '--margin-bottom', '0',
+        '--margin-left', '0',
         '--javascript-delay', '3000',
         '--no-stop-slow-scripts',
-        shellQuote(reportPath),
+        shellQuote(pdfSourcePath),
         shellQuote(pdfPath)
     ].join(' ');
-    exec(wkhtmltopdfCommand, callback);
+    exec(wkhtmltopdfCommand, cleanupCallback);
 }
 
 function sanitizeReportSegment(value, fallback = 'unknown') {

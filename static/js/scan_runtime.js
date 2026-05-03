@@ -328,7 +328,7 @@ function initializeScanRuntime(socket) {
                 reportActionLink({ href: data.url, title: 'Open HTML report', icon: 'file-code-2' }),
                 reportActionLink({ href: data.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !data.pdfUrl }),
                 reportActionLink({ href: data.pdfUrl, title: 'Download PDF', icon: 'download', download: true, disabled: !data.pdfUrl }),
-                reportActionLink({ href: data.driveHtmlUrl || data.drivePdfUrl, title: 'Open in Google Drive', icon: 'cloud', disabled: !(data.driveHtmlUrl || data.drivePdfUrl) })
+                reportActionLink({ href: data.drivePdfUrl || data.driveHtmlUrl, title: 'Open PDF in Google Drive', icon: 'cloud', disabled: !(data.drivePdfUrl || data.driveHtmlUrl) })
             ].join('');
             reportStatus.classList.remove('hidden');
             document.getElementById('report-status-text').innerHTML = `
@@ -411,7 +411,7 @@ function initializeScanRuntime(socket) {
                     reportActionLink({ href: report.pdfUrl, title: 'Open PDF report', icon: 'file-text', disabled: !report.pdfUrl }),
                     reportActionLink({ href: report.xmlUrl, title: 'Open XML report', icon: 'braces', disabled: !report.xmlUrl }),
                     reportActionLink({ href: report.pdfUrl, title: 'Download PDF', icon: 'download', download: true, disabled: !report.pdfUrl }),
-                    reportActionLink({ href: report.driveHtmlUrl || report.drivePdfUrl, title: 'Open in Google Drive', icon: 'cloud', disabled: !(report.driveHtmlUrl || report.drivePdfUrl) })
+                    reportActionLink({ href: report.drivePdfUrl || report.driveHtmlUrl, title: 'Open PDF in Google Drive', icon: 'cloud', disabled: !(report.drivePdfUrl || report.driveHtmlUrl) })
                 ].join('');
                 return `
                     <div class="bg-white border ${failed ? 'border-red-200' : 'border-olive-200'} rounded-lg p-3 shadow-sm transition-shadow hover:shadow-md">
@@ -428,7 +428,7 @@ function initializeScanRuntime(socket) {
                         </div>
                         ${failed && report.error ? `<p class="mt-2 line-clamp-2 rounded-lg bg-red-50 p-2 font-mono text-[10px] text-red-700">${escapeHTML(report.error)}</p>` : ''}
                         <div class="mt-3 flex items-center justify-between gap-2">
-                            <span class="text-[10px] font-medium ${failed ? 'text-red-600' : 'text-olive-500'}">${failed ? `Failed${report.duration ? ` after ${report.duration}s` : ''}` : (report.driveHtmlUrl || report.drivePdfUrl ? 'Drive synced' : 'Local only')}</span>
+                            <span class="text-[10px] font-medium ${failed ? 'text-red-600' : 'text-olive-500'}">${failed ? `Failed${report.duration ? ` after ${report.duration}s` : ''}` : (report.drivePdfUrl || report.driveHtmlUrl ? 'Drive synced' : 'Local only')}</span>
                             <div class="flex items-center gap-1.5">${actions}</div>
                         </div>
                     </div>
