@@ -4,6 +4,7 @@
   "description": "Nmap Network Scanner GUI",
   "main": "server.js",
   "scripts": {
+    "prestart": "node scripts/ensure-dependencies.js",
     "start": "node server.js"
   },
   "dependencies": {

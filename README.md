@@ -13,6 +13,8 @@ sudo npm start
 
 Then open http://localhost:9000 in your browser.
 
+`npm start` also checks for missing Node packages and installs them automatically, so a clean checkout will recover if `node_modules/` has not been created yet.
+
 ## Tech Stack
 
 | Layer | Technology |
