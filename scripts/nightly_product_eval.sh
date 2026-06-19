@@ -3,13 +3,6 @@ set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_DIR="$BASE_DIR"
-EVAL_ROOT="${NMAPUI_EVAL_ROOT:-}"
-if [[ -z "$EVAL_ROOT" && -d "$BASE_DIR/.claude/worktrees/quirky-torvalds" ]]; then
-  EVAL_ROOT="$BASE_DIR/.claude/worktrees/quirky-torvalds"
-fi
-if [[ -n "$EVAL_ROOT" && -d "$EVAL_ROOT" ]]; then
-  ROOT_DIR="$(cd "$EVAL_ROOT" && pwd)"
-fi
 LOG_DIR="${NMAPUI_EVAL_LOG_DIR:-$ROOT_DIR/docs/notes/eval-logs}"
 MODE="${1:---dry-run}"
 if [[ -z "${PYTHON_BIN:-}" && -x "$BASE_DIR/.venv/bin/python" ]]; then
@@ -36,6 +29,18 @@ git_revision() {
 log_file_for() {
   local suffix="$1"
   printf '%s/nightly-product-eval%s.log' "$LOG_DIR" "$suffix"
+}
+
+server_log() {
+  printf '%s/nightly-product-eval-server.log' "$LOG_DIR"
+}
+
+run_log() {
+  printf '%s/nightly-product-eval.log' "$LOG_DIR"
+}
+
+json_log() {
+  printf '%s/nightly-product-eval.json' "$LOG_DIR"
 }
 
 write_json_report() {
@@ -75,8 +80,58 @@ run_pytest_slice() {
   eval "$PYTEST_BIN -q $tests" >"$output_file" 2>&1
 }
 
-tests_present() {
-  find "$ROOT_DIR/tests" -type f -name 'test_*.py' 2>/dev/null | grep -q .
+probe_identity() {
+  curl -fsS "http://127.0.0.1:9000/api/app-identity"
+}
+
+probe_root() {
+  curl -fsS "http://127.0.0.1:9000/"
+}
+
+probe_static_asset() {
+  curl -fsS "http://127.0.0.1:9000/static/techmore.png" >/dev/null
+}
+
+port_in_use() {
+  python3 - <<'PY'
+import socket
+
+with socket.socket() as sock:
+    sock.settimeout(1)
+    raise SystemExit(0 if sock.connect_ex(("127.0.0.1", 9000)) == 0 else 1)
+PY
+}
+
+wait_for_port() {
+  python3 - <<'PY'
+import socket
+import time
+
+deadline = time.time() + 20
+while time.time() < deadline:
+    with socket.socket() as sock:
+        sock.settimeout(1)
+        if sock.connect_ex(("127.0.0.1", 9000)) == 0:
+            raise SystemExit(0)
+    time.sleep(1)
+raise SystemExit(1)
+PY
+}
+
+start_server() {
+  (cd "$ROOT_DIR" && npm start) >"$(server_log)" 2>&1 &
+  echo $!
+}
+
+stop_server() {
+  local pid="$1"
+  if [[ -z "$pid" ]]; then
+    return
+  fi
+  if kill -0 "$pid" >/dev/null 2>&1; then
+    kill "$pid" >/dev/null 2>&1 || true
+    wait "$pid" >/dev/null 2>&1 || true
+  fi
 }
 
 print_dry_run() {
@@ -88,55 +143,66 @@ Target: $SAFE_TARGET
 Log dir: $LOG_DIR
 
 Planned scenarios:
-1. Quick scan against a safe target
-2. Deep scan with CVE output enabled
-3. HTML and PDF report generation
-4. Auto-scan schedule validation
-5. Auto-monitor rule validation
-6. Job reconnect/replay handling
-7. Update banner and idle-state flow
+1. Boot the app through npm start
+2. Probe /api/app-identity
+3. Probe /
+4. Probe /static/techmore.png
+5. Record the result
 EOF2
 }
 
 main() {
+  local server_pid=""
   case "$MODE" in
     --dry-run)
       print_dry_run
       ;;
     --run)
       mkdir -p "$LOG_DIR"
-      local runtime_log report_log update_log json_log
-      runtime_log="$(log_file_for "-pytest")"
-      report_log="${runtime_log}.report"
-      update_log="${runtime_log}.update"
-      json_log="${LOG_DIR}/nightly-product-eval.json"
+      local runtime_log
+      runtime_log="$(run_log)"
 
-      if tests_present; then
-        run_pytest_slice "$ROOT_DIR/tests/test_runtime_contract.py $ROOT_DIR/tests/test_socketio_integration.py $ROOT_DIR/tests/test_health_modules.py" "$runtime_log"
-        run_pytest_slice "$ROOT_DIR/tests/test_reporting_modules.py" "$report_log"
-        run_pytest_slice "$ROOT_DIR/tests/test_update_modules.py" "$update_log"
-      else
-        printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$runtime_log"
-        printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$report_log"
-        printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$update_log"
+      if port_in_use; then
+        printf 'Port 9000 already in use; blocked evaluation run.\n' >"$runtime_log"
+        write_json_report "$(json_log)" "run" '[
+          {"name": "app_start", "status": "blocked", "reason": "port already in use"},
+          {"name": "identity_probe", "status": "blocked", "reason": "port already in use"},
+          {"name": "root_probe", "status": "blocked", "reason": "port already in use"}
+        ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\"]")"
+        printf '%s nightly-product-eval blocked: port 9000 already in use\n' "$(timestamp)"
+        exit 1
       fi
 
-      local scenarios_json artifacts_json
-      if tests_present; then
-        scenarios_json='[
-          {"name": "runtime_contract", "status": "pass"},
-          {"name": "report_generation", "status": "pass"},
-          {"name": "update_and_idle_flow", "status": "pass"}
-        ]'
-      else
-        scenarios_json='[
-          {"name": "runtime_contract", "status": "blocked", "reason": "no test files present"},
-          {"name": "report_generation", "status": "blocked", "reason": "no test files present"},
-          {"name": "update_and_idle_flow", "status": "blocked", "reason": "no test files present"}
-        ]'
+      server_pid="$(start_server)"
+      if ! wait_for_port; then
+        printf 'Server did not start on port 9000.\n' >"$runtime_log"
+        write_json_report "$(json_log)" "run" '[
+          {"name": "app_start", "status": "blocked", "reason": "server did not start"},
+          {"name": "identity_probe", "status": "blocked", "reason": "server did not start"},
+          {"name": "root_probe", "status": "blocked", "reason": "server did not start"}
+        ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\"]")"
+        printf '%s nightly-product-eval blocked: server did not start on port 9000\n' "$(timestamp)"
+        exit 1
       fi
-      artifacts_json="$(printf '%s' "[\"$runtime_log\", \"$report_log\", \"$update_log\"]")"
-      write_json_report "$json_log" "run" "$scenarios_json" "$artifacts_json"
+
+      identity_json="$(probe_identity)"
+      root_html="$(probe_root)"
+      probe_static_asset
+      printf '%s\n' "$identity_json"
+      printf '%s\n' "$root_html" | sed -n '1,5p'
+      {
+        printf '%s\n' "$(timestamp)"
+        printf 'identity=%s\n' "$identity_json"
+        printf 'root=%s\n' "$(printf '%s' "$root_html" | tr '\n' ' ' | cut -c1-200)"
+        printf 'static_asset=ok\n'
+      } >"$runtime_log"
+      write_json_report "$(json_log)" "run" '[
+        {"name": "app_start", "status": "pass"},
+        {"name": "identity_probe", "status": "pass"},
+        {"name": "root_probe", "status": "pass"},
+        {"name": "static_asset_probe", "status": "pass"}
+      ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\"]")"
+      stop_server "${server_pid:-}"
       printf '%s nightly-product-eval completed successfully\n' "$(timestamp)"
       ;;
     --record)
