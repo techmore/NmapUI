@@ -1107,8 +1107,10 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind, onComp
     const reportUrl = `/reports/${profile.folderName}/${reportName}`;
     const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
     const xmlUrl = `/reports/${profile.folderName}/${xmlName}`;
+    let reportXmlPath = xmlPath;
     try {
         fs.copyFileSync(xmlPath, xmlArchivePath);
+        reportXmlPath = xmlArchivePath;
         logEvent(socket, 'report', `XML archived: ${xmlName}`);
     } catch (error) {
         logEvent(socket, 'error', `XML archive failed for ${xmlName}: ${error.message}`);
@@ -1132,7 +1134,7 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind, onComp
             '--stringparam', 'cidr', shellQuote(networkInfo.cidr || ''),
             '--stringparam', 'traceroute_summary', shellQuote(tracerouteSummary),
             shellQuote(xslPath),
-            shellQuote(xmlPath)
+            shellQuote(reportXmlPath)
         ].join(' ');
         exec(xsltCommand, (err) => {
             if (!err) {
