@@ -116,6 +116,10 @@ probe_auto_scan_ui_js() {
   curl -fsS "http://127.0.0.1:9000/static/js/auto_scan_ui.js" >/dev/null
 }
 
+probe_asset_details_modal_js() {
+  curl -fsS "http://127.0.0.1:9000/static/js/asset_details_modal.js" >/dev/null
+}
+
 port_in_use() {
   python3 - <<'PY'
 import socket
@@ -177,7 +181,8 @@ Planned scenarios:
 8. Probe /static/js/settings_tab.js
 9. Probe /static/js/update_modal.js
 10. Probe /static/js/auto_scan_ui.js
-11. Record the result
+11. Probe /static/js/asset_details_modal.js
+12. Record the result
 EOF2
 }
 
@@ -224,6 +229,7 @@ main() {
       probe_settings_tab_js
       probe_update_modal_js
       probe_auto_scan_ui_js
+      probe_asset_details_modal_js
       printf '%s\n' "$identity_json"
       printf '%s\n' "$root_html" | sed -n '1,5p'
       {
@@ -237,6 +243,7 @@ main() {
         printf 'settings_tab_js=ok\n'
         printf 'update_modal_js=ok\n'
         printf 'auto_scan_ui_js=ok\n'
+        printf 'asset_details_modal_js=ok\n'
       } >"$runtime_log"
       run_pytest_slice "$ROOT_DIR/.claude/worktrees/quirky-torvalds/tests/test_socketio_integration.py" "${LOG_DIR}/nightly-product-eval-pytest.log.socketio"
       write_json_report "$(json_log)" "run" '[
@@ -250,6 +257,7 @@ main() {
         {"name": "settings_tab_js_probe", "status": "pass"},
         {"name": "update_modal_js_probe", "status": "pass"},
         {"name": "auto_scan_ui_js_probe", "status": "pass"},
+        {"name": "asset_details_modal_js_probe", "status": "pass"},
         {"name": "socketio_runtime_smoke", "status": "pass"},
         {"name": "socketio_integration_tests", "status": "pass"}
       ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\", \"${LOG_DIR}/nightly-product-eval-pytest.log.socketio\"]")"
