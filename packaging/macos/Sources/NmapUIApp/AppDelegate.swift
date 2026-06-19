@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL, runtimeURL: runtimeURL)
     private let runtimeMenuPresenter = RuntimeMenuPresenter()
     private let runtimeAlertPresenter = RuntimeAlertPresenter()
+    private let launchAtLoginController = LaunchAtLoginController()
     private lazy var runtimeLifecycleController = RuntimeLifecycleController(
         processLauncher: processLauncher,
         startupCoordinator: startupCoordinator,
@@ -80,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func syncLaunchAtLoginState() {
-        runtimeMenuPresenter.syncLaunchAtLoginState()
+        launchAtLoginController.syncLaunchAtLoginState(runtimeMenuPresenter)
     }
 
     @objc private func openApp() {
@@ -124,17 +125,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleLaunchAtLogin() {
-        guard #available(macOS 13.0, *) else { return }
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-            syncLaunchAtLoginState()
-        } catch {
-            NSLog("Failed to toggle launch at login: \(error.localizedDescription)")
-        }
+        launchAtLoginController.toggleLaunchAtLogin()
+        syncLaunchAtLoginState()
     }
 
     @objc private func uninstallApp() {
