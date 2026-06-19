@@ -8,6 +8,7 @@ __pycache__/
 config.json
 history.json
 .google_drive/
+/.claude/
 
 reports_archive/
 phase2_results.xml
