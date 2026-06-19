@@ -7,6 +7,26 @@ _HOSTNAME_RE = re.compile(
     r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?"
     r"(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$"
 )
+_IPV4_LIKE_RE = re.compile(r"^[0-9./-]+$")
+
+
+def _is_valid_ipv4_range(item: str) -> bool:
+    """Return whether an item is an Nmap-style IPv4 octet range."""
+    octets = item.split(".")
+    if len(octets) != 4 or not any("-" in octet for octet in octets):
+        return False
+
+    for octet in octets:
+        bounds = octet.split("-")
+        if len(bounds) > 2 or any(not bound.isdigit() for bound in bounds):
+            return False
+        values = [int(bound) for bound in bounds]
+        if any(value > 255 for value in values):
+            return False
+        if len(values) == 2 and values[0] > values[1]:
+            return False
+
+    return True
 
 
 def _is_valid_item(item: str) -> tuple[bool, str | None]:
@@ -26,6 +46,14 @@ def _is_valid_item(item: str) -> tuple[bool, str | None]:
         return True, None
     except ValueError:
         pass
+
+    # Nmap supports ranges within IPv4 octets, such as 192.168.1.1-254.
+    if _is_valid_ipv4_range(item):
+        return True, None
+
+    # Do not let malformed dotted IPs fall through and pass as hostnames.
+    if _IPV4_LIKE_RE.fullmatch(item):
+        return False, f"Invalid target: {item}"
 
     # Hostname / FQDN (nmap accepts these natively)
     if _HOSTNAME_RE.match(item):
