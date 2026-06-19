@@ -41,6 +41,106 @@ Then open http://localhost:9000 in your browser.
 
 All dependencies are installed automatically by `install.sh`.
 
+## Installation & Quick Start (macOS)
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/techmore/NmapUI.git
+   cd NmapUI
+   ```
+
+2. Build and launch the menu bar app:
+   ```bash
+   ./build.sh
+   ```
+
+   `build.sh` will automatically run `install.sh` if dependencies haven't been set up yet. After a successful build, look for the network icon in your macOS menu bar. The app serves NmapUI on a local loopback URL, defaulting to `http://127.0.0.1:9000` and falling back to the next available local port if needed.
+   The wrapper target is selected automatically from your host architecture (`arm64` or `x86_64`). Override it explicitly with `NMAPUI_SWIFT_TARGET` if needed.
+   The completed `NmapUI.app` is installed into `/Applications` when writable, otherwise `~/Applications`, replacing any existing install. Override the destination explicitly with `NMAPUI_APPLICATIONS_DIR`.
+
+   > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
+
+### Running without the menu bar app
+
+To run the Python server directly (after `install.sh` has been run):
+```bash
+./start.sh
+```
+
+Or manually:
+```bash
+source .venv/bin/activate
+./.venv/bin/python -m playwright install chromium
+./.venv/bin/python app.py
+```
+
+## Container Build
+
+If you want a more atomic install path, the repository now includes a container build that packages the Python app with its runtime dependencies and common scan/report tooling.
+
+Build the image:
+```bash
+docker build -t nmapui:container .
+```
+
+Run it with Docker Compose:
+```bash
+docker compose up --build
+```
+
+The container listens on `0.0.0.0:9000` and persists runtime data in `/data`. The compose file mounts that directory as a named volume so scan history, settings, and runtime state survive restarts.
+
+Notes:
+- The container includes `nmap`, `xsltproc`, `wkhtmltopdf`, and Chromium for PDF rendering.
+- Network scanning still depends on the runtime’s network permissions. The bundled compose file adds `NET_ADMIN` and `NET_RAW`, which are typically required for fuller scan capabilities.
+- For environments like Apple Container Machines, the same image can be used as a starting point, but you may need to adjust network exposure or host access based on the target runtime’s policies.
+- Container startup keeps auth safe by default in the container example through explicit environment overrides. Change those before using it beyond local development.
+
+## Repository Layout
+
+- Root: stable entrypoints and runtime files such as `app.py`, `requirements.txt`, `install.sh`, and `deploy.sh`
+- `packaging/macos/`: supported Swift wrapper source and wrapper-specific docs
+- `packaging/pyinstaller/`: PyInstaller spec and packaging inputs
+- `docs/guides/`: user and maintainer guides
+- `docs/notes/`: internal implementation notes and working analysis
+- `docs/audits/`: deeper audit writeups that are not part of the main setup flow
+
+Runtime-only files such as `auto_scan_config.json`, generated scan outputs, local wrapper binaries, and ad hoc scratch directories should stay untracked.
+
+## Admin Commands
+
+Backfill legacy scan metadata into the SQLite runtime store without starting the web app:
+
+```bash
+./.venv/bin/python scripts/backfill_runtime_store.py
+```
+
+Optional overrides:
+
+```bash
+./.venv/bin/python scripts/backfill_runtime_store.py --db-path /tmp/runtime.sqlite3 --scans-dir /tmp/scans
+```
+
+Export the runtime database from the Settings tab, or download it directly:
+
+```bash
+curl -OJ http://127.0.0.1:9000/api/runtime/export
+```
+
+Migrate an existing runtime database into the newly built menu bar app:
+
+```bash
+NMAPUI_MIGRATE_DB=1 ./build.sh
+```
+
+Optional migration source override:
+
+```bash
+NMAPUI_MIGRATE_DB=1 NMAPUI_MIGRATE_DB_FROM=/path/to/runtime.sqlite3 ./build.sh
+```
+
+If migration is enabled and the source database does not exist, `build.sh` fails before replacing the installed app.
+
 ## Usage
 
 ### Start the server

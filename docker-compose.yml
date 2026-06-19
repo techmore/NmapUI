@@ -1,0 +1,24 @@
+services:
+  nmapui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nmapui:container
+    container_name: nmapui
+    environment:
+      NMAPUI_ALLOW_DEFAULT_CREDENTIALS: "true"
+      NMAPUI_TRUST_LOCAL_UI: "true"
+      NMAPUI_HOST: 0.0.0.0
+      NMAPUI_PORT: "9000"
+    ports:
+      - "9000:9000"
+    volumes:
+      - nmapui-data:/data
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    privileged: false
+    restart: unless-stopped
+
+volumes:
+  nmapui-data:
