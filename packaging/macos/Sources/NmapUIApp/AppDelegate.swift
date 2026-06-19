@@ -15,6 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let launchAtLoginController = LaunchAtLoginController()
     let preferencesStore = PreferencesStore()
     private lazy var preferencesController = PreferencesController(preferencesStore: preferencesStore)
+    private lazy var swiftUIBridgeController = SwiftUIBridgeController(
+        openDataDirectory: { [weak self] in self?.openDataDirectory() },
+        savePreferences: { [weak self] in self?.savePreferences() },
+        resetPreferences: { [weak self] in self?.resetPreferences() }
+    )
     private lazy var runtimeLifecycleController = RuntimeLifecycleController(
         processLauncher: processLauncher,
         startupCoordinator: startupCoordinator,
@@ -94,20 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appCommandController.openDataDirectory()
     }
 
-    func openDataDirectoryFromSwiftUI() {
-        openDataDirectory()
-    }
-
     @objc private func restartRuntime() {
         restartRuntimeAfterPreferenceChange()
-    }
-
-    func savePreferencesFromSwiftUI() {
-        savePreferences()
-    }
-
-    func resetPreferencesFromSwiftUI() {
-        resetPreferences()
     }
 
     @objc private func savePreferences() {
@@ -131,6 +124,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quitApp() {
         appTerminationController.quitApp()
+    }
+
+    func openDataDirectoryFromSwiftUI() {
+        swiftUIBridgeController.openDataDirectoryFromSwiftUI()
+    }
+
+    func savePreferencesFromSwiftUI() {
+        swiftUIBridgeController.savePreferencesFromSwiftUI()
+    }
+
+    func resetPreferencesFromSwiftUI() {
+        swiftUIBridgeController.resetPreferencesFromSwiftUI()
     }
 
     private func restartRuntimeAfterPreferenceChange() {
