@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let runtimeURL = RuntimeEndpoints.baseURL
     private let processLauncher = ProcessLauncher()
     private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL, runtimeURL: runtimeURL)
+    private let runtimeMenuPresenter = RuntimeMenuPresenter()
     private lazy var runtimeLifecycleController = RuntimeLifecycleController(
         processLauncher: processLauncher,
         startupCoordinator: startupCoordinator,
@@ -15,12 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     private var statusItem: NSStatusItem?
-    private var runtimeStatusMenuItem: NSMenuItem?
-    private var openAppMenuItem: NSMenuItem?
-    private var openDataDirectoryMenuItem: NSMenuItem?
-    private var restartRuntimeMenuItem: NSMenuItem?
-    private var launchAtLoginMenuItem: NSMenuItem?
-
     let preferencesStore = PreferencesStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -32,7 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = statusItem?.button else { return }
-        updateStatusIcon(isReady: false)
         button.imagePosition = .imageOnly
         button.toolTip = "NmapUI"
 
@@ -40,14 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let runtimeStatusItem = NSMenuItem(title: "Runtime: Starting...", action: nil, keyEquivalent: "")
         runtimeStatusItem.isEnabled = false
         menu.addItem(runtimeStatusItem)
-        runtimeStatusMenuItem = runtimeStatusItem
         menu.addItem(.separator())
 
         let openItem = NSMenuItem(title: "Starting NmapUI...", action: #selector(openApp), keyEquivalent: "o")
         openItem.target = self
         openItem.isEnabled = false
         menu.addItem(openItem)
-        openAppMenuItem = openItem
         menu.addItem(.separator())
 
         let preferencesItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
@@ -58,19 +50,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let restartItem = NSMenuItem(title: "Restart Runtime", action: #selector(restartRuntime), keyEquivalent: "r")
         restartItem.target = self
         menu.addItem(restartItem)
-        restartRuntimeMenuItem = restartItem
         menu.addItem(.separator())
 
         let dataDirectoryItem = NSMenuItem(title: "Open Data Folder", action: #selector(openDataDirectory), keyEquivalent: "")
         dataDirectoryItem.target = self
         menu.addItem(dataDirectoryItem)
-        openDataDirectoryMenuItem = dataDirectoryItem
         menu.addItem(.separator())
 
         let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         loginItem.target = self
         menu.addItem(loginItem)
-        launchAtLoginMenuItem = loginItem
         menu.addItem(.separator())
 
         let uninstallItem = NSMenuItem(title: "Uninstall NmapUI", action: #selector(uninstallApp), keyEquivalent: "")
@@ -79,15 +68,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(withTitle: "Quit", action: #selector(quitApp), keyEquivalent: "q")
         statusItem?.menu = menu
+        runtimeMenuPresenter.configureStatusItem(
+            statusItem,
+            runtimeStatusMenuItem: runtimeStatusItem,
+            openAppMenuItem: openItem,
+            openDataDirectoryMenuItem: dataDirectoryItem,
+            restartRuntimeMenuItem: restartItem,
+            launchAtLoginMenuItem: loginItem
+        )
     }
 
     private func syncLaunchAtLoginState() {
-        guard #available(macOS 13.0, *) else {
-            launchAtLoginMenuItem?.isEnabled = false
-            launchAtLoginMenuItem?.state = .off
-            return
-        }
-        launchAtLoginMenuItem?.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        runtimeMenuPresenter.syncLaunchAtLoginState()
     }
 
     @objc private func openApp() {
@@ -239,21 +231,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func syncRuntimeMenuState() {
-        runtimeStatusMenuItem?.title = "Runtime: \(runtimeLifecycleController.runtimeStatusText)"
-        openAppMenuItem?.title = runtimeLifecycleController.runtimeIsReady ? "Open App" : "Starting NmapUI..."
-        openAppMenuItem?.isEnabled = runtimeLifecycleController.runtimeIsReady
-        restartRuntimeMenuItem?.isEnabled = true
-        openDataDirectoryMenuItem?.isEnabled = true
-        updateStatusIcon(isReady: runtimeLifecycleController.runtimeIsReady)
-    }
-
-    private func updateStatusIcon(isReady: Bool) {
-        guard let button = statusItem?.button else { return }
-        let symbolName = isReady ? "network" : "hourglass"
-        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "NmapUI")
-        image?.isTemplate = true
-        button.image = image
-        button.contentTintColor = isReady ? .controlAccentColor : .secondaryLabelColor
+        runtimeMenuPresenter.syncRuntimeMenuState(
+            isReady: runtimeLifecycleController.runtimeIsReady,
+            statusText: runtimeLifecycleController.runtimeStatusText
+        )
     }
 }
 
