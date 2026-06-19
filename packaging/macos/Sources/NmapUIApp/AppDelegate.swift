@@ -8,6 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let runtimeURL = RuntimeEndpoints.baseURL
     private let processLauncher = ProcessLauncher()
     private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL, runtimeURL: runtimeURL)
+    private lazy var runtimeLifecycleController = RuntimeLifecycleController(
+        processLauncher: processLauncher,
+        startupCoordinator: startupCoordinator,
+        runtimeURL: runtimeURL
+    )
 
     private var statusItem: NSStatusItem?
     private var runtimeStatusMenuItem: NSMenuItem?
@@ -16,25 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var restartRuntimeMenuItem: NSMenuItem?
     private var launchAtLoginMenuItem: NSMenuItem?
 
-    private var runtimeProcess: Process?
-    private var runtimeStopRequested = false
-    private var runtimeAutoRestartAttempted = false
-    private var runtimeStatusText = "Starting..."
-    private var runtimeIsReady = false
     let preferencesStore = PreferencesStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         syncLaunchAtLoginState()
-        runtimeProcess = processLauncher.launchRuntimeIfNeeded()
-        if runtimeProcess == nil {
-            runtimeStatusText = "Error"
-            syncRuntimeMenuState()
-            presentRuntimeLaunchFailureAlert()
-        } else {
-            attachRuntimeTerminationHandler()
-        }
-        beginRuntimeStartupWatch()
+        startRuntimeLifecycle()
     }
 
     private func setupStatusItem() {
@@ -138,28 +130,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         restartRuntimeAfterPreferenceChange()
     }
 
-    private func beginRuntimeStartupWatch() {
-        startupCoordinator.begin()
-        Task { [weak self] in
-            guard let self else { return }
-            let result = await self.startupCoordinator.observeStartup()
-            guard let result else { return }
-            switch result {
-            case .ready:
-                self.runtimeIsReady = true
-                self.runtimeStatusText = "Ready"
-                self.runtimeAutoRestartAttempted = false
-                self.syncRuntimeMenuState()
-                NSWorkspace.shared.open(self.runtimeURL)
-            case .timeout:
-                self.runtimeIsReady = false
-                self.runtimeStatusText = "Starting..."
-                self.syncRuntimeMenuState()
-                self.presentRuntimeStartupTimeoutAlert()
-            }
-        }
-    }
-
     @objc private func toggleLaunchAtLogin() {
         guard #available(macOS 13.0, *) else { return }
         do {
@@ -175,8 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func uninstallApp() {
-        runtimeStopRequested = true
-        stopRuntimeProcess()
+        runtimeLifecycleController.stopForQuitOrUninstall()
         if #available(macOS 13.0, *) {
             try? SMAppService.mainApp.unregister()
         }
@@ -187,73 +156,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quitApp() {
-        runtimeStopRequested = true
-        stopRuntimeProcess()
+        runtimeLifecycleController.stopForQuitOrUninstall()
         NSApp.terminate(nil)
     }
 
-    private func stopRuntimeProcess() {
-        processLauncher.stop(runtimeProcess: runtimeProcess)
-        runtimeProcess = nil
-    }
-
     private func restartRuntimeAfterPreferenceChange() {
-        runtimeStopRequested = true
-        stopRuntimeProcess()
-        runtimeIsReady = false
-        runtimeAutoRestartAttempted = false
-        runtimeStatusText = "Starting..."
-        syncRuntimeMenuState()
-
-        runtimeProcess = processLauncher.launchRuntimeIfNeeded()
-        if runtimeProcess == nil {
-            runtimeStatusText = "Error"
-            syncRuntimeMenuState()
-            presentRuntimeLaunchFailureAlert()
-        } else {
-            attachRuntimeTerminationHandler()
-        }
-
-        runtimeStopRequested = false
-        beginRuntimeStartupWatch()
+        runtimeLifecycleController.restartAfterPreferenceChange(
+            onBrowserOpen: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
+                NSWorkspace.shared.open(self.runtimeURL)
+            },
+            onLaunchFailure: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
+                self.presentRuntimeLaunchFailureAlert()
+            },
+            onStartupTimeout: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
+                self.presentRuntimeStartupTimeoutAlert()
+            },
+            onRuntimeExitFinalFailure: { [weak self] terminationStatus in
+                guard let self else { return }
+                self.presentRuntimeExitAlert(terminationStatus: terminationStatus)
+            },
+            onStateChanged: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
+            }
+        )
     }
 
-    private func attachRuntimeTerminationHandler() {
-        runtimeProcess?.terminationHandler = { [weak self] process in
-            Task { @MainActor in
-                self?.handleRuntimeExit(terminationStatus: process.terminationStatus)
+    private func startRuntimeLifecycle() {
+        runtimeLifecycleController.start(
+            onBrowserOpen: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
+                NSWorkspace.shared.open(self.runtimeURL)
+            },
+            onLaunchFailure: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
+                self.presentRuntimeLaunchFailureAlert()
+            },
+            onStartupTimeout: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
+                self.presentRuntimeStartupTimeoutAlert()
+            },
+            onRuntimeExitFinalFailure: { [weak self] terminationStatus in
+                guard let self else { return }
+                self.presentRuntimeExitAlert(terminationStatus: terminationStatus)
+            },
+            onStateChanged: { [weak self] in
+                guard let self else { return }
+                self.syncRuntimeMenuState()
             }
-        }
-    }
-
-    private func handleRuntimeExit(terminationStatus: Int32) {
-        runtimeProcess = nil
-        runtimeIsReady = false
-        runtimeStatusText = "Error"
-        syncRuntimeMenuState()
-
-        guard !runtimeStopRequested else { return }
-
-        if !runtimeAutoRestartAttempted {
-            runtimeAutoRestartAttempted = true
-            runtimeStatusText = "Restarting..."
-            syncRuntimeMenuState()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-                self?.restartRuntimeAfterPreferenceChange()
-            }
-            return
-        }
-
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "NmapUI runtime stopped"
-        alert.informativeText = "The backend exited with status \(terminationStatus). Restart the runtime from the menu if you want another attempt."
-        alert.addButton(withTitle: "Restart Runtime")
-        alert.addButton(withTitle: "OK")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            restartRuntimeAfterPreferenceChange()
-        }
+        )
     }
 
     private func presentRuntimeLaunchFailureAlert() {
@@ -274,13 +234,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.runModal()
     }
 
+    private func presentRuntimeExitAlert(terminationStatus: Int32) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "NmapUI runtime stopped"
+        alert.informativeText = "The backend exited with status \(terminationStatus). Restart the runtime from the menu if you want another attempt."
+        alert.addButton(withTitle: "Restart Runtime")
+        alert.addButton(withTitle: "OK")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            restartRuntimeAfterPreferenceChange()
+        }
+    }
+
     private func syncRuntimeMenuState() {
-        runtimeStatusMenuItem?.title = "Runtime: \(runtimeStatusText)"
-        openAppMenuItem?.title = runtimeIsReady ? "Open App" : "Starting NmapUI..."
-        openAppMenuItem?.isEnabled = runtimeIsReady
+        runtimeStatusMenuItem?.title = "Runtime: \(runtimeLifecycleController.runtimeStatusText)"
+        openAppMenuItem?.title = runtimeLifecycleController.runtimeIsReady ? "Open App" : "Starting NmapUI..."
+        openAppMenuItem?.isEnabled = runtimeLifecycleController.runtimeIsReady
         restartRuntimeMenuItem?.isEnabled = true
         openDataDirectoryMenuItem?.isEnabled = true
-        updateStatusIcon(isReady: runtimeIsReady)
+        updateStatusIcon(isReady: runtimeLifecycleController.runtimeIsReady)
     }
 
     private func updateStatusIcon(isReady: Bool) {
