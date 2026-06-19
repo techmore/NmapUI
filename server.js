@@ -17,6 +17,7 @@ const io = new Server(server);
 
 const APP_IDENTITY = 'tm-network-scanner';
 const PORT = Number(process.env.PORT || 9000);
+const HOST = process.env.HOST || process.env.NMAPUI_HOST || '127.0.0.1';
 const DATA_DIR = process.env.NMAPUI_DATA_DIR
     ? path.resolve(process.env.NMAPUI_DATA_DIR)
     : __dirname;
@@ -1715,8 +1716,12 @@ function listenWithPortGuard(retried = false) {
         }
         listenWithPortGuard(true);
     });
-    server.listen(PORT);
+    server.listen(PORT, HOST);
 }
 
-server.on('listening', () => console.log(`${VERSION} Server running on http://localhost:${PORT}`));
+server.on('listening', () => {
+    const address = server.address();
+    const activePort = address && typeof address === 'object' ? address.port : PORT;
+    console.log(`${VERSION} Server running on http://localhost:${activePort}`);
+});
 listenWithPortGuard();
