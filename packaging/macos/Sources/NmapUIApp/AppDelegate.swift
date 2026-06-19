@@ -162,58 +162,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func restartRuntimeAfterPreferenceChange() {
         runtimeLifecycleController.restartAfterPreferenceChange(
-            onBrowserOpen: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-                NSWorkspace.shared.open(self.runtimeURL)
-            },
-            onLaunchFailure: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-                self.presentRuntimeLaunchFailureAlert()
-            },
-            onStartupTimeout: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-                self.presentRuntimeStartupTimeoutAlert()
-            },
+            onBrowserOpen: { [weak self] in self?.handleRuntimeBrowserOpen() },
+            onLaunchFailure: { [weak self] in self?.handleRuntimeLaunchFailure() },
+            onStartupTimeout: { [weak self] in self?.handleRuntimeStartupTimeout() },
             onRuntimeExitFinalFailure: { [weak self] terminationStatus in
-                guard let self else { return }
-                self.presentRuntimeExitAlert(terminationStatus: terminationStatus)
+                self?.handleRuntimeExitFinalFailure(terminationStatus: terminationStatus)
             },
-            onStateChanged: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-            }
+            onStateChanged: { [weak self] in self?.handleRuntimeStateChanged() }
         )
     }
 
     private func startRuntimeLifecycle() {
         runtimeLifecycleController.start(
-            onBrowserOpen: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-                NSWorkspace.shared.open(self.runtimeURL)
-            },
-            onLaunchFailure: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-                self.presentRuntimeLaunchFailureAlert()
-            },
-            onStartupTimeout: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-                self.presentRuntimeStartupTimeoutAlert()
-            },
+            onBrowserOpen: { [weak self] in self?.handleRuntimeBrowserOpen() },
+            onLaunchFailure: { [weak self] in self?.handleRuntimeLaunchFailure() },
+            onStartupTimeout: { [weak self] in self?.handleRuntimeStartupTimeout() },
             onRuntimeExitFinalFailure: { [weak self] terminationStatus in
-                guard let self else { return }
-                self.presentRuntimeExitAlert(terminationStatus: terminationStatus)
+                self?.handleRuntimeExitFinalFailure(terminationStatus: terminationStatus)
             },
-            onStateChanged: { [weak self] in
-                guard let self else { return }
-                self.syncRuntimeMenuState()
-            }
+            onStateChanged: { [weak self] in self?.handleRuntimeStateChanged() }
         )
+    }
+
+    private func handleRuntimeBrowserOpen() {
+        syncRuntimeMenuState()
+        NSWorkspace.shared.open(runtimeURL)
+    }
+
+    private func handleRuntimeLaunchFailure() {
+        syncRuntimeMenuState()
+        presentRuntimeLaunchFailureAlert()
+    }
+
+    private func handleRuntimeStartupTimeout() {
+        syncRuntimeMenuState()
+        presentRuntimeStartupTimeoutAlert()
+    }
+
+    private func handleRuntimeExitFinalFailure(terminationStatus: Int32) {
+        presentRuntimeExitAlert(terminationStatus: terminationStatus)
+    }
+
+    private func handleRuntimeStateChanged() {
+        syncRuntimeMenuState()
     }
 
     private func presentRuntimeLaunchFailureAlert() {
