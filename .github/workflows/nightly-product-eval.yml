@@ -1,0 +1,44 @@
+name: Nightly Product Evaluation
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Select dry-run for a no-side-effects preview or run for the full evaluation."
+        required: false
+        default: "run"
+        type: choice
+        options:
+          - run
+          - dry-run
+
+jobs:
+  eval:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm install
+
+      - name: Run nightly product evaluation
+        run: npm run nightly-eval:${{ github.event.inputs.mode || 'run' }}
+
+      - name: Upload evaluation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-product-eval
+          path: |
+            docs/notes/eval-logs/nightly-product-eval.log
+            docs/notes/eval-logs/nightly-product-eval-server.log
+            docs/notes/eval-logs/nightly-product-eval.json
+            docs/notes/eval-logs/nightly-product-eval-socketio-smoke.log

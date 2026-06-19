@@ -10,13 +10,18 @@ const cron = require('node-cron');
 const axios = require('axios');
 const xml2js = require('xml2js');
 const crypto = require('crypto');
+const {
+    runGoogleDriveHelper,
+    getGoogleDriveRedirectUri,
+} = require('./google_drive_bridge');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 const APP_IDENTITY = 'tm-network-scanner';
-const PORT = Number(process.env.PORT || 9000);
+const PORT = Number(process.env.PORT || process.env.NMAPUI_PORT || 9000);
+const HOST = process.env.HOST || process.env.NMAPUI_HOST || '127.0.0.1';
 const DATA_DIR = process.env.NMAPUI_DATA_DIR
     ? path.resolve(process.env.NMAPUI_DATA_DIR)
     : __dirname;
@@ -38,7 +43,7 @@ app.get('/google-drive/oauth2callback', async (req, res) => {
         'exchange-code',
         '--code', req.query.code || '',
         '--state', req.query.state || ''
-    ]);
+    ], DATA_DIR);
     if (result.success) {
         const googleDrive = saveGoogleDriveConfig({ enabled: true });
         logEvent(null, 'settings', 'Google Drive connected and sync enabled.');
@@ -546,32 +551,6 @@ function getCustomerFingerprintProfile() {
     };
 }
 
-function runGoogleDriveHelper(args, input = null) {
-    return new Promise((resolve) => {
-        const child = spawn('python3', [path.join(__dirname, 'google_drive.py'), ...args, '--root', DATA_DIR]);
-        let stdout = '';
-        let stderr = '';
-
-        child.stdout.on('data', data => { stdout += data.toString(); });
-        child.stderr.on('data', data => { stderr += data.toString(); });
-        child.on('close', (code) => {
-            try {
-                const payload = JSON.parse(stdout.trim() || '{}');
-                resolve({ ...payload, exitCode: code });
-            } catch (error) {
-                resolve({ success: false, exitCode: code, error: stderr.trim() || stdout.trim() || error.message });
-            }
-        });
-
-        if (input) child.stdin.end(input);
-        else child.stdin.end();
-    });
-}
-
-function getGoogleDriveRedirectUri() {
-    return `http://localhost:${PORT}/google-drive/oauth2callback`;
-}
-
 async function uploadReportFilesToDrive(socket, filePaths, profile, context = {}) {
     const googleDrive = appConfig.googleDrive || {};
     const label = context.label || 'report';
@@ -595,7 +574,7 @@ async function uploadReportFilesToDrive(socket, filePaths, profile, context = {}
     const destination = googleDrive.folderId ? `folder ID ${googleDrive.folderId}` : folderName;
     logEvent(socket, 'report', `Google Drive upload starting for ${label}: ${fileNames} -> ${destination}`);
 
-    const result = await runGoogleDriveHelper(args);
+    const result = await runGoogleDriveHelper(args, DATA_DIR);
     if (result.success) {
         if (result.folder_id && !googleDrive.folderId) saveGoogleDriveConfig({ folderId: result.folder_id });
         const uploadedNames = (result.uploaded || []).map(file => file.name).filter(Boolean).join(', ') || `${existingFiles.length} file(s)`;
@@ -1113,10 +1092,8 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind, onComp
     const reportUrl = `/reports/${profile.folderName}/${reportName}`;
     const pdfUrl = `/reports/${profile.folderName}/${pdfName}`;
     const xmlUrl = `/reports/${profile.folderName}/${xmlName}`;
-    let reportXmlPath = xmlPath;
     try {
         fs.copyFileSync(xmlPath, xmlArchivePath);
-        reportXmlPath = xmlArchivePath;
         logEvent(socket, 'report', `XML archived: ${xmlName}`);
     } catch (error) {
         logEvent(socket, 'error', `XML archive failed for ${xmlName}: ${error.message}`);
@@ -1140,7 +1117,7 @@ function generateReportFromXml(socket, xmlPath, duration, reportScanKind, onComp
             '--stringparam', 'cidr', shellQuote(networkInfo.cidr || ''),
             '--stringparam', 'traceroute_summary', shellQuote(tracerouteSummary),
             shellQuote(xslPath),
-            shellQuote(reportXmlPath)
+            shellQuote(xmlPath)
         ].join(' ');
         exec(xsltCommand, (err) => {
             if (!err) {
@@ -1594,7 +1571,7 @@ io.on('connection', (socket) => {
     socket.on('get_history', () => socket.emit('history_data', loadJSON(HISTORY_PATH, [])));
     socket.on('get_customer_profile', () => socket.emit('customer_profile', getCustomerFingerprintProfile()));
     socket.on('get_google_drive_status', async () => {
-        const status = await runGoogleDriveHelper(['status']);
+        const status = await runGoogleDriveHelper(['status'], DATA_DIR);
         if (status.connected && !getGoogleDriveConfig().enabled) {
             saveGoogleDriveConfig({ enabled: true });
             logEvent(socket, 'settings', 'Google Drive connection found; sync enabled on server.');
@@ -1602,17 +1579,17 @@ io.on('connection', (socket) => {
         socket.emit('google_drive_status', { ...status, config: getGoogleDriveConfig() });
     });
     socket.on('save_google_drive_credentials', async (data = {}) => {
-        const result = await runGoogleDriveHelper(['save-credentials'], data.credentialsJson || '');
+        const result = await runGoogleDriveHelper(['save-credentials'], DATA_DIR, data.credentialsJson || '');
         const googleDrive = result.success ? saveGoogleDriveConfig({ enabled: true }) : getGoogleDriveConfig();
         if (result.success) logEvent(socket, 'settings', 'Google Drive credentials imported and sync enabled.');
         socket.emit('google_drive_status', { ...result, config: googleDrive });
     });
     socket.on('connect_google_drive', async () => {
-        const result = await runGoogleDriveHelper(['auth-url', '--redirect-uri', getGoogleDriveRedirectUri()]);
+        const result = await runGoogleDriveHelper(['auth-url', '--redirect-uri', getGoogleDriveRedirectUri(PORT)], DATA_DIR);
         socket.emit('google_drive_auth_url', result);
     });
     socket.on('disconnect_google_drive', async () => {
-        const result = await runGoogleDriveHelper(['disconnect']);
+        const result = await runGoogleDriveHelper(['disconnect'], DATA_DIR);
         const googleDrive = saveGoogleDriveConfig({ enabled: false });
         if (result.success) logEvent(socket, 'settings', 'Google Drive disconnected and sync disabled.');
         socket.emit('google_drive_status', { ...result, config: googleDrive });
@@ -1717,8 +1694,12 @@ function listenWithPortGuard(retried = false) {
         }
         listenWithPortGuard(true);
     });
-    server.listen(PORT);
+    server.listen(PORT, HOST);
 }
 
-server.on('listening', () => console.log(`${VERSION} Server running on http://localhost:${PORT}`));
+server.on('listening', () => {
+    const address = server.address();
+    const activePort = address && typeof address === 'object' ? address.port : PORT;
+    console.log(`${VERSION} Server running on http://localhost:${activePort}`);
+});
 listenWithPortGuard();

@@ -4,31 +4,16 @@ set -euo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_DIR="$BASE_DIR"
 LOG_DIR="${NMAPUI_EVAL_LOG_DIR:-$ROOT_DIR/docs/notes/eval-logs}"
+DEFAULT_PORT="${NMAPUI_EVAL_PORT:-0}"
 MODE="${1:---dry-run}"
-if [[ -z "${PYTHON_BIN:-}" && -x "$BASE_DIR/.venv/bin/python" ]]; then
-  PYTHON_BIN="$BASE_DIR/.venv/bin/python"
-elif [[ -z "${PYTHON_BIN:-}" && -x "$ROOT_DIR/.venv/bin/python" ]]; then
-  PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
-else
-  PYTHON_BIN="${PYTHON_BIN:-python3}"
-fi
-PYTEST_BIN="${PYTEST_BIN:-$PYTHON_BIN -m pytest}"
 SAFE_TARGET="${NMAPUI_EVAL_TARGET:-127.0.0.1}"
 
 timestamp() {
-  "$PYTHON_BIN" - <<'PY'
-from datetime import datetime, timezone
-print(datetime.now(timezone.utc).isoformat())
-PY
+  node -e 'process.stdout.write(new Date().toISOString())'
 }
 
 git_revision() {
   git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || printf '%s' unknown
-}
-
-log_file_for() {
-  local suffix="$1"
-  printf '%s/nightly-product-eval%s.log' "$LOG_DIR" "$suffix"
 }
 
 server_log() {
@@ -49,77 +34,112 @@ write_json_report() {
   local scenarios_json="$3"
   local artifacts_json="$4"
   mkdir -p "$LOG_DIR"
-  "$PYTHON_BIN" - "$path" "$mode" "$(git_revision)" "$ROOT_DIR" "$scenarios_json" "$artifacts_json" <<'PY'
-import json
-import pathlib
-import sys
-from datetime import datetime, timezone
+  node - "$path" "$mode" "$(git_revision)" "$ROOT_DIR" "$scenarios_json" "$artifacts_json" <<'NODE'
+const fs = require('fs');
+const path = require('path');
 
-path = pathlib.Path(sys.argv[1])
-mode = sys.argv[2]
-revision = sys.argv[3]
-root_dir = sys.argv[4]
-scenarios = json.loads(sys.argv[5])
-artifacts = json.loads(sys.argv[6])
-payload = {
-    "timestamp": datetime.now(timezone.utc).isoformat(),
-    "mode": mode,
-    "revision": revision,
-    "environment": pathlib.Path(root_dir).name,
-    "scenarios": scenarios,
-    "artifacts": artifacts,
-}
-path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-PY
+const [,, filePath, mode, revision, rootDir, scenariosJson, artifactsJson] = process.argv;
+const payload = {
+  timestamp: new Date().toISOString(),
+  mode,
+  revision,
+  environment: path.basename(rootDir),
+  scenarios: JSON.parse(scenariosJson),
+  artifacts: JSON.parse(artifactsJson),
+};
+fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+NODE
 }
 
-run_pytest_slice() {
-  local tests="$1"
+run_socketio_smoke() {
+  local port="$1"
   local output_file="$2"
   mkdir -p "$LOG_DIR"
-  eval "$PYTEST_BIN -q $tests" >"$output_file" 2>&1
+  node "$ROOT_DIR/scripts/nightly_product_eval_socketio_smoke.js" "$port" >"$output_file" 2>&1
 }
 
 probe_identity() {
-  curl -fsS "http://127.0.0.1:9000/api/app-identity"
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/api/app-identity"
 }
 
 probe_root() {
-  curl -fsS "http://127.0.0.1:9000/"
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/"
 }
 
 probe_static_asset() {
-  curl -fsS "http://127.0.0.1:9000/static/techmore.png" >/dev/null
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/techmore.png" >/dev/null
 }
 
-port_in_use() {
-  python3 - <<'PY'
-import socket
-
-with socket.socket() as sock:
-    sock.settimeout(1)
-    raise SystemExit(0 if sock.connect_ex(("127.0.0.1", 9000)) == 0 else 1)
-PY
+probe_static_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/app_bootstrap.js" >/dev/null
 }
 
-wait_for_port() {
-  python3 - <<'PY'
-import socket
-import time
+probe_site_chrome_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/site_chrome.js" >/dev/null
+}
 
-deadline = time.time() + 20
-while time.time() < deadline:
-    with socket.socket() as sock:
-        sock.settimeout(1)
-        if sock.connect_ex(("127.0.0.1", 9000)) == 0:
-            raise SystemExit(0)
-    time.sleep(1)
-raise SystemExit(1)
-PY
+probe_report_generation_ui_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/report_generation_ui.js" >/dev/null
+}
+
+probe_settings_tab_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/settings_tab.js" >/dev/null
+}
+
+probe_update_modal_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/update_modal.js" >/dev/null
+}
+
+probe_auto_scan_ui_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/auto_scan_ui.js" >/dev/null
+}
+
+probe_asset_details_modal_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/asset_details_modal.js" >/dev/null
+}
+
+probe_customer_ui_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/customer_ui.js" >/dev/null
+}
+
+probe_table_sorter_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/table_sorter.js" >/dev/null
+}
+
+probe_auto_update_banner_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/auto_update_banner.js" >/dev/null
+}
+
+probe_reports_tab_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/reports_tab.js" >/dev/null
+}
+
+probe_scan_runtime_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/scan_runtime.js" >/dev/null
+}
+
+probe_scan_banners_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/scan_banners.js" >/dev/null
 }
 
 start_server() {
-  (cd "$ROOT_DIR" && npm start) >"$(server_log)" 2>&1 &
+  (cd "$ROOT_DIR" && PORT="$DEFAULT_PORT" TRACEROUTE_PATH=/usr/bin/true npm start) >"$(server_log)" 2>&1 &
   echo $!
 }
 
@@ -147,7 +167,20 @@ Planned scenarios:
 2. Probe /api/app-identity
 3. Probe /
 4. Probe /static/techmore.png
-5. Record the result
+5. Probe /static/js/app_bootstrap.js
+6. Probe /static/js/site_chrome.js
+7. Probe /static/js/report_generation_ui.js
+8. Probe /static/js/settings_tab.js
+9. Probe /static/js/update_modal.js
+10. Probe /static/js/auto_scan_ui.js
+11. Probe /static/js/asset_details_modal.js
+12. Probe /static/js/customer_ui.js
+13. Probe /static/js/table_sorter.js
+14. Probe /static/js/auto_update_banner.js
+15. Probe /static/js/reports_tab.js
+16. Probe /static/js/scan_runtime.js
+17. Probe /static/js/scan_banners.js
+18. Record the result
 EOF2
 }
 
@@ -160,34 +193,47 @@ main() {
     --run)
       mkdir -p "$LOG_DIR"
       local runtime_log
+      local active_port=""
       runtime_log="$(run_log)"
 
-      if port_in_use; then
-        printf 'Port 9000 already in use; blocked evaluation run.\n' >"$runtime_log"
-        write_json_report "$(json_log)" "run" '[
-          {"name": "app_start", "status": "blocked", "reason": "port already in use"},
-          {"name": "identity_probe", "status": "blocked", "reason": "port already in use"},
-          {"name": "root_probe", "status": "blocked", "reason": "port already in use"}
-        ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\"]")"
-        printf '%s nightly-product-eval blocked: port 9000 already in use\n' "$(timestamp)"
-        exit 1
-      fi
-
       server_pid="$(start_server)"
-      if ! wait_for_port; then
-        printf 'Server did not start on port 9000.\n' >"$runtime_log"
+
+      for _ in $(seq 1 20); do
+        if grep -oE 'http://localhost:[0-9]+' "$(server_log)" | tail -n1 | grep -oE '[0-9]+' >/tmp/nightly-product-eval-port.$$ 2>/dev/null; then
+          active_port="$(cat /tmp/nightly-product-eval-port.$$)"
+          rm -f /tmp/nightly-product-eval-port.$$
+          break
+        fi
+        sleep 1
+      done
+
+      if [[ -z "$active_port" ]]; then
+        printf 'Server did not report a listening port.\n' >"$runtime_log"
         write_json_report "$(json_log)" "run" '[
           {"name": "app_start", "status": "blocked", "reason": "server did not start"},
           {"name": "identity_probe", "status": "blocked", "reason": "server did not start"},
           {"name": "root_probe", "status": "blocked", "reason": "server did not start"}
         ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\"]")"
-        printf '%s nightly-product-eval blocked: server did not start on port 9000\n' "$(timestamp)"
+        printf '%s nightly-product-eval blocked: server did not report a listening port\n' "$(timestamp)"
         exit 1
       fi
 
-      identity_json="$(probe_identity)"
-      root_html="$(probe_root)"
-      probe_static_asset
+      identity_json="$(probe_identity "$active_port")"
+      root_html="$(probe_root "$active_port")"
+      probe_static_asset "$active_port"
+      probe_static_js "$active_port"
+      probe_site_chrome_js "$active_port"
+      probe_report_generation_ui_js "$active_port"
+      probe_settings_tab_js "$active_port"
+      probe_update_modal_js "$active_port"
+      probe_auto_scan_ui_js "$active_port"
+      probe_asset_details_modal_js "$active_port"
+      probe_customer_ui_js "$active_port"
+      probe_table_sorter_js "$active_port"
+      probe_auto_update_banner_js "$active_port"
+      probe_reports_tab_js "$active_port"
+      probe_scan_runtime_js "$active_port"
+      probe_scan_banners_js "$active_port"
       printf '%s\n' "$identity_json"
       printf '%s\n' "$root_html" | sed -n '1,5p'
       {
@@ -195,13 +241,42 @@ main() {
         printf 'identity=%s\n' "$identity_json"
         printf 'root=%s\n' "$(printf '%s' "$root_html" | tr '\n' ' ' | cut -c1-200)"
         printf 'static_asset=ok\n'
+        printf 'static_js=ok\n'
+        printf 'site_chrome_js=ok\n'
+        printf 'report_generation_ui_js=ok\n'
+        printf 'settings_tab_js=ok\n'
+        printf 'update_modal_js=ok\n'
+        printf 'auto_scan_ui_js=ok\n'
+        printf 'asset_details_modal_js=ok\n'
+        printf 'customer_ui_js=ok\n'
+        printf 'table_sorter_js=ok\n'
+        printf 'auto_update_banner_js=ok\n'
+        printf 'reports_tab_js=ok\n'
+        printf 'scan_runtime_js=ok\n'
+        printf 'scan_banners_js=ok\n'
       } >"$runtime_log"
+      run_socketio_smoke "$active_port" "${LOG_DIR}/nightly-product-eval-socketio-smoke.log"
       write_json_report "$(json_log)" "run" '[
         {"name": "app_start", "status": "pass"},
         {"name": "identity_probe", "status": "pass"},
         {"name": "root_probe", "status": "pass"},
-        {"name": "static_asset_probe", "status": "pass"}
-      ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\"]")"
+        {"name": "static_asset_probe", "status": "pass"},
+        {"name": "static_js_probe", "status": "pass"},
+        {"name": "site_chrome_js_probe", "status": "pass"},
+        {"name": "report_generation_ui_js_probe", "status": "pass"},
+        {"name": "settings_tab_js_probe", "status": "pass"},
+        {"name": "update_modal_js_probe", "status": "pass"},
+        {"name": "auto_scan_ui_js_probe", "status": "pass"},
+        {"name": "asset_details_modal_js_probe", "status": "pass"},
+        {"name": "customer_ui_js_probe", "status": "pass"},
+        {"name": "table_sorter_js_probe", "status": "pass"},
+        {"name": "auto_update_banner_js_probe", "status": "pass"},
+        {"name": "reports_tab_js_probe", "status": "pass"},
+        {"name": "scan_runtime_js_probe", "status": "pass"},
+        {"name": "scan_banners_js_probe", "status": "pass"},
+        {"name": "socketio_runtime_smoke", "status": "pass"},
+        {"name": "socketio_integration_smoke", "status": "pass"}
+      ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\", \"${LOG_DIR}/nightly-product-eval-socketio-smoke.log\"]")"
       stop_server "${server_pid:-}"
       printf '%s nightly-product-eval completed successfully\n' "$(timestamp)"
       ;;
