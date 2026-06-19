@@ -136,6 +136,11 @@ probe_table_sorter_js() {
   curl -fsS "http://127.0.0.1:${port}/static/js/table_sorter.js" >/dev/null
 }
 
+probe_auto_update_banner_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/auto_update_banner.js" >/dev/null
+}
+
 start_server() {
   (cd "$ROOT_DIR" && PORT="$DEFAULT_PORT" TRACEROUTE_PATH=/usr/bin/true npm start) >"$(server_log)" 2>&1 &
   echo $!
@@ -174,7 +179,8 @@ Planned scenarios:
 11. Probe /static/js/asset_details_modal.js
 12. Probe /static/js/customer_ui.js
 13. Probe /static/js/table_sorter.js
-14. Record the result
+14. Probe /static/js/auto_update_banner.js
+15. Record the result
 EOF2
 }
 
@@ -224,6 +230,7 @@ main() {
       probe_asset_details_modal_js "$active_port"
       probe_customer_ui_js "$active_port"
       probe_table_sorter_js "$active_port"
+      probe_auto_update_banner_js "$active_port"
       printf '%s\n' "$identity_json"
       printf '%s\n' "$root_html" | sed -n '1,5p'
       {
@@ -240,6 +247,7 @@ main() {
         printf 'asset_details_modal_js=ok\n'
         printf 'customer_ui_js=ok\n'
         printf 'table_sorter_js=ok\n'
+        printf 'auto_update_banner_js=ok\n'
       } >"$runtime_log"
       run_pytest_slice "$ROOT_DIR/.claude/worktrees/quirky-torvalds/tests/test_socketio_integration.py" "${LOG_DIR}/nightly-product-eval-pytest.log.socketio"
       write_json_report "$(json_log)" "run" '[
@@ -256,6 +264,7 @@ main() {
         {"name": "asset_details_modal_js_probe", "status": "pass"},
         {"name": "customer_ui_js_probe", "status": "pass"},
         {"name": "table_sorter_js_probe", "status": "pass"},
+        {"name": "auto_update_banner_js_probe", "status": "pass"},
         {"name": "socketio_runtime_smoke", "status": "pass"},
         {"name": "socketio_integration_tests", "status": "pass"}
       ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\", \"${LOG_DIR}/nightly-product-eval-pytest.log.socketio\"]")"
