@@ -100,6 +100,10 @@ probe_site_chrome_js() {
   curl -fsS "http://127.0.0.1:9000/static/js/site_chrome.js" >/dev/null
 }
 
+probe_report_generation_ui_js() {
+  curl -fsS "http://127.0.0.1:9000/static/js/report_generation_ui.js" >/dev/null
+}
+
 port_in_use() {
   python3 - <<'PY'
 import socket
@@ -157,7 +161,8 @@ Planned scenarios:
 4. Probe /static/techmore.png
 5. Probe /static/js/app_bootstrap.js
 6. Probe /static/js/site_chrome.js
-7. Record the result
+7. Probe /static/js/report_generation_ui.js
+8. Record the result
 EOF2
 }
 
@@ -200,6 +205,7 @@ main() {
       probe_static_asset
       probe_static_js
       probe_site_chrome_js
+      probe_report_generation_ui_js
       printf '%s\n' "$identity_json"
       printf '%s\n' "$root_html" | sed -n '1,5p'
       {
@@ -209,6 +215,7 @@ main() {
         printf 'static_asset=ok\n'
         printf 'static_js=ok\n'
         printf 'site_chrome_js=ok\n'
+        printf 'report_generation_ui_js=ok\n'
       } >"$runtime_log"
       run_pytest_slice "$ROOT_DIR/.claude/worktrees/quirky-torvalds/tests/test_socketio_integration.py" "${LOG_DIR}/nightly-product-eval-pytest.log.socketio"
       write_json_report "$(json_log)" "run" '[
@@ -218,6 +225,7 @@ main() {
         {"name": "static_asset_probe", "status": "pass"},
         {"name": "static_js_probe", "status": "pass"},
         {"name": "site_chrome_js_probe", "status": "pass"},
+        {"name": "report_generation_ui_js_probe", "status": "pass"},
         {"name": "socketio_runtime_smoke", "status": "pass"},
         {"name": "socketio_integration_tests", "status": "pass"}
       ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\", \"${LOG_DIR}/nightly-product-eval-pytest.log.socketio\"]")"
