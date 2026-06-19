@@ -61,6 +61,10 @@ run_pytest_slice() {
   "$PYTEST_BIN" -q -k "$pattern" >"$output_file" 2>&1
 }
 
+tests_present() {
+  find "$ROOT_DIR/tests" -type f -name 'test_*.py' 2>/dev/null | grep -q .
+}
+
 print_dry_run() {
   cat <<EOF2
 NmapUI nightly product evaluation loop
@@ -93,16 +97,30 @@ main() {
       update_log="${runtime_log}.update"
       json_log="${LOG_DIR}/nightly-product-eval.json"
 
-      run_pytest_slice "runtime_contract or socketio_integration or health_modules" "$runtime_log"
-      run_pytest_slice "report_generation or reporting_modules" "$report_log"
-      run_pytest_slice "update_modules or idle_state or update" "$update_log"
+      if tests_present; then
+        run_pytest_slice "runtime_contract or socketio_integration or health_modules" "$runtime_log"
+        run_pytest_slice "report_generation or reporting_modules" "$report_log"
+        run_pytest_slice "update_modules or idle_state or update" "$update_log"
+      else
+        printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$runtime_log"
+        printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$report_log"
+        printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$update_log"
+      fi
 
       local scenarios_json artifacts_json
-      scenarios_json='[
-        {"name": "runtime_contract", "status": "pass"},
-        {"name": "report_generation", "status": "pass"},
-        {"name": "update_and_idle_flow", "status": "pass"}
-      ]'
+      if tests_present; then
+        scenarios_json='[
+          {"name": "runtime_contract", "status": "pass"},
+          {"name": "report_generation", "status": "pass"},
+          {"name": "update_and_idle_flow", "status": "pass"}
+        ]'
+      else
+        scenarios_json='[
+          {"name": "runtime_contract", "status": "blocked", "reason": "no test files present"},
+          {"name": "report_generation", "status": "blocked", "reason": "no test files present"},
+          {"name": "update_and_idle_flow", "status": "blocked", "reason": "no test files present"}
+        ]'
+      fi
       artifacts_json="$(printf '%s' "[\"$runtime_log\", \"$report_log\", \"$update_log\"]")"
       write_json_report "$json_log" "run" "$scenarios_json" "$artifacts_json"
       printf '%s nightly-product-eval completed successfully\n' "$(timestamp)"

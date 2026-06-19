@@ -85,6 +85,7 @@ Notes:
 
 - Root: stable entrypoints and runtime files such as `server.js`, `install.sh`, and `deploy.sh`
 - `NmapUI.app/` and `NmapUIMenuBar.app/`: macOS app bundles produced by the current packaging flow
+- `packaging/macos/`: Swift/AppKit shell scaffold for the macOS-native direction
 - `docs/guides/`: user and maintainer guides
 - `docs/notes/`: internal implementation notes and working analysis
 - `docs/audits/`: deeper audit writeups that are not part of the main setup flow
