@@ -19,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startupCoordinator: startupCoordinator,
         runtimeURL: runtimeURL
     )
+    private lazy var appTerminationController = AppTerminationController(
+        runtimeLifecycleController: runtimeLifecycleController
+    )
 
     private var statusItem: NSStatusItem?
 
@@ -130,19 +133,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func uninstallApp() {
-        runtimeLifecycleController.stopForQuitOrUninstall()
-        if #available(macOS 13.0, *) {
-            try? SMAppService.mainApp.unregister()
-        }
-        let bundleURL = Bundle.main.bundleURL
-        NSWorkspace.shared.recycle([bundleURL]) { _, _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
-        }
+        appTerminationController.uninstallApp()
     }
 
     @objc private func quitApp() {
-        runtimeLifecycleController.stopForQuitOrUninstall()
-        NSApp.terminate(nil)
+        appTerminationController.quitApp()
     }
 
     private func restartRuntimeAfterPreferenceChange() {
