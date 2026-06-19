@@ -51,12 +51,11 @@ All dependencies are installed automatically by `install.sh`.
 
 2. Build and launch the menu bar app:
    ```bash
-   ./build.sh
+   open NmapUIMenuBar.app
    ```
 
-   `build.sh` will automatically run `install.sh` if dependencies haven't been set up yet. After a successful build, look for the network icon in your macOS menu bar. The app serves NmapUI on a local loopback URL, defaulting to `http://127.0.0.1:9000` and falling back to the next available local port if needed.
-   The wrapper target is selected automatically from your host architecture (`arm64` or `x86_64`). Override it explicitly with `NMAPUI_SWIFT_TARGET` if needed.
-   The completed `NmapUI.app` is installed into `/Applications` when writable, otherwise `~/Applications`, replacing any existing install. Override the destination explicitly with `NMAPUI_APPLICATIONS_DIR`.
+   After launch, look for the network icon in your macOS menu bar. The app serves NmapUI on a local loopback URL, defaulting to `http://127.0.0.1:9000` and falling back to the next available local port if needed.
+   The menu bar app now exposes a `Launch at Login` toggle and an `Uninstall NmapUI` menu action. Uninstall removes the login item registration first and then moves the app bundle to the Trash.
 
    > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 
@@ -74,10 +73,10 @@ Run it with Docker Compose:
 docker compose up --build
 ```
 
-The container listens on `0.0.0.0:9000` and persists runtime data in `/data`. The compose file mounts that directory as a named volume so scan history, settings, and runtime state survive restarts.
+The container listens on `0.0.0.0:9000` and persists runtime data in `/data`. The app now reads mutable files from that directory, so scan history, settings, reports, and temporary scan artifacts survive restarts.
 
 Notes:
-- The container includes `nmap`, `xsltproc`, `wkhtmltopdf`, and Chromium for PDF rendering.
+- The container includes `nmap`, `xsltproc`, `wkhtmltopdf`, Chromium, `traceroute`, and `python3` for the helper scripts.
 - Network scanning still depends on the runtime’s network permissions. The bundled compose file adds `NET_ADMIN` and `NET_RAW`, which are typically required for fuller scan capabilities.
 - For environments like Apple Container Machines, the same image can be used as a starting point, but you may need to adjust network exposure or host access based on the target runtime’s policies.
 
@@ -100,19 +99,13 @@ Export the runtime database from the Settings tab, or download it directly:
 curl -OJ http://127.0.0.1:9000/api/runtime/export
 ```
 
-Migrate an existing runtime database into the newly built menu bar app:
+If you are migrating an existing runtime database into the menu bar app bundle, copy the runtime data directory into the bundle resources before launch:
 
 ```bash
-NMAPUI_MIGRATE_DB=1 ./build.sh
+cp /path/to/runtime.sqlite3 NmapUIMenuBar.app/Contents/Resources/data/runtime.sqlite3
 ```
 
-Optional migration source override:
-
-```bash
-NMAPUI_MIGRATE_DB=1 NMAPUI_MIGRATE_DB_FROM=/path/to/runtime.sqlite3 ./build.sh
-```
-
-If migration is enabled and the source database does not exist, `build.sh` fails before replacing the installed app.
+The current repository does not include the old `build.sh` installer flow referenced in earlier notes.
 
 ## Usage
 
@@ -122,7 +115,7 @@ If migration is enabled and the source database does not exist, `build.sh` fails
 sudo npm start
 ```
 
-The launcher starts the local runtime on port 9000 by default and opens the macOS app shell around it.
+The launcher starts the local runtime on port 9000 by default and opens the app shell around it. On the macOS wrapper, the menu bar icon is the primary way back into the app.
 
 ### Scans
 

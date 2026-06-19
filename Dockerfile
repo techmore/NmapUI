@@ -1,38 +1,38 @@
-FROM python:3.12-slim-bookworm
+FROM node:20-bookworm-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+ENV NODE_ENV=production \
     NMAPUI_DATA_DIR=/data \
-    NMAPUI_LOG_DIR=/data/logs \
-    NMAPUI_HOST=0.0.0.0 \
-    NMAPUI_PORT=9000
+    PORT=9000
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    chromium \
     curl \
-    arp-scan \
-    git \
+    lsof \
+    net-tools \
     nmap \
-    procps \
+    python3 \
     traceroute \
-    xsltproc \
     wkhtmltopdf \
+    xsltproc \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/requirements.txt
-
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt \
-    && python -m playwright install --with-deps chromium
+COPY package*.json /app/
+RUN npm ci --omit=dev
 
 COPY . /app
 
-RUN mkdir -p /data /data/logs
+RUN mkdir -p /data/reports_archive /data/work \
+    && useradd --system --create-home --home-dir /home/nmapui nmapui \
+    && chown -R nmapui:nmapui /app /data
+
+USER nmapui
 
 EXPOSE 9000
 
-CMD ["python", "app.py"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:9000/api/app-identity >/dev/null || exit 1
+
+CMD ["node", "server.js"]
