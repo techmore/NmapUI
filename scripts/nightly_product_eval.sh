@@ -1,11 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$BASE_DIR"
+EVAL_ROOT="${NMAPUI_EVAL_ROOT:-}"
+if [[ -z "$EVAL_ROOT" && -d "$BASE_DIR/.claude/worktrees/quirky-torvalds" ]]; then
+  EVAL_ROOT="$BASE_DIR/.claude/worktrees/quirky-torvalds"
+fi
+if [[ -n "$EVAL_ROOT" && -d "$EVAL_ROOT" ]]; then
+  ROOT_DIR="$(cd "$EVAL_ROOT" && pwd)"
+fi
 LOG_DIR="${NMAPUI_EVAL_LOG_DIR:-$ROOT_DIR/docs/notes/eval-logs}"
 MODE="${1:---dry-run}"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-PYTEST_BIN="${PYTEST_BIN:-pytest}"
+if [[ -z "${PYTHON_BIN:-}" && -x "$BASE_DIR/.venv/bin/python" ]]; then
+  PYTHON_BIN="$BASE_DIR/.venv/bin/python"
+elif [[ -z "${PYTHON_BIN:-}" && -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+else
+  PYTHON_BIN="${PYTHON_BIN:-python3}"
+fi
+PYTEST_BIN="${PYTEST_BIN:-$PYTHON_BIN -m pytest}"
 SAFE_TARGET="${NMAPUI_EVAL_TARGET:-127.0.0.1}"
 
 timestamp() {
@@ -55,10 +69,10 @@ PY
 }
 
 run_pytest_slice() {
-  local pattern="$1"
+  local tests="$1"
   local output_file="$2"
   mkdir -p "$LOG_DIR"
-  "$PYTEST_BIN" -q -k "$pattern" >"$output_file" 2>&1
+  eval "$PYTEST_BIN -q $tests" >"$output_file" 2>&1
 }
 
 tests_present() {
@@ -98,9 +112,9 @@ main() {
       json_log="${LOG_DIR}/nightly-product-eval.json"
 
       if tests_present; then
-        run_pytest_slice "runtime_contract or socketio_integration or health_modules" "$runtime_log"
-        run_pytest_slice "report_generation or reporting_modules" "$report_log"
-        run_pytest_slice "update_modules or idle_state or update" "$update_log"
+        run_pytest_slice "$ROOT_DIR/tests/test_runtime_contract.py $ROOT_DIR/tests/test_socketio_integration.py $ROOT_DIR/tests/test_health_modules.py" "$runtime_log"
+        run_pytest_slice "$ROOT_DIR/tests/test_reporting_modules.py" "$report_log"
+        run_pytest_slice "$ROOT_DIR/tests/test_update_modules.py" "$update_log"
       else
         printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$runtime_log"
         printf 'No test files found in %s/tests; recording blocked evaluation run.\n' "$ROOT_DIR" >"$report_log"
