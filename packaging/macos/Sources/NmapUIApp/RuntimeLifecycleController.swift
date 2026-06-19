@@ -3,11 +3,6 @@ import Foundation
 
 @MainActor
 final class RuntimeLifecycleController {
-    enum StartupResult {
-        case ready
-        case timeout
-    }
-
     private let processLauncher: ProcessLauncher
     private let startupCoordinator: StartupCoordinator
     private let runtimeURL: URL
