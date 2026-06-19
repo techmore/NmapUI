@@ -1,6 +1,6 @@
 # TM-NMapUI
 
-Network Scanner GUI - A web-based network scanning and monitoring tool powered by Nmap.
+macOS-first network scanning and monitoring app powered by Nmap.
 
 ## Quick Start
 
@@ -11,7 +11,7 @@ cd TM-NmapUI
 sudo npm start
 ```
 
-Then open http://localhost:9000 in your browser.
+The app will open its local UI automatically. If you need to access it directly, use the loopback URL shown by the launcher, usually `http://127.0.0.1:9000`.
 
 `npm start` also checks for missing Node packages and installs them automatically, so a clean checkout will recover if `node_modules/` has not been created yet.
 
@@ -20,6 +20,7 @@ Then open http://localhost:9000 in your browser.
 | Layer | Technology |
 |-------|------------|
 | Runtime | Node.js |
+| Desktop Shell | Swift menu bar app |
 | Web Framework | Express |
 | Real-time | Socket.IO |
 | Scanner | Nmap + NSE (Nmap Scripting Engine) |
@@ -27,15 +28,14 @@ Then open http://localhost:9000 in your browser.
 | XML Processing | xml2js |
 | Scheduling | node-cron |
 | HTTP Client | axios |
-| Cloud Sync | Google Drive API (Python) |
+| Cloud Sync | Google Drive helper |
 
 ## Requirements
 
-- **macOS** (tested on macOS)
+- **macOS** (primary target)
 - **Homebrew** (for package management)
 - **Node.js** (via Homebrew)
 - **Nmap** (with script database updated)
-- **Python 3** (for Google Drive integration)
 - **wkhtmltopdf** or **Chromium** (for PDF generation)
 - **xsltproc** (for HTML report styling)
 
@@ -60,23 +60,9 @@ All dependencies are installed automatically by `install.sh`.
 
    > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 
-### Running without the menu bar app
-
-To run the Python server directly (after `install.sh` has been run):
-```bash
-./start.sh
-```
-
-Or manually:
-```bash
-source .venv/bin/activate
-./.venv/bin/python -m playwright install chromium
-./.venv/bin/python app.py
-```
-
 ## Container Build
 
-If you want a more atomic install path, the repository now includes a container build that packages the Python app with its runtime dependencies and common scan/report tooling.
+If you want a more atomic install path, the repository now includes a container build that packages the Node runtime with its scan/report tooling.
 
 Build the image:
 ```bash
@@ -94,13 +80,11 @@ Notes:
 - The container includes `nmap`, `xsltproc`, `wkhtmltopdf`, and Chromium for PDF rendering.
 - Network scanning still depends on the runtime’s network permissions. The bundled compose file adds `NET_ADMIN` and `NET_RAW`, which are typically required for fuller scan capabilities.
 - For environments like Apple Container Machines, the same image can be used as a starting point, but you may need to adjust network exposure or host access based on the target runtime’s policies.
-- Container startup keeps auth safe by default in the container example through explicit environment overrides. Change those before using it beyond local development.
 
 ## Repository Layout
 
-- Root: stable entrypoints and runtime files such as `app.py`, `requirements.txt`, `install.sh`, and `deploy.sh`
-- `packaging/macos/`: supported Swift wrapper source and wrapper-specific docs
-- `packaging/pyinstaller/`: PyInstaller spec and packaging inputs
+- Root: stable entrypoints and runtime files such as `server.js`, `install.sh`, and `deploy.sh`
+- `NmapUI.app/` and `NmapUIMenuBar.app/`: macOS app bundles produced by the current packaging flow
 - `docs/guides/`: user and maintainer guides
 - `docs/notes/`: internal implementation notes and working analysis
 - `docs/audits/`: deeper audit writeups that are not part of the main setup flow
@@ -108,18 +92,6 @@ Notes:
 Runtime-only files such as `auto_scan_config.json`, generated scan outputs, local wrapper binaries, and ad hoc scratch directories should stay untracked.
 
 ## Admin Commands
-
-Backfill legacy scan metadata into the SQLite runtime store without starting the web app:
-
-```bash
-./.venv/bin/python scripts/backfill_runtime_store.py
-```
-
-Optional overrides:
-
-```bash
-./.venv/bin/python scripts/backfill_runtime_store.py --db-path /tmp/runtime.sqlite3 --scans-dir /tmp/scans
-```
 
 Export the runtime database from the Settings tab, or download it directly:
 
@@ -143,13 +115,13 @@ If migration is enabled and the source database does not exist, `build.sh` fails
 
 ## Usage
 
-### Start the server
+### Start the app
 
 ```bash
 sudo npm start
 ```
 
-The server runs on port 9000 by default. Access at http://localhost:9000
+The launcher starts the local runtime on port 9000 by default and opens the macOS app shell around it.
 
 ### Scans
 
@@ -173,7 +145,7 @@ HTML and PDF reports are generated after each scan. Reports include:
 
 ```
 .
-├── server.js           # Main application
+├── server.js           # Main local runtime
 ├── install.sh         # Dependency installer
 ├── package.json      # Node dependencies
 ├── google_drive.py   # Google Drive sync helper
