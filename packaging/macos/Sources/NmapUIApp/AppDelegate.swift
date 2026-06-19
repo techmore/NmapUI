@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL, runtimeURL: runtimeURL)
     private let runtimeMenuPresenter = RuntimeMenuPresenter()
     private let runtimeAlertPresenter = RuntimeAlertPresenter()
+    private let appCommandController = AppCommandController(runtimeURL: RuntimeEndpoints.baseURL)
     private let launchAtLoginController = LaunchAtLoginController()
     let preferencesStore = PreferencesStore()
     private lazy var preferencesController = PreferencesController(preferencesStore: preferencesStore)
@@ -86,16 +87,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openApp() {
-        NSWorkspace.shared.open(runtimeURL)
+        appCommandController.openApp()
     }
 
     @objc private func openPreferences() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        appCommandController.openPreferences()
     }
 
     @objc private func openDataDirectory() {
-        NSWorkspace.shared.activateFileViewerSelecting([ProcessLauncher.currentDataDirectoryURL()])
+        appCommandController.openDataDirectory()
     }
 
     func openDataDirectoryFromSwiftUI() {
