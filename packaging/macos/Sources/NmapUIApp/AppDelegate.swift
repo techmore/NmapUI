@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let runtimeMenuPresenter = RuntimeMenuPresenter()
     private let runtimeAlertPresenter = RuntimeAlertPresenter()
     private let launchAtLoginController = LaunchAtLoginController()
+    let preferencesStore = PreferencesStore()
+    private lazy var preferencesController = PreferencesController(preferencesStore: preferencesStore)
     private lazy var runtimeLifecycleController = RuntimeLifecycleController(
         processLauncher: processLauncher,
         startupCoordinator: startupCoordinator,
@@ -18,7 +20,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     private var statusItem: NSStatusItem?
-    let preferencesStore = PreferencesStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -114,13 +115,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func savePreferences() {
-        preferencesStore.save()
+        preferencesController.savePreferences()
         restartRuntimeAfterPreferenceChange()
     }
 
     @objc private func resetPreferences() {
-        preferencesStore.clearPersistedValues()
-        preferencesStore.resetToDefaults()
+        preferencesController.resetPreferences()
         restartRuntimeAfterPreferenceChange()
     }
 
