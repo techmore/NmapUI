@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let processLauncher = ProcessLauncher()
     private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL, runtimeURL: runtimeURL)
     private let runtimeMenuPresenter = RuntimeMenuPresenter()
+    private let runtimeAlertPresenter = RuntimeAlertPresenter()
     private lazy var runtimeLifecycleController = RuntimeLifecycleController(
         processLauncher: processLauncher,
         startupCoordinator: startupCoordinator,
@@ -183,51 +184,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleRuntimeLaunchFailure() {
         syncRuntimeMenuState()
-        presentRuntimeLaunchFailureAlert()
+        runtimeAlertPresenter.presentLaunchFailureAlert()
     }
 
     private func handleRuntimeStartupTimeout() {
         syncRuntimeMenuState()
-        presentRuntimeStartupTimeoutAlert()
+        runtimeAlertPresenter.presentStartupTimeoutAlert()
     }
 
     private func handleRuntimeExitFinalFailure(terminationStatus: Int32) {
-        presentRuntimeExitAlert(terminationStatus: terminationStatus)
+        runtimeAlertPresenter.presentRuntimeExitAlert(terminationStatus: terminationStatus) { [weak self] in
+            self?.restartRuntimeAfterPreferenceChange()
+        }
     }
 
     private func handleRuntimeStateChanged() {
         syncRuntimeMenuState()
-    }
-
-    private func presentRuntimeLaunchFailureAlert() {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "NmapUI could not start the runtime"
-        alert.informativeText = "Check the runtime command and make sure the app can bind the fixed port."
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-
-    private func presentRuntimeStartupTimeoutAlert() {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "NmapUI is still starting"
-        alert.informativeText = "The runtime did not become ready in time. Keep the app open and use Restart Runtime from the menu if you need another startup attempt."
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-
-    private func presentRuntimeExitAlert(terminationStatus: Int32) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "NmapUI runtime stopped"
-        alert.informativeText = "The backend exited with status \(terminationStatus). Restart the runtime from the menu if you want another attempt."
-        alert.addButton(withTitle: "Restart Runtime")
-        alert.addButton(withTitle: "OK")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            restartRuntimeAfterPreferenceChange()
-        }
     }
 
     private func syncRuntimeMenuState() {
