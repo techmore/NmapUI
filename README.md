@@ -73,12 +73,13 @@ Run it with Docker Compose:
 docker compose up --build
 ```
 
-The container listens on `0.0.0.0:9000` and persists runtime data in `/data`. The app now reads mutable files from that directory, so scan history, settings, reports, and temporary scan artifacts survive restarts.
+The container listens on `0.0.0.0:9000` and persists runtime data in `/data`. The app now reads mutable files from that directory, so scan history, settings, reports, and temporary scan artifacts survive restarts. If you want to override defaults locally, set `NMAPUI_DATA_DIR`, `NMAPUI_PORT`, or `PORT` in your shell or a compose `.env` file.
 
 Notes:
 - The container includes `nmap`, `xsltproc`, `wkhtmltopdf`, Chromium, `traceroute`, and `python3` for the helper scripts.
 - Network scanning still depends on the runtime’s network permissions. The bundled compose file adds `NET_ADMIN` and `NET_RAW`, which are typically required for fuller scan capabilities.
 - For environments like Apple Container Machines, the same image can be used as a starting point, but you may need to adjust network exposure or host access based on the target runtime’s policies.
+- The container healthcheck hits `/api/app-identity`, which is a lightweight readiness signal for orchestration.
 
 ## Repository Layout
 
