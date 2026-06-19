@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let runtimeMenuPresenter = RuntimeMenuPresenter()
     private let runtimeAlertPresenter = RuntimeAlertPresenter()
     private let appCommandController = AppCommandController(runtimeURL: RuntimeEndpoints.baseURL)
+    private let appMenuBuilder = AppMenuBuilder()
     private let launchAtLoginController = LaunchAtLoginController()
     let preferencesStore = PreferencesStore()
     private lazy var preferencesController = PreferencesController(preferencesStore: preferencesStore)
@@ -37,43 +38,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.imagePosition = .imageOnly
         button.toolTip = "NmapUI"
 
-        let menu = NSMenu()
         let runtimeStatusItem = NSMenuItem(title: "Runtime: Starting...", action: nil, keyEquivalent: "")
         runtimeStatusItem.isEnabled = false
-        menu.addItem(runtimeStatusItem)
-        menu.addItem(.separator())
 
         let openItem = NSMenuItem(title: "Starting NmapUI...", action: #selector(openApp), keyEquivalent: "o")
-        openItem.target = self
         openItem.isEnabled = false
-        menu.addItem(openItem)
-        menu.addItem(.separator())
 
         let preferencesItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
-        preferencesItem.target = self
-        menu.addItem(preferencesItem)
-        menu.addItem(.separator())
 
         let restartItem = NSMenuItem(title: "Restart Runtime", action: #selector(restartRuntime), keyEquivalent: "r")
-        restartItem.target = self
-        menu.addItem(restartItem)
-        menu.addItem(.separator())
 
         let dataDirectoryItem = NSMenuItem(title: "Open Data Folder", action: #selector(openDataDirectory), keyEquivalent: "")
-        dataDirectoryItem.target = self
-        menu.addItem(dataDirectoryItem)
-        menu.addItem(.separator())
 
         let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
-        loginItem.target = self
-        menu.addItem(loginItem)
-        menu.addItem(.separator())
 
         let uninstallItem = NSMenuItem(title: "Uninstall NmapUI", action: #selector(uninstallApp), keyEquivalent: "")
-        uninstallItem.target = self
-        menu.addItem(uninstallItem)
 
-        menu.addItem(withTitle: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+
+        let menu = appMenuBuilder.buildMenu(
+            target: self,
+            onRuntimeStatusItem: runtimeStatusItem,
+            onOpenItem: openItem,
+            onPreferencesItem: preferencesItem,
+            onRestartItem: restartItem,
+            onDataDirectoryItem: dataDirectoryItem,
+            onLaunchAtLoginItem: loginItem,
+            onUninstallItem: uninstallItem,
+            onQuitItem: quitItem
+        )
         statusItem?.menu = menu
         runtimeMenuPresenter.configureStatusItem(
             statusItem,
