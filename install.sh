@@ -159,7 +159,6 @@ verify_commands=(
     "node:node"
     "npm:npm"
     "nmap:nmap"
-    "python3:python3"
     "xsltproc:xsltproc"
     "express:node"
 )

@@ -6,21 +6,10 @@ ROOT_DIR="$BASE_DIR"
 LOG_DIR="${NMAPUI_EVAL_LOG_DIR:-$ROOT_DIR/docs/notes/eval-logs}"
 DEFAULT_PORT="${NMAPUI_EVAL_PORT:-0}"
 MODE="${1:---dry-run}"
-if [[ -z "${PYTHON_BIN:-}" && -x "$BASE_DIR/.venv/bin/python" ]]; then
-  PYTHON_BIN="$BASE_DIR/.venv/bin/python"
-elif [[ -z "${PYTHON_BIN:-}" && -x "$ROOT_DIR/.venv/bin/python" ]]; then
-  PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
-else
-  PYTHON_BIN="${PYTHON_BIN:-python3}"
-fi
-PYTEST_BIN="${PYTEST_BIN:-$PYTHON_BIN -m pytest}"
 SAFE_TARGET="${NMAPUI_EVAL_TARGET:-127.0.0.1}"
 
 timestamp() {
-  "$PYTHON_BIN" - <<'PY'
-from datetime import datetime, timezone
-print(datetime.now(timezone.utc).isoformat())
-PY
+  node -e 'process.stdout.write(new Date().toISOString())'
 }
 
 git_revision() {
@@ -45,35 +34,28 @@ write_json_report() {
   local scenarios_json="$3"
   local artifacts_json="$4"
   mkdir -p "$LOG_DIR"
-  "$PYTHON_BIN" - "$path" "$mode" "$(git_revision)" "$ROOT_DIR" "$scenarios_json" "$artifacts_json" <<'PY'
-import json
-import pathlib
-import sys
-from datetime import datetime, timezone
+  node - "$path" "$mode" "$(git_revision)" "$ROOT_DIR" "$scenarios_json" "$artifacts_json" <<'NODE'
+const fs = require('fs');
+const path = require('path');
 
-path = pathlib.Path(sys.argv[1])
-mode = sys.argv[2]
-revision = sys.argv[3]
-root_dir = sys.argv[4]
-scenarios = json.loads(sys.argv[5])
-artifacts = json.loads(sys.argv[6])
-payload = {
-    "timestamp": datetime.now(timezone.utc).isoformat(),
-    "mode": mode,
-    "revision": revision,
-    "environment": pathlib.Path(root_dir).name,
-    "scenarios": scenarios,
-    "artifacts": artifacts,
-}
-path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-PY
+const [,, filePath, mode, revision, rootDir, scenariosJson, artifactsJson] = process.argv;
+const payload = {
+  timestamp: new Date().toISOString(),
+  mode,
+  revision,
+  environment: path.basename(rootDir),
+  scenarios: JSON.parse(scenariosJson),
+  artifacts: JSON.parse(artifactsJson),
+};
+fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+NODE
 }
 
-run_pytest_slice() {
-  local tests="$1"
+run_socketio_smoke() {
+  local port="$1"
   local output_file="$2"
   mkdir -p "$LOG_DIR"
-  eval "$PYTEST_BIN -q $tests" >"$output_file" 2>&1
+  node "$ROOT_DIR/scripts/nightly_product_eval_socketio_smoke.js" "$port" >"$output_file" 2>&1
 }
 
 probe_identity() {
@@ -151,6 +133,11 @@ probe_scan_runtime_js() {
   curl -fsS "http://127.0.0.1:${port}/static/js/scan_runtime.js" >/dev/null
 }
 
+probe_scan_banners_js() {
+  local port="$1"
+  curl -fsS "http://127.0.0.1:${port}/static/js/scan_banners.js" >/dev/null
+}
+
 start_server() {
   (cd "$ROOT_DIR" && PORT="$DEFAULT_PORT" TRACEROUTE_PATH=/usr/bin/true npm start) >"$(server_log)" 2>&1 &
   echo $!
@@ -192,7 +179,8 @@ Planned scenarios:
 14. Probe /static/js/auto_update_banner.js
 15. Probe /static/js/reports_tab.js
 16. Probe /static/js/scan_runtime.js
-17. Record the result
+17. Probe /static/js/scan_banners.js
+18. Record the result
 EOF2
 }
 
@@ -245,6 +233,7 @@ main() {
       probe_auto_update_banner_js "$active_port"
       probe_reports_tab_js "$active_port"
       probe_scan_runtime_js "$active_port"
+      probe_scan_banners_js "$active_port"
       printf '%s\n' "$identity_json"
       printf '%s\n' "$root_html" | sed -n '1,5p'
       {
@@ -264,8 +253,9 @@ main() {
         printf 'auto_update_banner_js=ok\n'
         printf 'reports_tab_js=ok\n'
         printf 'scan_runtime_js=ok\n'
+        printf 'scan_banners_js=ok\n'
       } >"$runtime_log"
-      run_pytest_slice "$ROOT_DIR/.claude/worktrees/quirky-torvalds/tests/test_socketio_integration.py" "${LOG_DIR}/nightly-product-eval-pytest.log.socketio"
+      run_socketio_smoke "$active_port" "${LOG_DIR}/nightly-product-eval-socketio-smoke.log"
       write_json_report "$(json_log)" "run" '[
         {"name": "app_start", "status": "pass"},
         {"name": "identity_probe", "status": "pass"},
@@ -283,9 +273,10 @@ main() {
         {"name": "auto_update_banner_js_probe", "status": "pass"},
         {"name": "reports_tab_js_probe", "status": "pass"},
         {"name": "scan_runtime_js_probe", "status": "pass"},
+        {"name": "scan_banners_js_probe", "status": "pass"},
         {"name": "socketio_runtime_smoke", "status": "pass"},
-        {"name": "socketio_integration_tests", "status": "pass"}
-      ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\", \"${LOG_DIR}/nightly-product-eval-pytest.log.socketio\"]")"
+        {"name": "socketio_integration_smoke", "status": "pass"}
+      ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\", \"${LOG_DIR}/nightly-product-eval-socketio-smoke.log\"]")"
       stop_server "${server_pid:-}"
       printf '%s nightly-product-eval completed successfully\n' "$(timestamp)"
       ;;

@@ -59,28 +59,6 @@ All dependencies are installed automatically by `install.sh`.
 
    > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 
-## Container Build
-
-If you want a more atomic install path, the repository now includes a container build that packages the Node runtime with its scan/report tooling.
-
-Build the image:
-```bash
-docker build -t nmapui:container .
-```
-
-Run it with Docker Compose:
-```bash
-docker compose up --build
-```
-
-The container listens on `0.0.0.0:9000` and persists runtime data in `/data`. The app now reads mutable files from that directory, so scan history, settings, reports, and temporary scan artifacts survive restarts. If you want to override defaults locally, set `NMAPUI_DATA_DIR`, `NMAPUI_PORT`, or `PORT` in your shell or a compose `.env` file.
-
-Notes:
-- The container includes `nmap`, `xsltproc`, `wkhtmltopdf`, Chromium, `traceroute`, and `python3` for the helper scripts.
-- Network scanning still depends on the runtime’s network permissions. The bundled compose file adds `NET_ADMIN` and `NET_RAW`, which are typically required for fuller scan capabilities.
-- For environments like Apple Container Machines, the same image can be used as a starting point, but you may need to adjust network exposure or host access based on the target runtime’s policies.
-- The container healthcheck hits `/api/app-identity`, which is a lightweight readiness signal for orchestration.
-
 ## Repository Layout
 
 - Root: stable entrypoints and runtime files such as `server.js`, `install.sh`, and `deploy.sh`
@@ -106,7 +84,7 @@ If you are migrating an existing runtime database into the menu bar app bundle, 
 cp /path/to/runtime.sqlite3 NmapUIMenuBar.app/Contents/Resources/data/runtime.sqlite3
 ```
 
-The current repository does not include the old `build.sh` installer flow referenced in earlier notes.
+The current repository does not include the old installer flow referenced in earlier notes.
 
 ## Usage
 
@@ -117,6 +95,27 @@ sudo npm start
 ```
 
 The launcher starts the local runtime on port 9000 by default and opens the app shell around it. On the macOS wrapper, the menu bar icon is the primary way back into the app.
+
+### Nightly Eval
+
+```bash
+npm run nightly-eval
+```
+
+This runs the nightly product evaluation loop, which boots the app, checks key runtime endpoints and assets, and records an evaluation artifact under `docs/notes/eval-logs/`.
+
+For a no-side-effects preview of the loop shape, run:
+
+```bash
+npm run nightly-eval:dry-run
+```
+
+To install or remove the macOS scheduler from the repo root, use:
+
+```bash
+npm run nightly-eval:launchd-install
+npm run nightly-eval:launchd-uninstall
+```
 
 ### Scans
 
@@ -143,7 +142,7 @@ HTML and PDF reports are generated after each scan. Reports include:
 ├── server.js           # Main local runtime
 ├── install.sh         # Dependency installer
 ├── package.json      # Node dependencies
-├── google_drive.py   # Google Drive sync helper
+├── google_drive_bridge.js   # Google Drive helper dispatch layer
 ├── nmap-modern.xsl  # Report stylesheet
 ├── config.json      # App configuration
 ├── history.json    # Scan history
