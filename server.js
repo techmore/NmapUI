@@ -17,10 +17,17 @@ const io = new Server(server);
 
 const APP_IDENTITY = 'tm-network-scanner';
 const PORT = Number(process.env.PORT || 9000);
+const DATA_DIR = process.env.NMAPUI_DATA_DIR
+    ? path.resolve(process.env.NMAPUI_DATA_DIR)
+    : __dirname;
+const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
+const HISTORY_PATH = path.join(DATA_DIR, 'history.json');
+const REPORTS_DIR = path.join(DATA_DIR, 'reports_archive');
+const WORK_DIR = path.join(DATA_DIR, 'work');
 
 app.use(express.static(path.join(__dirname)));
 app.use('/static', express.static(path.join(__dirname, 'static')));
-app.use('/reports', express.static(path.join(__dirname, 'reports_archive')));
+app.use('/reports', express.static(REPORTS_DIR));
 
 app.get('/api/app-identity', (req, res) => {
     res.json({ app: APP_IDENTITY, name: 'TM-NMapUI', version: VERSION });
@@ -57,9 +64,6 @@ let isTracerouteRunning = false;
 let cachedNetworkInfo = null;
 let cachedPublicIP = null;
 
-const CONFIG_PATH = path.join(__dirname, 'config.json');
-const HISTORY_PATH = path.join(__dirname, 'history.json');
-const REPORTS_DIR = path.join(__dirname, 'reports_archive');
 const NMAP_PATH = resolveExecutable(process.env.NMAP_PATH, [
     '/opt/homebrew/bin/nmap',
     '/usr/local/bin/nmap',
@@ -88,7 +92,9 @@ const GOWITNESS_PATH = resolveExecutable(process.env.GOWITNESS_PATH, [
 let customerProfileConfig = loadJSON(CONFIG_PATH, {}).customerProfile || {};
 let appConfig = loadJSON(CONFIG_PATH, {});
 
-if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR);
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true });
+if (!fs.existsSync(WORK_DIR)) fs.mkdirSync(WORK_DIR, { recursive: true });
 
 function loadJSON(filePath, defaultVal = {}) {
     if (fs.existsSync(filePath)) {
@@ -542,7 +548,7 @@ function getCustomerFingerprintProfile() {
 
 function runGoogleDriveHelper(args, input = null) {
     return new Promise((resolve) => {
-        const child = spawn('python3', [path.join(__dirname, 'google_drive.py'), ...args, '--root', __dirname]);
+        const child = spawn('python3', [path.join(__dirname, 'google_drive.py'), ...args, '--root', DATA_DIR]);
         let stdout = '';
         let stderr = '';
 
@@ -641,8 +647,8 @@ function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
         ...(scripts.length ? ['--script', scripts.join(',')] : []),
         ...scriptArgs,
         '--stylesheet', 'nmap-modern.xsl',
-        '-oX', 'phase2_results.xml',
-        '-iL', 'targets.tmp'
+        '-oX', path.join(WORK_DIR, 'phase2_results.xml'),
+        '-iL', path.join(WORK_DIR, 'targets.tmp')
     ];
     return args;
 }
@@ -1243,11 +1249,10 @@ function runNmapFallbackPass(socket, args, phase, xmlFile, label, options = {}) 
 }
 
 async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
-    const noScriptXml = 'phase2_no_script.xml';
-    const vulnersXml = 'phase2_vulners.xml';
+    const noScriptXml = path.join(WORK_DIR, 'phase2_no_script.xml');
+    const vulnersXml = path.join(WORK_DIR, 'phase2_vulners.xml');
     [noScriptXml, vulnersXml].forEach(file => {
-        const filePath = path.join(__dirname, file);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        if (fs.existsSync(file)) fs.unlinkSync(file);
     });
 
     logEvent(socket, 'job', 'Starting Phase 2 fallback recovery as two passes: 2.1 service/OS detection, then 2.2 vulners only.');
@@ -1256,7 +1261,7 @@ async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
         '-T3',
         '--open',
         '-oX', noScriptXml,
-        '-iL', 'targets.tmp'
+        '-iL', path.join(WORK_DIR, 'targets.tmp')
     ], 2.1, noScriptXml, 'service + OS detection without scripts', { scanKind: reportScanKind });
     if (!pass21.success) {
         logEvent(socket, 'error', `Phase 2.1 fallback failed: ${pass21.error}`);
@@ -1273,7 +1278,7 @@ async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
         '-sV',
         '--script', 'vulners',
         '--script-args', 'threads=8',
-        '-iL', 'targets.tmp',
+        '-iL', path.join(WORK_DIR, 'targets.tmp'),
         '-oX', vulnersXml
     ], 2.2, vulnersXml, 'vulners only', { scanKind: reportScanKind });
     if (!pass22.success) {
@@ -1306,7 +1311,7 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
     if (phase === 1) {
         discoveredHosts = [];
         // Ensure XML is gone so we don't parse stale data
-        const oldXml = path.join(__dirname, 'phase2_results.xml');
+        const oldXml = path.join(WORK_DIR, 'phase2_results.xml');
         if (fs.existsSync(oldXml)) fs.unlinkSync(oldXml);
     }
     
@@ -1387,7 +1392,7 @@ function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
         io.emit('phase_complete', { phase, duration, ...phaseStats });
         
         if (phase >= 2) {
-            const xmlPath = path.join(__dirname, 'phase2_results.xml');
+            const xmlPath = path.join(WORK_DIR, 'phase2_results.xml');
             const reportScanKind = options.scanKind || currentScanKind;
             setTimeout(() => {
                 if (!isCompleteNmapXML(xmlPath)) {
@@ -1519,7 +1524,7 @@ function startChainedScan(socket, target, usePn = false, options = {}) {
             return;
         }
         const discoveredTargets = discoveredHosts.map(h => h.ip).join('\n');
-        fs.writeFileSync('targets.tmp', discoveredTargets);
+        fs.writeFileSync(path.join(WORK_DIR, 'targets.tmp'), discoveredTargets);
 
         if (usePn) {
             const vpnHelper = !!options.vpnHelper;
@@ -1565,7 +1570,7 @@ io.on('connection', (socket) => {
     socket.on('start_dragnet_scan', (data) => {
         if (discoveredHosts.length === 0) { logEvent(socket, 'error', 'No hosts discovered in Phase 1.'); return; }
         const targets = discoveredHosts.map(h => h.ip).join('\n');
-        fs.writeFileSync('targets.tmp', targets);
+        fs.writeFileSync(path.join(WORK_DIR, 'targets.tmp'), targets);
         runNmap(socket, buildPhase2Args(true, true), 3, null, { scanKind: 'dragnet' });
     });
     socket.on('stop_scan', () => { if (currentScan) currentScan.kill(); });
