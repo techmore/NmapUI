@@ -5,14 +5,6 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private struct RuntimeLifecycleCallbacks {
-        let onBrowserOpen: @MainActor () -> Void
-        let onLaunchFailure: @MainActor () -> Void
-        let onStartupTimeout: @MainActor () -> Void
-        let onRuntimeExitFinalFailure: @MainActor (Int32) -> Void
-        let onStateChanged: @MainActor () -> Void
-    }
-
     private let runtimeURL = RuntimeEndpoints.baseURL
     private let processLauncher = ProcessLauncher()
     private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL, runtimeURL: runtimeURL)
@@ -169,29 +161,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func restartRuntimeAfterPreferenceChange() {
-        let callbacks = runtimeLifecycleCallbacks()
         runtimeLifecycleController.restartAfterPreferenceChange(
-            onBrowserOpen: callbacks.onBrowserOpen,
-            onLaunchFailure: callbacks.onLaunchFailure,
-            onStartupTimeout: callbacks.onStartupTimeout,
-            onRuntimeExitFinalFailure: callbacks.onRuntimeExitFinalFailure,
-            onStateChanged: callbacks.onStateChanged
+            onBrowserOpen: { [weak self] in self?.handleRuntimeBrowserOpen() },
+            onLaunchFailure: { [weak self] in self?.handleRuntimeLaunchFailure() },
+            onStartupTimeout: { [weak self] in self?.handleRuntimeStartupTimeout() },
+            onRuntimeExitFinalFailure: { [weak self] terminationStatus in
+                self?.handleRuntimeExitFinalFailure(terminationStatus: terminationStatus)
+            },
+            onStateChanged: { [weak self] in self?.handleRuntimeStateChanged() }
         )
     }
 
     private func startRuntimeLifecycle() {
-        let callbacks = runtimeLifecycleCallbacks()
         runtimeLifecycleController.start(
-            onBrowserOpen: callbacks.onBrowserOpen,
-            onLaunchFailure: callbacks.onLaunchFailure,
-            onStartupTimeout: callbacks.onStartupTimeout,
-            onRuntimeExitFinalFailure: callbacks.onRuntimeExitFinalFailure,
-            onStateChanged: callbacks.onStateChanged
-        )
-    }
-
-    private func runtimeLifecycleCallbacks() -> RuntimeLifecycleCallbacks {
-        RuntimeLifecycleCallbacks(
             onBrowserOpen: { [weak self] in self?.handleRuntimeBrowserOpen() },
             onLaunchFailure: { [weak self] in self?.handleRuntimeLaunchFailure() },
             onStartupTimeout: { [weak self] in self?.handleRuntimeStartupTimeout() },
