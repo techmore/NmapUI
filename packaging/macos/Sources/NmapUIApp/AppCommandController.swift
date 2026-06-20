@@ -3,14 +3,24 @@ import Foundation
 
 @MainActor
 final class AppCommandController {
-    private let runtimeURL: URL
-
-    init(runtimeURL: URL) {
-        self.runtimeURL = runtimeURL
-    }
+    private let runtimeURL = RuntimeEndpoints.baseURL
 
     func openApp() {
+        NSApp.sendAction(Selector(("showWindow:")), to: nil, from: nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        NSApp.windows.first?.orderFrontRegardless()
+    }
+
+    func openBrowser() {
         NSWorkspace.shared.open(runtimeURL)
+    }
+
+    func showAbout() {
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [
+            .credits: NSAttributedString(string: "Menu bar shell for the NmapUI runtime")
+        ])
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     func openPreferences() {

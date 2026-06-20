@@ -5,25 +5,18 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let runtimeURL = RuntimeEndpoints.baseURL
     private let processLauncher = ProcessLauncher()
-    private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL, runtimeURL: runtimeURL)
+    private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL)
     private let runtimeMenuPresenter = RuntimeMenuPresenter()
     private let runtimeAlertPresenter = RuntimeAlertPresenter()
-    private let appCommandController = AppCommandController(runtimeURL: RuntimeEndpoints.baseURL)
+    private let appCommandController = AppCommandController()
     private let appMenuBuilder = AppMenuBuilder()
     private let launchAtLoginController = LaunchAtLoginController()
+    let sessionState = AppSessionState()
     let preferencesStore = PreferencesStore()
-    private lazy var preferencesController = PreferencesController(preferencesStore: preferencesStore)
-    private lazy var swiftUIBridgeController = SwiftUIBridgeController(
-        openDataDirectory: { [weak self] in self?.openDataDirectory() },
-        savePreferences: { [weak self] in self?.savePreferences() },
-        resetPreferences: { [weak self] in self?.resetPreferences() }
-    )
     private lazy var runtimeLifecycleController = RuntimeLifecycleController(
         processLauncher: processLauncher,
-        startupCoordinator: startupCoordinator,
-        runtimeURL: runtimeURL
+        startupCoordinator: startupCoordinator
     )
     private lazy var appTerminationController = AppTerminationController(
         runtimeLifecycleController: runtimeLifecycleController
@@ -32,9 +25,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        sessionState.runtimeIsReady = false
+        sessionState.runtimeStatusText = "Starting..."
+        sessionState.startupHint = "Preparing native shell..."
+        sessionState.preloadMessage = "Loading dashboard..."
+        sessionState.showLoadingStrip = true
         setupStatusItem()
         syncLaunchAtLoginState()
-        startRuntimeLifecycle()
+        Task { @MainActor in
+            await Task.yield()
+            self.startRuntimeLifecycle()
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        }
+        return true
     }
 
     private func setupStatusItem() {
@@ -48,6 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let openItem = NSMenuItem(title: "Starting NmapUI...", action: #selector(openApp), keyEquivalent: "o")
         openItem.isEnabled = false
+
+        let aboutItem = NSMenuItem(title: "About NmapUI", action: #selector(showAbout), keyEquivalent: "")
 
         let preferencesItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
 
@@ -65,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             target: self,
             onRuntimeStatusItem: runtimeStatusItem,
             onOpenItem: openItem,
+            onAboutItem: aboutItem,
             onPreferencesItem: preferencesItem,
             onRestartItem: restartItem,
             onDataDirectoryItem: dataDirectoryItem,
@@ -95,7 +108,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appCommandController.openPreferences()
     }
 
-    @objc private func openDataDirectory() {
+    @objc private func showAbout() {
+        appCommandController.showAbout()
+    }
+
+    @objc func openBrowser() {
+        appCommandController.openBrowser()
+    }
+
+    @objc func openDataDirectory() {
         appCommandController.openDataDirectory()
     }
 
@@ -103,13 +124,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         restartRuntimeAfterPreferenceChange()
     }
 
-    @objc private func savePreferences() {
-        preferencesController.savePreferences()
-        restartRuntimeAfterPreferenceChange()
+    @objc func savePreferences() {
+        savePreferencesAndRestartRuntimeIfNeeded()
     }
 
-    @objc private func resetPreferences() {
-        preferencesController.resetPreferences()
+    @objc func resetPreferences() {
+        preferencesStore.resetToDefaults()
         restartRuntimeAfterPreferenceChange()
     }
 
@@ -126,16 +146,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appTerminationController.quitApp()
     }
 
-    func openDataDirectoryFromSwiftUI() {
-        swiftUIBridgeController.openDataDirectoryFromSwiftUI()
+    @objc func chooseDataDirectory() {
+        chooseDataDirectoryForSwiftUI()
     }
 
-    func savePreferencesFromSwiftUI() {
-        swiftUIBridgeController.savePreferencesFromSwiftUI()
-    }
-
-    func resetPreferencesFromSwiftUI() {
-        swiftUIBridgeController.resetPreferencesFromSwiftUI()
+    private func savePreferencesAndRestartRuntimeIfNeeded() {
+        if preferencesStore.save() {
+            restartRuntimeAfterPreferenceChange()
+        } else {
+            runtimeAlertPresenter.presentPreferencesSaveFailureAlert()
+        }
     }
 
     private func restartRuntimeAfterPreferenceChange() {
@@ -163,27 +183,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleRuntimeBrowserOpen() {
+        sessionState.runtimeIsReady = true
+        sessionState.runtimeStatusText = "Ready"
+        sessionState.startupHint = "Ready to scan"
+        sessionState.preloadMessage = "Dashboard ready"
+        sessionState.showLoadingStrip = false
         syncRuntimeMenuState()
-        NSWorkspace.shared.open(runtimeURL)
+        NSWorkspace.shared.open(RuntimeEndpoints.baseURL)
     }
 
     private func handleRuntimeLaunchFailure() {
+        sessionState.runtimeIsReady = false
+        sessionState.runtimeStatusText = "Error"
+        sessionState.startupHint = "Runtime failed to start"
+        sessionState.preloadMessage = "Runtime failed to start"
+        sessionState.showLoadingStrip = false
         syncRuntimeMenuState()
         runtimeAlertPresenter.presentLaunchFailureAlert()
     }
 
     private func handleRuntimeStartupTimeout() {
+        sessionState.runtimeIsReady = false
+        sessionState.runtimeStatusText = "Waiting"
+        sessionState.startupHint = "Backend is still booting"
+        sessionState.preloadMessage = "Keeping the shell open"
+        sessionState.showLoadingStrip = true
         syncRuntimeMenuState()
-        runtimeAlertPresenter.presentStartupTimeoutAlert()
+        handleRuntimeBrowserOpen()
     }
 
     private func handleRuntimeExitFinalFailure(terminationStatus: Int32) {
+        sessionState.runtimeIsReady = false
+        sessionState.runtimeStatusText = "Error"
+        sessionState.startupHint = "Runtime stopped unexpectedly"
+        sessionState.preloadMessage = "Runtime stopped unexpectedly"
+        sessionState.showLoadingStrip = false
         runtimeAlertPresenter.presentRuntimeExitAlert(terminationStatus: terminationStatus) { [weak self] in
             self?.restartRuntimeAfterPreferenceChange()
         }
     }
 
     private func handleRuntimeStateChanged() {
+        sessionState.runtimeIsReady = runtimeLifecycleController.runtimeIsReady
+        sessionState.runtimeStatusText = runtimeLifecycleController.runtimeStatusText
         syncRuntimeMenuState()
     }
 
@@ -192,6 +234,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isReady: runtimeLifecycleController.runtimeIsReady,
             statusText: runtimeLifecycleController.runtimeStatusText
         )
+    }
+
+    private func chooseDataDirectoryForSwiftUI() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: preferencesStore.dataDirectoryPath)
+
+        panel.begin { [weak self] response in
+            guard response == .OK, let self, let url = panel.url else { return }
+            self.preferencesStore.dataDirectoryPath = url.path
+        }
     }
 }
 

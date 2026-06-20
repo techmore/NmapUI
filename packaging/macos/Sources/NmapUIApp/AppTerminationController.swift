@@ -16,8 +16,13 @@ final class AppTerminationController {
             try? SMAppService.mainApp.unregister()
         }
         let bundleURL = Bundle.main.bundleURL
-        NSWorkspace.shared.recycle([bundleURL]) { _, _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+        NSWorkspace.shared.recycle([bundleURL]) { _, error in
+            if let error {
+                NSLog("Failed to recycle app bundle during uninstall: \(error.localizedDescription)")
+            }
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
         }
     }
 

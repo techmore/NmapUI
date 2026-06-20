@@ -1,5 +1,11 @@
 function initializeSiteChrome() {
     const dateTimeEl = document.getElementById('current-date-time');
+    const tabSyncKey = 'nmapui.activeTab';
+    const tabSyncChannelName = 'nmapui-ui-state';
+    const tabSyncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(tabSyncChannelName) : null;
+    const tabs = ['dashboard', 'history', 'reports', 'customers', 'logs', 'settings'];
+    let activeTab = tabs.includes((location.hash || '').replace('#', '')) ? (location.hash || '').replace('#', '') : 'dashboard';
+
     const updateDateTime = () => {
         const now = new Date();
         if (dateTimeEl) dateTimeEl.textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
@@ -9,15 +15,37 @@ function initializeSiteChrome() {
 
     ensureTabPanelsAreSiblings();
 
-    // Tab switching logic
-    const tabs = ['dashboard', 'history', 'reports', 'customers', 'logs', 'settings'];
     tabs.forEach(tab => {
         const btn = document.getElementById(`tab-${tab}-btn`);
         if (btn) {
             btn.addEventListener('click', () => {
-                switchAppTab(tab);
+                switchAppTab(tab, { broadcast: true, persist: true });
             });
         }
+    });
+
+    const applyRemoteTab = (tab) => {
+        if (!tabs.includes(tab) || tab === activeTab) return;
+        switchAppTab(tab, { broadcast: false, persist: false });
+    };
+
+    const readStoredTab = () => {
+        const storedTab = localStorage.getItem(tabSyncKey);
+        return tabs.includes(storedTab || '') ? storedTab : null;
+    };
+
+    const initialTab = tabs.includes(activeTab) ? activeTab : (readStoredTab() || 'dashboard');
+    switchAppTab(initialTab, { broadcast: false, persist: false });
+
+    window.addEventListener('storage', (event) => {
+        if (event.key === tabSyncKey && typeof event.newValue === 'string') {
+            applyRemoteTab(event.newValue);
+        }
+    });
+
+    tabSyncChannel?.addEventListener('message', (event) => {
+        const tab = event.data?.tab;
+        applyRemoteTab(tab);
     });
 
     document.getElementById('refresh-history-tab-btn')?.addEventListener('click', () => {
@@ -78,8 +106,17 @@ function setTabStatus(elementId, message, isError = false) {
     status.classList.toggle('text-olive-800', !isError);
 }
 
-function switchAppTab(tab) {
+function switchAppTab(tab, options = {}) {
+    const { broadcast = false, persist = false } = options;
     const tabs = ['dashboard', 'history', 'reports', 'customers', 'logs', 'settings'];
+    if (!tabs.includes(tab)) return;
+    window.activeNmapUITab = tab;
+    if (persist) {
+        localStorage.setItem('nmapui.activeTab', tab);
+        if (location.hash !== `#${tab}`) {
+            history.replaceState(null, '', `#${tab}`);
+        }
+    }
     tabs.forEach(t => {
         const panel = document.getElementById(`${t}-tab-panel`);
         if (panel) panel.classList.toggle('hidden', t !== tab);
@@ -104,6 +141,15 @@ function switchAppTab(tab) {
             window.loadSettingsTab();
         } else {
             setTabStatus('settings-tab-status', '');
+        }
+    }
+
+    if (broadcast) {
+        window.dispatchEvent(new CustomEvent('nmapui-tab-changed', { detail: { tab } }));
+        if (typeof BroadcastChannel !== 'undefined') {
+            const channel = new BroadcastChannel('nmapui-ui-state');
+            channel.postMessage({ type: 'tab', tab });
+            channel.close();
         }
     }
 }

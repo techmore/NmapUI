@@ -5,19 +5,18 @@ import Foundation
 final class RuntimeLifecycleController {
     private let processLauncher: ProcessLauncher
     private let startupCoordinator: StartupCoordinator
-    private let runtimeURL: URL
 
     private var runtimeProcess: Process?
     private var runtimeStopRequested = false
     private var runtimeAutoRestartAttempted = false
+    private var pendingAutoRestartWorkItem: DispatchWorkItem?
 
     var runtimeIsReady = false
     var runtimeStatusText = "Starting..."
 
-    init(processLauncher: ProcessLauncher, startupCoordinator: StartupCoordinator, runtimeURL: URL) {
+    init(processLauncher: ProcessLauncher, startupCoordinator: StartupCoordinator) {
         self.processLauncher = processLauncher
         self.startupCoordinator = startupCoordinator
-        self.runtimeURL = runtimeURL
     }
 
     func start(
@@ -27,6 +26,8 @@ final class RuntimeLifecycleController {
         onRuntimeExitFinalFailure: @escaping @MainActor (Int32) -> Void,
         onStateChanged: @escaping @MainActor () -> Void
     ) {
+        pendingAutoRestartWorkItem?.cancel()
+        pendingAutoRestartWorkItem = nil
         runtimeStopRequested = false
         runtimeProcess = processLauncher.launchRuntimeIfNeeded()
         if runtimeProcess == nil {
@@ -57,6 +58,8 @@ final class RuntimeLifecycleController {
         onRuntimeExitFinalFailure: @escaping @MainActor (Int32) -> Void,
         onStateChanged: @escaping @MainActor () -> Void
     ) {
+        pendingAutoRestartWorkItem?.cancel()
+        pendingAutoRestartWorkItem = nil
         runtimeStopRequested = true
         stopRuntime()
         runtimeIsReady = false
@@ -73,6 +76,8 @@ final class RuntimeLifecycleController {
     }
 
     func stopForQuitOrUninstall() {
+        pendingAutoRestartWorkItem?.cancel()
+        pendingAutoRestartWorkItem = nil
         runtimeStopRequested = true
         stopRuntime()
     }
@@ -96,7 +101,7 @@ final class RuntimeLifecycleController {
                 onBrowserOpen()
             case .timeout:
                 self.runtimeIsReady = false
-                self.runtimeStatusText = "Starting..."
+                self.runtimeStatusText = "Waiting"
                 onStateChanged()
                 onStartupTimeout()
             }
@@ -120,11 +125,15 @@ final class RuntimeLifecycleController {
             runtimeAutoRestartAttempted = true
             runtimeStatusText = "Restarting..."
             onStateChanged()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self, !self.runtimeStopRequested else { return }
+                self.pendingAutoRestartWorkItem = nil
                 Task { @MainActor in
                     onRetry()
                 }
             }
+            pendingAutoRestartWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: workItem)
             return
         }
 

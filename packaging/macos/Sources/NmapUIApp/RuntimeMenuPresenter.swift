@@ -38,8 +38,9 @@ final class RuntimeMenuPresenter {
 
     func syncRuntimeMenuState(isReady: Bool, statusText: String) {
         runtimeStatusMenuItem?.title = "Runtime: \(statusText)"
-        openAppMenuItem?.title = isReady ? "Open App" : "Starting NmapUI..."
-        openAppMenuItem?.isEnabled = isReady
+        let canOpenUIAnyway = statusText == "Waiting"
+        openAppMenuItem?.title = isReady ? "Open NmapUI" : (canOpenUIAnyway ? "Open UI Anyway" : "Starting NmapUI...")
+        openAppMenuItem?.isEnabled = isReady || canOpenUIAnyway
         restartRuntimeMenuItem?.isEnabled = true
         openDataDirectoryMenuItem?.isEnabled = true
         updateStatusIcon(isReady: isReady)

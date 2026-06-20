@@ -12,11 +12,20 @@ final class RuntimeAlertPresenter {
         alert.runModal()
     }
 
-    func presentStartupTimeoutAlert() {
+    func presentPreferencesSaveFailureAlert() {
         let alert = NSAlert()
         alert.alertStyle = .warning
+        alert.messageText = "Could not save preferences"
+        alert.informativeText = "NmapUI could not update the launch at login setting, so the preferences change was not saved."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    func presentStartupTimeoutAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
         alert.messageText = "NmapUI is still starting"
-        alert.informativeText = "The runtime did not become ready in time. Keep the app open and use Restart Runtime from the menu if you need another startup attempt."
+        alert.informativeText = "The runtime is taking a little longer than usual. The app will keep the native shell open and continue loading the UI in the background."
         alert.addButton(withTitle: "OK")
         alert.runModal()
     }

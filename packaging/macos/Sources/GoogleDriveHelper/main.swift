@@ -1,4 +1,4 @@
-import Foundation
+@preconcurrency import Foundation
 import CryptoKit
 
 private enum HelperError: Error {
@@ -89,35 +89,39 @@ private struct SimpleResponse {
     let body: Data
 }
 
+private final class ResultBox<Value>: @unchecked Sendable {
+    var value: Value?
+}
+
 private func postForm(url: URL, body: [String: String]) throws -> SimpleResponse {
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
     request.httpBody = body
-        .map { "\($0.key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }
+        .map { "\(formURLEncode($0.key))=\(formURLEncode($0.value))" }
         .joined(separator: "&")
         .data(using: .utf8)
 
     let semaphore = DispatchSemaphore(value: 0)
-    var output: SimpleResponse?
-    var caught: Error?
+    let output = ResultBox<SimpleResponse>()
+    let caught = ResultBox<Error>()
 
     URLSession.shared.dataTask(with: request) { data, response, error in
         defer { semaphore.signal() }
         if let error {
-            caught = error
+            caught.value = error
             return
         }
         guard let httpResponse = response as? HTTPURLResponse else {
-            caught = HelperError.invalidPayload("Missing HTTP response")
+            caught.value = HelperError.invalidPayload("Missing HTTP response")
             return
         }
-        output = SimpleResponse(statusCode: httpResponse.statusCode, body: data ?? Data())
+        output.value = SimpleResponse(statusCode: httpResponse.statusCode, body: data ?? Data())
     }.resume()
 
     semaphore.wait()
-    if let caught { throw caught }
-    guard let output else { throw HelperError.invalidPayload("Missing response body") }
+    if let caught = caught.value { throw caught }
+    guard let output = output.value else { throw HelperError.invalidPayload("Missing response body") }
     return output
 }
 
@@ -125,8 +129,12 @@ private func jsonObject(from data: Data) -> [String: Any] {
     (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
 }
 
-private func percentEncode(_ value: String) -> String {
-    value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+private func formURLEncode(_ value: String) -> String {
+    var allowed = CharacterSet.urlQueryAllowed
+    allowed.remove(charactersIn: "&+=?")
+    return value
+        .replacingOccurrences(of: " ", with: "+")
+        .addingPercentEncoding(withAllowedCharacters: allowed) ?? value
 }
 
 private func makeMultipartBody(metadata: [String: Any], fileName: String, fileData: Data) -> (body: Data, boundary: String) {
@@ -152,7 +160,7 @@ private func makeMultipartBody(metadata: [String: Any], fileName: String, fileDa
 
 private func formURLEncoded(_ fields: [String: String]) -> Data {
     fields
-        .map { "\(percentEncode($0.key))=\(percentEncode($0.value))" }
+        .map { "\(formURLEncode($0.key))=\(formURLEncode($0.value))" }
         .joined(separator: "&")
         .data(using: .utf8) ?? Data()
 }
@@ -166,23 +174,23 @@ private func httpGET(url: String, query: [String: String]? = nil, headers: [Stri
     request.httpMethod = "GET"
     headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
     let semaphore = DispatchSemaphore(value: 0)
-    var output: SimpleResponse?
-    var caught: Error?
+    let output = ResultBox<SimpleResponse>()
+    let caught = ResultBox<Error>()
     URLSession.shared.dataTask(with: request) { data, response, error in
         defer { semaphore.signal() }
         if let error {
-            caught = error
+            caught.value = error
             return
         }
         guard let httpResponse = response as? HTTPURLResponse else {
-            caught = HelperError.invalidPayload("Missing HTTP response")
+            caught.value = HelperError.invalidPayload("Missing HTTP response")
             return
         }
-        output = SimpleResponse(statusCode: httpResponse.statusCode, body: data ?? Data())
+        output.value = SimpleResponse(statusCode: httpResponse.statusCode, body: data ?? Data())
     }.resume()
     semaphore.wait()
-    if let caught { throw caught }
-    guard let output else { throw HelperError.invalidPayload("Missing response body") }
+    if let caught = caught.value { throw caught }
+    guard let output = output.value else { throw HelperError.invalidPayload("Missing response body") }
     return output
 }
 
@@ -196,23 +204,23 @@ private func httpPOST(
     headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
     request.httpBody = body
     let semaphore = DispatchSemaphore(value: 0)
-    var output: SimpleResponse?
-    var caught: Error?
+    let output = ResultBox<SimpleResponse>()
+    let caught = ResultBox<Error>()
     URLSession.shared.dataTask(with: request) { data, response, error in
         defer { semaphore.signal() }
         if let error {
-            caught = error
+            caught.value = error
             return
         }
         guard let httpResponse = response as? HTTPURLResponse else {
-            caught = HelperError.invalidPayload("Missing HTTP response")
+            caught.value = HelperError.invalidPayload("Missing HTTP response")
             return
         }
-        output = SimpleResponse(statusCode: httpResponse.statusCode, body: data ?? Data())
+        output.value = SimpleResponse(statusCode: httpResponse.statusCode, body: data ?? Data())
     }.resume()
     semaphore.wait()
-    if let caught { throw caught }
-    guard let output else { throw HelperError.invalidPayload("Missing response body") }
+    if let caught = caught.value { throw caught }
+    guard let output = output.value else { throw HelperError.invalidPayload("Missing response body") }
     return output
 }
 
@@ -426,7 +434,7 @@ struct GoogleDriveHelper {
                     exit(1)
                 }
                 let expiresIn = (payload["expires_in"] as? Double).map { Int($0) } ?? 3600
-                var updatedState = TokenState(schemaVersion: 1, ciphertext: nil, refreshToken: tokenState?.refreshToken ?? (payload["refresh_token"] as? String), accessToken: payload["access_token"] as? String, expiresAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(TimeInterval(expiresIn))), pendingAuth: nil)
+                let updatedState = TokenState(schemaVersion: 1, ciphertext: nil, refreshToken: tokenState?.refreshToken ?? (payload["refresh_token"] as? String), accessToken: payload["access_token"] as? String, expiresAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(TimeInterval(expiresIn))), pendingAuth: nil)
                 try writeJSON(updatedState, to: paths.token)
                 printJSON(HelperResponse(success: true, status: "Google Drive connected", error: nil, configured: nil, connected: nil, expiresAt: updatedState.expiresAt, authURL: nil))
                 exit(0)

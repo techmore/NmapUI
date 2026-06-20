@@ -1,0 +1,149 @@
+{
+  "" : {
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUI-primary.dia",
+    "emit-module-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUI-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUI-primary-emit-module.dia",
+    "pch" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUI-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUI-primary.swiftdeps"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/AppCommandController.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppCommandController~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/AppDelegate.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppDelegate~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/AppMenuBuilder.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppMenuBuilder~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/AppSessionState.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppSessionState~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/AppTerminationController.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/AppTerminationController~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/LaunchAtLoginController.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/LaunchAtLoginController~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/NativeShellView.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NativeShellView~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/NmapUIApp.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/NmapUIApp~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/PreferencesView.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/PreferencesView~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/RuntimeAlertPresenter.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeAlertPresenter~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/RuntimeEndpoints.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeEndpoints~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/RuntimeLifecycleController.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeLifecycleController~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/RuntimeMenuPresenter.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/RuntimeMenuPresenter~partial.swiftmodule"
+  },
+  "/Users/seandolbec/Projects/NmapUI/packaging/macos/Sources/NmapUIApp/StartupCoordinator.swift" : {
+    "const-values" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator.swiftconstvalues",
+    "dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator.d",
+    "diagnostics" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator.dia",
+    "index-unit-output-path" : "/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator.o",
+    "llvm-bc" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator.bc",
+    "object" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator.o",
+    "swift-dependencies" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator.swiftdeps",
+    "swiftmodule" : "/Users/seandolbec/Projects/NmapUI/packaging/macos/.build/out/Intermediates.noindex/NmapUI.build/Debug/NmapUI-p.build/Objects-normal/arm64/StartupCoordinator~partial.swiftmodule"
+  }
+}

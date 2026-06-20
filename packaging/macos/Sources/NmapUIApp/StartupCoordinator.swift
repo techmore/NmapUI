@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 @MainActor
@@ -9,13 +8,11 @@ final class StartupCoordinator {
     }
 
     private let readinessURL: URL
-    private let runtimeURL: URL
     private var launchToken = UUID()
     private var startupTimeoutPrompted = false
 
-    init(readinessURL: URL, runtimeURL: URL) {
+    init(readinessURL: URL) {
         self.readinessURL = readinessURL
-        self.runtimeURL = runtimeURL
     }
 
     func begin() {

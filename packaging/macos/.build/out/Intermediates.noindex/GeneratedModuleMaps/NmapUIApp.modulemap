@@ -1,0 +1,4 @@
+module NmapUIApp {
+header "NmapUIApp-Swift.h"
+export *
+}

@@ -1,5 +1,4 @@
 import AppKit
-import Foundation
 
 @MainActor
 final class AppMenuBuilder {
@@ -7,6 +6,7 @@ final class AppMenuBuilder {
         target: AnyObject,
         onRuntimeStatusItem: NSMenuItem,
         onOpenItem: NSMenuItem,
+        onAboutItem: NSMenuItem,
         onPreferencesItem: NSMenuItem,
         onRestartItem: NSMenuItem,
         onDataDirectoryItem: NSMenuItem,
@@ -20,6 +20,10 @@ final class AppMenuBuilder {
 
         onOpenItem.target = target
         menu.addItem(onOpenItem)
+        menu.addItem(.separator())
+
+        onAboutItem.target = target
+        menu.addItem(onAboutItem)
         menu.addItem(.separator())
 
         onPreferencesItem.target = target

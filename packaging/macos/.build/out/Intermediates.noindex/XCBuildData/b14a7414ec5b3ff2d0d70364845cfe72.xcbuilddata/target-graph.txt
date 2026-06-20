@@ -1,0 +1,10 @@
+Target dependency graph (5 targets)
+Target 'AllExcludingTests' in project 'Aggregate'
+➜ Explicit dependency on target 'NmapUI-product' in project 'NmapUI'
+➜ Explicit dependency on target 'GoogleDriveHelper-product' in project 'NmapUI'
+➜ Explicit dependency on target 'NmapUIApp' in project 'NmapUI'
+➜ Explicit dependency on target 'GoogleDriveHelper' in project 'NmapUI'
+Target 'GoogleDriveHelper' in project 'NmapUI' (no dependencies)
+Target 'NmapUIApp' in project 'NmapUI' (no dependencies)
+Target 'GoogleDriveHelper-product' in project 'NmapUI' (no dependencies)
+Target 'NmapUI-product' in project 'NmapUI' (no dependencies)

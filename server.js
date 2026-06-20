@@ -261,16 +261,20 @@ function updateNmapScriptDatabase() {
 
     console.log('Prescan - Updating scripts...');
     const updateCommand = getPrivilegedCommand(NMAP_PATH, ['--script-updatedb']);
-    const updateProcess = spawn(updateCommand.command, updateCommand.args);
-    updateProcess.stderr.on('data', data => {
-        const text = data.toString();
-        if (isSudoAuthFailure(text)) {
-            console.warn('Skipping nmap script update: passwordless sudo is required.');
-        } else if (!text.includes('Warning: ')) {
-            console.warn(`[NMAP UPDATE] ${text.trim()}`);
-        }
-    });
-    updateProcess.on('error', error => console.warn(`Skipping nmap script update: ${error.message}`));
+    try {
+        const updateProcess = spawn(updateCommand.command, updateCommand.args);
+        updateProcess.stderr.on('data', data => {
+            const text = data.toString();
+            if (isSudoAuthFailure(text)) {
+                console.warn('Skipping nmap script update: passwordless sudo is required.');
+            } else if (!text.includes('Warning: ')) {
+                console.warn(`[NMAP UPDATE] ${text.trim()}`);
+            }
+        });
+        updateProcess.on('error', error => console.warn(`Skipping nmap script update: ${error.message}`));
+    } catch (error) {
+        console.warn(`Skipping nmap script update: ${error.message}`);
+    }
 }
 
 function isSudoAuthFailure(text) {
@@ -770,27 +774,32 @@ function runTraceroute() {
         console.warn(describeMissingExecutable('traceroute', 'TRACEROUTE_PATH'));
         return;
     }
-    isTracerouteRunning = true;
-    cachedHops = [];
-    const traceroute = spawn(TRACEROUTE_PATH, ['-m', '15', '-n', '-q', '1', '8.8.8.8']);
-    traceroute.stdout.on('data', (data) => {
-        const lines = data.toString().split('\n');
-        lines.forEach(line => {
-            const match = line.match(/^\s*(\d+)\s+([0-9.]+)/);
-            if (match) {
-                const hop = { hop: parseInt(match[1]), ip: match[2] };
-                if (!cachedHops.find(h => h.hop === hop.hop)) {
-                    cachedHops.push(hop);
-                    io.emit('traceroute_hop', hop);
+    try {
+        isTracerouteRunning = true;
+        cachedHops = [];
+        const traceroute = spawn(TRACEROUTE_PATH, ['-m', '15', '-n', '-q', '1', '8.8.8.8']);
+        traceroute.stdout.on('data', (data) => {
+            const lines = data.toString().split('\n');
+            lines.forEach(line => {
+                const match = line.match(/^\s*(\d+)\s+([0-9.]+)/);
+                if (match) {
+                    const hop = { hop: parseInt(match[1]), ip: match[2] };
+                    if (!cachedHops.find(h => h.hop === hop.hop)) {
+                        cachedHops.push(hop);
+                        io.emit('traceroute_hop', hop);
+                    }
                 }
-            }
+            });
         });
-    });
-    traceroute.on('error', error => {
-        console.error(`[TRACEROUTE ERROR] ${error.message}`);
+        traceroute.on('error', error => {
+            console.error(`[TRACEROUTE ERROR] ${error.message}`);
+            isTracerouteRunning = false;
+        });
+        traceroute.on('close', () => { isTracerouteRunning = false; });
+    } catch (error) {
         isTracerouteRunning = false;
-    });
-    traceroute.on('close', () => { isTracerouteRunning = false; });
+        console.warn(`[TRACEROUTE ERROR] ${error.message}`);
+    }
 }
 
 function parseNmapXML(xmlPath, onParsed = null) {

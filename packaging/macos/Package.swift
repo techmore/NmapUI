@@ -19,7 +19,13 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "NmapUIApp",
-            path: "Sources/NmapUIApp"
+            path: "Sources/NmapUIApp",
+            exclude: [
+                "Resources/Info.plist"
+            ],
+            resources: [
+                .process("Assets")
+            ]
         ),
         .executableTarget(
             name: "GoogleDriveHelper",
