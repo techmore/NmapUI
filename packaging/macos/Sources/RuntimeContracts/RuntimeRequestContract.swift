@@ -20,6 +20,7 @@ public enum RuntimeClientRequest: String, Codable, CaseIterable {
     case getPrivilegeHelperStatus = "get_privilege_helper_status"
     case installPrivilegeHelper = "install_privilege_helper"
     case openReport = "open_report"
+    case saveAppSettings = "save_app_settings"
 }
 
 public struct RuntimeGoogleDriveCredentialsPayload: Codable, Equatable {

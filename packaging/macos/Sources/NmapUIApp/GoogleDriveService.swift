@@ -18,6 +18,15 @@ enum GoogleDriveService {
         let uploaded: [[String: String]]
     }
 
+    struct CommandResult: Sendable {
+        let success: Bool
+        let status: String?
+        let error: String?
+        let authURL: String?
+        let configured: Bool?
+        let connected: Bool?
+    }
+
     static func resolveHelperURL() -> URL? {
         if let path = RuntimeToolchain.current().googleDriveHelperPath,
            FileManager.default.isExecutableFile(atPath: path) {
@@ -68,6 +77,126 @@ enum GoogleDriveService {
                 error: error.localizedDescription
             )
         }
+    }
+
+    static func saveCredentials(_ credentialsJson: String, dataDirectory: URL) -> CommandResult {
+        guard let helper = resolveHelperURL() else {
+            return CommandResult(success: false, status: nil, error: "GoogleDriveHelper binary not found", authURL: nil, configured: nil, connected: nil)
+        }
+        let normalized = normalizeCredentialsJSON(credentialsJson)
+        do {
+            let output = try runHelper(
+                helper: helper,
+                arguments: ["save-credentials", "--root", dataDirectory.path, "--credentials-json", normalized]
+            )
+            let json = parseJSON(output)
+            // Keep a convenience copy for the app as well.
+            RuntimeMetadataStore.persistGoogleDriveCredentials(normalized, to: dataDirectory)
+            return CommandResult(
+                success: (json["success"] as? Bool) ?? false,
+                status: json["status"] as? String,
+                error: json["error"] as? String,
+                authURL: nil,
+                configured: true,
+                connected: nil
+            )
+        } catch {
+            return CommandResult(success: false, status: nil, error: error.localizedDescription, authURL: nil, configured: nil, connected: nil)
+        }
+    }
+
+    static func authURL(dataDirectory: URL, redirectURI: String) -> CommandResult {
+        guard let helper = resolveHelperURL() else {
+            return CommandResult(success: false, status: nil, error: "GoogleDriveHelper binary not found", authURL: nil, configured: nil, connected: nil)
+        }
+        do {
+            let output = try runHelper(
+                helper: helper,
+                arguments: ["auth-url", "--root", dataDirectory.path, "--redirect-uri", redirectURI]
+            )
+            let json = parseJSON(output)
+            return CommandResult(
+                success: (json["success"] as? Bool) ?? false,
+                status: json["status"] as? String,
+                error: json["error"] as? String,
+                authURL: json["authURL"] as? String,
+                configured: json["configured"] as? Bool,
+                connected: json["connected"] as? Bool
+            )
+        } catch {
+            return CommandResult(success: false, status: nil, error: error.localizedDescription, authURL: nil, configured: nil, connected: nil)
+        }
+    }
+
+    static func exchangeCode(code: String, state: String, dataDirectory: URL) -> CommandResult {
+        guard let helper = resolveHelperURL() else {
+            return CommandResult(success: false, status: nil, error: "GoogleDriveHelper binary not found", authURL: nil, configured: nil, connected: nil)
+        }
+        do {
+            let output = try runHelper(
+                helper: helper,
+                arguments: ["exchange-code", "--root", dataDirectory.path, "--code", code, "--state", state]
+            )
+            let json = parseJSON(output)
+            return CommandResult(
+                success: (json["success"] as? Bool) ?? false,
+                status: json["status"] as? String,
+                error: json["error"] as? String,
+                authURL: nil,
+                configured: json["configured"] as? Bool,
+                connected: true
+            )
+        } catch {
+            return CommandResult(success: false, status: nil, error: error.localizedDescription, authURL: nil, configured: nil, connected: nil)
+        }
+    }
+
+    static func disconnect(dataDirectory: URL) -> CommandResult {
+        guard let helper = resolveHelperURL() else {
+            return CommandResult(success: false, status: nil, error: "GoogleDriveHelper binary not found", authURL: nil, configured: nil, connected: nil)
+        }
+        do {
+            let output = try runHelper(
+                helper: helper,
+                arguments: ["disconnect", "--root", dataDirectory.path]
+            )
+            let json = parseJSON(output)
+            return CommandResult(
+                success: (json["success"] as? Bool) ?? false,
+                status: json["status"] as? String ?? "Google Drive disconnected",
+                error: json["error"] as? String,
+                authURL: nil,
+                configured: json["configured"] as? Bool,
+                connected: false
+            )
+        } catch {
+            return CommandResult(success: false, status: nil, error: error.localizedDescription, authURL: nil, configured: nil, connected: nil)
+        }
+    }
+
+    /// Accept either flat `{client_id, client_secret}` or Google console `installed`/`web` JSON.
+    static func normalizeCredentialsJSON(_ raw: String) -> String {
+        guard let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return raw
+        }
+        if object["client_id"] != nil, object["client_secret"] != nil {
+            return raw
+        }
+        let nested = (object["installed"] as? [String: Any]) ?? (object["web"] as? [String: Any])
+        if let nested,
+           let clientId = nested["client_id"] as? String,
+           let clientSecret = nested["client_secret"] as? String {
+            let flat: [String: String] = [
+                "client_id": clientId,
+                "client_secret": clientSecret
+            ]
+            if let encoded = try? JSONSerialization.data(withJSONObject: flat),
+               let text = String(data: encoded, encoding: .utf8) {
+                return text
+            }
+        }
+        return raw
     }
 
     static func uploadReportArtifacts(

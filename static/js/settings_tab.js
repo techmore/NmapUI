@@ -136,8 +136,16 @@ function saveSettingsTab() {
             enabled: settings.googleDriveEnabled,
             folderId: settings.googleDriveFolder
         });
+        if (window.webkit?.messageHandlers?.nmapuiRequest?.postMessage) {
+            window.webkit.messageHandlers.nmapuiRequest.postMessage({
+                event: 'save_app_settings',
+                payload: settings
+            });
+        } else {
+            window.socket?.emit?.('save_app_settings', settings);
+        }
         renderSettingsRuntimeSummary();
-        setSettingsStatus('Settings saved locally in this browser.');
+        setSettingsStatus('Settings saved for this browser and native app.');
     } catch (error) {
         setSettingsStatus('Failed to save local settings.', true);
     }
@@ -271,11 +279,19 @@ function initializeSettingsTab(socket) {
     });
     document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', () => {
         setGoogleDriveStatus('Starting Google Drive authorization...');
-        socket.emit('connect_google_drive');
+        if (window.webkit?.messageHandlers?.nmapuiRequest?.postMessage) {
+            window.webkit.messageHandlers.nmapuiRequest.postMessage({ event: 'connect_google_drive', payload: {} });
+        } else {
+            socket.emit('connect_google_drive');
+        }
     });
     document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', () => {
         setGoogleDriveStatus('Disconnecting Google Drive...');
-        socket.emit('disconnect_google_drive');
+        if (window.webkit?.messageHandlers?.nmapuiRequest?.postMessage) {
+            window.webkit.messageHandlers.nmapuiRequest.postMessage({ event: 'disconnect_google_drive', payload: {} });
+        } else {
+            socket.emit('disconnect_google_drive');
+        }
     });
     document.getElementById('settings-google-drive-import-btn')?.addEventListener('click', () => {
         document.getElementById('settings-google-drive-credentials-file')?.click();

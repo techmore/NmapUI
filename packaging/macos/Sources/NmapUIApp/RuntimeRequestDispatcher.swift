@@ -110,31 +110,27 @@ final class RuntimeRequestDispatcher: RuntimeRequestDispatching {
             return RuntimeRequestDispatchResult()
         case .stopScan:
             return RuntimeRequestDispatchResult(events: [.scanStopped(RuntimeScanStoppedEnvelope())])
-        case .getPrivilegeHelperStatus, .installPrivilegeHelper, .openReport:
-            // Handled by the native shell bridge (AppDelegate) for interactive privilege/report actions.
+        case .getPrivilegeHelperStatus, .installPrivilegeHelper, .openReport, .connectGoogleDrive, .disconnectGoogleDrive, .saveAppSettings:
+            // Handled by the native shell bridge (AppDelegate) for interactive system actions.
             return RuntimeRequestDispatchResult()
         case .saveGoogleDriveCredentials:
             let credentials = googleDriveCredentialsPayload(from: request)
-            RuntimeMetadataStore.persistGoogleDriveCredentials(credentials.credentialsJson, to: dataDirectory)
+            let result = GoogleDriveService.saveCredentials(credentials.credentialsJson, dataDirectory: dataDirectory)
+            sessionState.refreshGoogleDriveSnapshot(from: dataDirectory)
             if let googleDrive = sessionState.runtimeGoogleDriveStatusEnvelope() {
-                return RuntimeRequestDispatchResult(events: [.googleDriveStatus(googleDrive)])
+                return RuntimeRequestDispatchResult(events: [
+                    .googleDriveStatus(RuntimeGoogleDriveStatusEnvelope(
+                        success: result.success,
+                        status: result.status ?? (result.success ? "Google Drive credentials saved" : (result.error ?? "Failed to save credentials")),
+                        config: googleDrive.config
+                    ))
+                ])
             }
             return RuntimeRequestDispatchResult(events: [.googleDriveStatus(RuntimeGoogleDriveStatusEnvelope(
-                success: true,
-                status: "Google Drive credentials saved",
+                success: result.success,
+                status: result.status ?? result.error ?? "Google Drive credentials updated",
                 config: ["enabled": .bool(sessionState.runtimeGoogleDriveSnapshot.enabled)]
             ))])
-        case .connectGoogleDrive:
-            return RuntimeRequestDispatchResult(events: [.googleDriveAuthURL(RuntimeGoogleDriveAuthURLEnvelope(
-                success: true,
-                url: RuntimeEndpoints.googleDriveOAuthCallbackURL().absoluteString,
-                status: "Google Drive auth URL ready"
-            ))])
-        case .disconnectGoogleDrive:
-            if let googleDrive = sessionState.runtimeGoogleDriveStatusEnvelope() {
-                return RuntimeRequestDispatchResult(events: [.googleDriveStatus(googleDrive)])
-            }
-            return RuntimeRequestDispatchResult()
         }
     }
 

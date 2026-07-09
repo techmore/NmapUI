@@ -445,11 +445,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sessionState.emitHistoryData()
             sessionState.emitReportsData()
 
+            copyReportToDesktopIfEnabled(generated: generated, dataDirectory: dataDirectory)
+
             if sessionState.runtimeGoogleDriveSnapshot.enabled {
                 await uploadReportToGoogleDriveIfEnabled(generated: generated, dataDirectory: dataDirectory)
             }
         } catch {
             RuntimeDiagnosticsLogger.error("Report generation failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func copyReportToDesktopIfEnabled(
+        generated: ReportGenerator.GeneratedReport,
+        dataDirectory: URL
+    ) {
+        let configURL = dataDirectory.appendingPathComponent("config.json")
+        let json = (try? Data(contentsOf: configURL)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let reports = (json?["reports"] as? [String: Any]) ?? [:]
+        let saveToDesktop = reports["saveToDesktop"] as? Bool ?? false
+        guard saveToDesktop else { return }
+
+        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+        let destinationRoot = desktop.appendingPathComponent("NmapUI Reports", isDirectory: true)
+            .appendingPathComponent(generated.folderName, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
+            for source in [generated.htmlURL, generated.xmlURL, generated.pdfURL].compactMap({ $0 }) {
+                let dest = destinationRoot.appendingPathComponent(source.lastPathComponent)
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try FileManager.default.removeItem(at: dest)
+                }
+                try FileManager.default.copyItem(at: source, to: dest)
+            }
+            RuntimeDiagnosticsLogger.log("Copied report artifacts to \(destinationRoot.path)")
+        } catch {
+            RuntimeDiagnosticsLogger.error("Desktop report copy failed: \(error.localizedDescription)")
         }
     }
 
@@ -528,6 +559,99 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let url = URL(string: path), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    @MainActor
+    func connectGoogleDriveFromSettings() {
+        Task { @MainActor in
+            await self.performGoogleDriveConnect()
+        }
+    }
+
+    @MainActor
+    func disconnectGoogleDriveFromSettings() {
+        let dataDirectory = RuntimeSettingsStore.currentDataDirectoryURL()
+        let result = GoogleDriveService.disconnect(dataDirectory: dataDirectory)
+        RuntimeDiagnosticsLogger.log("Google Drive disconnect success=\(result.success) status=\(result.status ?? "none")")
+        sessionState.refreshGoogleDriveSnapshot(from: dataDirectory)
+        sessionState.emitGoogleDriveStatus()
+        let payload: [String: Any] = [
+            "success": result.success,
+            "status": result.status ?? (result.success ? "Google Drive disconnected" : (result.error ?? "Disconnect failed")),
+            "error": result.error as Any
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: payload),
+           let json = String(data: data, encoding: .utf8) {
+            WebPortalViewCoordinatorBridge.shared.emitRuntimeEvent(event: "google_drive_status", payloadJSON: json)
+        }
+    }
+
+    func saveAppSettingsFromWeb(_ payload: [String: Any]) {
+        let dataDirectory = RuntimeSettingsStore.currentDataDirectoryURL()
+        let saveReportsDesktop = payload["saveReportsDesktop"] as? Bool ?? false
+        RuntimeMetadataStore.persistConfigSection(
+            "reports",
+            values: ["saveToDesktop": .bool(saveReportsDesktop)],
+            to: dataDirectory
+        )
+        if let enabled = payload["googleDriveEnabled"] as? Bool {
+            let folderId = payload["googleDriveFolder"] as? String ?? sessionState.runtimeGoogleDriveSnapshot.folderId
+            sessionState.updateGoogleDriveSettings(enabled: enabled, folderId: folderId, dataDirectory: dataDirectory)
+        }
+        RuntimeDiagnosticsLogger.log("App settings saved saveReportsDesktop=\(saveReportsDesktop)")
+        sessionState.emitGoogleDriveStatus()
+    }
+
+    private func performGoogleDriveConnect() async {
+        let dataDirectory = RuntimeSettingsStore.currentDataDirectoryURL()
+        do {
+            let session = try GoogleDriveOAuthSession.start(preferredPort: 9010)
+            let auth = GoogleDriveService.authURL(dataDirectory: dataDirectory, redirectURI: session.redirectURI)
+            guard auth.success, let authURLString = auth.authURL, let authURL = URL(string: authURLString) else {
+                session.cancel(with: .listenFailed)
+                presentGoogleDriveMessage(auth.error ?? "Unable to start Google Drive authorization.", isError: true)
+                return
+            }
+
+            presentGoogleDriveMessage("Google authorization opened. Complete sign-in in the browser window.", isError: false)
+            NSWorkspace.shared.open(authURL)
+
+            let callback = try await session.waitForCallback(timeoutSeconds: 180)
+            let exchange = GoogleDriveService.exchangeCode(
+                code: callback.code,
+                state: callback.state,
+                dataDirectory: dataDirectory
+            )
+            sessionState.refreshGoogleDriveSnapshot(from: dataDirectory)
+            sessionState.emitGoogleDriveStatus()
+            if exchange.success {
+                // Ensure sync stays enabled after a successful connect.
+                sessionState.updateGoogleDriveSettings(
+                    enabled: true,
+                    folderId: sessionState.runtimeGoogleDriveSnapshot.folderId,
+                    dataDirectory: dataDirectory
+                )
+                sessionState.emitGoogleDriveStatus()
+                presentGoogleDriveMessage(exchange.status ?? "Google Drive connected", isError: false)
+            } else {
+                presentGoogleDriveMessage(exchange.error ?? "Failed to complete Google Drive authorization.", isError: true)
+            }
+        } catch {
+            presentGoogleDriveMessage(error.localizedDescription, isError: true)
+            sessionState.emitGoogleDriveStatus()
+        }
+    }
+
+    private func presentGoogleDriveMessage(_ message: String, isError: Bool) {
+        let payload: [String: Any] = [
+            "success": !isError,
+            "status": message,
+            "error": isError ? message : NSNull()
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: payload),
+           let json = String(data: data, encoding: .utf8) {
+            WebPortalViewCoordinatorBridge.shared.emitRuntimeEvent(event: "google_drive_status", payloadJSON: json)
         }
     }
 

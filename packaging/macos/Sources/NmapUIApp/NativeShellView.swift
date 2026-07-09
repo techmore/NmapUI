@@ -221,6 +221,15 @@ struct WebPortalView: NSViewRepresentable {
                             appDelegate.openReportPath(path)
                         }
                         return
+                    case .connectGoogleDrive:
+                        appDelegate.connectGoogleDriveFromSettings()
+                        return
+                    case .disconnectGoogleDrive:
+                        appDelegate.disconnectGoogleDriveFromSettings()
+                        return
+                    case .saveAppSettings:
+                        appDelegate.saveAppSettingsFromWeb(payload)
+                        return
                     case .stopScan:
                         appDelegate.stopSwiftManagedScan()
                         return
