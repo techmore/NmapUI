@@ -72,6 +72,7 @@ function setGoogleDriveStatus(message, isError = false) {
     status.classList.toggle('text-red-700', isError);
     status.classList.toggle('text-olive-600', !isError);
 }
+window.setGoogleDriveStatus = setGoogleDriveStatus;
 
 function renderGoogleDriveSummary({ config = {}, status = {} } = {}) {
     const enabledState = document.getElementById('settings-google-drive-enabled-state');

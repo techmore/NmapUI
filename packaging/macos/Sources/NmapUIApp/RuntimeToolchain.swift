@@ -58,9 +58,20 @@ struct RuntimeToolchain: Codable {
             ),
             googleDriveHelperPath: resolveExecutable(
                 explicitPath: ProcessInfo.processInfo.environment["NMAPUI_GOOGLE_DRIVE_HELPER"],
-                candidates: [
-                    FileManager.default.currentDirectoryPath + "/packaging/macos/.build/out/Products/Debug/GoogleDriveHelper"
-                ]
+                candidates: {
+                    var paths: [String] = []
+                    if let execDir = Bundle.main.executableURL?.deletingLastPathComponent().path {
+                        paths.append(execDir + "/GoogleDriveHelper")
+                    }
+                    let cwd = FileManager.default.currentDirectoryPath
+                    paths.append(contentsOf: [
+                        cwd + "/packaging/macos/.build/debug/GoogleDriveHelper",
+                        cwd + "/packaging/macos/.build/release/GoogleDriveHelper",
+                        cwd + "/packaging/macos/.build/out/Products/Debug/GoogleDriveHelper",
+                        cwd + "/.build/debug/GoogleDriveHelper"
+                    ])
+                    return paths
+                }()
             )
         )
     }

@@ -44,6 +44,7 @@ final class RuntimeRequestDispatcher: RuntimeRequestDispatching {
             }
             return RuntimeRequestDispatchResult()
         case .getGoogleDriveStatus:
+            sessionState.refreshGoogleDriveSnapshot(from: dataDirectory)
             if let googleDrive = sessionState.runtimeGoogleDriveStatusEnvelope() {
                 return RuntimeRequestDispatchResult(events: [.googleDriveStatus(googleDrive)])
             }

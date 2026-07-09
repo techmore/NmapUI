@@ -34,6 +34,11 @@ if [ -f "$HELPER_PATH" ]; then
     cp "$HELPER_PATH" "$HELPER_EXECUTABLE"
     chmod 755 "$HELPER_EXECUTABLE"
 fi
+DRIVE_HELPER_PATH="$BUILD_DIR/debug/GoogleDriveHelper"
+if [ -f "$DRIVE_HELPER_PATH" ]; then
+    cp "$DRIVE_HELPER_PATH" "$MACOS_DIR/GoogleDriveHelper"
+    chmod 755 "$MACOS_DIR/GoogleDriveHelper"
+fi
 INFO_PLIST_SOURCE="$SCRIPT_DIR/Sources/NmapUIApp/Resources/Info.plist"
 if [ ! -f "$INFO_PLIST_SOURCE" ]; then
     INFO_PLIST_SOURCE="$SCRIPT_DIR/Resources/Info.plist"

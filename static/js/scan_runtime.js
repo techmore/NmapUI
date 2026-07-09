@@ -233,6 +233,19 @@ function handleNativeRuntimeEvent(eventName, payload = {}) {
         return;
     }
 
+    if (eventName === 'auto_scan_config' && typeof window.__nmapuiApplyAutoScanConfig === 'function') {
+        window.__nmapuiApplyAutoScanConfig(payload);
+        return;
+    }
+
+    if (eventName === 'google_drive_upload_complete') {
+        if (typeof window.setGoogleDriveStatus === 'function') {
+            window.setGoogleDriveStatus(payload.status || 'Google Drive upload finished.', !!payload.error);
+        }
+        window.socket?.emit('get_google_drive_status');
+        return;
+    }
+
     if (eventName === 'reports_refresh') {
         window.socket?.emit('get_reports');
     }

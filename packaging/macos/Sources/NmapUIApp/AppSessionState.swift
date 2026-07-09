@@ -411,12 +411,31 @@ final class AppSessionState: ObservableObject {
         let configURL = dataDirectory.appendingPathComponent("config.json")
         let json = (try? Data(contentsOf: configURL)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         let autoScan = (json?["autoScan"] as? [String: Any]) ?? [:]
+        if autoScan.isEmpty {
+            runtimeAutoScanSnapshot = RuntimeAutoScanSnapshot(
+                enabled: false,
+                recurrence: "daily",
+                startTime: "01:00",
+                target: fallbackTarget,
+                config: [:]
+            )
+            return
+        }
+        let enabled = autoScan["enabled"] as? Bool ?? false
+        let recurrence = autoScan["recurrence"] as? String ?? "daily"
+        let startTime = autoScan["startTime"] as? String ?? "01:00"
+        let target = autoScan["target"] as? String ?? fallbackTarget
         runtimeAutoScanSnapshot = RuntimeAutoScanSnapshot(
-            enabled: autoScan["enabled"] as? Bool ?? false,
-            recurrence: autoScan["recurrence"] as? String ?? "daily",
-            startTime: autoScan["startTime"] as? String ?? "01:00",
-            target: autoScan["target"] as? String ?? fallbackTarget,
-            config: autoScan.toJSONValueMap()
+            enabled: enabled,
+            recurrence: recurrence,
+            startTime: startTime,
+            target: target,
+            config: enrichedAutoScanConfig(
+                enabled: enabled,
+                recurrence: recurrence,
+                startTime: startTime,
+                target: target
+            )
         )
     }
 
@@ -431,7 +450,12 @@ final class AppSessionState: ObservableObject {
             enabled: runtimeAutoScanSnapshot.enabled,
             schedule: runtimeAutoScanSnapshot.recurrence,
             scheduleLabel: runtimeAutoScanSnapshot.recurrence.capitalized,
-            config: runtimeAutoScanSnapshot.config
+            config: enrichedAutoScanConfig(
+                enabled: runtimeAutoScanSnapshot.enabled,
+                recurrence: runtimeAutoScanSnapshot.recurrence,
+                startTime: runtimeAutoScanSnapshot.startTime,
+                target: runtimeAutoScanSnapshot.target
+            )
         )
     }
 
@@ -445,20 +469,43 @@ final class AppSessionState: ObservableObject {
         let normalizedRecurrence = ["hourly", "daily", "weekly", "monthly"].contains(recurrence) ? recurrence : "daily"
         let normalizedStartTime = startTime.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "01:00" : startTime
         let normalizedTarget = target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (runtimeNetworkState?.cidr ?? "192.168.1.0/24") : target
+        let config = enrichedAutoScanConfig(
+            enabled: enabled,
+            recurrence: normalizedRecurrence,
+            startTime: normalizedStartTime,
+            target: normalizedTarget
+        )
         let snapshot = RuntimeAutoScanSnapshot(
             enabled: enabled,
             recurrence: normalizedRecurrence,
             startTime: normalizedStartTime,
             target: normalizedTarget,
-            config: [
-                "enabled": .bool(enabled),
-                "recurrence": .string(normalizedRecurrence),
-                "startTime": .string(normalizedStartTime),
-                "target": .string(normalizedTarget)
-            ]
+            config: config
         )
         runtimeAutoScanSnapshot = snapshot
-        RuntimeMetadataStore.persistConfigSection("autoScan", values: snapshot.config, to: dataDirectory)
+        RuntimeMetadataStore.persistConfigSection("autoScan", values: config, to: dataDirectory)
+    }
+
+    private func enrichedAutoScanConfig(
+        enabled: Bool,
+        recurrence: String,
+        startTime: String,
+        target: String
+    ) -> [String: RuntimeJSONValue] {
+        let next = AutoScanSchedule.nextRunDate(enabled: enabled, recurrence: recurrence, startTime: startTime)
+        var config: [String: RuntimeJSONValue] = [
+            "enabled": .bool(enabled),
+            "recurrence": .string(recurrence),
+            "startTime": .string(startTime),
+            "target": .string(target)
+        ]
+        if let next {
+            config["nextRunAt"] = .string(ISO8601DateFormatter().string(from: next))
+            if let label = AutoScanSchedule.formattedNextRun(next) {
+                config["nextRunLabel"] = .string(label)
+            }
+        }
+        return config
     }
 
     func refreshGoogleDriveSnapshot(from dataDirectory: URL) {
@@ -479,10 +526,19 @@ final class AppSessionState: ObservableObject {
     }
 
     func runtimeGoogleDriveStatusEnvelope() -> RuntimeGoogleDriveStatusEnvelope? {
-        RuntimeGoogleDriveStatusEnvelope(
-            success: true,
-            status: runtimeGoogleDriveSnapshot.enabled ? "Google Drive enabled" : "Google Drive disabled",
-            config: runtimeGoogleDriveSnapshot.config
+        let dataDirectory = RuntimeSettingsStore.currentDataDirectoryURL()
+        let live = GoogleDriveService.status(dataDirectory: dataDirectory)
+        var config = runtimeGoogleDriveSnapshot.config
+        config["enabled"] = .bool(runtimeGoogleDriveSnapshot.enabled)
+        config["folderId"] = .string(runtimeGoogleDriveSnapshot.folderId)
+        config["configured"] = .bool(live.configured)
+        config["connected"] = .bool(live.connected)
+        // Keep a stable enabled/disabled status for the UI envelope; connection detail lives in config.
+        let statusText = runtimeGoogleDriveSnapshot.enabled ? "Google Drive enabled" : "Google Drive disabled"
+        return RuntimeGoogleDriveStatusEnvelope(
+            success: live.success || !runtimeGoogleDriveSnapshot.enabled,
+            status: statusText,
+            config: config
         )
     }
 

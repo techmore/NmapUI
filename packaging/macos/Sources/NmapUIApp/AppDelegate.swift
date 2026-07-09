@@ -444,9 +444,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sessionState.emitReportsRefresh()
             sessionState.emitHistoryData()
             sessionState.emitReportsData()
+
+            if sessionState.runtimeGoogleDriveSnapshot.enabled {
+                await uploadReportToGoogleDriveIfEnabled(generated: generated, dataDirectory: dataDirectory)
+            }
         } catch {
             RuntimeDiagnosticsLogger.error("Report generation failed: \(error.localizedDescription)")
         }
+    }
+
+    private func uploadReportToGoogleDriveIfEnabled(
+        generated: ReportGenerator.GeneratedReport,
+        dataDirectory: URL
+    ) async {
+        let status = GoogleDriveService.status(dataDirectory: dataDirectory)
+        guard status.connected else {
+            RuntimeDiagnosticsLogger.log("Skipping Google Drive upload: not connected (\(status.status))")
+            return
+        }
+
+        var files = [generated.htmlURL, generated.xmlURL]
+        if let pdf = generated.pdfURL {
+            files.append(pdf)
+        }
+        let result = GoogleDriveService.uploadReportArtifacts(
+            files: files,
+            dataDirectory: dataDirectory,
+            folderId: sessionState.runtimeGoogleDriveSnapshot.folderId
+        )
+        RuntimeDiagnosticsLogger.log(
+            "Google Drive upload success=\(result.success) status=\(result.status) error=\(result.error ?? "none")"
+        )
+
+        let payload: [String: Any] = [
+            "success": result.success,
+            "status": result.status,
+            "error": result.error as Any,
+            "uploadedCount": result.uploaded.count
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: payload),
+           let json = String(data: data, encoding: .utf8) {
+            WebPortalViewCoordinatorBridge.shared.emitRuntimeEvent(
+                event: "google_drive_upload_complete",
+                payloadJSON: json
+            )
+        }
+        sessionState.emitGoogleDriveStatus()
     }
 
     func emitPrivilegeHelperStatus() {

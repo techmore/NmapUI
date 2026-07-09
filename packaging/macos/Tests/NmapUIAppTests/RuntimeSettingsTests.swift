@@ -737,7 +737,7 @@ struct RuntimeSettingsTests {
         let data = try RuntimeEventEncoder.encodeJSON(message)
         let decoded = try RuntimeEventEncoder.decodeJSON(data)
 
-        #expect(decoded.event == "sync_state")
+        #expect(decoded.event == "scan_started")
         #expect(decoded.payload == message)
     }
 
