@@ -2,32 +2,49 @@ import ServiceManagement
 import SwiftUI
 
 enum PreferencesKeys {
+    static let useDefaultRuntimeCommand = "NMAPUI_USE_DEFAULT_RUNTIME_COMMAND"
+    static let runtimeExecutable = "NMAPUI_RUNTIME_EXECUTABLE"
+    static let runtimeArguments = "NMAPUI_RUNTIME_ARGUMENTS"
     static let runtimeCommand = "NMAPUI_RUNTIME_COMMAND"
     static let dataDirectory = "NMAPUI_DATA_DIR"
 }
 
 @MainActor
 final class PreferencesStore: ObservableObject {
-    @Published var runtimeCommand: String
+    @Published var useDefaultRuntimeCommand: Bool
+    @Published var runtimeExecutable: String
+    @Published var runtimeArguments: String
     @Published var dataDirectoryPath: String
     @Published var launchAtLoginEnabled: Bool
-    private var persistedRuntimeCommand: String
+    private var persistedUseDefaultRuntimeCommand: Bool
+    private var persistedRuntimeExecutable: String
+    private var persistedRuntimeArguments: String
     private var persistedDataDirectoryPath: String
     private var persistedLaunchAtLoginEnabled: Bool
 
     init() {
-        let runtimeCommand = ProcessLauncher.currentRuntimeCommand()
-        let dataDirectoryPath = ProcessLauncher.currentDataDirectory()
-        let launchAtLoginEnabled = ProcessLauncher.isLaunchAtLoginEnabled()
-        self.runtimeCommand = runtimeCommand
+        let loadedSettings = RuntimeSettingsStore.load(from: RuntimeSettingsStore.currentDataDirectoryURL())
+        let currentSettings = RuntimeSettingsStore.current()
+        let useDefaultRuntimeCommand = loadedSettings?.useDefaultRuntimeCommand ?? currentSettings.useDefaultRuntimeCommand
+        let runtimeExecutable = loadedSettings?.runtimeExecutable ?? currentSettings.runtimeExecutable
+        let runtimeArguments = loadedSettings?.runtimeArguments ?? currentSettings.runtimeArguments
+        let dataDirectoryPath = loadedSettings?.dataDirectoryPath ?? currentSettings.dataDirectoryPath
+        let launchAtLoginEnabled = loadedSettings?.launchAtLoginEnabled ?? currentSettings.launchAtLoginEnabled
+        self.useDefaultRuntimeCommand = useDefaultRuntimeCommand
+        self.runtimeExecutable = runtimeExecutable
+        self.runtimeArguments = runtimeArguments
         self.dataDirectoryPath = dataDirectoryPath
         self.launchAtLoginEnabled = launchAtLoginEnabled
         let persistedState = Self.persistedState(
-            runtimeCommand: runtimeCommand,
+            useDefaultRuntimeCommand: useDefaultRuntimeCommand,
+            runtimeExecutable: runtimeExecutable,
+            runtimeArguments: runtimeArguments,
             dataDirectoryPath: dataDirectoryPath,
             launchAtLoginEnabled: launchAtLoginEnabled
         )
-        persistedRuntimeCommand = persistedState.runtimeCommand
+        persistedUseDefaultRuntimeCommand = persistedState.useDefaultRuntimeCommand
+        persistedRuntimeExecutable = persistedState.runtimeExecutable
+        persistedRuntimeArguments = persistedState.runtimeArguments
         persistedDataDirectoryPath = persistedState.dataDirectoryPath
         persistedLaunchAtLoginEnabled = persistedState.launchAtLoginEnabled
     }
@@ -47,51 +64,99 @@ final class PreferencesStore: ObservableObject {
         }
 
         let defaults = UserDefaults.standard
-        defaults.set(runtimeCommand, forKey: PreferencesKeys.runtimeCommand)
+        defaults.set(useDefaultRuntimeCommand, forKey: PreferencesKeys.useDefaultRuntimeCommand)
+        if useDefaultRuntimeCommand {
+            defaults.removeObject(forKey: PreferencesKeys.runtimeExecutable)
+            defaults.removeObject(forKey: PreferencesKeys.runtimeArguments)
+            defaults.removeObject(forKey: PreferencesKeys.runtimeCommand)
+        } else {
+            defaults.set(runtimeExecutable, forKey: PreferencesKeys.runtimeExecutable)
+            defaults.set(runtimeArguments, forKey: PreferencesKeys.runtimeArguments)
+            defaults.removeObject(forKey: PreferencesKeys.runtimeCommand)
+        }
         defaults.set(dataDirectoryPath, forKey: PreferencesKeys.dataDirectory)
+        RuntimeSettingsStore.persist(
+            RuntimeSettings(
+                useDefaultRuntimeCommand: useDefaultRuntimeCommand,
+                runtimeExecutable: runtimeExecutable,
+                runtimeArguments: runtimeArguments,
+                dataDirectoryPath: dataDirectoryPath,
+                launchAtLoginEnabled: launchAtLoginEnabled
+            ),
+            to: URL(fileURLWithPath: dataDirectoryPath)
+        )
 
         let persistedState = Self.persistedState(
-            runtimeCommand: runtimeCommand,
+            useDefaultRuntimeCommand: useDefaultRuntimeCommand,
+            runtimeExecutable: runtimeExecutable,
+            runtimeArguments: runtimeArguments,
             dataDirectoryPath: dataDirectoryPath,
             launchAtLoginEnabled: launchAtLoginEnabled
         )
-        persistedRuntimeCommand = persistedState.runtimeCommand
+        persistedUseDefaultRuntimeCommand = persistedState.useDefaultRuntimeCommand
+        persistedRuntimeExecutable = persistedState.runtimeExecutable
+        persistedRuntimeArguments = persistedState.runtimeArguments
         persistedDataDirectoryPath = persistedState.dataDirectoryPath
         persistedLaunchAtLoginEnabled = persistedState.launchAtLoginEnabled
         return true
     }
 
     func resetToDefaults() {
-        runtimeCommand = ProcessLauncher.currentRuntimeCommand()
-        dataDirectoryPath = ProcessLauncher.currentDataDirectory()
-        launchAtLoginEnabled = ProcessLauncher.isLaunchAtLoginEnabled()
+        let currentSettings = RuntimeSettingsStore.current()
+        useDefaultRuntimeCommand = currentSettings.useDefaultRuntimeCommand
+        runtimeExecutable = currentSettings.runtimeExecutable
+        runtimeArguments = currentSettings.runtimeArguments
+        dataDirectoryPath = currentSettings.dataDirectoryPath
+        launchAtLoginEnabled = currentSettings.launchAtLoginEnabled
         let persistedState = Self.persistedState(
-            runtimeCommand: runtimeCommand,
+            useDefaultRuntimeCommand: useDefaultRuntimeCommand,
+            runtimeExecutable: runtimeExecutable,
+            runtimeArguments: runtimeArguments,
             dataDirectoryPath: dataDirectoryPath,
             launchAtLoginEnabled: launchAtLoginEnabled
         )
-        persistedRuntimeCommand = persistedState.runtimeCommand
+        persistedUseDefaultRuntimeCommand = persistedState.useDefaultRuntimeCommand
+        persistedRuntimeExecutable = persistedState.runtimeExecutable
+        persistedRuntimeArguments = persistedState.runtimeArguments
         persistedDataDirectoryPath = persistedState.dataDirectoryPath
         persistedLaunchAtLoginEnabled = persistedState.launchAtLoginEnabled
     }
 
     var hasUnsavedChanges: Bool {
-        runtimeCommand != persistedRuntimeCommand
+        useDefaultRuntimeCommand != persistedUseDefaultRuntimeCommand
+            || runtimeExecutable != persistedRuntimeExecutable
+            || runtimeArguments != persistedRuntimeArguments
             || dataDirectoryPath != persistedDataDirectoryPath
             || launchAtLoginEnabled != persistedLaunchAtLoginEnabled
     }
 
+    var runtimeCommandLaunchPreview: String {
+        let executable = runtimeExecutable.trimmingCharacters(in: .whitespacesAndNewlines)
+        let arguments = runtimeArguments.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !executable.isEmpty else {
+            return "Executable: --"
+        }
+        return arguments.isEmpty
+            ? "Executable: \(executable)"
+            : "Executable: \(executable) | Arguments: \(arguments)"
+    }
+
     private static func persistedState(
-        runtimeCommand: String,
+        useDefaultRuntimeCommand: Bool,
+        runtimeExecutable: String,
+        runtimeArguments: String,
         dataDirectoryPath: String,
         launchAtLoginEnabled: Bool
-    ) -> (runtimeCommand: String, dataDirectoryPath: String, launchAtLoginEnabled: Bool) {
+    ) -> (useDefaultRuntimeCommand: Bool, runtimeExecutable: String, runtimeArguments: String, dataDirectoryPath: String, launchAtLoginEnabled: Bool) {
         (
-            runtimeCommand: runtimeCommand,
+            useDefaultRuntimeCommand: useDefaultRuntimeCommand,
+            runtimeExecutable: runtimeExecutable,
+            runtimeArguments: runtimeArguments,
             dataDirectoryPath: dataDirectoryPath,
             launchAtLoginEnabled: launchAtLoginEnabled
         )
     }
+
 }
 
 struct PreferencesView: View {
@@ -109,9 +174,38 @@ struct PreferencesView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Runtime Command")
                     .font(.headline)
-                TextField("node server.js", text: $store.runtimeCommand)
-                    .textFieldStyle(.roundedBorder)
-                Text("This command runs from the repo root and should start the local backend.")
+                Picker("Runtime Mode", selection: $store.useDefaultRuntimeCommand) {
+                    Text("Default").tag(true)
+                    Text("Custom").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.bottom, 2)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Executable")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("/usr/bin/true", text: $store.runtimeExecutable)
+                            .disabled(store.useDefaultRuntimeCommand)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Arguments")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("", text: $store.runtimeArguments)
+                            .disabled(store.useDefaultRuntimeCommand)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+                if !store.useDefaultRuntimeCommand {
+                    Text(store.runtimeCommandLaunchPreview)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                Text("The default launch now uses a neutral native placeholder. Turn it off only if you need a custom executable and arguments.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

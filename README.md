@@ -8,21 +8,21 @@ macOS-first network scanning and monitoring app powered by Nmap.
 git clone https://github.com/techmore/TM-NmapUI.git
 cd TM-NmapUI
 ./install.sh
-sudo npm start
+cd packaging/macos && ./run.sh
 ```
 
 The app will open its local UI automatically. If you need to access it directly, use the loopback URL shown by the launcher, usually `http://127.0.0.1:9000`.
 
-`npm start` also checks for missing Node packages and installs them automatically, so a clean checkout will recover if `node_modules/` has not been created yet.
+The Swift-native launcher handles the app startup path directly.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Runtime | Node.js |
+| Runtime | Swift menu bar app |
 | Desktop Shell | Swift menu bar app |
-| Web Framework | Express |
-| Real-time | Socket.IO |
+| Web Framework | Legacy Node host only |
+| Real-time | Native Swift transport |
 | Scanner | Nmap + NSE (Nmap Scripting Engine) |
 | PDF Generation | wkhtmltopdf / Chromium |
 | XML Processing | xml2js |
@@ -34,7 +34,6 @@ The app will open its local UI automatically. If you need to access it directly,
 
 - **macOS** (primary target)
 - **Homebrew** (for package management)
-- **Node.js** (via Homebrew)
 - **Nmap** (with script database updated)
 - **wkhtmltopdf** or **Chromium** (for PDF generation)
 - **xsltproc** (for HTML report styling)
@@ -61,7 +60,7 @@ All dependencies are installed automatically by `install.sh`.
 
 ## Repository Layout
 
-- Root: stable entrypoints and runtime files such as `server.js`, `install.sh`, and `deploy.sh`
+- Root: stable entrypoints and runtime files such as `install.sh`, `deploy.sh`, and repository-level scripts
 - `NmapUI.app/` and `NmapUIMenuBar.app/`: macOS app bundles produced by the current packaging flow
 - `packaging/macos/`: Swift/AppKit shell scaffold for the macOS-native direction
 - `docs/guides/`: user and maintainer guides
@@ -91,30 +90,30 @@ The current repository does not include the old installer flow referenced in ear
 ### Start the app
 
 ```bash
-sudo npm start
+cd packaging/macos && ./run.sh
 ```
 
-The launcher starts the local runtime on port 9000 by default and opens the app shell around it. On the macOS wrapper, the menu bar icon is the primary way back into the app.
+The launcher starts the native macOS shell and opens the loopback UI on port 9000 by default. On the macOS wrapper, the menu bar icon is the primary way back into the app.
 
 ### Nightly Eval
 
 ```bash
-npm run nightly-eval
+./scripts/nightly_product_eval.sh --run
 ```
 
-This runs the nightly product evaluation loop, which boots the app, checks key runtime endpoints and assets, and records an evaluation artifact under `docs/notes/eval-logs/`.
+This runs the nightly product evaluation loop, which boots the Swift-native app, checks key runtime endpoints and assets, and records an evaluation artifact under `docs/notes/eval-logs/`.
 
 For a no-side-effects preview of the loop shape, run:
 
 ```bash
-npm run nightly-eval:dry-run
+./scripts/nightly_product_eval.sh --dry-run
 ```
 
 To install or remove the macOS scheduler from the repo root, use:
 
 ```bash
-npm run nightly-eval:launchd-install
-npm run nightly-eval:launchd-uninstall
+./packaging/macos/nightly_product_eval_launchd.sh install
+./packaging/macos/nightly_product_eval_launchd.sh uninstall
 ```
 
 ### Scans
@@ -139,10 +138,10 @@ HTML and PDF reports are generated after each scan. Reports include:
 
 ```
 .
-├── server.js           # Main local runtime
+├── packaging/macos/    # Swift-native macOS app shell
 ├── install.sh         # Dependency installer
-├── package.json      # Node dependencies
-├── google_drive_bridge.js   # Google Drive helper dispatch layer
+├── package.json      # Legacy Node tooling and helper scripts
+├── google_drive_bridge.js   # Legacy Google Drive helper dispatch layer
 ├── nmap-modern.xsl  # Report stylesheet
 ├── config.json      # App configuration
 ├── history.json    # Scan history

@@ -6,17 +6,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="${APP_NAME:-NmapUI}"
 BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/.build}"
 PRODUCT_PATH="$BUILD_DIR/debug/$APP_NAME"
+HELPER_PATH="$BUILD_DIR/debug/NmapPrivilegedHelper"
 APP_BUNDLE="${APP_BUNDLE:-$SCRIPT_DIR/build/$APP_NAME.app}"
 RESOURCES_DIR="$APP_BUNDLE/Contents/Resources"
 MACOS_DIR="$APP_BUNDLE/Contents/MacOS"
 REAL_EXECUTABLE="$MACOS_DIR/$APP_NAME.real"
+HELPER_EXECUTABLE="$MACOS_DIR/NmapPrivilegedHelper"
 WRAPPER_EXECUTABLE="$MACOS_DIR/$APP_NAME"
 ICONSET_DIR="$SCRIPT_DIR/build/AppIcon.iconset"
 ICON_FILE="$RESOURCES_DIR/AppIcon.icns"
 GENERATED_ASSETS_DIR="$SCRIPT_DIR/build/generated-assets"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
 SIGN_OPTIONS="${CODESIGN_OPTIONS:---force --deep --sign}"
-RUNTIME_WORKDIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Scan workdir stays under Application Support; do not force the repo as workdir.
+DATA_DIR="${NMAPUI_DATA_DIR:-$HOME/Library/Application Support/NmapUI}"
 
 cd "$SCRIPT_DIR"
 swift build
@@ -27,11 +30,23 @@ rm -rf "$GENERATED_ASSETS_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$GENERATED_ASSETS_DIR"
 
 cp "$PRODUCT_PATH" "$REAL_EXECUTABLE"
-cp "$SCRIPT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+if [ -f "$HELPER_PATH" ]; then
+    cp "$HELPER_PATH" "$HELPER_EXECUTABLE"
+    chmod 755 "$HELPER_EXECUTABLE"
+fi
+INFO_PLIST_SOURCE="$SCRIPT_DIR/Sources/NmapUIApp/Resources/Info.plist"
+if [ ! -f "$INFO_PLIST_SOURCE" ]; then
+    INFO_PLIST_SOURCE="$SCRIPT_DIR/Resources/Info.plist"
+fi
+cp "$INFO_PLIST_SOURCE" "$APP_BUNDLE/Contents/Info.plist"
+cp "$SCRIPT_DIR/../../index.html" "$RESOURCES_DIR/index.html"
+cp "$SCRIPT_DIR/../../nmap-modern.xsl" "$RESOURCES_DIR/nmap-modern.xsl"
+rm -rf "$RESOURCES_DIR/static"
+ditto "$SCRIPT_DIR/../../static" "$RESOURCES_DIR/static"
 cat > "$WRAPPER_EXECUTABLE" <<EOF
 #!/bin/bash
 set -euo pipefail
-export NMAPUI_RUNTIME_WORKDIR="$RUNTIME_WORKDIR"
+export NMAPUI_DATA_DIR="\${NMAPUI_DATA_DIR:-$DATA_DIR}"
 exec "\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)/$APP_NAME.real" "\$@"
 EOF
 chmod +x "$REAL_EXECUTABLE" "$WRAPPER_EXECUTABLE"

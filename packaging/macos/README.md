@@ -4,7 +4,26 @@ This directory packages the macOS menu bar shell that launches the local NmapUI 
 
 ## Goal
 
-Launch the packaged backend, present a menu bar app, and keep the web UI pinned to port `9000`.
+Launch a normal (non-root) SwiftUI macOS app that hosts the perfected HTML product UI, runs nmap with root privileges via a one-time-installed helper, and supports unattended scheduled scans.
+
+### Privilege model
+
+- The GUI app always runs as the logged-in user.
+- Full nmap scans (`-sS`, `-O`, etc.) go through `NmapPrivilegedHelper` (root LaunchDaemon).
+- First complete/dragnet scan (or enabling auto-scan) prompts once for admin to install the helper.
+- After install, interactive and scheduled scans need no further password prompts.
+- Quick host discovery can run without the helper.
+
+### UI model
+
+- The perfected HTML dashboard (`index.html` + `static/`) is the product UX.
+- Swift hosts it full-bleed in `WKWebView` with a native bridge (no competing native chrome).
+- Menu bar + Preferences remain native.
+
+### Scheduling
+
+- Enabling auto-scan installs `~/Library/LaunchAgents/com.techmore.nmapui.autoscan.plist`.
+- The agent runs `NmapUI --scheduled-scan`, which uses the privileged helper with no UI.
 
 ## Suggested Shape
 
@@ -69,7 +88,9 @@ The menu bar icon includes a `Runtime:` status row plus an `About NmapUI` item a
 
 ## Runtime Overrides
 
-- `NMAPUI_RUNTIME_COMMAND` sets the command used by the launcher, defaulting to `node server.js`.
+- In-app Preferences control the runtime executable and argument list.
+- `NMAPUI_RUNTIME_EXECUTABLE` and `NMAPUI_RUNTIME_ARGUMENTS` are stored by the Swift launcher when a custom runtime is enabled.
+- The default launch path now goes through the Swift-native shell in `packaging/macos/`, with the runtime command reconstructed from structured preferences rather than stored as a single shell string.
 - `NMAPUI_DATA_DIR` sets the runtime data directory, defaulting to `~/Library/Application Support/NmapUI`.
 - `NMAPUI_APPLICATIONS_DIR` sets the destination for `./install.sh`, defaulting to `~/Applications`.
 - The nightly eval LaunchAgent installs to `~/Library/LaunchAgents/` and runs `scripts/nightly_product_eval.sh --run`.

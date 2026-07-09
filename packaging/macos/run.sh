@@ -10,4 +10,4 @@ export NMAPUI_RUNTIME_WORKDIR="${NMAPUI_RUNTIME_WORKDIR:-$(cd "$SCRIPT_DIR/../..
 export PORT="${PORT:-9000}"
 export HOST="${HOST:-127.0.0.1}"
 
-swift run
+swift run NmapUI

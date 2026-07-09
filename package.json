@@ -2,10 +2,11 @@
   "name": "gemini-nmap",
   "version": "1.0.0",
   "description": "Nmap Network Scanner GUI",
-  "main": "server.js",
+  "main": "packaging/macos/run.sh",
   "scripts": {
     "prestart": "node scripts/ensure-dependencies.js",
-    "start": "node server.js",
+    "start": "cd packaging/macos && ./run.sh",
+    "test:google-drive-helper-unavailable": "node scripts/test_google_drive_helper_unavailable.js",
     "nightly-eval": "./scripts/nightly_product_eval.sh --run",
     "nightly-eval:run": "./scripts/nightly_product_eval.sh --run",
     "nightly-eval:dry-run": "./scripts/nightly_product_eval.sh --dry-run",
@@ -16,7 +17,6 @@
     "axios": "^1.3.4",
     "express": "^4.18.2",
     "node-cron": "^4.2.1",
-    "socket.io": "^4.6.1",
     "xml2js": "^0.6.2"
   }
 }

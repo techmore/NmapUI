@@ -12,13 +12,26 @@ let package = Package(
             targets: ["NmapUIApp"]
         ),
         .executable(
+            name: "NmapPrivilegedHelper",
+            targets: ["NmapPrivilegedHelper"]
+        ),
+        .executable(
             name: "GoogleDriveHelper",
             targets: ["GoogleDriveHelper"]
+        ),
+        .executable(
+            name: "RuntimeReportHelper",
+            targets: ["RuntimeReportHelper"]
         )
     ],
     targets: [
+        .target(
+            name: "RuntimeContracts",
+            path: "Sources/RuntimeContracts"
+        ),
         .executableTarget(
             name: "NmapUIApp",
+            dependencies: ["RuntimeContracts"],
             path: "Sources/NmapUIApp",
             exclude: [
                 "Resources/Info.plist"
@@ -28,8 +41,22 @@ let package = Package(
             ]
         ),
         .executableTarget(
+            name: "NmapPrivilegedHelper",
+            path: "Sources/NmapPrivilegedHelper"
+        ),
+        .executableTarget(
             name: "GoogleDriveHelper",
             path: "Sources/GoogleDriveHelper"
+        ),
+        .executableTarget(
+            name: "RuntimeReportHelper",
+            dependencies: ["RuntimeContracts"],
+            path: "Sources/RuntimeReportHelper"
+        ),
+        .testTarget(
+            name: "NmapUIAppTests",
+            dependencies: ["NmapUIApp"],
+            path: "Tests/NmapUIAppTests"
         )
     ]
 )

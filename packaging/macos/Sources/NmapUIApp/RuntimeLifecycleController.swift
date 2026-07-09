@@ -32,10 +32,12 @@ final class RuntimeLifecycleController {
         runtimeProcess = processLauncher.launchRuntimeIfNeeded()
         if runtimeProcess == nil {
             runtimeStatusText = "Error"
+            RuntimeDiagnosticsLogger.error("Runtime launcher returned nil")
             onStateChanged()
             onLaunchFailure()
             return
         }
+        RuntimeDiagnosticsLogger.log("Runtime process started pid=\(runtimeProcess?.processIdentifier ?? -1)")
 
         attachRuntimeTerminationHandler(
             onBrowserOpen: onBrowserOpen,
@@ -94,12 +96,14 @@ final class RuntimeLifecycleController {
             guard let result else { return }
             switch result {
             case .ready:
+                RuntimeDiagnosticsLogger.log("Startup coordinator reported ready")
                 self.runtimeIsReady = true
                 self.runtimeStatusText = "Ready"
                 self.runtimeAutoRestartAttempted = false
                 onStateChanged()
                 onBrowserOpen()
             case .timeout:
+                RuntimeDiagnosticsLogger.log("Startup coordinator reported timeout")
                 self.runtimeIsReady = false
                 self.runtimeStatusText = "Waiting"
                 onStateChanged()
@@ -117,6 +121,7 @@ final class RuntimeLifecycleController {
         runtimeProcess = nil
         runtimeIsReady = false
         runtimeStatusText = "Error"
+        RuntimeDiagnosticsLogger.error("Runtime process exited status=\(terminationStatus)")
         onStateChanged()
 
         guard !runtimeStopRequested else { return }
@@ -155,6 +160,15 @@ final class RuntimeLifecycleController {
         runtimeProcess?.terminationHandler = { [weak self] process in
             Task { @MainActor in
                 guard let self else { return }
+                if process.terminationStatus == 0 {
+                    RuntimeDiagnosticsLogger.log("Runtime process exited cleanly; not restarting")
+                    self.runtimeProcess = nil
+                    self.runtimeIsReady = true
+                    self.runtimeStatusText = "Ready"
+                    onStateChanged()
+                    onBrowserOpen()
+                    return
+                }
                 self.handleRuntimeExit(
                     terminationStatus: process.terminationStatus,
                     onRuntimeExitFinalFailure: onRuntimeExitFinalFailure,

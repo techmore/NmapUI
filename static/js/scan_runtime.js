@@ -209,6 +209,53 @@ function highlightActiveScanHost(data) {
 
 let appVersion = null;
 
+function handleNativeRuntimeEvent(eventName, payload = {}) {
+    if (eventName === 'scan_complete') {
+        resetScanUI();
+        stopPhaseTimer(payload.phase, payload.duration);
+        document.getElementById('last-scan-time-val').textContent = `${payload.duration}s`;
+        document.getElementById('last-scan-duration').classList.remove('hidden');
+        window.socket?.emit('get_history');
+        window.socket?.emit('get_reports');
+        return;
+    }
+
+    if (eventName === 'report_ready') {
+        window.socket?.emit('get_history');
+        window.socket?.emit('get_reports');
+        const status = document.getElementById('scan-console-status');
+        if (status) status.textContent = 'Report ready';
+        return;
+    }
+
+    if (eventName === 'privilege_helper_status' && typeof window.applyPrivilegeHelperStatus === 'function') {
+        window.applyPrivilegeHelperStatus(payload);
+        return;
+    }
+
+    if (eventName === 'reports_refresh') {
+        window.socket?.emit('get_reports');
+    }
+}
+
+function postNativeRuntimeAction(action, payload) {
+    if (window.webkit?.messageHandlers?.nmapuiRuntime?.postMessage) {
+        window.webkit.messageHandlers.nmapuiRuntime.postMessage({ action, ...payload });
+        return true;
+    }
+    return false;
+}
+
+window.__nmapuiHandleNativeRuntimeEvent = (eventName, payloadJSON) => {
+    try {
+        const payload = typeof payloadJSON === 'string' ? JSON.parse(payloadJSON || '{}') : (payloadJSON || {});
+        const actualPayload = payload && typeof payload === 'object' && 'payload' in payload ? payload.payload : payload;
+        handleNativeRuntimeEvent(eventName, actualPayload || {});
+    } catch (error) {
+        console.warn('Failed to handle native runtime event', eventName, error);
+    }
+};
+
 function initializeScanRuntime(socket) {
     socket.on('sync_state', (state) => {
         if (state.version) {
@@ -234,11 +281,6 @@ function initializeScanRuntime(socket) {
             document.getElementById('scan-target').value = state.target;
             setScanUIActive(state.phase, state.scanKind);
             startPhaseTimer(state.phase, state.startTime);
-        }
-
-        if (state.lastResult) {
-            document.getElementById('last-scan-time-val').textContent = state.lastResult.duration + 's';
-            document.getElementById('last-scan-duration').classList.remove('hidden');
         }
 
         if (state.hops && state.hops.length > 0) {
@@ -603,25 +645,35 @@ function initializeDiscoveryUI(socket) {
     if (startScanBtn) {
         startScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
-            socket.emit('start_quick_scan', { target, customerProfilePrefix: getScanCustomerProfilePrefix() });
+            const payload = { target, customerProfilePrefix: getScanCustomerProfilePrefix() };
+            if (!postNativeRuntimeAction('start_quick_scan', { target, usePn: false, vpnHelper: false, scanKind: 'quick' })) {
+                socket.emit('start_quick_scan', payload);
+            }
         });
     }
     if (completeScanBtn) {
         completeScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
             const vpnHelper = !!document.getElementById('vpn-helper-toggle')?.checked;
-            socket.emit('start_complete_scan', { target, vpnHelper, customerProfilePrefix: getScanCustomerProfilePrefix() });
+            const payload = { target, vpnHelper, customerProfilePrefix: getScanCustomerProfilePrefix() };
+            if (!postNativeRuntimeAction('start_complete_scan', { target, usePn: false, vpnHelper, scanKind: 'complete' })) {
+                socket.emit('start_complete_scan', payload);
+            }
         });
     }
     if (dragnetScanBtn) {
         dragnetScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
-            socket.emit('start_dragnet_scan', { target });
+            if (!postNativeRuntimeAction('start_dragnet_scan', { target, usePn: false, vpnHelper: false, scanKind: 'dragnet' })) {
+                socket.emit('start_dragnet_scan', { target });
+            }
         });
     }
     if (stopScanBtn) {
         stopScanBtn.addEventListener('click', () => {
-            socket.emit('stop_scan');
+            if (!postNativeRuntimeAction('stop_scan', {})) {
+                socket.emit('stop_scan');
+            }
         });
     }
     document.getElementById('discovery-table')?.addEventListener('click', event => {

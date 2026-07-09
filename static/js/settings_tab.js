@@ -165,6 +165,46 @@ function addTargetProfile() {
     setSettingsStatus('Target profile added to this session.');
 }
 
+function applyPrivilegeHelperStatus(data = {}) {
+    const state = document.getElementById('settings-privilege-helper-state');
+    const status = document.getElementById('settings-privilege-helper-status');
+    const installBtn = document.getElementById('settings-privilege-helper-install-btn');
+    const ready = !!data.ready;
+    if (state) {
+        state.textContent = ready ? 'Ready' : 'Not installed';
+        state.className = ready ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700';
+    }
+    if (status) {
+        status.textContent = data.status || (ready
+            ? 'Privileged scanner helper is ready for interactive and scheduled scans.'
+            : 'Install once with admin approval. After that, full scans and schedules need no password.');
+        status.classList.toggle('text-red-700', !!data.error);
+        status.classList.toggle('text-olive-600', !data.error);
+    }
+    if (installBtn) {
+        installBtn.textContent = ready ? 'Reinstall Helper' : 'Install Helper';
+    }
+}
+window.applyPrivilegeHelperStatus = applyPrivilegeHelperStatus;
+
+function requestPrivilegeHelperStatus() {
+    if (window.webkit?.messageHandlers?.nmapuiRequest?.postMessage) {
+        window.webkit.messageHandlers.nmapuiRequest.postMessage({ event: 'get_privilege_helper_status', payload: {} });
+        return;
+    }
+    window.socket?.emit?.('get_privilege_helper_status');
+}
+
+function installPrivilegeHelper() {
+    const status = document.getElementById('settings-privilege-helper-status');
+    if (status) status.textContent = 'Requesting administrator approval to install the scanner helper…';
+    if (window.webkit?.messageHandlers?.nmapuiRequest?.postMessage) {
+        window.webkit.messageHandlers.nmapuiRequest.postMessage({ event: 'install_privilege_helper', payload: {} });
+        return;
+    }
+    window.socket?.emit?.('install_privilege_helper');
+}
+
 function initializeSettingsTab(socket) {
     if (settingsTabInitialized) return;
     settingsTabInitialized = true;
@@ -173,7 +213,31 @@ function initializeSettingsTab(socket) {
     socket.on('initial_data', (data) => {
         if (data.googleDrive) applyGoogleDriveConfig(data.googleDrive);
         socket.emit('get_google_drive_status');
+        requestPrivilegeHelperStatus();
     });
+
+    socket.on('privilege_helper_status', applyPrivilegeHelperStatus);
+    if (typeof window.__nmapuiHandleNativeRuntimeEvent === 'function') {
+        const previous = window.__nmapuiHandleNativeRuntimeEvent;
+        window.__nmapuiHandleNativeRuntimeEvent = (eventName, payloadJSON) => {
+            try {
+                const payload = typeof payloadJSON === 'string' ? JSON.parse(payloadJSON || '{}') : (payloadJSON || {});
+                const actual = payload && typeof payload === 'object' && 'payload' in payload ? payload.payload : payload;
+                if (eventName === 'privilege_helper_status') {
+                    applyPrivilegeHelperStatus(actual || {});
+                }
+            } catch (_) { /* ignore */ }
+            previous(eventName, payloadJSON);
+        };
+    } else {
+        window.__nmapuiHandleNativeRuntimeEvent = (eventName, payloadJSON) => {
+            try {
+                const payload = typeof payloadJSON === 'string' ? JSON.parse(payloadJSON || '{}') : (payloadJSON || {});
+                const actual = payload && typeof payload === 'object' && 'payload' in payload ? payload.payload : payload;
+                if (eventName === 'privilege_helper_status') applyPrivilegeHelperStatus(actual || {});
+            } catch (_) { /* ignore */ }
+        };
+    }
 
     socket.on('google_drive_status', (data = {}) => {
         if (data.config) applyGoogleDriveConfig(data.config, data);
@@ -198,6 +262,8 @@ function initializeSettingsTab(socket) {
     document.getElementById('refresh-settings-btn')?.addEventListener('click', loadSettingsTab);
     document.getElementById('capture-current-target-btn')?.addEventListener('click', captureCurrentTarget);
     document.getElementById('add-target-profile-btn')?.addEventListener('click', addTargetProfile);
+    document.getElementById('settings-privilege-helper-install-btn')?.addEventListener('click', installPrivilegeHelper);
+    requestPrivilegeHelperStatus();
     document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', () => {
         setGoogleDriveStatus('Checking Google Drive status...');
         socket.emit('get_google_drive_status');

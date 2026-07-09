@@ -6,7 +6,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"></script>
+    <script>
+        window.__NMAPUI_NATIVE_RUNTIME__ = !!window.webkit?.messageHandlers?.nmapuiRequest;
+        if (!window.__NMAPUI_NATIVE_RUNTIME__) {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"><\/script>');
+        } else {
+            window.io = {
+                connect() {
+                    return {
+                        on() {},
+                        once() {},
+                        off() {},
+                        emit() {},
+                        disconnect() {}
+                    };
+                }
+            };
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
     <script>
@@ -523,7 +540,7 @@
             <div>
                 <h1 class="text-4xl font-display italic text-olive-950">TM-NMAPUI</h1>
                 <div class="flex items-center gap-2">
-                    <div id="app-version" class="text-sm text-olive-600 font-medium">v2026.5.2.15.58</div>
+                    <div id="app-version" class="text-sm text-olive-600 font-medium">Loading...</div>
                     <a
                         href="https://github.com/techmore/NmapUI"
                         target="_blank"
@@ -583,7 +600,7 @@
                 </div>
                 <div>
                     <h3 class="text-lg font-semibold">Update Available!</h3>
-                    <p id="update-description" class="text-olive-100">NmapUI v2026.5.2.15.58 is ready to install</p>
+                    <p id="update-description" class="text-olive-100">NmapUI update status will appear here</p>
                 </div>
             </div>
             <div class="flex items-center space-x-4">
@@ -893,6 +910,29 @@
                         </button>
                     </div>
                     <div id="settings-profile-list" class="mt-5 grid gap-3"></div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-xl font-display italic text-olive-900">Scanner Privilege Helper</h3>
+                            <p class="mt-2 text-sm text-olive-700">Full nmap scans need root once via a small helper. The app itself stays a normal user process. After install, daily/weekly schedules run without password prompts.</p>
+                        </div>
+                        <button id="settings-privilege-helper-install-btn" type="button" class="action-button action-button-primary action-button-compact" aria-label="Install privileged scanner helper">
+                            Install Helper
+                        </button>
+                    </div>
+                    <div class="mt-4 grid gap-2 rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-800">
+                        <div class="flex justify-between gap-3">
+                            <span class="font-semibold">Status</span>
+                            <span id="settings-privilege-helper-state" class="font-semibold text-amber-700">Checking…</span>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <span class="font-semibold">Mode</span>
+                            <span class="text-right text-olive-600">App user / nmap root helper</span>
+                        </div>
+                        <p id="settings-privilege-helper-status" class="mt-1 text-xs text-olive-600">Waiting for native runtime status…</p>
+                    </div>
                 </section>
 
                 <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
@@ -1814,20 +1854,20 @@
         });
     </script>
 
-    <script src="/static/js/scan_runtime.js"></script>
-    <script src="/static/js/scan_banners.js"></script>
-    <script src="/static/js/report_status.js"></script>
-    <script src="/static/js/update_modal.js"></script>
-    <script src="/static/js/auto_update_banner.js"></script>
-    <script src="/static/js/asset_details_modal.js"></script>
-    <script src="/static/js/table_sorter.js"></script>
-    <script src="/static/js/site_chrome.js"></script>
-    <script src="/static/js/reports_tab.js"></script>
-    <script src="/static/js/settings_tab.js"></script>
-    <script src="/static/js/auto_scan_ui.js"></script>
-    <script src="/static/js/customer_ui.js"></script>
-    <script src="/static/js/report_generation_ui.js"></script>
-    <script src="/static/js/app_bootstrap.js"></script>
+    <script src="static/js/scan_runtime.js"></script>
+    <script src="static/js/scan_banners.js"></script>
+    <script src="static/js/report_status.js"></script>
+    <script src="static/js/update_modal.js"></script>
+    <script src="static/js/auto_update_banner.js"></script>
+    <script src="static/js/asset_details_modal.js"></script>
+    <script src="static/js/table_sorter.js"></script>
+    <script src="static/js/site_chrome.js"></script>
+    <script src="static/js/reports_tab.js"></script>
+    <script src="static/js/settings_tab.js"></script>
+    <script src="static/js/auto_scan_ui.js"></script>
+    <script src="static/js/customer_ui.js"></script>
+    <script src="static/js/report_generation_ui.js"></script>
+    <script src="static/js/app_bootstrap.js"></script>
 
     <!-- ── Audit Log Panel ─────────────────────────────────────────────── -->
     <div id="log-panel" class="hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col" style="height:320px;">

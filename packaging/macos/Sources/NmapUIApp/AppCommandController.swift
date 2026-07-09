@@ -3,17 +3,14 @@ import Foundation
 
 @MainActor
 final class AppCommandController {
-    private let runtimeURL = RuntimeEndpoints.baseURL
-
     func openApp() {
-        NSApp.sendAction(Selector(("showWindow:")), to: nil, from: nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSApp.windows.first?.makeKeyAndOrderFront(nil)
         NSApp.windows.first?.orderFrontRegardless()
     }
 
     func openBrowser() {
-        NSWorkspace.shared.open(runtimeURL)
+        openApp()
     }
 
     func showAbout() {
@@ -24,11 +21,10 @@ final class AppCommandController {
     }
 
     func openPreferences() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func openDataDirectory() {
-        NSWorkspace.shared.activateFileViewerSelecting([ProcessLauncher.currentDataDirectoryURL()])
+        NSWorkspace.shared.activateFileViewerSelecting([RuntimeSettingsStore.currentDataDirectoryURL()])
     }
 }

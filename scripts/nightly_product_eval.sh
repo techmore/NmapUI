@@ -9,7 +9,7 @@ MODE="${1:---dry-run}"
 SAFE_TARGET="${NMAPUI_EVAL_TARGET:-127.0.0.1}"
 
 timestamp() {
-  node -e 'process.stdout.write(new Date().toISOString())'
+  date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
 git_revision() {
@@ -34,28 +34,24 @@ write_json_report() {
   local scenarios_json="$3"
   local artifacts_json="$4"
   mkdir -p "$LOG_DIR"
-  node - "$path" "$mode" "$(git_revision)" "$ROOT_DIR" "$scenarios_json" "$artifacts_json" <<'NODE'
-const fs = require('fs');
-const path = require('path');
+  python3 - "$path" "$mode" "$(git_revision)" "$ROOT_DIR" "$scenarios_json" "$artifacts_json" <<'PY'
+import json
+import os
+import pathlib
+import sys
+from datetime import datetime, timezone
 
-const [,, filePath, mode, revision, rootDir, scenariosJson, artifactsJson] = process.argv;
-const payload = {
-  timestamp: new Date().toISOString(),
-  mode,
-  revision,
-  environment: path.basename(rootDir),
-  scenarios: JSON.parse(scenariosJson),
-  artifacts: JSON.parse(artifactsJson),
-};
-fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
-NODE
+file_path, mode, revision, root_dir, scenarios_json, artifacts_json = sys.argv[1:]
+payload = {
+    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "mode": mode,
+    "revision": revision,
+    "environment": pathlib.Path(root_dir).name,
+    "scenarios": json.loads(scenarios_json),
+    "artifacts": json.loads(artifacts_json),
 }
-
-run_socketio_smoke() {
-  local port="$1"
-  local output_file="$2"
-  mkdir -p "$LOG_DIR"
-  node "$ROOT_DIR/scripts/nightly_product_eval_socketio_smoke.js" "$port" >"$output_file" 2>&1
+pathlib.Path(file_path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+PY
 }
 
 probe_identity() {
@@ -139,7 +135,7 @@ probe_scan_banners_js() {
 }
 
 start_server() {
-  (cd "$ROOT_DIR" && PORT="$DEFAULT_PORT" TRACEROUTE_PATH=/usr/bin/true npm start) >"$(server_log)" 2>&1 &
+  (cd "$ROOT_DIR/packaging/macos" && PORT="$DEFAULT_PORT" TRACEROUTE_PATH=/usr/bin/true ./run.sh) >"$(server_log)" 2>&1 &
   echo $!
 }
 
@@ -163,7 +159,7 @@ Target: $SAFE_TARGET
 Log dir: $LOG_DIR
 
 Planned scenarios:
-1. Boot the app through npm start
+1. Boot the app through the Swift-native launcher
 2. Probe /api/app-identity
 3. Probe /
 4. Probe /static/techmore.png
@@ -255,7 +251,6 @@ main() {
         printf 'scan_runtime_js=ok\n'
         printf 'scan_banners_js=ok\n'
       } >"$runtime_log"
-      run_socketio_smoke "$active_port" "${LOG_DIR}/nightly-product-eval-socketio-smoke.log"
       write_json_report "$(json_log)" "run" '[
         {"name": "app_start", "status": "pass"},
         {"name": "identity_probe", "status": "pass"},
@@ -273,10 +268,8 @@ main() {
         {"name": "auto_update_banner_js_probe", "status": "pass"},
         {"name": "reports_tab_js_probe", "status": "pass"},
         {"name": "scan_runtime_js_probe", "status": "pass"},
-        {"name": "scan_banners_js_probe", "status": "pass"},
-        {"name": "socketio_runtime_smoke", "status": "pass"},
-        {"name": "socketio_integration_smoke", "status": "pass"}
-      ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\", \"${LOG_DIR}/nightly-product-eval-socketio-smoke.log\"]")"
+        {"name": "scan_banners_js_probe", "status": "pass"}
+      ]' "$(printf '%s' "[\"$runtime_log\", \"$(server_log)\"]")"
       stop_server "${server_pid:-}"
       printf '%s nightly-product-eval completed successfully\n' "$(timestamp)"
       ;;

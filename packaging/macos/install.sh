@@ -20,6 +20,8 @@ sleep 1
 mkdir -p "$DEST_DIR"
 rm -rf "$DEST_BUNDLE"
 ditto "$APP_BUNDLE" "$DEST_BUNDLE"
+mkdir -p "$DEST_BUNDLE/Contents/Resources"
+cp "$SCRIPT_DIR/Sources/NmapUIApp/Assets/techmore.png" "$DEST_BUNDLE/Contents/Resources/techmore.png"
 
 if [ -n "$SIGN_IDENTITY" ]; then
     codesign --force --deep --sign "$SIGN_IDENTITY" "$DEST_BUNDLE"

@@ -1,6 +1,55 @@
-var socket = io.connect(`http://${document.domain}:${location.port}`);
+function createNativeSocketShim() {
+    const listeners = new Map();
+    const emitNative = (event, payload = {}) => {
+        if (window.webkit?.messageHandlers?.nmapuiRequest?.postMessage) {
+            window.webkit.messageHandlers.nmapuiRequest.postMessage({ event, payload });
+            return true;
+        }
+        return false;
+    };
+    return {
+        connected: true,
+        id: 'native-runtime',
+        on(event, handler) {
+            const existing = listeners.get(event) || [];
+            existing.push(handler);
+            listeners.set(event, existing);
+        },
+        once(event, handler) {
+            const wrapped = (payload) => {
+                this.off(event, wrapped);
+                handler(payload);
+            };
+            this.on(event, wrapped);
+        },
+        off(event, handler) {
+            if (!listeners.has(event)) return;
+            listeners.set(event, (listeners.get(event) || []).filter(item => item !== handler));
+        },
+        emit(event, payload = {}) {
+            return emitNative(event, payload);
+        },
+        __receive(event, payload) {
+            (listeners.get(event) || []).forEach(handler => {
+                try { handler(payload); } catch (error) { console.warn(`Native socket handler failed for ${event}`, error); }
+            });
+        },
+        connect() {
+            (listeners.get('connect') || []).forEach(handler => {
+                try { handler(); } catch (error) { console.warn('Native socket connect handler failed', error); }
+            });
+        }
+    };
+}
+
+const useNativeRuntime = !!window.__NMAPUI_NATIVE_RUNTIME__ || !!window.webkit?.messageHandlers?.nmapuiRequest;
+var socket = useNativeRuntime ? createNativeSocketShim() : io.connect(`http://${document.domain}:${location.port}`);
 window.socket = socket;
-socket.on('connect', () => console.log('Socket.IO connected'));
+if (!useNativeRuntime) {
+    socket.on('connect', () => console.log('Socket.IO connected'));
+} else {
+    queueMicrotask(() => socket.connect());
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof initializeScanRuntime === 'function') {
