@@ -13,6 +13,8 @@ MACOS_DIR="$APP_BUNDLE/Contents/MacOS"
 REAL_EXECUTABLE="$MACOS_DIR/$APP_NAME.real"
 HELPER_EXECUTABLE="$MACOS_DIR/NmapPrivilegedHelper"
 WRAPPER_EXECUTABLE="$MACOS_DIR/$APP_NAME"
+RESOURCE_BUNDLE_NAME="NmapUI_NmapUIApp.bundle"
+RESOURCE_BUNDLE_SOURCE="$BUILD_DIR/debug/$RESOURCE_BUNDLE_NAME"
 ICONSET_DIR="$SCRIPT_DIR/build/AppIcon.iconset"
 ICON_FILE="$RESOURCES_DIR/AppIcon.icns"
 GENERATED_ASSETS_DIR="$SCRIPT_DIR/build/generated-assets"
@@ -30,6 +32,12 @@ rm -rf "$GENERATED_ASSETS_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$GENERATED_ASSETS_DIR"
 
 cp "$PRODUCT_PATH" "$REAL_EXECUTABLE"
+if [ -d "$RESOURCE_BUNDLE_SOURCE" ]; then
+    ditto "$RESOURCE_BUNDLE_SOURCE" "$RESOURCES_DIR/$RESOURCE_BUNDLE_NAME"
+else
+    echo "Missing Swift Package resource bundle: $RESOURCE_BUNDLE_SOURCE" >&2
+    exit 1
+fi
 if [ -f "$HELPER_PATH" ]; then
     cp "$HELPER_PATH" "$HELPER_EXECUTABLE"
     chmod 755 "$HELPER_EXECUTABLE"
@@ -66,8 +74,8 @@ if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
     iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE"
 fi
 
-if [ -n "$SIGN_IDENTITY" ]; then
-    codesign $SIGN_OPTIONS "$SIGN_IDENTITY" "$APP_BUNDLE"
-fi
+# Ad-hoc signing makes locally built bundles launchable without a Developer ID.
+# A configured identity is still used for distributable builds.
+codesign $SIGN_OPTIONS "${SIGN_IDENTITY:--}" "$APP_BUNDLE"
 
 echo "Created $APP_BUNDLE"

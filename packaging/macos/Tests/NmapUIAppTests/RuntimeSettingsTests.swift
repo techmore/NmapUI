@@ -5,6 +5,96 @@ import RuntimeContracts
 
 @Suite("Runtime Settings", .serialized)
 struct RuntimeSettingsTests {
+    @Test("runs a native quick discovery scan through ScanCoordinator")
+    func nativeQuickDiscoveryScanProducesHostSummary() async throws {
+        let nmapPath = "/opt/homebrew/bin/nmap"
+        guard FileManager.default.isExecutableFile(atPath: nmapPath) else { return }
+        let workDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmapui-scan-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: workDirectory) }
+
+        let coordinator = ScanCoordinator(workDirectory: workDirectory, nmapPath: nmapPath)
+        let result = await coordinator.runPhase1(.init(
+            target: "127.0.0.1",
+            usePn: false,
+            vpnHelper: false,
+            scanKind: .quick,
+            allowInteractivePrivilegePrompt: false
+        ))
+
+        #expect(result.completed)
+        #expect(result.xmlPath != nil)
+        #expect(result.summary?.hosts.contains(where: { $0.ip == "127.0.0.1" }) == true)
+    }
+
+    @Test("allocates a unique writable work directory for every scan")
+    func scanWorkDirectoriesAreUnique() {
+        let first = RuntimeSettingsStore.newScanWorkDirectoryURL()
+        let second = RuntimeSettingsStore.newScanWorkDirectoryURL()
+        defer {
+            try? FileManager.default.removeItem(at: first)
+            try? FileManager.default.removeItem(at: second)
+        }
+
+        #expect(first != second)
+        #expect(FileManager.default.fileExists(atPath: first.path))
+        #expect(FileManager.default.fileExists(atPath: second.path))
+    }
+
+    @Test("quick scans perform an unprivileged common-port pass after discovery")
+    func quickScanIncludesTCPPortDiscoveryArguments() {
+        let arguments = ScanCoordinator.quickPortScanArguments(vpnHelper: false)
+
+        #expect(arguments.contains("-sT"))
+        #expect(arguments.contains("-sV"))
+        #expect(arguments.contains("--version-light"))
+        #expect(arguments.contains("--top-ports"))
+        #expect(arguments.contains("100"))
+        #expect(arguments.contains("--host-timeout"))
+        #expect(arguments.contains("25s"))
+        #expect(arguments.contains("--max-retries"))
+        #expect(arguments.contains("--open"))
+        #expect(arguments.contains("-iL"))
+        #expect(!arguments.contains("-sn"))
+        #expect(!arguments.contains("-sS"))
+    }
+
+    @Test("complete scans bound slow hosts and vulnerability scripts")
+    func completeScanIncludesRuntimeLimits() {
+        let arguments = ScanCoordinator.completeScanArguments(usePn: false, vpnHelper: false)
+
+        #expect(arguments.contains("--host-timeout"))
+        #expect(arguments.contains("4m"))
+        #expect(arguments.contains("--script-timeout"))
+        #expect(arguments.contains("45s"))
+        #expect(arguments.contains("--max-retries"))
+        #expect(arguments.contains("--max-rtt-timeout"))
+        #expect(arguments.contains("--min-hostgroup"))
+        #expect(arguments.contains("--max-hostgroup"))
+    }
+
+    @Test("coalesces repeated hosts from Nmap progress output")
+    func grepableProgressCoalescesDuplicateHosts() {
+        let hosts = RuntimeNmapGrepableParser.parse(text: """
+        Host: 192.168.1.10 ()  Ports: 22/open/tcp//ssh///
+        Host: 192.168.1.10 ()  Ports: 80/open/tcp//http///
+        """)
+
+        #expect(hosts.count == 1)
+        #expect(hosts[0].ip == "192.168.1.10")
+        #expect(hosts[0].ports == "80")
+    }
+
+
+    @Test("collects native network reference data")
+    func nativeNetworkSnapshotCollectsReferenceData() async {
+        let snapshot = await RuntimeNetworkState.current()
+        #expect(!snapshot.localIP.isEmpty)
+        #expect(!snapshot.mask.isEmpty)
+        #expect(!snapshot.cidr.isEmpty)
+        #expect(!snapshot.publicIP.isEmpty)
+    }
+
     @Test("persists and loads the versioned runtime settings contract")
     func persistAndLoadRoundTrip() throws {
         let tempDirectory = FileManager.default.temporaryDirectory

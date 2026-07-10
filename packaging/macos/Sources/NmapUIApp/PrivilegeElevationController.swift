@@ -27,15 +27,14 @@ enum PrivilegeElevationController {
     }
 
     /// Ensures the privileged nmap helper is installed. Prompts for admin once if needed.
-    @MainActor
-    static func ensurePrivilegedHelperReady(interactive: Bool) throws {
+    static func ensurePrivilegedHelperReady(interactive: Bool) async throws {
         if PrivilegeHelperClient.isHelperReachable {
             return
         }
         guard interactive else {
             throw PrivilegeHelperClient.ClientError.notAvailable
         }
-        try PrivilegeHelperClient.ensureInstalled()
+        try await PrivilegeHelperClient.ensureInstalled()
         RuntimeDiagnosticsLogger.log("Privileged nmap helper is ready")
     }
 

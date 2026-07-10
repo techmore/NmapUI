@@ -117,6 +117,10 @@ final class AppSessionState: ObservableObject {
     @Published var runtimeAutoScanSnapshot = RuntimeAutoScanSnapshot.empty()
     @Published var runtimeGoogleDriveSnapshot = RuntimeGoogleDriveSnapshot.empty()
     @Published var runtimeCustomerProfileSnapshot = RuntimeCustomerProfileSnapshot.empty()
+    @Published var latestScanStats: RuntimeScanStats?
+    @Published var scanFeedback = "Ready to scan"
+    @Published var scanStageDescription = "Ready to scan"
+    @Published var latestHosts: [RuntimeNmapXMLHostSummary] = []
 
     init(
         eventRouter: RuntimeEventRouting = RuntimeEventRouter(
@@ -160,6 +164,11 @@ final class AppSessionState: ObservableObject {
             currentTarget: nil,
             currentScanKind: nil
         )
+        scanStageDescription = "Ready to scan"
+    }
+
+    func updateScanStage(_ description: String) {
+        scanStageDescription = description
     }
 
     func emitScanStopped() {

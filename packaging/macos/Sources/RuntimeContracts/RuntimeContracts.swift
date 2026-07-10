@@ -202,7 +202,7 @@ public struct RuntimeFailedScanEntry: Codable, Equatable {
     }
 }
 
-public struct RuntimeNmapXMLHostSummary: Codable, Equatable {
+public struct RuntimeNmapXMLHostSummary: Codable, Equatable, Sendable {
     public let ip: String
     public let mac: String
     public let vendor: String
@@ -228,7 +228,7 @@ public struct RuntimeNmapXMLHostSummary: Codable, Equatable {
     }
 }
 
-public struct RuntimeNmapXMLSummary: Codable, Equatable {
+public struct RuntimeNmapXMLSummary: Codable, Equatable, Sendable {
     public let hosts: [RuntimeNmapXMLHostSummary]
 
     public init(hosts: [RuntimeNmapXMLHostSummary]) {
@@ -236,7 +236,7 @@ public struct RuntimeNmapXMLSummary: Codable, Equatable {
     }
 }
 
-public struct RuntimeScanStats: Codable, Equatable {
+public struct RuntimeScanStats: Codable, Equatable, Sendable {
     public let hostCount: Int
     public let openPortCount: Int
     public let criticalCVECount: Int

@@ -6,6 +6,7 @@ final class ScanCoordinator: @unchecked Sendable {
     private enum Artifact {
         static let phase1XML = "phase1_results.xml"
         static let phase2XML = "phase2_results.xml"
+        static let phase2Progress = "phase2_progress.gnmap"
         static let targets = "targets.tmp"
     }
 
@@ -51,7 +52,7 @@ final class ScanCoordinator: @unchecked Sendable {
         let allowInteractivePrivilegePrompt: Bool
     }
 
-    struct ScanResult {
+    struct ScanResult: Sendable {
         let phase: Phase
         let duration: String
         let xmlPath: URL?
@@ -93,19 +94,34 @@ final class ScanCoordinator: @unchecked Sendable {
     func runPhase1(_ request: ScanRequest) async -> ScanResult {
         // Host discovery: prefer unprivileged; still works elevated if needed.
         await run(
-            nmapArguments: ["-sn", "-T4", "-oX", Artifact.phase1XML] + normalizeTargets(request.target),
+            nmapArguments: ["-sn", "-T4", "--host-timeout", "12s", "--max-retries", "1", "-oX", Artifact.phase1XML] + normalizeTargets(request.target),
             phase: .phase1,
             preferPrivileged: false,
             allowInteractivePrivilegePrompt: request.allowInteractivePrivilegePrompt
         )
     }
 
-    func runPhase2(_ request: ScanRequest) async -> ScanResult {
-        let args = buildPhase2Args(usePn: request.usePn, vpnHelper: request.vpnHelper)
+    func runPhase2(
+        _ request: ScanRequest,
+        onHostProgress: @MainActor @Sendable @escaping ([RuntimeNmapXMLHostSummary]) -> Void = { _ in }
+    ) async -> ScanResult {
+        let args = Self.completeScanArguments(usePn: request.usePn, vpnHelper: request.vpnHelper)
         return await run(
             nmapArguments: args,
             phase: .phase2,
             preferPrivileged: true,
+            onHostProgress: onHostProgress,
+            allowInteractivePrivilegePrompt: request.allowInteractivePrivilegePrompt
+        )
+    }
+
+    /// Quick scans use TCP connect rather than SYN scanning so they do not need elevation.
+    func runQuickPortScan(_ request: ScanRequest) async -> ScanResult {
+        await run(
+            nmapArguments: Self.quickPortScanArguments(vpnHelper: request.vpnHelper),
+            phase: .phase2,
+            preferPrivileged: false,
+            useInstalledHelper: false,
             allowInteractivePrivilegePrompt: request.allowInteractivePrivilegePrompt
         )
     }
@@ -120,7 +136,12 @@ final class ScanCoordinator: @unchecked Sendable {
         )
     }
 
-    func runFullScan(_ request: ScanRequest) async -> ScanResult {
+    func runFullScan(
+        _ request: ScanRequest,
+        onPhaseStarted: @MainActor @Sendable @escaping (Phase, String) -> Void = { _, _ in },
+        onPhaseCompleted: @MainActor @Sendable @escaping (ScanResult) -> Void = { _ in },
+        onHostProgress: @MainActor @Sendable @escaping ([RuntimeNmapXMLHostSummary]) -> Void = { _ in }
+    ) async -> ScanResult {
         resetCancelFlag()
         RuntimeDiagnosticsLogger.log(
             "Running full scan target=\(request.target) kind=\(request.scanKind) interactivePrivilege=\(request.allowInteractivePrivilegePrompt) euid=\(geteuid())"
@@ -129,9 +150,7 @@ final class ScanCoordinator: @unchecked Sendable {
         if request.scanKind.requiresPrivilegedNmap {
             do {
                 if request.allowInteractivePrivilegePrompt {
-                    try await MainActor.run {
-                        try PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
-                    }
+                    try await PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
                 } else if !PrivilegeHelperClient.isHelperReachable {
                     return ScanResult(
                         phase: .phase1,
@@ -157,7 +176,9 @@ final class ScanCoordinator: @unchecked Sendable {
             }
         }
 
+        await onPhaseStarted(.phase1, "Phase 1 of 2: discovering live hosts and collecting network identity")
         let phase1 = await runPhase1(request)
+        await onPhaseCompleted(phase1)
         if isCancelled {
             return cancelledResult(phase: .phase1, duration: phase1.duration)
         }
@@ -167,15 +188,20 @@ final class ScanCoordinator: @unchecked Sendable {
         }
         writeTargetsFile(from: summary)
         if request.scanKind == .dragnet {
+            await onPhaseStarted(.phase3, "Phase 3: deep all-port and vulnerability scan of \(summary.hostCount) discovered hosts")
             RuntimeDiagnosticsLogger.log("Entering dragnet phase")
             let result = await runDragnet(allowInteractivePrivilegePrompt: request.allowInteractivePrivilegePrompt)
             return isCancelled ? cancelledResult(phase: .phase3, duration: result.duration) : result
         }
         if request.scanKind == .quick {
-            return phase1
+            await onPhaseStarted(.phase2, "Phase 2 of 2: common-port and service scan of \(summary.hostCount) discovered hosts")
+            RuntimeDiagnosticsLogger.log("Entering quick TCP port scan")
+            let result = await runQuickPortScan(request)
+            return isCancelled ? cancelledResult(phase: .phase2, duration: result.duration) : result
         }
+        await onPhaseStarted(.phase2, "Phase 2 of 2: deep SYN, service, OS, and vulnerability scan of \(summary.hostCount) discovered hosts")
         RuntimeDiagnosticsLogger.log("Entering phase 2")
-        let result = await runPhase2(request)
+        let result = await runPhase2(request, onHostProgress: onHostProgress)
         return isCancelled ? cancelledResult(phase: .phase2, duration: result.duration) : result
     }
 
@@ -198,6 +224,8 @@ final class ScanCoordinator: @unchecked Sendable {
         nmapArguments: [String],
         phase: Phase,
         preferPrivileged: Bool,
+        useInstalledHelper: Bool = true,
+        onHostProgress: @MainActor @Sendable @escaping ([RuntimeNmapXMLHostSummary]) -> Void = { _ in },
         allowInteractivePrivilegePrompt: Bool
     ) async -> ScanResult {
         let startedAt = Date()
@@ -212,13 +240,25 @@ final class ScanCoordinator: @unchecked Sendable {
             return cancelledResult(phase: phase, duration: "0.00")
         }
 
-        let useHelper = preferPrivileged || PrivilegeHelperClient.isHelperReachable
+        let progressTask = phase == .phase2 ? Task {
+            var lastSignature = ""
+            while !Task.isCancelled {
+                let hosts = RuntimeNmapGrepableParser.parse(contentsOf: workDirectory.appendingPathComponent(Artifact.phase2Progress))
+                let signature = hosts.map { "\($0.ip)|\($0.ports)|\($0.version)" }.joined(separator: "\n")
+                if !hosts.isEmpty, signature != lastSignature {
+                    lastSignature = signature
+                    await onHostProgress(hosts)
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        } : nil
+        defer { progressTask?.cancel() }
+
+        let useHelper = preferPrivileged || (useInstalledHelper && PrivilegeHelperClient.isHelperReachable)
         if useHelper && (PrivilegeHelperClient.isHelperReachable || (preferPrivileged && allowInteractivePrivilegePrompt)) {
             do {
                 if preferPrivileged && !PrivilegeHelperClient.isHelperReachable && allowInteractivePrivilegePrompt {
-                    try await MainActor.run {
-                        try PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
-                    }
+                    try await PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
                 }
                 let result = try PrivilegeHelperClient.runNmap(
                     nmapPath: resolvedNmap,
@@ -327,19 +367,41 @@ final class ScanCoordinator: @unchecked Sendable {
             .filter { !$0.isEmpty }
     }
 
-    private func buildPhase2Args(usePn: Bool, vpnHelper: Bool) -> [String] {
+    static func completeScanArguments(usePn: Bool, vpnHelper: Bool) -> [String] {
         var args = ["-sS", "-sV", "-O"]
         if usePn { args.append("-Pn") }
         args.append(vpnHelper ? "-T2" : "-T3")
         args.append(contentsOf: [
             "--open",
+            "--host-timeout", "4m",
+            "--script-timeout", "45s",
+            "--max-retries", "1",
+            "--max-rtt-timeout", "1000ms",
+            "--min-hostgroup", "8",
+            "--max-hostgroup", "16",
             "--script", "vulners",
             "--script-args", vpnHelper ? "mincvss=0,threads=5" : "mincvss=0,threads=10",
             "--stylesheet", "nmap-modern.xsl",
             "-oX", Artifact.phase2XML,
+            "-oG", Artifact.phase2Progress,
             "-iL", Artifact.targets
         ])
         return args
+    }
+
+    static func quickPortScanArguments(vpnHelper: Bool) -> [String] {
+        [
+            "-sT",
+            "-sV",
+            "--version-light",
+            "--top-ports", "100",
+            "--host-timeout", "25s",
+            "--max-retries", "1",
+            vpnHelper ? "-T2" : "-T4",
+            "--open",
+            "-oX", Artifact.phase2XML,
+            "-iL", Artifact.targets
+        ]
     }
 
     private func xmlFileName(for phase: Phase) -> String {

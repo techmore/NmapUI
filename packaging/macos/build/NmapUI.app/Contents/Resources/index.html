@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TM-NMAPUI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
+    <script>
+        window.__NMAPUI_NATIVE_RUNTIME__ = !!window.webkit?.messageHandlers?.nmapuiRequest;
+        if (!window.__NMAPUI_NATIVE_RUNTIME__) {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"><\/script>');
+        } else {
+            window.io = {
+                connect() {
+                    return {
+                        on() {},
+                        once() {},
+                        off() {},
+                        emit() {},
+                        disconnect() {}
+                    };
+                }
+            };
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        olive: {
+                            50: 'oklch(96% 0.015 110)',
+                            100: 'oklch(91% 0.020 110)',
+                            200: 'oklch(85% 0.028 110)',
+                            300: 'oklch(75% 0.040 110)',
+                            400: 'oklch(62% 0.055 110)',
+                            500: 'oklch(50% 0.065 110)',
+                            600: 'oklch(42% 0.055 110)',
+                            700: 'oklch(35% 0.045 110)',
+                            800: 'oklch(28% 0.035 110)',
+                            900: 'oklch(22% 0.025 110)',
+                            950: 'oklch(16% 0.015 110)',
+                        }
+                    },
+                    fontFamily: {
+                        display: ['Instrument Serif', 'serif'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background-color: oklch(91% 0.012 106.5);
+        color: oklch(15.3% 0.006 107.1);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        scroll-behavior: smooth;
+    }
+    h1, h2, h3 {
+        font-family: 'Instrument Serif', serif;
+        text-wrap: balance;
+    }
+    ::selection {
+        background-color: oklch(75% 0.040 110);
+        color: oklch(46% 0.046 34);
+    }
+    input::placeholder {
+        color: oklch(50% 0.065 110);
+    }
+    .open-ports-cell {
+        max-width: 200px;
+        overflow-wrap: break-word;
+    }
+    table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    th {
+        background-color: oklch(22% 0.025 110);
+        color: white;
+        font-weight: 500;
+    }
+    tbody tr:nth-child(even) {
+        background-color: oklch(96% 0.015 110);
+    }
+    tbody tr:hover {
+        background-color: oklch(85% 0.028 110);
+    }
+    .card-pulsing {
+        animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        border-color: oklch(22% 0.025 110) !important;
+        box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
+    }
+    @keyframes pulse-border {
+        0%, 100% {
+            box-shadow: 0 0 0 4px oklch(62% 0.055 110 / 0.6);
+        }
+        50% {
+            box-shadow: 0 0 0 12px oklch(62% 0.055 110 / 0.2);
+        }
+    }
+    
+    /* Custom scrollbar for webkit browsers */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: oklch(96% 0.015 110);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: oklch(75% 0.040 110);
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: oklch(62% 0.055 110);
+    }
+    
+    /* Focus visible styles for accessibility */
+    :focus-visible {
+        outline: 2px solid oklch(62% 0.055 110);
+        outline-offset: 2px;
+    }
+    
+    /* Custom animations */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate-fade-in-up {
+        animation: fadeInUp 0.6s ease-out forwards;
+    }
+    
+    /* Stagger delay utilities */
+    .delay-100 { animation-delay: 100ms; }
+    .delay-200 { animation-delay: 200ms; }
+    .delay-300 { animation-delay: 300ms; }
+    .delay-400 { animation-delay: 400ms; }
+    .delay-500 { animation-delay: 500ms; }
+    
+    /* Line clamp utilities */
+    .line-clamp-1 {
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    /* Aspect ratio fallback */
+    .aspect-video {
+        aspect-ratio: 16 / 9;
+    }
+    
+    .aspect-square {
+        aspect-ratio: 1 / 1;
+    }
+    
+    /* Glass morphism utilities */
+    .glass {
+        background: rgba(247, 248, 244, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    
+    /* Prevent layout shift from images */
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+    
+    /* Reduced motion preferences */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+    
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+    
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .scrollbar-hide {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+    
+    /* Print styles */
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        body {
+            background: white;
+            color: black;
+        }
+    }
+    
+    /* Compact card styles */
+    .compact-card {
+        transition: all 0.2s ease;
+    }
+    
+    .compact-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Dense grid optimizations */
+    @media (min-width: 1280px) {
+        .xl\:grid-cols-5 {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+    }
+    
+    /* Custom form styles */
+    input[type="search"]::-webkit-search-decoration,
+    input[type="search"]::-webkit-search-cancel-button,
+    input[type="search"]::-webkit-search-results-button,
+    input[type="search"]::-webkit-search-results-decoration {
+        display: none;
+    }
+    
+    /* Loading skeleton animation */
+    @keyframes skeleton {
+        0% {
+            background-position: -200% 0;
+        }
+        100% {
+            background-position: 200% 0;
+        }
+    }
+    
+    .skeleton {
+        background: linear-gradient(90deg, oklch(94% 0.012 106.5) 25%, oklch(97% 0.008 106.5) 50%, oklch(94% 0.012 106.5) 75%);
+        background-size: 200% 100%;
+        animation: skeleton 1.5s infinite;
+    }
+    
+    /* Hover lift effect */
+    .hover-lift {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .hover-lift:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+    }
+
+    .page-shell {
+        width: 100%;
+        max-width: 98vw;
+        margin-inline: auto;
+        padding-inline: 1rem;
+    }
+
+    @media (min-width: 640px) {
+        .page-shell {
+            padding-inline: 1.5rem;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .page-shell {
+            padding-inline: 2rem;
+        }
+    }
+
+    .results-band {
+        width: 100%;
+        margin-top: 2rem;
+        border-radius: 0.75rem;
+        border: 1px solid oklch(75% 0.040 110);
+        background-color: oklch(96% 0.015 110);
+        padding-block: 2rem;
+        box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+        overflow-x: auto;
+    }
+
+    #discovery-table {
+        width: 100%;
+        min-width: 100%;
+    }
+
+    #discovery-table th,
+    #discovery-table td {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #discovery-table th:nth-child(1),
+    #discovery-table td:nth-child(1) { width: 3%; }
+    #discovery-table th:nth-child(2),
+    #discovery-table td:nth-child(2) { width: 11%; }
+    #discovery-table th:nth-child(3),
+    #discovery-table td:nth-child(3) { width: 14%; }
+    #discovery-table th:nth-child(4),
+    #discovery-table td:nth-child(4) { width: 8%; }
+    #discovery-table th:nth-child(5),
+    #discovery-table td:nth-child(5) { width: 10%; }
+    #discovery-table th:nth-child(6),
+    #discovery-table td:nth-child(6) { width: 11%; }
+    #discovery-table th:nth-child(7),
+    #discovery-table td:nth-child(7) { width: 10%; }
+    #discovery-table th:nth-child(8),
+    #discovery-table td:nth-child(8) { width: 5%; }
+    #discovery-table th:nth-child(9),
+    #discovery-table td:nth-child(9) { width: 7%; }
+    #discovery-table th:nth-child(10),
+    #discovery-table td:nth-child(10) { width: 7%; }
+    #discovery-table th:nth-child(11),
+    #discovery-table td:nth-child(11) { width: 10%; }
+    #discovery-table th:nth-child(12),
+    #discovery-table td:nth-child(12) { width: 5%; }
+
+    #discovery-table .screenshot-cell img {
+        width: 140px;
+        height: 78px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid oklch(80% 0.035 110);
+        background-color: oklch(94% 0.018 110);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #discovery-table .screenshot-cell img:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Lightbox */
+    #lightbox {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgb(0 0 0 / 0.9);
+        padding: 2rem;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #lightbox.active {
+        display: flex;
+    }
+
+    #lightbox img {
+        max-width: 90vw;
+        max-height: 90vh;
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    #lightbox-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: white;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: oklch(22% 0.025 110);
+        transition: background-color 0.2s ease;
+    }
+
+    #lightbox-close:hover {
+        background: oklch(91% 0.020 110);
+    }
+
+    #discovery-table .screenshot-cell span {
+        font-size: 10px;
+        color: oklch(46% 0.045 110);
+    }
+
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgb(0 0 0 / 0.5);
+        padding: 1rem;
+    }
+
+    .modal-panel {
+        width: 100%;
+        border-radius: 0.5rem;
+        background: white;
+    }
+
+    .modal-panel-scroll {
+        display: flex;
+        max-height: 90vh;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .form-control {
+        width: 100%;
+        border: 1px solid oklch(75% 0.040 110);
+        border-radius: 0.5rem;
+        background: white;
+        color: oklch(22% 0.025 110);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: oklch(62% 0.055 110);
+        box-shadow: 0 0 0 3px oklch(62% 0.055 110 / 0.14);
+    }
+
+    .form-control-md {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .form-control-sm {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
+
+    .icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        color: oklch(50% 0.065 110);
+        transition: color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .icon-button:hover {
+        color: oklch(22% 0.025 110);
+        background-color: oklch(91% 0.020 110);
+    }
+
+    .action-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .action-button-primary {
+        background: oklch(42% 0.055 110);
+        color: white;
+    }
+
+    .action-button-primary:hover {
+        background: oklch(35% 0.045 110);
+    }
+
+    .action-button-secondary {
+        background: oklch(50% 0.065 110);
+        color: white;
+    }
+
+    .action-button-secondary:hover {
+        background: oklch(42% 0.055 110);
+    }
+
+    .action-button-compact {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
+    
+    /* Custom button press effect */
+    .btn-press:active {
+        transform: scale(0.98);
+    }
+    
+    /* Historical / dimmed rows shown while a new scan is pending */
+    .historical-row {
+        opacity: 0.4;
+        transition: opacity 0.4s ease;
+    }
+
+    /* Gradient text */
+    .gradient-text {
+        background: linear-gradient(135deg, oklch(55% 0.065 110) 0%, oklch(62% 0.055 110) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    /* Focus ring custom color */
+    .focus-ring-olive:focus {
+        --tw-ring-color: oklch(62% 0.055 110);
+    }
+</style>
+</head>
+<body class="py-8">
+    <!-- Main Content Container (1200px) -->
+    <div class="page-shell">
+    <!-- Header with Title -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-6">
+            <img src="static/techmore.png" class="h-12 w-auto">
+            <div>
+                <h1 class="text-4xl font-display italic text-olive-950">TM-NMAPUI</h1>
+                <div class="flex items-center gap-2">
+                    <div id="app-version" class="text-sm text-olive-600 font-medium">Loading...</div>
+                    <a
+                        href="https://github.com/techmore/NmapUI"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center justify-center rounded-full bg-olive-100 p-1.5 text-olive-700 transition-colors hover:bg-olive-200 hover:text-olive-900"
+                        aria-label="Open NmapUI GitHub repository"
+                    >
+                        <svg class="size-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <path d="M8 0C3.58 0 0 3.67 0 8.2c0 3.63 2.29 6.71 5.47 7.8.4.08.55-.18.55-.4 0-.2-.01-.86-.01-1.56-2.01.38-2.53-.5-2.69-.96-.09-.24-.48-.96-.82-1.15-.28-.16-.68-.56-.01-.57.63-.01 1.08.59 1.23.83.72 1.24 1.87.89 2.33.68.07-.54.28-.89.51-1.09-1.78-.21-3.64-.92-3.64-4.09 0-.9.31-1.64.82-2.22-.08-.21-.36-1.05.08-2.18 0 0 .67-.22 2.2.85.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.07 2.2-.85 2.2-.85.44 1.13.16 1.97.08 2.18.51.58.82 1.31.82 2.22 0 3.18-1.87 3.88-3.65 4.09.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .22.15.48.55.4A8.24 8.24 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z" />
+                        </svg>
+                    </a>
+                    <button id="app-update-badge" onclick="showUpdateModal()" class="hidden px-2 py-0.5 bg-amber-500 text-white text-[10px] font-bold rounded-full hover:bg-amber-600 transition-colors">
+                        Update Available
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="current-date-time" class="text-xl font-display text-olive-950 text-center"></div>
+        <div class="flex items-center gap-8">
+        </div>
+    </div>
+
+    <div class="mb-6 rounded-2xl border border-olive-200 bg-white/85 p-2 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center gap-2">
+        <button id="tab-dashboard-btn" class="action-button action-button-primary" aria-label="Show dashboard tab">
+            Dashboard
+        </button>
+        <button id="tab-history-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show history tab">
+            History
+        </button>
+        <button id="tab-reports-btn" class="action-button text-olive-700 hover:bg-olive-100 relative" aria-label="Show reports tab">
+            Reports
+            <span id="reports-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-olive-700 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
+        </button>
+        <button id="tab-customers-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show customers tab">
+            Customers
+        </button>
+        <button id="tab-logs-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show logs tab">
+            Logs
+        </button>
+        <button id="tab-settings-btn" class="action-button text-olive-700 hover:bg-olive-100" aria-label="Show settings tab">
+            Settings
+        </button>
+        </div>
+    </div>
+
+    <div id="dashboard-tab-panel">
+
+    <!-- Auto-Update Banner -->
+    <div id="auto-update-banner" class="hidden fixed top-16 left-4 right-4 z-50 bg-gradient-to-r from-olive-600 to-olive-700 text-white p-4 rounded-lg shadow-lg border border-olive-500 max-w-2xl mx-auto">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="flex-shrink-0">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">Update Available!</h3>
+                    <p id="update-description" class="text-olive-100">NmapUI update status will appear here</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-center">
+                    <div id="countdown-timer" class="text-3xl font-mono font-bold text-olive-100">
+                        30
+                    </div>
+                    <div class="text-xs text-olive-200">seconds</div>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="update-now-btn" class="bg-white text-olive-700 px-4 py-2 rounded-lg font-medium hover:bg-olive-50 transition-colors text-sm">
+                        Update Now
+                    </button>
+                    <button id="cancel-update-btn" class="bg-olive-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-olive-400 transition-colors text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <div class="bg-olive-500 rounded-full h-2 overflow-hidden">
+                <div id="progress-bar" class="bg-white h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden customer selector for JavaScript compatibility -->
+    <select id="current-customer" class="hidden">
+        <option value="">Auto-detect network...</option>
+    </select>
+
+    <div id="auto-scan-warning-banner" class="hidden mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <div class="text-[11px] font-black uppercase tracking-widest text-amber-700">Upcoming Auto-Scan</div>
+                <div class="mt-1 text-sm font-medium text-amber-950">
+                    A scheduled scan will begin soon.
+                    <span id="auto-scan-warning-next-run" class="font-bold"></span>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-[10px] font-black uppercase tracking-widest text-amber-600">Starts In</div>
+                <div id="auto-scan-warning-countdown" class="text-2xl font-mono font-bold text-amber-900">--:--:--</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Local IP Info Panel -->
+    <div id="local-ip-panel" class="mt-4 p-4 bg-olive-50 rounded-xl shadow-sm border border-olive-300">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+            <div>
+                <span class="text-olive-500 block">Local IP</span>
+                <span id="local-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">Subnet Mask</span>
+                <span id="subnet-mask-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">CIDR</span>
+                <span id="cidr-value" class="font-medium text-olive-950"></span>
+            </div>
+            <div>
+                <span class="text-olive-500 block">Public IP</span>
+                <span id="public-ip-value" class="font-medium text-olive-950"></span>
+            </div>
+        </div>
+
+        <div id="network-key-banner" class="p-4 bg-olive-50 text-olive-950 rounded-2xl shadow-sm border border-olive-200">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-olive-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <span class="text-olive-600 text-xs font-bold uppercase tracking-widest">Network Topology</span>
+                    </div>
+                    <div class="flex items-center gap-8">
+                        <div class="flex flex-col items-end">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-400 font-black">Hops</span>
+                            <span id="total-hops" class="text-sm font-mono font-bold text-olive-900">--</span>
+                        </div>
+                        <div class="flex flex-col items-end border-l border-olive-100 pl-4">
+                            <span class="text-[9px] uppercase tracking-tighter text-amber-500 font-black">Private</span>
+                            <span id="private-hops" class="text-sm font-mono font-bold text-amber-600">--</span>
+                        </div>
+                        <div class="flex flex-col items-end border-l border-olive-100 pl-4">
+                            <span class="text-[9px] uppercase tracking-tighter text-emerald-500 font-black">Public</span>
+                            <span id="public-hops" class="text-sm font-mono font-bold text-emerald-600">--</span>
+                        </div>
+                        <div class="flex flex-col items-end border-l border-olive-100 pl-4">
+                            <span class="text-[9px] uppercase tracking-tighter text-olive-400 font-black">Exit</span>
+                            <span id="exit-ip" class="text-sm font-mono font-bold text-olive-900">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="route-path" class="flex items-center flex-wrap gap-2 py-1">
+                    <span class="text-olive-400 text-xs italic">Mapping active route...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section id="history-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">History</h2>
+                <p class="mt-1 text-sm text-olive-600">Review prior scans, compare selected scan pairs, and reopen historical artifacts.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button id="history-focus-current-btn" class="action-button action-button-primary action-button-compact" aria-label="Focus history on the current network context">
+                    Current Context
+                </button>
+                <button id="history-focus-all-btn" class="action-button action-button-secondary action-button-compact" aria-label="Show all history">
+                    All History
+                </button>
+                <button id="refresh-history-tab-btn" class="action-button action-button-primary action-button-compact" aria-label="Refresh scan history">
+                    Refresh History
+                </button>
+            </div>
+        </div>
+        <div id="history-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div id="history-context-panel" class="mt-4 hidden rounded-2xl border border-olive-200 bg-white p-5 shadow-sm"></div>
+        <div id="history-compare-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div id="history-compare-panel" class="mt-4 hidden rounded-2xl border border-olive-200 bg-olive-50 p-5">
+            <h3 class="text-xl font-display italic text-olive-950">Scan Comparison</h3>
+            <p id="history-compare-summary" class="mt-2 text-sm text-olive-700"></p>
+            <div id="history-compare-details" class="mt-4 grid gap-4 lg:grid-cols-2"></div>
+        </div>
+        <div id="history-tab-list" class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    </section>
+
+    <section id="reports-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">Reports</h2>
+                <p class="mt-1 text-sm text-olive-600">Open completed scan reports without relying on transient status messages.</p>
+            </div>
+            <button id="refresh-reports-btn" class="action-button action-button-primary action-button-compact" aria-label="Refresh available reports">
+                Refresh Reports
+            </button>
+        </div>
+        <div id="reports-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div id="reports-customer-filters" class="mt-4 flex flex-wrap gap-2"></div>
+        <div id="reports-tab-list" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"></div>
+    </section>
+
+    <section id="customers-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">Customers</h2>
+                <p class="mt-1 text-sm text-olive-600">Manage customer identities, public IP mappings, and assignment data used by reports and history.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button id="refresh-customers-tab-btn" class="action-button action-button-secondary action-button-compact" aria-label="Refresh customers">
+                    Refresh Customers
+                </button>
+                <button id="add-customer-tab-btn" class="action-button action-button-primary action-button-compact" aria-label="Add customer from customers tab">
+                    Add Customer
+                </button>
+            </div>
+        </div>
+        <div id="customers-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div class="mt-6 rounded-2xl border border-olive-200 bg-olive-50 p-5">
+            <div class="grid gap-4 lg:grid-cols-[1fr_220px_auto] lg:items-end">
+                <div>
+                    <h3 class="text-xl font-display italic text-olive-950">WAN Fingerprint</h3>
+                    <p id="customer-fingerprint-summary" class="mt-2 font-mono text-xs text-olive-700">Waiting for WAN fingerprint</p>
+                    <p id="customer-fingerprint-folder" class="mt-1 font-mono text-[11px] text-olive-500"></p>
+                </div>
+                <div>
+                    <label for="customer-profile-prefix" class="block text-xs font-bold uppercase tracking-wider text-olive-600">Report Prefix</label>
+                    <input id="customer-profile-prefix" type="text" class="form-control form-control-md mt-1" placeholder="CSP">
+                </div>
+                <button id="save-customer-prefix-btn" class="action-button action-button-primary action-button-compact" aria-label="Save report prefix">
+                    Save Prefix
+                </button>
+            </div>
+        </div>
+        <div id="customers-tab-list" class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    </section>
+
+    <section id="logs-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">Logs</h2>
+                <p class="mt-1 text-sm text-olive-600">Inspect live scan, report, update, and runtime events with searchable filters and export.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button id="logs-export-btn" class="action-button action-button-secondary action-button-compact" aria-label="Export visible log entries">
+                    Export Visible Logs
+                </button>
+                <button id="logs-clear-btn" class="action-button action-button-secondary action-button-compact" aria-label="Clear captured log entries">
+                    Clear Logs
+                </button>
+                <button onclick="toggleLogPanel()" class="action-button action-button-primary action-button-compact" aria-label="Open live audit log drawer">
+                    Open Live Drawer
+                </button>
+            </div>
+        </div>
+        <div class="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div class="rounded-2xl border border-olive-200 bg-zinc-950 p-4 shadow-inner">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-widest text-olive-400">Runtime Log Stream</p>
+                        <p id="logs-tab-count" class="mt-1 text-xs text-zinc-400">0 visible entries</p>
+                    </div>
+                    <input
+                        type="search"
+                        id="logs-search-input"
+                        class="form-control form-control-sm w-full max-w-xs border-zinc-700 bg-zinc-900 text-zinc-100 placeholder-zinc-500"
+                        placeholder="Search target, message, level, or timestamp"
+                        aria-label="Search log entries"
+                    >
+                </div>
+                <div id="logs-tab-empty" class="mt-4 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">
+                    No log entries captured yet.
+                </div>
+                <div id="logs-tab-entries" class="mt-4 hidden max-h-[32rem] space-y-1 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs"></div>
+            </div>
+            <aside class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                <h3 class="text-xl font-display italic text-olive-900">Filters</h3>
+                <div class="mt-4 space-y-4">
+                    <div>
+                        <label for="logs-level-filter" class="block text-xs font-bold uppercase tracking-widest text-olive-600">Severity / Type</label>
+                        <select id="logs-level-filter" class="form-control form-control-md mt-2">
+                            <option value="all">All events</option>
+                            <option value="error">Errors</option>
+                            <option value="warn">Warnings</option>
+                            <option value="scan">Scan feedback</option>
+                            <option value="raw">Raw output</option>
+                            <option value="job">Job status</option>
+                            <option value="report">Reports</option>
+                            <option value="update">Updates</option>
+                        </select>
+                    </div>
+                    <div class="rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-700">
+                        Search matches timestamps, targets, messages, and event labels. Raw nmap output and runtime console errors are included in the same stream.
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section id="settings-tab-panel" class="hidden rounded-3xl border border-olive-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-olive-100 pb-4">
+            <div>
+                <h2 class="text-3xl font-display italic text-olive-950">Settings</h2>
+                <p class="mt-1 text-sm text-olive-600">Manage reusable target profiles, scan rules, and stored sync configuration from one place.</p>
+            </div>
+            <button id="save-settings-btn" class="action-button action-button-primary action-button-compact" aria-label="Save application settings">
+                Save Settings
+            </button>
+        </div>
+        <div id="settings-tab-status" class="mt-4 hidden rounded-xl bg-olive-50 px-4 py-3 text-sm text-olive-800"></div>
+        <div class="mt-6 grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+            <div class="space-y-6">
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-xl font-display italic text-olive-900">Target Profiles</h3>
+                            <p class="mt-2 text-sm text-olive-700">Save common targets and customer assignments, then apply them back into the Dashboard with one click.</p>
+                        </div>
+                        <button id="refresh-settings-btn" class="action-button action-button-secondary action-button-compact" aria-label="Refresh settings">
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="mt-4 grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label for="settings-profile-name" class="block text-sm font-medium text-olive-800">Profile Name</label>
+                            <input id="settings-profile-name" type="text" class="form-control form-control-md mt-1" placeholder="Branch office /24">
+                        </div>
+                        <div>
+                            <label for="settings-profile-target" class="block text-sm font-medium text-olive-800">Target</label>
+                            <input id="settings-profile-target" type="text" class="form-control form-control-md mt-1" placeholder="192.168.10.0/24">
+                        </div>
+                        <div>
+                            <label for="settings-profile-customer" class="block text-sm font-medium text-olive-800">Customer</label>
+                            <select id="settings-profile-customer" class="form-control form-control-md mt-1">
+                                <option value="">Use current customer selection</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="settings-profile-notes" class="block text-sm font-medium text-olive-800">Notes</label>
+                            <input id="settings-profile-notes" type="text" class="form-control form-control-md mt-1" placeholder="Optional notes">
+                        </div>
+                        <label class="flex items-start gap-3 rounded-xl border border-olive-200 bg-white px-4 py-3">
+                            <input id="settings-profile-scan-only-mode" type="checkbox" class="mt-1 size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-olive-900">Profile scan-only override</span>
+                                <span class="block text-sm text-olive-700">Force unprivileged mode when this profile is active.</span>
+                            </span>
+                        </label>
+                        <div>
+                            <label for="settings-profile-excluded-targets" class="block text-sm font-medium text-olive-800">Profile Excluded Targets</label>
+                            <textarea id="settings-profile-excluded-targets" rows="4" class="form-control form-control-md mt-1" placeholder="One host, range, or CIDR per line"></textarea>
+                        </div>
+                        <div>
+                            <label for="settings-profile-max-scan-minutes" class="block text-sm font-medium text-olive-800">Profile max scan duration (minutes)</label>
+                            <input id="settings-profile-max-scan-minutes" type="number" min="15" max="480" step="15" class="form-control form-control-md mt-1" placeholder="Use global default">
+                            <p class="mt-2 text-xs text-olive-600">Overrides the global max scan duration when this profile is active.</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <button id="add-target-profile-btn" class="action-button action-button-primary action-button-compact" aria-label="Add target profile">
+                            Save Target Profile
+                        </button>
+                        <button id="capture-current-target-btn" class="action-button action-button-secondary action-button-compact" aria-label="Capture current dashboard target into settings form">
+                            Use Current Dashboard Target
+                        </button>
+                    </div>
+                    <div id="settings-profile-list" class="mt-5 grid gap-3"></div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-xl font-display italic text-olive-900">Scanner Privilege Helper</h3>
+                            <p class="mt-2 text-sm text-olive-700">Full nmap scans need root once via a small helper. The app itself stays a normal user process. After install, daily/weekly schedules run without password prompts.</p>
+                        </div>
+                        <button id="settings-privilege-helper-install-btn" type="button" class="action-button action-button-primary action-button-compact" aria-label="Install privileged scanner helper">
+                            Install Helper
+                        </button>
+                    </div>
+                    <div class="mt-4 grid gap-2 rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-800">
+                        <div class="flex justify-between gap-3">
+                            <span class="font-semibold">Status</span>
+                            <span id="settings-privilege-helper-state" class="font-semibold text-amber-700">Checking…</span>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <span class="font-semibold">Mode</span>
+                            <span class="text-right text-olive-600">App user / nmap root helper</span>
+                        </div>
+                        <p id="settings-privilege-helper-status" class="mt-1 text-xs text-olive-600">Waiting for native runtime status…</p>
+                    </div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Scan Rules</h3>
+                    <p class="mt-2 text-sm text-olive-700">Persist operator safety defaults without scattering them across runtime controls.</p>
+                    <div class="mt-4 space-y-4">
+                        <label class="flex items-start gap-3 rounded-xl border border-olive-200 bg-white px-4 py-3">
+                            <input id="settings-scan-only-mode" type="checkbox" class="mt-1 size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-olive-900">Scan-only mode</span>
+                                <span class="block text-sm text-olive-700">Force unprivileged scan technique and skip ARP MAC/vendor detection.</span>
+                            </span>
+                        </label>
+                        <div>
+                            <label for="settings-excluded-targets" class="block text-sm font-medium text-olive-800">Excluded Targets</label>
+                            <textarea id="settings-excluded-targets" rows="5" class="form-control form-control-md mt-1" placeholder="One host, range, or CIDR per line"></textarea>
+                            <p class="mt-2 text-xs text-olive-600">Exclusions are applied to Nmap-based scan flows. Current ARP discovery remains best-effort and may still touch excluded IPs outside scan-only mode.</p>
+                        </div>
+                        <div>
+                            <label for="settings-max-scan-minutes" class="block text-sm font-medium text-olive-800">Max scan duration (minutes)</label>
+                            <input id="settings-max-scan-minutes" type="number" min="15" max="480" step="15" class="form-control form-control-md mt-1" placeholder="120">
+                            <p class="mt-2 text-xs text-olive-600">Comprehensive scans will stop after this limit and auto-split into smaller chunks if needed.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Report Exports</h3>
+                    <p class="mt-2 text-sm text-olive-700">Keep a copy of each report outside the app bundle for easy access.</p>
+                    <div class="mt-4 space-y-4">
+                        <label class="flex items-start gap-3 rounded-xl border border-olive-200 bg-white px-4 py-3">
+                            <input id="settings-save-reports-desktop" type="checkbox" class="mt-1 size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-olive-900">Save reports to Desktop</span>
+                                <span class="block text-sm text-olive-700">Copy report artifacts into a Desktop folder named <span class="font-semibold">nmapui-reports</span>.</span>
+                            </span>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Auto-monitor Defaults</h3>
+                    <p class="mt-2 text-sm text-olive-700">Define the default schedule used when you enable auto-monitoring for a customer.</p>
+                    <div class="mt-4 grid gap-4 md:grid-cols-2">
+                        <label class="flex items-start gap-3 rounded-xl border border-olive-200 bg-white px-4 py-3 md:col-span-2">
+                            <input id="settings-auto-monitor-enabled-by-default" type="checkbox" class="mt-1 size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-olive-900">Enable new customer rules by default</span>
+                                <span class="block text-sm text-olive-700">If disabled, new customer monitor rules start in a saved but paused state.</span>
+                            </span>
+                        </label>
+                        <div>
+                            <label for="settings-auto-monitor-recurrence" class="block text-sm font-medium text-olive-800">Recurrence</label>
+                            <select id="settings-auto-monitor-recurrence" class="form-control form-control-md mt-1">
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="biweekly">Bi-weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="settings-auto-monitor-day" class="block text-sm font-medium text-olive-800">Weekday Anchor</label>
+                            <select id="settings-auto-monitor-day" class="form-control form-control-md mt-1">
+                                <option value="monday">Monday</option>
+                                <option value="tuesday">Tuesday</option>
+                                <option value="wednesday">Wednesday</option>
+                                <option value="thursday">Thursday</option>
+                                <option value="friday">Friday</option>
+                                <option value="saturday">Saturday</option>
+                                <option value="sunday">Sunday</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="settings-auto-monitor-time" class="block text-sm font-medium text-olive-800">Run Time</label>
+                            <input id="settings-auto-monitor-time" type="time" class="form-control form-control-md mt-1">
+                        </div>
+                        <div class="rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-700 md:col-span-2">
+                            New customer rules default to <span class="font-semibold text-olive-900">Complete + PDF</span>. Existing customer-specific rules can still override the inherited schedule from the Customers tab.
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="space-y-6">
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Sync Configuration</h3>
+                    <p class="mt-2 text-sm text-olive-700">Store integration settings here now. Live sync flows remain tracked separately.</p>
+                    <div class="mt-4 space-y-4">
+                        <div class="rounded-xl border border-olive-200 bg-white p-4">
+                            <label class="flex items-center gap-3">
+                                <span class="inline-flex size-8 items-center justify-center rounded-lg bg-white shadow-sm border border-olive-200">
+                                    <svg viewBox="0 0 87.3 78" width="20" height="20" aria-hidden="true">
+                                        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"></path>
+                                        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"></path>
+                                        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"></path>
+                                        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"></path>
+                                        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"></path>
+                                        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"></path>
+                                    </svg>
+                                </span>
+                                <input id="settings-google-drive-enabled" type="checkbox" class="size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                                <span class="text-sm font-semibold text-olive-900">Google Drive sync enabled</span>
+                            </label>
+                            <label for="settings-google-drive-folder" class="mt-3 block text-sm font-medium text-olive-800">Drive Folder ID</label>
+                            <input id="settings-google-drive-folder" type="text" class="form-control form-control-md mt-1" placeholder="Optional folder ID">
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <button id="settings-google-drive-connect-btn" type="button" class="action-button action-button-primary action-button-compact">Connect Google Drive</button>
+                                <button id="settings-google-drive-disconnect-btn" type="button" class="action-button action-button-secondary action-button-compact">Disconnect</button>
+                                <button id="settings-google-drive-import-btn" type="button" class="action-button action-button-secondary action-button-compact">Import Credentials JSON</button>
+                                <button id="settings-google-drive-test-btn" type="button" class="action-button action-button-secondary action-button-compact">Test Drive Config</button>
+                            </div>
+                            <input id="settings-google-drive-credentials-file" type="file" accept=".json,application/json" class="hidden">
+                            <p class="mt-2 text-xs text-olive-600">Builds can bundle Google Drive OAuth credentials. If this install is missing them, import your `credentials.json` here and then click Connect.</p>
+                            <div id="settings-google-drive-summary" class="mt-3 grid gap-2 rounded-lg border border-olive-200 bg-olive-50 px-3 py-3 text-xs text-olive-800">
+                                <div class="flex justify-between gap-3"><span class="font-semibold">Sync</span><span id="settings-google-drive-enabled-state">Disabled</span></div>
+                                <div class="flex justify-between gap-3"><span class="font-semibold">Connection</span><span id="settings-google-drive-connected-state">Unknown</span></div>
+                                <div class="flex justify-between gap-3"><span class="font-semibold">Folder ID</span><span id="settings-google-drive-folder-state" class="font-mono text-right break-all">--</span></div>
+                            </div>
+                            <p id="settings-google-drive-status" class="mt-2 text-xs text-olive-600">Not configured</p>
+                        </div>
+                        <div class="rounded-xl border border-olive-200 bg-white p-4">
+                            <label class="flex items-center gap-3">
+                                <input id="settings-remote-sync-enabled" type="checkbox" class="size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                                <span class="text-sm font-semibold text-olive-900">Remote sync enabled</span>
+                            </label>
+                            <label for="settings-remote-sync-endpoint" class="mt-3 block text-sm font-medium text-olive-800">Remote Endpoint</label>
+                            <input id="settings-remote-sync-endpoint" type="url" class="form-control form-control-md mt-1" placeholder="https://cybersecuritypilot.org/api">
+                            <label for="settings-remote-sync-api-key" class="mt-3 block text-sm font-medium text-olive-800">API Key</label>
+                            <input id="settings-remote-sync-api-key" type="password" class="form-control form-control-md mt-1" placeholder="Stored locally until remote integration is implemented">
+                            <button id="settings-remote-sync-test-btn" type="button" class="action-button action-button-secondary action-button-compact mt-3">Test Remote Sync</button>
+                            <p id="settings-remote-sync-status" class="mt-2 text-xs text-olive-600">Not configured</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Runtime Summary</h3>
+                    <div id="settings-runtime-summary" class="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div class="rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-700">Loading runtime summary…</div>
+                    </div>
+                    <div class="mt-4 rounded-xl border border-olive-200 bg-white p-4">
+                        <div class="text-xs font-bold uppercase tracking-widest text-olive-500">Tool Versions</div>
+                        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                            <div>
+                                <div class="text-xs font-medium text-olive-600">Nmap Engine</div>
+                                <div id="settings-nmap-version" class="mt-1 rounded border border-olive-200 bg-olive-50 px-3 py-2 font-mono text-xs text-olive-900">Nmap: --</div>
+                            </div>
+                            <div>
+                                <div class="text-xs font-medium text-olive-600">Vulners Runtime</div>
+                                <div id="settings-vulners-version" class="mt-1 rounded border border-olive-200 bg-olive-50 px-3 py-2 font-mono text-xs text-olive-900">Vulners: --</div>
+                            </div>
+                            <div>
+                                <div class="text-xs font-medium text-olive-600">ARP-Scan Utility</div>
+                                <div id="settings-arpscan-version" class="mt-1 rounded border border-olive-200 bg-olive-50 px-3 py-2 font-mono text-xs text-olive-900">ARP-Scan: --</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
+                    <h3 class="text-xl font-display italic text-olive-900">Maintenance</h3>
+                    <p class="mt-2 text-sm text-olive-700">Repair, export, or migrate the SQLite runtime store without losing report, history, or log data.</p>
+                    <div class="mt-4 rounded-xl border border-olive-200 bg-white p-4">
+                        <div class="flex flex-wrap gap-2">
+                            <button id="settings-runtime-backfill-btn" type="button" class="action-button action-button-secondary action-button-compact">
+                                Backfill Runtime Store
+                            </button>
+                            <button id="settings-runtime-retention-btn" type="button" class="action-button action-button-secondary action-button-compact">
+                                Prune Logs + Compact DB
+                            </button>
+                            <button id="settings-runtime-export-btn" type="button" class="action-button action-button-secondary action-button-compact">
+                                Export Runtime Database
+                            </button>
+                        </div>
+                        <p id="settings-maintenance-status" class="mt-2 text-xs text-olive-600">Ready</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </section>
+
+    <div id="add-customer-form" class="hidden modal-overlay z-50">
+        <div class="modal-panel max-w-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-olive-900">Add Customer</h3>
+                <button onclick="hideCustomerForm()" class="icon-button size-8" aria-label="Close add customer dialog">
+                    ✕
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer Name *</label>
+                    <input type="text" id="cust-name" class="form-control form-control-md" placeholder="e.g., TechCorp HQ">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Customer ID *</label>
+                    <input type="text" id="cust-id" class="form-control form-control-md" placeholder="e.g., techcorp_hq">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Description</label>
+                    <input type="text" id="cust-description" class="form-control form-control-md" placeholder="Brief description">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Location</label>
+                    <input type="text" id="cust-location" class="form-control form-control-md" placeholder="City, State/Country">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Connection Type</label>
+                    <select id="cust-connection-type" class="form-control form-control-md">
+                        <option value="direct">Direct</option>
+                        <option value="vpn">VPN</option>
+                        <option value="residential">Residential</option>
+                        <option value="mobile">Mobile/Cellular</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Public IP / Range</label>
+                    <input type="text" id="cust-public-ip" class="form-control form-control-md" placeholder="e.g., 203.0.113.10 or 203.0.113.0/24">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Gateway Pattern</label>
+                    <input type="text" id="cust-gateway" class="form-control form-control-md" placeholder="e.g., 192.168.1.1">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Exit IP Pattern</label>
+                    <input type="text" id="cust-exit-pattern" class="form-control form-control-md" placeholder="e.g., 203.0.113.*">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Hop Count Range</label>
+                    <input type="text" id="cust-hop-count" class="form-control form-control-md" placeholder="e.g., 2-5">
+                </div>
+                <div>
+                    <label class="block text-olive-700 text-sm font-medium mb-1">Private IP Ranges</label>
+                    <input type="text" id="cust-private-ranges" class="form-control form-control-md" placeholder="192.168.0.0/16,10.0.0.0/8">
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="hideCustomerForm()" class="action-button action-button-secondary">
+                    Cancel
+                </button>
+                <button onclick="addCustomer()" class="action-button action-button-primary">
+                    Add Customer
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Customer Messages -->
+    <div id="customer-messages" class="mt-4 hidden">
+        <div class="p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
+            <span id="customer-message"></span>
+        </div>
+    </div>
+
+    <div id="history-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel modal-panel-scroll max-w-6xl">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center">
+                <h2 class="text-2xl font-display italic text-olive-900">Scan History</h2>
+                <button onclick="hideHistoryModal()" class="icon-button size-10" aria-label="Close scan history dialog">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div class="mb-4 flex flex-wrap items-center gap-4">
+                    <select id="history-customer-filter" onchange="loadScanHistory()" class="form-control form-control-sm">
+                        <option value="">All Customers</option>
+                    </select>
+                    <input type="date" id="history-date-filter" onchange="loadScanHistory()" class="form-control form-control-sm">
+                    <label class="inline-flex items-center gap-2 text-sm text-olive-800">
+                        <input type="checkbox" id="history-changed-filter" onchange="loadScanHistory()" class="size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500">
+                        Changed scans only
+                    </label>
+                    <button onclick="loadScanHistory()" class="action-button action-button-primary action-button-compact">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="history-list" class="space-y-3">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Asset Details Modal -->
+    <div id="asset-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel modal-panel-scroll max-w-4xl">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center">
+                <h2 id="asset-modal-title" class="text-2xl font-display italic text-olive-900">Asset Details</h2>
+                <button onclick="hideAssetModal()" class="icon-button size-10" aria-label="Close asset details dialog">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div id="asset-modal-content" class="space-y-6">
+                    <!-- Asset details will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div id="update-modal" class="hidden modal-overlay z-[60]">
+        <div class="modal-panel flex flex-col max-w-2xl shadow-2xl border border-olive-300">
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50 rounded-t-lg">
+                <h2 class="text-2xl font-display italic text-olive-900">Application Update</h2>
+                <button onclick="hideUpdateModal()" class="icon-button size-10" aria-label="Close update dialog">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-8">
+                <div id="update-initial" class="space-y-4">
+                    <p class="text-olive-800">A new version of NmapUI is available. Would you like to download it now?</p>
+                    <div id="update-release-notes" class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 max-h-32 overflow-y-auto">
+                        <strong>Release Notes:</strong><br>
+                        Loading...
+                    </div>
+                    <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                        <strong>Note:</strong> This will open your browser to download the new version. You'll need to install it manually.
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button onclick="hideUpdateModal()" class="px-5 py-2 text-olive-600 hover:text-olive-900 font-medium transition-colors">
+                            Later
+                        </button>
+                        <button onclick="startAppUpdate()" class="px-6 py-2 bg-amber-500 text-white font-bold rounded-full hover:bg-amber-600 shadow-sm transition-all">
+                            Download Update
+                        </button>
+                    </div>
+                </div>
+
+                <div id="update-progress" class="hidden space-y-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="update-current-status" class="text-olive-900 font-medium">Initializing update...</span>
+                        <span id="update-percentage" class="text-olive-600 text-sm">0%</span>
+                    </div>
+                    <div class="w-full bg-olive-100 rounded-full h-3 overflow-hidden shadow-inner">
+                        <div id="update-progress-bar" class="bg-amber-500 h-full w-0 transition-all duration-500 shadow-sm"></div>
+                    </div>
+                    <div id="update-terminal" class="mt-4 p-4 bg-zinc-900 text-zinc-300 font-mono text-xs rounded-lg h-48 overflow-y-auto shadow-inner border border-zinc-800">
+                        <div id="update-log"></div>
+                    </div>
+                </div>
+
+                <div id="update-complete" class="hidden text-center space-y-4">
+                    <div class="mx-auto size-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-display text-olive-950">Update Successful</h3>
+                    <p class="text-olive-700">The application is restarting. Please wait a moment...</p>
+                    <button onclick="window.location.reload()" class="mt-4 px-6 py-2 bg-olive-950 text-white rounded-full hover:bg-olive-800 transition-colors">
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Asset Details Modal -->
+    <div id="asset-details-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel modal-panel-scroll max-w-4xl shadow-2xl border border-olive-300">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-olive-300 flex justify-between items-center bg-olive-50">
+                <div>
+                    <h2 class="text-2xl font-display italic text-olive-900">Asset Details</h2>
+                    <p class="text-sm text-olive-600 mt-1">
+                        <span id="asset-detail-ip" class="font-mono font-bold"></span>
+                        <span id="asset-detail-hostname" class="ml-2"></span>
+                    </p>
+                </div>
+                <button onclick="closeAssetDetailsModal()" class="icon-button size-10" aria-label="Close asset details panel">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Basic Info Section -->
+                <div class="bg-olive-50 p-4 rounded-lg border border-olive-200">
+                    <h3 class="text-lg font-display italic text-olive-900 mb-3">Basic Information</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-olive-600 font-medium">MAC Address:</span>
+                            <span id="asset-detail-mac" class="ml-2 font-mono text-olive-900"></span>
+                        </div>
+                        <div>
+                            <span class="text-olive-600 font-medium">Vendor:</span>
+                            <span id="asset-detail-vendor" class="ml-2 text-olive-900"></span>
+                            <a id="asset-vendor-link" href="#" target="_blank" class="ml-2 text-olive-600 hover:text-olive-800 hidden">
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-olive-600 font-medium">Status:</span>
+                            <span id="asset-detail-status" class="ml-2 text-olive-900"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Services Section -->
+                <div class="bg-olive-50 p-4 rounded-lg border border-olive-200">
+                    <h3 class="text-lg font-display italic text-olive-900 mb-3">Services & Ports</h3>
+                    <div id="asset-detail-services" class="space-y-2">
+                        <!-- Services will be populated here -->
+                    </div>
+                </div>
+
+                <!-- CVE Vulnerabilities Section -->
+                <div id="asset-cve-section" class="bg-amber-50 p-4 rounded-lg border border-amber-200 hidden">
+                    <h3 class="text-lg font-display italic text-amber-900 mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Vulnerabilities (<span id="asset-cve-count">0</span> CVEs)
+                    </h3>
+                    <div id="asset-detail-cves" class="space-y-2 max-h-64 overflow-y-auto">
+                        <!-- CVEs will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-olive-300 bg-olive-50 flex justify-end">
+                <button onclick="closeAssetDetailsModal()" class="action-button action-button-primary">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Command Center -->
+    <div class="mt-8 bg-olive-50 p-6 rounded-2xl shadow-sm border border-olive-200">
+        <div class="flex flex-col md:flex-row md:items-end gap-6">
+            <!-- Target Input Group -->
+            <div class="flex-1 space-y-2">
+                <label for="scan-target" class="block text-xs font-bold uppercase tracking-wider text-olive-600 ml-1">Network Target</label>
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-olive-400 group-focus-within:text-olive-600 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                    </div>
+                    <input type="text" id="scan-target" class="w-full pl-11 pr-12 py-3 bg-olive-50 border-2 border-olive-100 rounded-xl text-olive-900 placeholder-olive-400 focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none" placeholder="192.168.1.0/24, 192.168.2.0/24, techmore.io" aria-label="Network targets for scanning">
+                    <span id="info-icon" class="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer text-olive-300 hover:text-olive-600 transition-colors" title="Scan information">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </span>
+                    <div id="tooltip" class="hidden absolute top-full right-0 mt-3 w-64 bg-olive-900 text-white p-4 rounded-xl shadow-xl border border-olive-800 text-xs z-50 leading-relaxed">
+                        <p class="font-bold text-olive-400 mb-1 uppercase tracking-tighter">Valid Target Formats:</p>
+                        <ul class="space-y-1 opacity-90">
+                            <li>• IPv4 (e.g. 192.168.1.1)</li>
+                            <li>• Ranges (e.g. 192.168.1.1-254)</li>
+                            <li>• CIDR (e.g. 192.168.1.0/24)</li>
+                            <li>• Hostnames (e.g. scanme.nmap.org)</li>
+                            <li>• Multiple targets separated by commas</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Selection Group -->
+            <div class="w-full md:w-64 space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <label for="customer-quick-add" class="block text-xs font-bold uppercase tracking-wider text-olive-600">Client Profile</label>
+                    <button onclick="showCustomerForm()" class="text-[10px] font-bold text-olive-600 hover:text-olive-800 uppercase tracking-wider underline underline-offset-4 decoration-olive-200 hover:decoration-olive-400 transition-all">
+                        + New Client
+                    </button>
+                </div>
+                <div class="relative">
+                    <select id="customer-quick-add" class="w-full appearance-none pl-4 pr-10 py-3 bg-olive-100 border-2 border-transparent rounded-xl text-olive-900 font-medium focus:bg-white focus:border-olive-500 focus:ring-4 focus:ring-olive-500/10 transition-all outline-none cursor-pointer" aria-label="Select customer profile">
+                        <option value="">Unassigned Network</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-olive-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Primary Actions -->
+            <div class="w-full md:w-auto flex flex-col gap-2">
+                <div class="flex flex-col md:flex-row gap-2">
+                    <button id="start-scan-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-600 text-white font-bold rounded-xl hover:bg-olive-700 active:scale-95 transition-all shadow-lg shadow-olive-600/20 flex items-center justify-center gap-3 group" aria-label="Initialize network discovery">
+                        <span class="scan-button-pulse hidden relative size-3">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
+                            <span class="relative inline-flex size-3 rounded-full bg-white"></span>
+                        </span>
+                        <span>Quick Scan</span>
+                        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <button id="generate-report-btn" class="w-full md:w-auto h-[52px] px-8 bg-olive-900 text-white font-bold rounded-xl hover:bg-olive-950 active:scale-95 transition-all shadow-lg shadow-olive-900/20 flex items-center justify-center gap-3 group" aria-label="Run a complete scan and generate a new PDF">
+                        <span class="scan-button-pulse hidden relative size-3">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
+                            <span class="relative inline-flex size-3 rounded-full bg-white"></span>
+                        </span>
+                        <span>Complete + PDF</span>
+                        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </button>
+                    <button id="dragnet-scan-btn" class="w-full md:w-auto h-[52px] px-8 bg-amber-700 text-white font-bold rounded-xl hover:bg-amber-800 active:scale-95 transition-all shadow-lg shadow-amber-700/20 flex items-center justify-center gap-3 group" aria-label="Run Dragnet full-port scan and generate a new PDF">
+                        <span class="scan-button-pulse hidden relative size-3">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
+                            <span class="relative inline-flex size-3 rounded-full bg-white"></span>
+                        </span>
+                        <span>Dragnet + PDF</span>
+                        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h5l2 3h11M5 7v10a2 2 0 002 2h10a2 2 0 002-2v-7M9 17h6" />
+                        </svg>
+                    </button>
+                </div>
+                <div id="last-scan-duration" class="text-center text-[10px] text-olive-500 font-bold uppercase tracking-widest hidden">
+                    Last Duration: <span id="last-scan-time-val">--</span>
+                </div>
+                <label class="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 cursor-pointer">
+                    <input type="checkbox" id="vpn-helper-toggle" class="size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500" aria-label="Enable VPN helper scan mode">
+                    <span>VPN Helper</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Secondary Controls & Status -->
+        <div class="mt-6 pt-6 border-t border-olive-100 flex flex-wrap items-center justify-between gap-6">
+            <div class="flex items-center gap-2">
+                <button id="stop-scan-btn" class="px-5 py-2 rounded-full bg-olive-100 text-olive-600 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-widest transition-all active:scale-95" aria-label="Terminate scanning operations">
+                    Stop
+                </button>
+                <div class="h-4 w-px bg-olive-200 mx-1"></div>
+                <button id="suspend-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Pause scan">
+                    Pause
+                </button>
+                <button id="resume-scan-btn" class="px-5 py-2 rounded-full text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-all" aria-label="Resume scan">
+                    Resume
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div id="last-scan-container" class="hidden flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-olive-100">
+                    <span class="text-[9px] font-black uppercase tracking-tighter text-olive-400">Baseline Health</span>
+                    <span id="last-scan-days" class="text-xs font-bold text-olive-900">--</span>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <button id="view-history-btn" class="flex items-center gap-2 text-olive-700 hover:text-olive-950 font-bold text-xs uppercase tracking-widest transition-colors group relative" aria-label="View historical scan archives">
+                        <svg class="w-5 h-5 text-olive-400 group-hover:text-olive-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Archive
+                        <span id="history-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
+                    </button>
+                    <button id="reload-last-scan-btn" class="hidden flex items-center gap-2 text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-colors" aria-label="Reload last scan results">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Reload Last
+                    </button>
+                    <button id="log-panel-toggle-btn" onclick="toggleLogPanel()" class="flex items-center gap-2 text-olive-500 hover:text-olive-800 font-bold text-xs uppercase tracking-widest transition-colors relative" aria-label="Toggle audit log panel">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Log
+                        <span id="log-count-badge" class="hidden absolute -top-2 -right-3 flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-olive-600 text-white text-[9px] font-black shadow-lg border-2 border-white">0</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3 ml-4">
+                    <label class="flex items-center cursor-pointer group">
+                        <input type="checkbox" id="auto-scan-toggle" class="sr-only peer" aria-label="Enable auto-monitor scans">
+                        <div class="relative w-10 h-5 bg-olive-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-olive-600"></div>
+                        <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 group-hover:text-olive-800 transition-colors">Auto-Monitor</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-status" class="hidden mt-4 p-4 rounded-lg">
+        <p id="report-status-text" class="text-sm font-medium"></p>
+        <div id="report-status-actions" class="hidden mt-3 flex flex-wrap gap-2"></div>
+    </div>
+
+        <!-- Scan Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+            <div id="quick-scan-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300 compact-card hover-lift">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Quick Scan</h2>
+                <!-- Pulsing indicator - hidden by default -->
+                <span id="quick-scan-indicator" class="hidden relative flex size-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-600 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
+                </span>
+            </div>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="quick-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="quick-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="text-olive-500 text-xs mt-2 font-mono">nmap -sn -T4</p>
+            </div>
+        </div>
+            <div id="deep-scan-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300 compact-card hover-lift">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Deep Scan</h2>
+                <span id="deep-scan-indicator" class="hidden relative flex size-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-600 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-olive-600"></span>
+                </span>
+            </div>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="deep-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="deep-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="deep-ports" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="deep-cves" class="font-medium text-olive-900">--</span></p>
+            </div>
+        </div>
+            <div class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300 compact-card hover-lift">
+            <h2 class="text-xl font-display italic text-olive-900 mb-3">Dragnet Scan</h2>
+            <div class="space-y-1 text-sm">
+                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="dragnet-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="dragnet-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="dragnet-ports" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="dragnet-cves" class="font-medium text-olive-900">--</span></p>
+            </div>
+        </div>
+    </div>
+<!--
+    <div id="scan-console-panel" class="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 shadow-inner">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-widest text-olive-400">Live Scan Console</p>
+                <p id="scan-console-status" class="mt-1 text-xs text-zinc-500">Waiting for scan activity</p>
+                <p id="runtime-process-summary" class="mt-1 font-mono text-[11px] text-zinc-400">Runtime PID: -- | nmap: -- | port 9000: --</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button id="copy-runtime-kill-btn" class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-olive-200 rounded border border-zinc-700 transition-colors">Copy Kill Cmds</button>
+                <button onclick="toggleLogPanel()" class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-olive-200 rounded border border-zinc-700 transition-colors">Full Log</button>
+            </div>
+        </div>
+        <div id="scan-console-entries" class="max-h-64 overflow-y-auto px-4 py-3 font-mono text-xs text-zinc-300 space-y-0.5">
+            <div class="text-zinc-600">No scan events yet.</div>
+        </div>
+    </div>
+-->
+    <!-- Scan Feedback Container -->
+    <div class="relative mt-6 hidden">
+        <div id="feedback-container" class="p-4 bg-olive-100 rounded-xl shadow-sm border border-olive-300 text-sm text-olive-900 space-y-2 empty:hidden min-h-[3rem] transition-all duration-500">
+        </div>
+        <div id="scan-timer-container" class="hidden absolute bottom-3 right-4 flex items-center gap-2 bg-white/70 backdrop-blur-sm px-3 py-1 rounded-full border border-olive-200 shadow-sm z-10">
+            <span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span id="scan-timer" class="font-mono text-xs font-bold text-amber-600">00:00</span>
+        </div>
+    </div>
+
+    <!-- Historical Data Banner (hidden by default) -->
+    <div id="historical-data-banner" class="mt-8 hidden">
+        <div class="bg-olive-100 border-l-4 border-olive-600 p-4 rounded-lg shadow-sm">
+            <div class="flex items-start justify-between">
+                <div class="flex items-start space-x-3">
+                    <span class="text-2xl">📅</span>
+                    <div class="flex-1">
+                        <h3 class="font-medium text-olive-900">
+                            <span id="historical-title">Historical Scan Data</span>
+                        </h3>
+                        <p class="text-sm text-olive-700 mt-1">
+                            <span id="historical-details"></span>
+                        </p>
+                        <div class="flex items-center space-x-4 mt-2 text-xs text-olive-600">
+                            <span id="historical-hosts"></span>
+                            <span id="historical-vulns"></span>
+                            <span id="historical-exploits"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Post-Scan Summary Banner (hidden by default) -->
+    <div id="scan-summary-banner" class="mt-8 hidden">
+        <div class="bg-emerald-50 border-l-4 border-emerald-600 p-6 rounded-lg shadow-md">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-3">
+                        <span class="text-3xl">✅</span>
+                        <h3 class="text-xl font-display italic text-emerald-900">Scan Complete!</h3>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                        <!-- Duration -->
+                        <div class="bg-white p-3 rounded-lg border border-emerald-200">
+                            <div class="text-xs text-emerald-600 font-medium uppercase tracking-wider">Duration</div>
+                            <div id="summary-duration" class="text-2xl font-bold text-emerald-900">--</div>
+                        </div>
+
+                        <!-- Hosts Discovered -->
+                        <div class="bg-white p-3 rounded-lg border border-emerald-200">
+                            <div class="text-xs text-emerald-600 font-medium uppercase tracking-wider">Hosts Found</div>
+                            <div id="summary-hosts" class="text-2xl font-bold text-emerald-900">--</div>
+                        </div>
+
+                        <!-- Ports Discovered -->
+                        <div class="bg-white p-3 rounded-lg border border-emerald-200">
+                            <div class="text-xs text-emerald-600 font-medium uppercase tracking-wider">Open Ports</div>
+                            <div id="summary-ports" class="text-2xl font-bold text-emerald-900">--</div>
+                        </div>
+
+                        <!-- CVEs Found -->
+                        <div class="bg-white p-3 rounded-lg border border-amber-200">
+                            <div class="text-xs text-amber-600 font-medium uppercase tracking-wider">CVEs Found</div>
+                            <div id="summary-cves" class="text-2xl font-bold text-amber-900">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="hideScanSummaryBanner()" class="ml-4 text-emerald-400 hover:text-emerald-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    </div>
+    <!-- Results Table -->
+    <section id="dashboard-results-panel" class="page-shell">
+        <div class="results-band">
+        <table id="discovery-table" class="table-fixed">
+                        <thead>
+                            <tr>
+                                <th class="w-8 px-0 py-0.5 text-left" data-column="status" data-fixed="true"></th>
+                                <th class="sortable w-24 px-1 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="ip" data-type="ip" title="Drag to reorder">
+                                    <div class="flex items-center space-x-1">
+                                        <span>IP Address</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable w-32 px-1 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="mac" data-type="mac" title="Drag to reorder">
+                                    <div class="flex items-center space-x-1">
+                                        <span>MAC Address</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable w-24 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="vendor" data-type="text" title="Drag to reorder">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Vendor</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable w-28 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="hostname" data-type="text" title="Drag to reorder">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Hostname</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable w-56 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="cves" data-type="number" title="Drag to reorder">
+                                    <div class="flex items-center space-x-1">
+                                        <span>CVEs</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable w-48 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="os" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>OS / Device</span>
+                                    </div>
+                                </th>
+                                <th class="sortable w-24 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="latency" data-type="text">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Latency</span>
+                                    </div>
+                                </th>
+                                <th class="sortable w-48 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="open_ports" data-type="ports" title="Drag to reorder">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Open Ports</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable w-56 px-0 py-0.5 text-left cursor-pointer hover:bg-olive-100 transition-colors group" data-column="version" data-type="text" title="Drag to reorder">
+                                    <div class="flex items-center space-x-1">
+                                        <span>Version</span>
+                                        <div class="sort-indicators opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <svg class="w-3 h-3 text-olive-400 sort-asc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                            </svg>
+                                            <svg class="w-3 h-3 text-olive-400 sort-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="w-28 px-0 py-0.5 text-left" data-column="screenshot" data-fixed="true">Screenshot</th>
+                                <th class="w-20 px-0 py-0.5 text-left" data-column="actions" data-fixed="true">Actions</th>
+                            </tr>
+                        </thead>
+
+            <tbody class="text-sm"></tbody>
+        </table>
+        </div>
+    </section>
+    <div class="page-shell">
+
+    <!-- Auto Scan Time Modal -->
+    <div id="auto-scan-modal" class="hidden modal-overlay z-50">
+        <div class="modal-panel max-w-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-display italic text-olive-900">Set Auto-Monitor Schedule</h3>
+                <button onclick="hideAutoScanTimeModal()" class="icon-button size-8 text-xl" aria-label="Close auto scan schedule dialog">&times;</button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-olive-700 mb-1">Recurrence</label>
+                        <select id="auto-recurrence" class="form-control form-control-md">
+                            <option value="hourly">Hourly</option>
+                            <option value="daily" selected="selected">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-olive-700 mb-1">Start Time</label>
+                        <input type="time" id="auto-start-time" class="form-control form-control-md" value="01:00">
+                    </div>
+                </div>
+
+                <div class="bg-olive-50 p-3 rounded-lg">
+                    <p class="text-sm text-olive-700">
+                        <strong>Automatic Mode:</strong> Auto-monitor runs Complete + PDF using the current network target. The schedule is saved on the server and resumes after restart.
+                    </p>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="saveAutoScanTimes()" class="action-button action-button-primary flex-1">
+                        Enable Auto-Monitor
+                    </button>
+                    <button onclick="saveAndRunScan()" class="action-button action-button-primary flex-1">
+                        Save and Run Scan
+                    </button>
+                    <button onclick="hideAutoScanTimeModal()" class="action-button action-button-secondary">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        function openLightbox(src) {
+            document.getElementById('lightbox-img').src = src;
+            document.getElementById('lightbox').classList.remove('hidden');
+            document.getElementById('lightbox').classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.add('hidden');
+            document.getElementById('lightbox').classList.remove('flex');
+            document.getElementById('lightbox-img').src = '';
+            document.body.style.overflow = '';
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeLightbox();
+            });
+            document.getElementById('lightbox')?.addEventListener('click', function(e) {
+                if (e.target === this) closeLightbox();
+            });
+        });
+    </script>
+
+    <script src="static/js/scan_runtime.js"></script>
+    <script src="static/js/scan_banners.js"></script>
+    <script src="static/js/report_status.js"></script>
+    <script src="static/js/update_modal.js"></script>
+    <script src="static/js/auto_update_banner.js"></script>
+    <script src="static/js/asset_details_modal.js"></script>
+    <script src="static/js/table_sorter.js"></script>
+    <script src="static/js/site_chrome.js"></script>
+    <script src="static/js/reports_tab.js"></script>
+    <script src="static/js/settings_tab.js"></script>
+    <script src="static/js/auto_scan_ui.js"></script>
+    <script src="static/js/customer_ui.js"></script>
+    <script src="static/js/report_generation_ui.js"></script>
+    <script src="static/js/app_bootstrap.js"></script>
+
+    <!-- ── Audit Log Panel ─────────────────────────────────────────────── -->
+    <div id="log-panel" class="hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col" style="height:320px;">
+        <div class="bg-olive-950 text-white flex items-center justify-between px-4 py-2 shadow-2xl border-t-2 border-olive-600 flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <svg class="w-4 h-4 text-olive-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span class="font-bold text-sm tracking-widest uppercase text-olive-200">Audit Log</span>
+                <span id="log-entry-count" class="text-xs font-mono text-olive-500">0 entries</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="copyLog()" class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-olive-800 hover:bg-olive-700 text-olive-200 rounded transition-colors">Copy</button>
+                <button onclick="clearLog()" class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-olive-800 hover:bg-olive-700 text-olive-200 rounded transition-colors">Clear</button>
+                <button onclick="toggleLogPanel()" class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-olive-800 hover:bg-olive-700 text-olive-200 rounded transition-colors">Close</button>
+            </div>
+        </div>
+        <div id="log-entries" class="flex-1 overflow-y-auto bg-olive-950 font-mono text-xs px-4 py-2 space-y-0.5"></div>
+    </div>
+    <!-- ── /Audit Log Panel ─────────────────────────────────────────────── -->
+
+<!-- Lightbox for screenshots -->
+    <div id="lightbox" class="fixed inset-0 z-[9999] bg-black/90 hidden" role="dialog" aria-modal="true" aria-label="Enlarged screenshot">
+        <button id="lightbox-close" onclick="closeLightbox()" class="absolute top-4 right-4 w-12 h-12 rounded-full bg-white border-none cursor-pointer flex items-center justify-center text-2xl text-olive-950 hover:bg-olive-100 transition-colors" aria-label="Close lightbox">&times;</button>
+        <img id="lightbox-img" src="" alt="Enlarged screenshot" class="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl">
+    </div>
+
+</body>
+</html>

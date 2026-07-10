@@ -1,4 +1,4 @@
 #!/bin/bash
 set -euo pipefail
-export NMAPUI_RUNTIME_WORKDIR="/Users/seandolbec/Projects/NmapUI"
+export NMAPUI_DATA_DIR="${NMAPUI_DATA_DIR:-/Users/seandolbec/Library/Application Support/NmapUI}"
 exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/NmapUI.real" "$@"

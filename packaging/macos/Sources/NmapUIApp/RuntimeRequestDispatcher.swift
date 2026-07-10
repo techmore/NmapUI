@@ -63,7 +63,7 @@ final class RuntimeRequestDispatcher: RuntimeRequestDispatching {
             // Install privileged helper (interactive once) then schedule unattended runs.
             Task { @MainActor in
                 do {
-                    try PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
+                    try await PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
                     AutoScanScheduler.sync(enabled: true, recurrence: recurrence, startTime: startTime)
                 } catch {
                     PrivilegeElevationController.presentHelperInstallFailure(error)

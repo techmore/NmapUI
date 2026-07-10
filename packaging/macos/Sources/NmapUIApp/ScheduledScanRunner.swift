@@ -44,7 +44,7 @@ enum ScheduledScanRunner {
             exit(2)
         }
 
-        let coordinator = ScanCoordinator()
+        let coordinator = ScanCoordinator(workDirectory: RuntimeSettingsStore.newScanWorkDirectoryURL())
         let request = ScanCoordinator.ScanRequest(
             target: resolvedTarget,
             usePn: false,

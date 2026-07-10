@@ -9,16 +9,14 @@
     <key>CFBundleIdentifier</key>
     <string>com.techmore.nmapui</string>
     <key>CFBundleVersion</key>
-    <string>0.1.0</string>
+    <string>1.0.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
-    <key>CFBundleGetInfoString</key>
-    <string>NmapUI 0.1.0</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon.icns</string>
-    <key>NSHumanReadableCopyright</key>
-    <string>Copyright 2026 Techmore</string>
+    <string>1.0.0</string>
+    <key>LSUIElement</key>
+    <false/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
 </dict>
 </plist>

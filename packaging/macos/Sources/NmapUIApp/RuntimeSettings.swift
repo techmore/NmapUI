@@ -179,6 +179,14 @@ enum RuntimeSettingsStore {
         return currentDataDirectoryURL().appendingPathComponent("work", isDirectory: true)
     }
 
+    static func newScanWorkDirectoryURL() -> URL {
+        let directory = currentRuntimeWorkDirectoryURL()
+            .appendingPathComponent("scans", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
     static func persist(_ settings: RuntimeSettings, to directoryURL: URL) {
         let fileURL = directoryURL.appendingPathComponent(fileName)
         guard let data = try? JSONEncoder().encode(settings) else { return }

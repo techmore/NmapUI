@@ -14,7 +14,7 @@ private extension String {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let processLauncher = ProcessLauncher()
-    private lazy var scanCoordinator = ScanCoordinator()
+    private var activeScanCoordinator: ScanCoordinator?
     private lazy var startupCoordinator = StartupCoordinator(readinessURL: RuntimeEndpoints.readinessURL)
     private let runtimeMenuPresenter = RuntimeMenuPresenter()
     private let runtimeAlertPresenter = RuntimeAlertPresenter()
@@ -140,6 +140,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sessionState.clearScanSession()
         setupStatusItem()
         syncLaunchAtLoginState()
+        Task { [weak self] in
+            // Let the initial window appear before macOS presents the one-time auth prompt.
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            do {
+                try await PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
+                RuntimeDiagnosticsLogger.log("Launch-time privileged scanner authorization is ready")
+            } catch {
+                RuntimeDiagnosticsLogger.error("Launch-time privileged scanner authorization was not completed: \(error.localizedDescription)")
+            }
+            self?.emitPrivilegeHelperStatus()
+        }
         NotificationCenter.default.addObserver(
             forName: .runtimeBridgeDidResolveIdentity,
             object: nil,
@@ -322,6 +333,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startScanFromNativeShell(target: String, scanKind: String, vpnHelper: Bool) {
+        guard !sessionState.runtimeScanSession.isScanning else {
+            RuntimeDiagnosticsLogger.log("Ignoring duplicate native scan request while a scan is already active")
+            return
+        }
         let normalizedTarget = normalizedScanTarget(target)
         RuntimeDiagnosticsLogger.log("Native scan requested target=\(normalizedTarget) scanKind=\(scanKind) vpnHelper=\(vpnHelper)")
         Task { [weak self] in
@@ -347,22 +362,92 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             scanKind: ScanCoordinator.ScanKind(scanKind),
             allowInteractivePrivilegePrompt: true
         )
+        let coordinator = ScanCoordinator(workDirectory: RuntimeSettingsStore.newScanWorkDirectoryURL())
+        activeScanCoordinator = coordinator
+        defer {
+            if activeScanCoordinator === coordinator {
+                activeScanCoordinator = nil
+            }
+        }
         sessionState.updateScanSession(
             scanStartTime: ISO8601DateFormatter().string(from: Date()),
             currentScanPhase: 1,
             currentTarget: normalizedTarget,
             currentScanKind: scanKind
         )
+        sessionState.updateScanStage("Preparing \(scanKind) scan for \(normalizedTarget)")
+        sessionState.scanFeedback = sessionState.scanStageDescription
+        let feedbackTask = Task { @MainActor in
+            let startedAt = Date()
+            while !Task.isCancelled && sessionState.runtimeScanSession.isScanning {
+                let elapsed = String(format: "%.0fs", Date().timeIntervalSince(startedAt))
+                sessionState.scanFeedback = "\(sessionState.scanStageDescription) · elapsed \(elapsed)"
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
         sessionState.eventRouter.emitScanLifecycle(
             phase: 1,
             target: normalizedTarget,
             startTime: sessionState.runtimeScanSession.scanStartTime,
             scanKind: scanKind
         )
-        let result = await scanCoordinator.runFullScan(request)
+        let result = await coordinator.runFullScan(
+            request,
+            onPhaseStarted: { [weak self] phase, description in
+                guard let self else { return }
+                self.sessionState.updateScanSession(
+                    scanStartTime: self.sessionState.runtimeScanSession.scanStartTime,
+                    currentScanPhase: phase.rawValue,
+                    currentTarget: normalizedTarget,
+                    currentScanKind: scanKind
+                )
+                self.sessionState.updateScanStage(description)
+                self.sessionState.eventRouter.emitScanLifecycle(
+                    phase: phase.rawValue,
+                    target: normalizedTarget,
+                    startTime: self.sessionState.runtimeScanSession.scanStartTime,
+                    scanKind: scanKind
+                )
+            },
+            onPhaseCompleted: { [weak self] phaseResult in
+                guard phaseResult.phase == .phase1, let summary = phaseResult.summary else { return }
+                guard let self else { return }
+                self.sessionState.latestHosts = summary.hosts
+                self.sessionState.latestScanStats = RuntimeScanStats.make(from: summary)
+                self.sessionState.eventRouter.emitPhaseStats(phase: phaseResult.phase.rawValue, summary: summary)
+                RuntimeDiagnosticsLogger.log("Published phase 1 discovery results hosts=\(summary.hostCount)")
+            },
+            onHostProgress: { [weak self] scannedHosts in
+                guard let self else { return }
+                self.sessionState.latestHosts = self.mergedHosts(
+                    discovered: self.sessionState.latestHosts,
+                    scanned: scannedHosts
+                )
+                let openPorts = self.sessionState.latestHosts.reduce(0) {
+                    $0 + $1.ports.split(separator: ",").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
+                }
+                self.sessionState.latestScanStats = RuntimeScanStats(
+                    hostCount: self.sessionState.latestHosts.count,
+                    openPortCount: openPorts,
+                    criticalCVECount: self.sessionState.latestScanStats?.criticalCVECount ?? 0,
+                    lowCVECount: self.sessionState.latestScanStats?.lowCVECount ?? 0
+                )
+                RuntimeDiagnosticsLogger.log("Published phase 2 host progress hosts=\(scannedHosts.count) openPorts=\(openPorts)")
+            }
+        )
+        feedbackTask.cancel()
         if let summary = result.summary {
+            sessionState.latestHosts = mergedHosts(discovered: sessionState.latestHosts, scanned: summary.hosts)
+            sessionState.latestScanStats = RuntimeScanStats(
+                hostCount: sessionState.latestHosts.count,
+                openPortCount: summary.openPortCount,
+                criticalCVECount: summary.criticalCVECount,
+                lowCVECount: summary.lowCVECount
+            )
+            sessionState.scanFeedback = "Phase \(result.phase.rawValue) complete: \(summary.hostCount) hosts, \(summary.openPortCount) open ports"
             RuntimeDiagnosticsLogger.log("Scan phase \(result.phase.rawValue) completed hosts=\(summary.hostCount) openPorts=\(summary.openPortCount)")
         } else {
+            sessionState.scanFeedback = result.error ?? "Scan completed without results"
             RuntimeDiagnosticsLogger.log("Scan phase \(result.phase.rawValue) completed without summary error=\(result.error ?? "none")")
         }
         if let summary = result.summary {
@@ -371,7 +456,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let shouldGenerateReport = result.completed
             && result.xmlPath != nil
-            && (scanKind == "complete" || scanKind == "dragnet")
             && result.phase != .phase1
         if shouldGenerateReport, let xmlPath = result.xmlPath {
             await generateAndPublishReport(
@@ -395,6 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             status: result.completed ? "success" : (result.error == "Scan cancelled" ? "cancelled" : "failed")
         )
         sessionState.clearScanSession()
+        if result.completed { sessionState.scanFeedback = "Scan complete in \(result.duration)" }
         sessionState.emitSyncState(
             version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
             hosts: result.summary?.hosts ?? []
@@ -538,13 +623,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func installPrivilegeHelperFromSettings() {
-        do {
-            try PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
-            RuntimeDiagnosticsLogger.log("Privilege helper installed from Settings")
-        } catch {
-            PrivilegeElevationController.presentHelperInstallFailure(error)
+        Task {
+            do {
+                try await PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
+                RuntimeDiagnosticsLogger.log("Privilege helper installed from Settings")
+            } catch {
+                PrivilegeElevationController.presentHelperInstallFailure(error)
+            }
+            emitPrivilegeHelperStatus()
         }
-        emitPrivilegeHelperStatus()
     }
 
     func openReportPath(_ path: String) {
@@ -657,7 +744,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func stopSwiftManagedScan() {
         RuntimeDiagnosticsLogger.log("Stop scan requested")
-        scanCoordinator.cancel()
+        activeScanCoordinator?.cancel()
         sessionState.emitScanStopped()
         sessionState.clearScanSession()
         sessionState.emitSyncState(
@@ -671,6 +758,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ?? sessionState.runtimeNetworkState?.cidr
             ?? sessionState.runtimeAutoScanSnapshot.target.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             ?? "192.168.1.0/24"
+    }
+
+    private func mergedHosts(
+        discovered: [RuntimeNmapXMLHostSummary],
+        scanned: [RuntimeNmapXMLHostSummary]
+    ) -> [RuntimeNmapXMLHostSummary] {
+        var scansByIP = scanned.reduce(into: [String: RuntimeNmapXMLHostSummary]()) { result, host in
+            // Grepable Nmap progress may report the same host more than once.
+            // Keep the latest report rather than trapping on a duplicate key.
+            result[host.ip] = host
+        }
+        var merged = discovered.map { host in
+            guard let scannedHost = scansByIP.removeValue(forKey: host.ip) else { return host }
+            return RuntimeNmapXMLHostSummary(
+                ip: host.ip,
+                mac: scannedHost.mac.isEmpty ? host.mac : scannedHost.mac,
+                vendor: scannedHost.vendor.isEmpty ? host.vendor : scannedHost.vendor,
+                hostname: scannedHost.hostname.isEmpty ? host.hostname : scannedHost.hostname,
+                os: scannedHost.os.isEmpty ? host.os : scannedHost.os,
+                latency: scannedHost.latency.isEmpty ? host.latency : scannedHost.latency,
+                ports: scannedHost.ports,
+                version: scannedHost.version,
+                highCVEs: scannedHost.highCVEs,
+                lowCVECount: scannedHost.lowCVECount
+            )
+        }
+        merged.append(contentsOf: scansByIP.values.sorted { $0.ip < $1.ip })
+        return merged
     }
 
     func emitCurrentRuntimeSnapshotToWebView() {
@@ -690,6 +805,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sessionState.emitGoogleDriveStatus()
         sessionState.emitCustomerProfile()
         emitPrivilegeHelperStatus()
+    }
+
+    func updateCustomerPrefix(_ prefix: String) {
+        sessionState.updateCustomerProfilePrefix(
+            prefix,
+            networkState: sessionState.runtimeNetworkState,
+            dataDirectory: RuntimeSettingsStore.currentDataDirectoryURL()
+        )
+        sessionState.emitCustomerProfile()
+        RuntimeDiagnosticsLogger.log("Customer profile prefix updated prefix=\(sessionState.runtimeCustomerProfileSnapshot.prefix)")
     }
 
     private func handleRuntimeBrowserOpen() {

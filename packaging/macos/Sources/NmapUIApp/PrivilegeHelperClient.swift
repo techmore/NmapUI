@@ -12,6 +12,7 @@ enum PrivilegeHelperClient {
     static let helperInstallPath = "/Library/PrivilegedHelperTools/com.techmore.nmapui.nmap-helper"
     static let launchDaemonPlistPath = "/Library/LaunchDaemons/com.techmore.nmapui.nmap-helper.plist"
     static let socketPath = "/Library/Application Support/NmapUI/helper.sock"
+    private static let installationQueue = DispatchQueue(label: "com.techmore.nmapui.helper-install", qos: .userInitiated)
 
     struct RunResult: Sendable {
         let exitCode: Int32
@@ -43,27 +44,43 @@ enum PrivilegeHelperClient {
         (try? ping()) == true
     }
 
+    static var installedHelperMatchesBundledHelper: Bool {
+        guard let bundled = resolveHelperBinaryURL() else { return false }
+        return FileManager.default.contentsEqual(atPath: bundled.path, andPath: helperInstallPath)
+    }
+
     static func ping() throws -> Bool {
         let response = try send(requestJSON: #"{"cmd":"ping"}"#)
         return response.ok && response.stdout == "pong"
     }
 
-    @MainActor
-    static func ensureInstalled(presentingWindow: NSWindow? = nil) throws {
+    static func ensureInstalled() async throws {
         if isHelperReachable {
             return
         }
-        try installHelper()
-        // Give launchd a moment to start the daemon.
-        let deadline = Date().addingTimeInterval(8)
-        while Date() < deadline {
-            if isHelperReachable {
-                return
+        try await withCheckedThrowingContinuation { continuation in
+            installationQueue.async {
+                do {
+                    // A launch preflight and a scan request share this queue, so only
+                    // one macOS authorization dialog can ever be active at a time.
+                    if isHelperReachable {
+                        continuation.resume()
+                        return
+                    }
+                    try installHelper()
+                    let deadline = Date().addingTimeInterval(8)
+                    while Date() < deadline {
+                        if isHelperReachable {
+                            continuation.resume()
+                            return
+                        }
+                        Thread.sleep(forTimeInterval: 0.25)
+                    }
+                    throw ClientError.installFailed("Helper installed but is not responding yet. Try again in a moment.")
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
-            Thread.sleep(forTimeInterval: 0.25)
-        }
-        if !isHelperReachable {
-            throw ClientError.installFailed("Helper installed but is not responding yet. Try again in a moment.")
         }
     }
 
@@ -135,7 +152,11 @@ enum PrivilegeHelperClient {
         let script = """
         mkdir -p /Library/PrivilegedHelperTools
         mkdir -p \(socketDir)
+        rm -f \(shellQuoted(socketPath))
         cp \(helperSource) \(installPath)
+        xattr -cr \(installPath) 2>/dev/null || true
+        codesign --remove-signature \(installPath) 2>/dev/null || true
+        codesign --force --sign - \(installPath)
         chown root:wheel \(installPath)
         chmod 755 \(installPath)
         printf "%b" "\(encodedPlist)" > \(plistPath)

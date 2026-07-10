@@ -174,40 +174,47 @@ struct PreferencesView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Runtime Command")
                     .font(.headline)
-                Picker("Runtime Mode", selection: $store.useDefaultRuntimeCommand) {
-                    Text("Default").tag(true)
-                    Text("Custom").tag(false)
+                HStack(spacing: 6) {
+                    Button("Default") { store.useDefaultRuntimeCommand = true }
+                        .buttonStyle(OliveButtonStyle(
+                            fill: store.useDefaultRuntimeCommand ? NativePalette.olive600 : NativePalette.olive100,
+                            hoverFill: NativePalette.olive700,
+                            text: store.useDefaultRuntimeCommand ? .white : NativePalette.olive700
+                        ))
+                    Button("Custom") { store.useDefaultRuntimeCommand = false }
+                        .buttonStyle(OliveButtonStyle(
+                            fill: store.useDefaultRuntimeCommand ? NativePalette.olive100 : NativePalette.olive600,
+                            hoverFill: NativePalette.olive700,
+                            text: store.useDefaultRuntimeCommand ? NativePalette.olive700 : .white
+                        ))
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.bottom, 2)
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Executable")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(NativePalette.olive600)
                         TextField("/usr/bin/true", text: $store.runtimeExecutable)
                             .disabled(store.useDefaultRuntimeCommand)
-                            .textFieldStyle(.roundedBorder)
+                            .oliveField()
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Arguments")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(NativePalette.olive600)
                         TextField("", text: $store.runtimeArguments)
                             .disabled(store.useDefaultRuntimeCommand)
-                            .textFieldStyle(.roundedBorder)
+                            .oliveField()
                     }
                 }
                 if !store.useDefaultRuntimeCommand {
                     Text(store.runtimeCommandLaunchPreview)
                         .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(NativePalette.olive500)
                         .textSelection(.enabled)
                 }
                 Text("The default launch now uses a neutral native placeholder. Turn it off only if you need a custom executable and arguments.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(NativePalette.olive600)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -216,7 +223,7 @@ struct PreferencesView: View {
                 HStack(spacing: 10) {
                     Text(store.dataDirectoryPath)
                         .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(NativePalette.olive500)
                         .textSelection(.enabled)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -236,35 +243,41 @@ struct PreferencesView: View {
                     }
                     .labelStyle(.titleAndIcon)
                     Button("Choose Folder…", action: onChooseFolder)
+                        .buttonStyle(OliveButtonStyle(fill: NativePalette.olive500, hoverFill: NativePalette.olive600, text: .white))
                     Button("Reveal in Finder", action: onRevealFolder)
+                        .buttonStyle(OliveButtonStyle(fill: NativePalette.olive500, hoverFill: NativePalette.olive600, text: .white))
                     if copiedPathConfirmation {
                         Text("Copied")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(NativePalette.emerald600)
                     }
                 }
                 Text("Choose a writable folder for reports and app state.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(NativePalette.olive600)
             }
 
             Toggle("Launch at Login", isOn: $store.launchAtLoginEnabled)
+                .toggleStyle(OliveToggleStyle())
+                .foregroundStyle(NativePalette.olive700)
 
             HStack {
                 Button("Reset to Defaults") {
                     showingResetConfirmation = true
                 }
+                .buttonStyle(OliveButtonStyle(fill: NativePalette.olive100, hoverFill: NativePalette.red50, text: NativePalette.olive700, hoverText: NativePalette.red600))
                 Spacer()
                 Button("Save") {
                     onSave()
                 }
                 .disabled(!store.hasUnsavedChanges)
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(OliveButtonStyle(fill: NativePalette.olive600, hoverFill: NativePalette.olive700, text: .white))
             }
             if store.hasUnsavedChanges {
                 Text("You have unsaved changes.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(NativePalette.amber700)
             }
         }
         .confirmationDialog(
@@ -285,5 +298,22 @@ struct PreferencesView: View {
         }
         .padding(20)
         .frame(width: 540)
+        .foregroundStyle(NativePalette.body)
+        .tint(NativePalette.olive600)
+        .background(NativePalette.olive50)
+        .environment(\.colorScheme, .light)
+    }
+}
+
+private extension View {
+    func oliveField() -> some View {
+        self
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .foregroundStyle(NativePalette.olive900)
+            .background(NativePalette.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(NativePalette.olive300, lineWidth: 1))
     }
 }

@@ -92,19 +92,27 @@ private func parseRunCLIArguments(_ args: [String]) throws -> HelperRunRequest {
 
 private final class DaemonState: @unchecked Sendable {
     private let lock = NSLock()
-    private var activeProcess: Process?
+    private var activeProcesses: [UUID: Process] = [:]
 
-    func setActive(_ process: Process?) {
+    func addActive(_ process: Process) -> UUID {
+        let id = UUID()
         lock.lock()
-        activeProcess = process
+        activeProcesses[id] = process
+        lock.unlock()
+        return id
+    }
+
+    func removeActive(_ id: UUID) {
+        lock.lock()
+        activeProcesses.removeValue(forKey: id)
         lock.unlock()
     }
 
     func cancelActive() {
         lock.lock()
-        let process = activeProcess
+        let processes = Array(activeProcesses.values)
         lock.unlock()
-        process?.terminate()
+        processes.forEach { $0.terminate() }
     }
 }
 
@@ -233,8 +241,8 @@ private func executeNmap(_ request: HelperRunRequest) throws -> ExecuteResult {
     process.standardOutput = stdoutPipe
     process.standardError = stderrPipe
 
-    daemonState.setActive(process)
-    defer { daemonState.setActive(nil) }
+    let processID = daemonState.addActive(process)
+    defer { daemonState.removeActive(processID) }
 
     try process.run()
     process.waitUntilExit()
