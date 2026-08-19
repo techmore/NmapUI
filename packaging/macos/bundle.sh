@@ -19,7 +19,7 @@ ICONSET_DIR="$SCRIPT_DIR/build/AppIcon.iconset"
 ICON_FILE="$RESOURCES_DIR/AppIcon.icns"
 GENERATED_ASSETS_DIR="$SCRIPT_DIR/build/generated-assets"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
-SIGN_OPTIONS="${CODESIGN_OPTIONS:---force --deep --sign}"
+SIGN_OPTIONS="${CODESIGN_OPTIONS:---force --sign}"
 # Scan workdir stays under Application Support; do not force the repo as workdir.
 DATA_DIR="${NMAPUI_DATA_DIR:-$HOME/Library/Application Support/NmapUI}"
 
@@ -52,8 +52,13 @@ if [ ! -f "$INFO_PLIST_SOURCE" ]; then
     INFO_PLIST_SOURCE="$SCRIPT_DIR/Resources/Info.plist"
 fi
 cp "$INFO_PLIST_SOURCE" "$APP_BUNDLE/Contents/Info.plist"
+if command -v /usr/libexec/PlistBuddy >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.techmore.nmapui" "$APP_BUNDLE/Contents/Info.plist"
+fi
 cp "$SCRIPT_DIR/../../index.html" "$RESOURCES_DIR/index.html"
 cp "$SCRIPT_DIR/../../nmap-modern.xsl" "$RESOURCES_DIR/nmap-modern.xsl"
+rm -rf "$RESOURCES_DIR/nmap-vulners"
+ditto "$SCRIPT_DIR/../../nmap-vulners" "$RESOURCES_DIR/nmap-vulners"
 rm -rf "$RESOURCES_DIR/static"
 ditto "$SCRIPT_DIR/../../static" "$RESOURCES_DIR/static"
 cat > "$WRAPPER_EXECUTABLE" <<EOF
@@ -74,8 +79,25 @@ if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
     iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE"
 fi
 
-# Ad-hoc signing makes locally built bundles launchable without a Developer ID.
-# A configured identity is still used for distributable builds.
+# Sign the executable with the same stable identifier that the privileged
+# helper authorizes. SwiftPM's default executable identifier is derived from
+# the product name and is not stable across builds.
+codesign --force --sign "${SIGN_IDENTITY:--}" --identifier com.techmore.nmapui "$REAL_EXECUTABLE"
+if [ -f "$HELPER_EXECUTABLE" ]; then
+    codesign --force --sign "${SIGN_IDENTITY:--}" --identifier com.techmore.nmapui.nmap-helper "$HELPER_EXECUTABLE"
+fi
+if [ -f "$MACOS_DIR/GoogleDriveHelper" ]; then
+    codesign --force --sign "${SIGN_IDENTITY:--}" --identifier com.techmore.nmapui.GoogleDriveHelper "$MACOS_DIR/GoogleDriveHelper"
+fi
+
+# Sign the outer bundle after its nested executables. Do not use --deep here:
+# --deep would re-sign NmapUI.real and discard its stable client identity.
 codesign $SIGN_OPTIONS "${SIGN_IDENTITY:--}" "$APP_BUNDLE"
+
+SIGNED_IDENTIFIER="$(codesign -d --verbose=4 "$REAL_EXECUTABLE" 2>&1 | awk -F= '/^Identifier=/{print $2; exit}')"
+if [ "$SIGNED_IDENTIFIER" != "com.techmore.nmapui" ]; then
+    echo "Unexpected launched executable identifier: ${SIGNED_IDENTIFIER:-missing}" >&2
+    exit 1
+fi
 
 echo "Created $APP_BUNDLE"

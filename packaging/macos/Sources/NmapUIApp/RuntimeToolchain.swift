@@ -51,6 +51,7 @@ struct RuntimeToolchain: Codable {
             gowitnessPath: resolveExecutable(
                 explicitPath: ProcessInfo.processInfo.environment["GOWITNESS_PATH"],
                 candidates: [
+                    GowitnessManager.managedBinaryURL().path,
                     "/opt/homebrew/bin/gowitness",
                     "/usr/local/bin/gowitness",
                     "gowitness"

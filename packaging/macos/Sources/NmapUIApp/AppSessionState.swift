@@ -92,6 +92,14 @@ struct RuntimeScanSessionSnapshot: Equatable {
 }
 
 @MainActor
+struct CurrentScanReportArtifacts: Equatable {
+    let name: String
+    let htmlPath: String
+    let pdfPath: String?
+    let xmlPath: String
+}
+
+@MainActor
 final class AppSessionState: ObservableObject {
     let eventRouter: RuntimeEventRouting
     private let lifecycleEventBridge: RuntimeLifecycleEventBridge
@@ -121,6 +129,11 @@ final class AppSessionState: ObservableObject {
     @Published var scanFeedback = "Ready to scan"
     @Published var scanStageDescription = "Ready to scan"
     @Published var latestHosts: [RuntimeNmapXMLHostSummary] = []
+    @Published var latestScreenshotURLs: [URL] = []
+    @Published var customerRegistry = CustomerRegistry.empty
+    @Published var customerResolution: CustomerResolution = .unassigned
+    /// Deliberately transient: Dashboard actions belong only to the scan just completed.
+    @Published var currentScanReportArtifacts: CurrentScanReportArtifacts?
 
     init(
         eventRouter: RuntimeEventRouting = RuntimeEventRouter(
@@ -376,7 +389,8 @@ final class AppSessionState: ObservableObject {
                 reportUrl: Self.nativeAccessibleURL(entry.reportUrl, dataDirectory: dataDirectory),
                 pdfUrl: Self.nativeAccessibleURL(entry.pdfUrl, dataDirectory: dataDirectory),
                 xmlUrl: Self.nativeAccessibleURL(entry.xmlUrl, dataDirectory: dataDirectory),
-                customerProfile: entry.customerProfile
+                customerProfile: entry.customerProfile,
+                comparison: entry.comparison
             )
         }
         return RuntimeHistoryDataEnvelope(history: rewritten)
@@ -492,7 +506,9 @@ final class AppSessionState: ObservableObject {
             config: config
         )
         runtimeAutoScanSnapshot = snapshot
-        RuntimeMetadataStore.persistConfigSection("autoScan", values: config, to: dataDirectory)
+        if case .failure(let error) = RuntimeMetadataStore.persistConfigSection("autoScan", values: config, to: dataDirectory) {
+            scanFeedback = "Could not save auto-scan settings: \(error.localizedDescription)"
+        }
     }
 
     private func enrichedAutoScanConfig(
@@ -562,7 +578,9 @@ final class AppSessionState: ObservableObject {
             ]
         )
         runtimeGoogleDriveSnapshot = snapshot
-        RuntimeMetadataStore.persistConfigSection("googleDrive", values: snapshot.config, to: dataDirectory)
+        if case .failure(let error) = RuntimeMetadataStore.persistConfigSection("googleDrive", values: snapshot.config, to: dataDirectory) {
+            scanFeedback = "Could not save Google Drive settings: \(error.localizedDescription)"
+        }
     }
 
     func emitGoogleDriveAuthURL(success: Bool, url: String?, status: String) {
@@ -571,10 +589,36 @@ final class AppSessionState: ObservableObject {
 
     func refreshCustomerProfileSnapshot(from dataDirectory: URL, networkState: RuntimeNetworkState?) {
         let prefix = RuntimeMetadataStore.loadCustomerProfilePrefix(from: dataDirectory)
-        let profile = RuntimeCustomerProfile.current(prefix: prefix, networkState: networkState)
+        customerRegistry = CustomerRegistry.load(from: dataDirectory)
+        customerResolution = customerRegistry.resolvedCustomer(network: networkState)
+        let customer: CustomerRecord?
+        switch customerResolution { case .assigned(let record, _): customer = record; default: customer = nil }
+        let profile = RuntimeCustomerProfile.current(prefix: customer?.reportPrefix ?? prefix, networkState: networkState, customer: customer)
         runtimeCustomerProfileSnapshot = RuntimeCustomerProfileSnapshot(prefix: prefix, profile: profile)
         runtimeCustomerProfile = profile
         runtimeBootstrapSnapshot.runtimeCustomerProfile = profile
+    }
+
+    func createCustomer(name: String, networkState: RuntimeNetworkState?, dataDirectory: URL) throws {
+        let cleanedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleanedName.count >= 2 else { throw CustomerRegistryError.invalidName }
+        guard !customerRegistry.customers.contains(where: { $0.name.caseInsensitiveCompare(cleanedName) == .orderedSame }) else { throw CustomerRegistryError.duplicateName }
+        guard !cleanedName.contains("/"), !cleanedName.contains("\\"), !cleanedName.contains(".."),
+              cleanedName.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else {
+            throw CustomerRegistryError.invalidName
+        }
+        let record = CustomerRecord(name: cleanedName, reportPrefix: RuntimeReportNaming.sanitizeSegment(cleanedName.uppercased(), fallback: "CUSTOMER"), publicIPs: [networkState?.publicIP].compactMap { $0 }, cidrs: [networkState?.cidr].compactMap { $0 })
+        customerRegistry.customers.append(record)
+        customerRegistry.activeCustomerID = record.id
+        try customerRegistry.persist(to: dataDirectory)
+        refreshCustomerProfileSnapshot(from: dataDirectory, networkState: networkState)
+    }
+
+    func selectCustomer(_ id: UUID?, networkState: RuntimeNetworkState?, dataDirectory: URL) throws {
+        guard id == nil || customerRegistry.customers.contains(where: { $0.id == id }) else { throw CustomerRegistryError.unknownCustomer }
+        customerRegistry.activeCustomerID = id
+        try customerRegistry.persist(to: dataDirectory)
+        refreshCustomerProfileSnapshot(from: dataDirectory, networkState: networkState)
     }
 
     func updateCustomerProfilePrefix(_ prefix: String, networkState: RuntimeNetworkState?, dataDirectory: URL) {
@@ -592,16 +636,18 @@ final class AppSessionState: ObservableObject {
     }
 }
 
+enum CustomerRegistryError: LocalizedError { case invalidName, duplicateName, unknownCustomer
+    var errorDescription: String? { switch self { case .invalidName: return "Customer name must contain at least two characters"; case .duplicateName: return "A customer with this name already exists"; case .unknownCustomer: return "The selected customer no longer exists" } }
+}
+
 private extension AppSessionState {
     func persistCustomerProfilePrefix(_ prefix: String, dataDirectory: URL) {
-        let configURL = dataDirectory.appendingPathComponent("config.json")
-        let existing = (try? Data(contentsOf: configURL)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        var config = existing
-        var customerProfileConfig = (config["customerProfile"] as? [String: Any]) ?? [:]
-        customerProfileConfig["prefix"] = prefix
-        config["customerProfile"] = customerProfileConfig
-        if let data = try? JSONSerialization.data(withJSONObject: config, options: [.sortedKeys, .prettyPrinted]) {
-            try? data.write(to: configURL, options: [.atomic])
+        if case .failure(let error) = RuntimeMetadataStore.persistConfigSection(
+            "customerProfile",
+            values: ["prefix": .string(prefix)],
+            to: dataDirectory
+        ) {
+            scanFeedback = "Could not save customer settings: \(error.localizedDescription)"
         }
     }
 }

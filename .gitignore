@@ -18,3 +18,9 @@ targets.tmp
 packaging/macos/.build/
 .build/
 packaging/macos/*.xcodeproj/
+packaging/macos/build/
+packaging/macos/.swiftpm/
+packaging/macos/run_2.sh
+nmap-vulners/
+phase1_results.xml
+docs/notes/eval-logs/

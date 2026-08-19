@@ -7,12 +7,14 @@ final class RuntimeReportRefreshMonitor {
 
     func start(dataDirectory: URL, onChange: @escaping @MainActor () -> Void) {
         task?.cancel()
-        lastSignature = currentSignature(for: dataDirectory)
+        lastSignature = RuntimeReportSignature.current(for: dataDirectory)
         task = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                let signature = self.currentSignature(for: dataDirectory)
+                let signature = await Task.detached(priority: .utility) {
+                    RuntimeReportSignature.current(for: dataDirectory)
+                }.value
                 guard signature != self.lastSignature else { continue }
                 self.lastSignature = signature
                 await MainActor.run {
@@ -27,20 +29,23 @@ final class RuntimeReportRefreshMonitor {
         task = nil
     }
 
-    private func currentSignature(for dataDirectory: URL) -> String {
-        let historySignature = fileSignature(at: dataDirectory.appendingPathComponent("history.json"))
-        let reportsSignature = directorySignature(at: dataDirectory.appendingPathComponent("reports_archive"))
+}
+
+private enum RuntimeReportSignature {
+    static func current(for dataDirectory: URL) -> String {
+        let historySignature = Self.fileSignature(at: dataDirectory.appendingPathComponent("history.json"))
+        let reportsSignature = Self.directorySignature(at: dataDirectory.appendingPathComponent("reports_archive"))
         return "\(historySignature)|\(reportsSignature)"
     }
 
-    private func fileSignature(at url: URL) -> String {
+    private static func fileSignature(at url: URL) -> String {
         guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
               let date = values.contentModificationDate
         else { return "missing" }
         return "\(date.timeIntervalSince1970)-\(values.fileSize ?? 0)"
     }
 
-    private func directorySignature(at url: URL) -> String {
+    private static func directorySignature(at url: URL) -> String {
         guard let enumerator = FileManager.default.enumerator(
             at: url,
             includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
@@ -53,7 +58,7 @@ final class RuntimeReportRefreshMonitor {
             guard fileURL.pathExtension.lowercased() == "html" || fileURL.pathExtension.lowercased() == "pdf" || fileURL.pathExtension.lowercased() == "xml" || fileURL.lastPathComponent == "drive.json" else {
                 continue
             }
-            let signature = fileSignature(at: fileURL)
+            let signature = Self.fileSignature(at: fileURL)
             components.append("\(fileURL.lastPathComponent):\(signature)")
         }
         return components.sorted().joined(separator: ";")

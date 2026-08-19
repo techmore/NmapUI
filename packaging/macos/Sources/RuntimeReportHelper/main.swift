@@ -487,10 +487,11 @@ private func loadDriveMetadata(for reportPath: URL) -> [String: Any] {
 
 private func buildSnapshot(reportsDir: URL, historyPath: URL) -> RuntimeReportsSnapshot {
     let history = loadJSON([RuntimeReportHistoryEntry].self, from: historyPath) ?? []
-    let historyByURL = Dictionary(uniqueKeysWithValues: history.compactMap { entry -> (String, RuntimeReportHistoryEntry)? in
-        guard let url = entry.reportUrl else { return nil }
-        return (url, entry)
-    })
+    let historyByURL = history.reduce(into: [String: RuntimeReportHistoryEntry]()) { result, entry in
+        guard let url = entry.reportUrl else { return }
+        if let existing = result[url], existing.timestamp >= entry.timestamp { return }
+        result[url] = entry
+    }
 
     var reports: [RuntimeReportListEntry] = []
     if let folderURLs = try? FileManager.default.contentsOfDirectory(at: reportsDir, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey]) {

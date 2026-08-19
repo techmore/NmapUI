@@ -16,11 +16,13 @@ final class PreferencesStore: ObservableObject {
     @Published var runtimeArguments: String
     @Published var dataDirectoryPath: String
     @Published var launchAtLoginEnabled: Bool
+    @Published var autoOpenScheduledReports: Bool
     private var persistedUseDefaultRuntimeCommand: Bool
     private var persistedRuntimeExecutable: String
     private var persistedRuntimeArguments: String
     private var persistedDataDirectoryPath: String
     private var persistedLaunchAtLoginEnabled: Bool
+    private var persistedAutoOpenScheduledReports: Bool
 
     init() {
         let loadedSettings = RuntimeSettingsStore.load(from: RuntimeSettingsStore.currentDataDirectoryURL())
@@ -30,11 +32,15 @@ final class PreferencesStore: ObservableObject {
         let runtimeArguments = loadedSettings?.runtimeArguments ?? currentSettings.runtimeArguments
         let dataDirectoryPath = loadedSettings?.dataDirectoryPath ?? currentSettings.dataDirectoryPath
         let launchAtLoginEnabled = loadedSettings?.launchAtLoginEnabled ?? currentSettings.launchAtLoginEnabled
+        let configURL = URL(fileURLWithPath: dataDirectoryPath).appendingPathComponent("config.json")
+        let config = (try? Data(contentsOf: configURL)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let autoOpenScheduledReports = ((config?["reportBehavior"] as? [String: Any])?["autoOpenScheduledReports"] as? Bool) ?? false
         self.useDefaultRuntimeCommand = useDefaultRuntimeCommand
         self.runtimeExecutable = runtimeExecutable
         self.runtimeArguments = runtimeArguments
         self.dataDirectoryPath = dataDirectoryPath
         self.launchAtLoginEnabled = launchAtLoginEnabled
+        self.autoOpenScheduledReports = autoOpenScheduledReports
         let persistedState = Self.persistedState(
             useDefaultRuntimeCommand: useDefaultRuntimeCommand,
             runtimeExecutable: runtimeExecutable,
@@ -47,6 +53,7 @@ final class PreferencesStore: ObservableObject {
         persistedRuntimeArguments = persistedState.runtimeArguments
         persistedDataDirectoryPath = persistedState.dataDirectoryPath
         persistedLaunchAtLoginEnabled = persistedState.launchAtLoginEnabled
+        persistedAutoOpenScheduledReports = autoOpenScheduledReports
     }
 
     func save() -> Bool {
@@ -85,6 +92,11 @@ final class PreferencesStore: ObservableObject {
             ),
             to: URL(fileURLWithPath: dataDirectoryPath)
         )
+        RuntimeMetadataStore.persistConfigSection(
+            "reportBehavior",
+            values: ["autoOpenScheduledReports": .bool(autoOpenScheduledReports)],
+            to: URL(fileURLWithPath: dataDirectoryPath)
+        )
 
         let persistedState = Self.persistedState(
             useDefaultRuntimeCommand: useDefaultRuntimeCommand,
@@ -98,6 +110,7 @@ final class PreferencesStore: ObservableObject {
         persistedRuntimeArguments = persistedState.runtimeArguments
         persistedDataDirectoryPath = persistedState.dataDirectoryPath
         persistedLaunchAtLoginEnabled = persistedState.launchAtLoginEnabled
+        persistedAutoOpenScheduledReports = autoOpenScheduledReports
         return true
     }
 
@@ -108,6 +121,7 @@ final class PreferencesStore: ObservableObject {
         runtimeArguments = currentSettings.runtimeArguments
         dataDirectoryPath = currentSettings.dataDirectoryPath
         launchAtLoginEnabled = currentSettings.launchAtLoginEnabled
+        autoOpenScheduledReports = false
         let persistedState = Self.persistedState(
             useDefaultRuntimeCommand: useDefaultRuntimeCommand,
             runtimeExecutable: runtimeExecutable,
@@ -120,6 +134,7 @@ final class PreferencesStore: ObservableObject {
         persistedRuntimeArguments = persistedState.runtimeArguments
         persistedDataDirectoryPath = persistedState.dataDirectoryPath
         persistedLaunchAtLoginEnabled = persistedState.launchAtLoginEnabled
+        persistedAutoOpenScheduledReports = autoOpenScheduledReports
     }
 
     var hasUnsavedChanges: Bool {
@@ -128,6 +143,7 @@ final class PreferencesStore: ObservableObject {
             || runtimeArguments != persistedRuntimeArguments
             || dataDirectoryPath != persistedDataDirectoryPath
             || launchAtLoginEnabled != persistedLaunchAtLoginEnabled
+            || autoOpenScheduledReports != persistedAutoOpenScheduledReports
     }
 
     var runtimeCommandLaunchPreview: String {
@@ -161,59 +177,32 @@ final class PreferencesStore: ObservableObject {
 
 struct PreferencesView: View {
     @ObservedObject var store: PreferencesStore
+    @ObservedObject var sessionState: AppSessionState
     let onChooseFolder: () -> Void
     let onRevealFolder: () -> Void
     let onSave: () -> Void
     let onReset: () -> Void
+    let onConnectGoogleDrive: () -> Void
+    let onDisconnectGoogleDrive: () -> Void
+    let onSaveGoogleDriveSettings: (Bool, String) -> Void
+    let onSaveGoogleDriveCredentials: (String) -> Void
     @State private var showingResetConfirmation = false
     @State private var copiedPathConfirmation = false
     @State private var copiedPathHideWorkItem: DispatchWorkItem?
+    @State private var googleDriveEnabled = false
+    @State private var googleDriveFolderID = ""
+    @State private var googleDriveCredentialsJSON = ""
+    @State private var googleDriveStatus: GoogleDriveService.Status?
+    @State private var showingCredentialEditor = false
 
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Runtime Command")
+                Text("Native execution")
                     .font(.headline)
-                HStack(spacing: 6) {
-                    Button("Default") { store.useDefaultRuntimeCommand = true }
-                        .buttonStyle(OliveButtonStyle(
-                            fill: store.useDefaultRuntimeCommand ? NativePalette.olive600 : NativePalette.olive100,
-                            hoverFill: NativePalette.olive700,
-                            text: store.useDefaultRuntimeCommand ? .white : NativePalette.olive700
-                        ))
-                    Button("Custom") { store.useDefaultRuntimeCommand = false }
-                        .buttonStyle(OliveButtonStyle(
-                            fill: store.useDefaultRuntimeCommand ? NativePalette.olive100 : NativePalette.olive600,
-                            hoverFill: NativePalette.olive700,
-                            text: store.useDefaultRuntimeCommand ? NativePalette.olive700 : .white
-                        ))
-                }
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Executable")
-                            .font(.caption)
-                            .foregroundStyle(NativePalette.olive600)
-                        TextField("/usr/bin/true", text: $store.runtimeExecutable)
-                            .disabled(store.useDefaultRuntimeCommand)
-                            .oliveField()
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Arguments")
-                            .font(.caption)
-                            .foregroundStyle(NativePalette.olive600)
-                        TextField("", text: $store.runtimeArguments)
-                            .disabled(store.useDefaultRuntimeCommand)
-                            .oliveField()
-                    }
-                }
-                if !store.useDefaultRuntimeCommand {
-                    Text(store.runtimeCommandLaunchPreview)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(NativePalette.olive500)
-                        .textSelection(.enabled)
-                }
-                Text("The default launch now uses a neutral native placeholder. Turn it off only if you need a custom executable and arguments.")
-                    .font(.caption)
+                Text("The dashboard, scans, reports, and integrations run through the Swift-native implementation. Legacy runtime command settings remain stored only for migration compatibility.")
+                    .font(.callout)
                     .foregroundStyle(NativePalette.olive600)
             }
 
@@ -257,9 +246,19 @@ struct PreferencesView: View {
                     .foregroundStyle(NativePalette.olive600)
             }
 
+            Toggle("Open HTML and PDF after scheduled scans", isOn: $store.autoOpenScheduledReports)
+                .toggleStyle(OliveToggleStyle())
+                .foregroundStyle(NativePalette.olive700)
+            Text("Off by default so unattended scans do not interrupt your work.")
+                .font(.caption)
+                .foregroundStyle(NativePalette.olive600)
+
             Toggle("Launch at Login", isOn: $store.launchAtLoginEnabled)
                 .toggleStyle(OliveToggleStyle())
                 .foregroundStyle(NativePalette.olive700)
+
+            Divider()
+            googleDriveSection
 
             HStack {
                 Button("Reset to Defaults") {
@@ -280,6 +279,7 @@ struct PreferencesView: View {
                     .foregroundStyle(NativePalette.amber700)
             }
         }
+        }
         .confirmationDialog(
             "Reset preferences to defaults?",
             isPresented: $showingResetConfirmation,
@@ -296,12 +296,100 @@ struct PreferencesView: View {
             copiedPathHideWorkItem?.cancel()
             copiedPathHideWorkItem = nil
         }
+        .onAppear { refreshGoogleDriveState() }
+        .onChange(of: sessionState.runtimeGoogleDriveSnapshot.enabled) { _ in refreshGoogleDriveState() }
+        .onChange(of: sessionState.runtimeGoogleDriveSnapshot.folderId) { _ in refreshGoogleDriveState() }
         .padding(20)
-        .frame(width: 540)
+        .frame(width: 620, height: 680)
         .foregroundStyle(NativePalette.body)
         .tint(NativePalette.olive600)
         .background(NativePalette.olive50)
         .environment(\.colorScheme, .light)
+    }
+
+    private var googleDriveSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Google Drive Sync").font(.headline)
+                    Text("Upload completed HTML, PDF, and XML reports to Google Drive.")
+                        .font(.caption)
+                        .foregroundStyle(NativePalette.olive600)
+                }
+                Spacer()
+                Label(
+                    googleDriveStatus?.connected == true ? "Connected" : (googleDriveStatus?.configured == true ? "Configured" : "Not configured"),
+                    systemImage: googleDriveStatus?.connected == true ? "checkmark.circle.fill" : "exclamationmark.circle"
+                )
+                .font(.caption.weight(.bold))
+                .foregroundStyle(googleDriveStatus?.connected == true ? NativePalette.emerald600 : NativePalette.amber700)
+            }
+
+            Toggle("Sync reports after successful scans", isOn: $googleDriveEnabled)
+                .toggleStyle(OliveToggleStyle())
+                .onChange(of: googleDriveEnabled) { enabled in
+                    onSaveGoogleDriveSettings(enabled, googleDriveFolderID)
+                }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Destination folder ID (optional)").font(.caption.weight(.semibold))
+                TextField("Leave blank to use the integration's default folder", text: $googleDriveFolderID)
+                    .oliveField()
+                    .onSubmit { onSaveGoogleDriveSettings(googleDriveEnabled, googleDriveFolderID) }
+                Text("Use the value after `/folders/` in a Google Drive folder URL.")
+                    .font(.caption2)
+                    .foregroundStyle(NativePalette.olive600)
+            }
+
+            HStack {
+                if googleDriveStatus?.connected == true {
+                    Button("Disconnect", action: onDisconnectGoogleDrive)
+                        .buttonStyle(OliveButtonStyle(fill: NativePalette.red50, hoverFill: NativePalette.olive100, text: NativePalette.red600))
+                } else {
+                    Button("Connect Google Drive", action: onConnectGoogleDrive)
+                        .buttonStyle(OliveButtonStyle(fill: NativePalette.olive600, hoverFill: NativePalette.olive700, text: .white))
+                        .disabled(googleDriveStatus?.configured != true)
+                }
+                Button("Refresh Status") { refreshGoogleDriveState() }
+                Spacer()
+                Button(showingCredentialEditor ? "Hide OAuth Setup" : "OAuth Setup") {
+                    showingCredentialEditor.toggle()
+                }
+            }
+
+            if let status = googleDriveStatus {
+                Text(status.error ?? status.status)
+                    .font(.caption)
+                    .foregroundStyle(status.success ? NativePalette.olive600 : NativePalette.red600)
+            }
+
+            if showingCredentialEditor {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Google OAuth client JSON").font(.caption.weight(.semibold))
+                    Text("Paste the downloaded Desktop OAuth client JSON. It is stored owner-readable in the app data directory and is never written to the repository.")
+                        .font(.caption2)
+                        .foregroundStyle(NativePalette.olive600)
+                    TextEditor(text: $googleDriveCredentialsJSON)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(minHeight: 110)
+                        .padding(6)
+                        .background(NativePalette.white)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(NativePalette.olive300))
+                    Button("Save OAuth Credentials") {
+                        onSaveGoogleDriveCredentials(googleDriveCredentialsJSON)
+                        googleDriveCredentialsJSON = ""
+                        refreshGoogleDriveState()
+                    }
+                    .disabled(googleDriveCredentialsJSON.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func refreshGoogleDriveState() {
+        googleDriveEnabled = sessionState.runtimeGoogleDriveSnapshot.enabled
+        googleDriveFolderID = sessionState.runtimeGoogleDriveSnapshot.folderId
+        googleDriveStatus = GoogleDriveService.status(dataDirectory: RuntimeSettingsStore.currentDataDirectoryURL())
     }
 }
 

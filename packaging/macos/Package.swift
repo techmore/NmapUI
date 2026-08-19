@@ -42,6 +42,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "NmapPrivilegedHelper",
+            dependencies: ["RuntimeContracts"],
             path: "Sources/NmapPrivilegedHelper"
         ),
         .executableTarget(
@@ -55,7 +56,7 @@ let package = Package(
         ),
         .testTarget(
             name: "NmapUIAppTests",
-            dependencies: ["NmapUIApp"],
+            dependencies: ["NmapUIApp", "RuntimeContracts"],
             path: "Tests/NmapUIAppTests"
         )
     ]

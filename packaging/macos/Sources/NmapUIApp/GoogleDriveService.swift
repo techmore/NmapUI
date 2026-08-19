@@ -16,6 +16,7 @@ enum GoogleDriveService {
         let status: String
         let error: String?
         let uploaded: [[String: String]]
+        let folderId: String?
     }
 
     struct CommandResult: Sendable {
@@ -87,11 +88,10 @@ enum GoogleDriveService {
         do {
             let output = try runHelper(
                 helper: helper,
-                arguments: ["save-credentials", "--root", dataDirectory.path, "--credentials-json", normalized]
+                arguments: ["save-credentials", "--root", dataDirectory.path],
+                stdin: normalized.data(using: .utf8)
             )
             let json = parseJSON(output)
-            // Keep a convenience copy for the app as well.
-            RuntimeMetadataStore.persistGoogleDriveCredentials(normalized, to: dataDirectory)
             return CommandResult(
                 success: (json["success"] as? Bool) ?? false,
                 status: json["status"] as? String,
@@ -209,12 +209,13 @@ enum GoogleDriveService {
                 success: false,
                 status: "Google Drive helper unavailable",
                 error: "GoogleDriveHelper binary not found",
-                uploaded: []
+                uploaded: [],
+                folderId: nil
             )
         }
         let existing = files.filter { FileManager.default.fileExists(atPath: $0.path) }
         guard !existing.isEmpty else {
-            return UploadResult(success: false, status: "No report files to upload", error: "missing files", uploaded: [])
+            return UploadResult(success: false, status: "No report files to upload", error: "missing files", uploaded: [], folderId: nil)
         }
 
         var arguments = ["upload", "--root", dataDirectory.path]
@@ -235,38 +236,35 @@ enum GoogleDriveService {
                 success: (json["success"] as? Bool) ?? false,
                 status: (json["status"] as? String) ?? "Upload finished",
                 error: json["error"] as? String,
-                uploaded: uploaded
+                uploaded: uploaded,
+                folderId: json["folderId"] as? String
             )
         } catch {
             return UploadResult(
                 success: false,
                 status: "Google Drive upload failed",
                 error: error.localizedDescription,
-                uploaded: []
+                uploaded: [],
+                folderId: nil
             )
         }
     }
 
-    private static func runHelper(helper: URL, arguments: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = helper
-        process.arguments = arguments
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-        try process.run()
-        process.waitUntilExit()
-        let out = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        if process.terminationStatus != 0, out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    private static func runHelper(helper: URL, arguments: [String], stdin: Data? = nil) throws -> String {
+        let result = try ExternalProcessRunner.run(
+            executable: helper,
+            arguments: arguments,
+            timeout: 5 * 60,
+            input: stdin
+        )
+        if result.exitCode != 0, result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw NSError(
                 domain: "NmapUI.GoogleDrive",
-                code: Int(process.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: err.isEmpty ? "GoogleDriveHelper failed" : err]
+                code: Int(result.exitCode),
+                userInfo: [NSLocalizedDescriptionKey: result.stderr.isEmpty ? "GoogleDriveHelper failed" : result.stderr]
             )
         }
-        return out
+        return result.stdout
     }
 
     private static func parseJSON(_ text: String) -> [String: Any] {

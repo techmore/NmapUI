@@ -9,12 +9,35 @@ extension RuntimeNmapXMLSummary {
         }
     }
     var criticalCVECount: Int {
-        hosts.reduce(0) { total, host in
-            total + host.highCVEs.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.count
-        }
+        // Preserve the existing dashboard metric semantics: it represents
+        // high-impact findings (CVSS 7.0+), while each finding retains its
+        // precise critical/high severity in the structured model.
+        hosts.reduce(0) { $0 + $1.vulnerabilities.filter { $0.score >= 7.0 }.count }
     }
     var lowCVECount: Int {
         hosts.reduce(0) { $0 + $1.lowCVECount }
+    }
+
+    func comparison(to previous: RuntimeNmapXMLSummary) -> RuntimeScanComparison {
+        let currentByIP = hosts.reduce(into: [String: RuntimeNmapXMLHostSummary]()) { $0[$1.ip] = $1 }
+        let previousByIP = previous.hosts.reduce(into: [String: RuntimeNmapXMLHostSummary]()) { $0[$1.ip] = $1 }
+        let currentPorts = Set(hosts.flatMap { $0.ports.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } })
+        let previousPorts = Set(previous.hosts.flatMap { $0.ports.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } })
+        let currentVulnerabilities = Set(hosts.flatMap { host in host.vulnerabilities.map { $0.id + "@" + ($0.port ?? "host") } })
+        let previousVulnerabilities = Set(previous.hosts.flatMap { host in host.vulnerabilities.map { $0.id + "@" + ($0.port ?? "host") } })
+        let changed = currentByIP.compactMap { ip, host -> String? in
+            guard let old = previousByIP[ip] else { return nil }
+            return host.ports != old.ports || host.version != old.version || host.os != old.os || host.vulnerabilities != old.vulnerabilities ? ip : nil
+        }.sorted()
+        return RuntimeScanComparison(
+            newHosts: currentByIP.keys.filter { previousByIP[$0] == nil }.sorted(),
+            removedHosts: previousByIP.keys.filter { currentByIP[$0] == nil }.sorted(),
+            changedHosts: changed,
+            newPorts: currentPorts.subtracting(previousPorts).sorted(),
+            removedPorts: previousPorts.subtracting(currentPorts).sorted(),
+            newVulnerabilities: currentVulnerabilities.subtracting(previousVulnerabilities).sorted(),
+            resolvedVulnerabilities: previousVulnerabilities.subtracting(currentVulnerabilities).sorted()
+        )
     }
 }
 
@@ -59,6 +82,8 @@ enum RuntimeNmapXMLParser {
                 currentHost?.updateService(attributes: attributeDict)
             } else if elementName == "script", attributeDict["id"] == "vulners" {
                 currentHost?.startVulners()
+            } else if elementName == "table" {
+                currentHost?.startVulnersTable()
             } else if elementName == "elem" {
                 currentHost?.captureVulnersElement(attributes: attributeDict)
             }
@@ -89,13 +114,17 @@ private final class HostBuilder {
     private var versions: [String] = []
     private var highCVEs = Set<String>()
     private var lowCVEs = Set<String>()
+    private var vulnerabilities: [RuntimeVulnerabilityFinding] = []
     private var currentPortId = ""
     private var currentPortOpen = false
     private var currentService: [String: String] = [:]
     private var inVulnersScript = false
+    private var inVulnersTable = false
     private var currentElemKey = ""
     private var pendingCVSS = ""
     private var pendingCVEId = ""
+    private var pendingType = ""
+    private var pendingExploit = false
 
     func captureAddress(attributes: [String: String]) {
         switch attributes["addrtype"] {
@@ -137,37 +166,61 @@ private final class HostBuilder {
         inVulnersScript = true
     }
 
-    func captureVulnersElement(attributes: [String: String]) {
+    func startVulnersTable() {
         guard inVulnersScript else { return }
+        inVulnersTable = true
+        pendingCVSS = ""
+        pendingCVEId = ""
+        pendingType = ""
+        pendingExploit = false
+    }
+
+    func captureVulnersElement(attributes: [String: String]) {
+        guard inVulnersScript, inVulnersTable else { return }
         currentElemKey = attributes["name"] ?? attributes["key"] ?? ""
     }
 
     func appendCharacters(_ string: String) {
-        guard inVulnersScript else { return }
+        guard inVulnersScript, inVulnersTable else { return }
         if currentElemKey == "cvss" {
             pendingCVSS += string
         } else if currentElemKey == "id" {
             pendingCVEId += string
+        } else if currentElemKey == "type" {
+            pendingType += string
+        } else if currentElemKey == "is_exploit" {
+            pendingExploit = pendingExploit || string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true"
         }
     }
 
     func endElement(_ elementName: String) {
-        if elementName == "elem" {
+        if elementName == "table", inVulnersTable {
             let normalizedId = pendingCVEId.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             let normalizedScore = pendingCVSS.trimmingCharacters(in: .whitespacesAndNewlines)
             if !normalizedId.isEmpty, !normalizedScore.isEmpty, let score = Double(normalizedScore), normalizedId.hasPrefix("CVE-") {
+                let severity = score >= 9.0 ? "critical" : (score >= 7.0 ? "high" : (score >= 4.0 ? "medium" : "low"))
+                let sourceType = pendingType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "cve" : pendingType.trimmingCharacters(in: .whitespacesAndNewlines)
+                vulnerabilities.append(RuntimeVulnerabilityFinding(id: normalizedId, score: score, severity: severity, port: currentPortId.isEmpty ? nil : currentPortId, service: currentService["name"], url: "https://vulners.com/\(sourceType)/\(normalizedId)", exploit: pendingExploit))
                 if score >= 7.0 {
                     highCVEs.insert("\(normalizedId)(\(score))")
                 } else {
                     lowCVEs.insert(normalizedId)
                 }
             }
-            currentElemKey = ""
-        } else if elementName == "script" {
-            inVulnersScript = false
+            inVulnersTable = false
             currentElemKey = ""
             pendingCVSS = ""
             pendingCVEId = ""
+            pendingType = ""
+            pendingExploit = false
+        } else if elementName == "script" {
+            inVulnersScript = false
+            inVulnersTable = false
+            currentElemKey = ""
+            pendingCVSS = ""
+            pendingCVEId = ""
+            pendingType = ""
+            pendingExploit = false
         }
     }
 
@@ -182,7 +235,8 @@ private final class HostBuilder {
             ports: openPorts.joined(separator: ", "),
             version: versions.joined(separator: " | "),
             highCVEs: Array(highCVEs).joined(separator: ", "),
-            lowCVECount: lowCVEs.count
+            lowCVECount: lowCVEs.count,
+            vulnerabilities: vulnerabilities.sorted { $0.id == $1.id ? $0.score > $1.score : $0.id < $1.id }
         )
     }
 }

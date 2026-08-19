@@ -63,25 +63,27 @@ final class ScanCoordinator: @unchecked Sendable {
 
     private let workDirectory: URL
     private let nmapPath: String
+    let scanID: UUID
     private let stateQueue = DispatchQueue(label: "com.techmore.nmapui.scan-coordinator")
     private var cancelRequested = false
-    private var activeLocalProcess: Process?
 
     init(
         workDirectory: URL = RuntimeSettingsStore.currentRuntimeWorkDirectoryURL(),
-        nmapPath: String = RuntimeToolchain.current().nmapPath ?? "nmap"
+        nmapPath: String = RuntimeToolchain.current().nmapPath ?? "nmap",
+        scanID: UUID = UUID()
     ) {
         self.workDirectory = workDirectory
         self.nmapPath = nmapPath
+        self.scanID = scanID
     }
 
+    var workDirectoryURL: URL { workDirectory }
+
     func cancel() {
-        let process: Process? = stateQueue.sync {
+        stateQueue.sync {
             cancelRequested = true
-            return activeLocalProcess
         }
-        process?.terminate()
-        PrivilegeHelperClient.cancelActiveScan()
+        PrivilegeHelperClient.cancelActiveScan(scanID: scanID)
         RuntimeDiagnosticsLogger.log("Scan cancel requested")
     }
 
@@ -92,13 +94,25 @@ final class ScanCoordinator: @unchecked Sendable {
     }
 
     func runPhase1(_ request: ScanRequest) async -> ScanResult {
-        // Host discovery: prefer unprivileged; still works elevated if needed.
-        await run(
-            nmapArguments: ["-sn", "-T4", "--host-timeout", "12s", "--max-retries", "1", "-oX", Artifact.phase1XML] + normalizeTargets(request.target),
+        guard let target = try? ScanTargetValidator.validate(request.target) else {
+            return invalidTargetResult(request.target)
+        }
+        let privilegedARP = request.scanKind.requiresPrivilegedNmap
+        return await run(
+            nmapArguments: Self.phase1Arguments(target: target, privilegedARP: privilegedARP),
             phase: .phase1,
-            preferPrivileged: false,
+            preferPrivileged: privilegedARP,
+            useInstalledHelper: privilegedARP,
             allowInteractivePrivilegePrompt: request.allowInteractivePrivilegePrompt
         )
+    }
+
+    static func phase1Arguments(target: String, privilegedARP: Bool) -> [String] {
+        var arguments = ["-sn"]
+        if privilegedARP { arguments.append("-PR") }
+        arguments.append(contentsOf: ["-T4", "--host-timeout", "12s", "--max-retries", "1", "-oX", Artifact.phase1XML])
+        arguments.append(contentsOf: target.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map(String.init))
+        return arguments
     }
 
     func runPhase2(
@@ -118,7 +132,7 @@ final class ScanCoordinator: @unchecked Sendable {
     /// Quick scans use TCP connect rather than SYN scanning so they do not need elevation.
     func runQuickPortScan(_ request: ScanRequest) async -> ScanResult {
         await run(
-            nmapArguments: Self.quickPortScanArguments(vpnHelper: request.vpnHelper),
+            nmapArguments: Self.quickPortScanArguments(vpnHelper: request.vpnHelper, target: nil),
             phase: .phase2,
             preferPrivileged: false,
             useInstalledHelper: false,
@@ -127,7 +141,7 @@ final class ScanCoordinator: @unchecked Sendable {
     }
 
     func runDragnet(allowInteractivePrivilegePrompt: Bool) async -> ScanResult {
-        let args = ["-sV", "-p-", "--script", "vulners", "--script-args", "mincvss=0,threads=10", "-oX", Artifact.phase2XML, "-iL", Artifact.targets]
+        let args = ["-sV", "-p-", "--script", RuntimeVulners.scriptPath(), "--script-args", "mincvss=0,threads=10", "-oX", Artifact.phase2XML, "-iL", Artifact.targets]
         return await run(
             nmapArguments: args,
             phase: .phase3,
@@ -143,6 +157,21 @@ final class ScanCoordinator: @unchecked Sendable {
         onHostProgress: @MainActor @Sendable @escaping ([RuntimeNmapXMLHostSummary]) -> Void = { _ in }
     ) async -> ScanResult {
         resetCancelFlag()
+        do {
+            _ = try ScanTargetValidator.validate(request.target)
+        } catch {
+            return invalidTargetResult(request.target, error: error.localizedDescription)
+        }
+        if request.scanKind.requiresPrivilegedNmap, RuntimeVulners.resolvedScriptURL == nil {
+            return ScanResult(
+                phase: .phase1,
+                duration: "0.00",
+                xmlPath: nil,
+                summary: nil,
+                completed: false,
+                error: "The bundled Vulners script is missing; install or repair the NmapUI bundle before running a complete scan."
+            )
+        }
         RuntimeDiagnosticsLogger.log(
             "Running full scan target=\(request.target) kind=\(request.scanKind) interactivePrivilege=\(request.allowInteractivePrivilegePrompt) euid=\(geteuid())"
         )
@@ -177,7 +206,14 @@ final class ScanCoordinator: @unchecked Sendable {
         }
 
         await onPhaseStarted(.phase1, "Phase 1 of 2: discovering live hosts and collecting network identity")
-        let phase1 = await runPhase1(request)
+        let phase1Raw = await runPhase1(request)
+        let phase1: ScanResult
+        if let summary = phase1Raw.summary {
+            let enriched = await ARPDiscovery.enrich(summary, target: request.target)
+            phase1 = ScanResult(phase: phase1Raw.phase, duration: phase1Raw.duration, xmlPath: phase1Raw.xmlPath, summary: enriched, completed: phase1Raw.completed, error: phase1Raw.error)
+        } else {
+            phase1 = phase1Raw
+        }
         await onPhaseCompleted(phase1)
         if isCancelled {
             return cancelledResult(phase: .phase1, duration: phase1.duration)
@@ -264,6 +300,7 @@ final class ScanCoordinator: @unchecked Sendable {
                     nmapPath: resolvedNmap,
                     arguments: nmapArguments,
                     workDirectory: workDirectory,
+                    scanID: scanID,
                     allowInteractiveFallback: allowInteractivePrivilegePrompt
                 )
                 return makeResult(phase: phase, startedAt: startedAt, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr)
@@ -293,40 +330,39 @@ final class ScanCoordinator: @unchecked Sendable {
         startedAt: Date,
         resolvedNmap: String
     ) async -> ScanResult {
-        let process = Process()
-        process.currentDirectoryURL = workDirectory
+        let executable: URL
+        let arguments: [String]
         if resolvedNmap.contains("/") {
-            process.executableURL = URL(fileURLWithPath: resolvedNmap)
-            process.arguments = nmapArguments
+            executable = URL(fileURLWithPath: resolvedNmap)
+            arguments = nmapArguments
         } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = [resolvedNmap] + nmapArguments
+            executable = URL(fileURLWithPath: "/usr/bin/env")
+            arguments = [resolvedNmap] + nmapArguments
         }
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        stateQueue.sync { activeLocalProcess = process }
-        defer { stateQueue.sync { activeLocalProcess = nil } }
-
         do {
-            try process.run()
+            // Drain both pipes concurrently. Waiting on Process directly can
+            // deadlock when an unprivileged scan produces enough diagnostics
+            // to fill either pipe's kernel buffer.
+            let result = try await Task.detached(priority: .userInitiated) {
+                try ExternalProcessRunner.run(
+                    executable: executable,
+                    arguments: arguments,
+                    currentDirectory: self.workDirectory,
+                    timeout: NmapPrivilegedHelperContract.maximumScanRuntime,
+                    isCancelled: { self.isCancelled }
+                )
+            }.value
+            return makeResult(
+                phase: phase,
+                startedAt: startedAt,
+                exitCode: result.exitCode,
+                stdout: result.stdout,
+                stderr: result.stderr
+            )
         } catch {
             RuntimeDiagnosticsLogger.error("Nmap launch failed phase=\(phase.rawValue) error=\(error.localizedDescription)")
             return ScanResult(phase: phase, duration: "0.00", xmlPath: nil, summary: nil, completed: false, error: error.localizedDescription)
         }
-
-        // Wait off the cooperative thread pool so cancellation can still interrupt.
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                process.waitUntilExit()
-                continuation.resume()
-            }
-        }
-        let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        return makeResult(phase: phase, startedAt: startedAt, exitCode: process.terminationStatus, stdout: stdout, stderr: stderr)
     }
 
     private func makeResult(phase: Phase, startedAt: Date, exitCode: Int32, stdout: String, stderr: String) -> ScanResult {
@@ -343,13 +379,15 @@ final class ScanCoordinator: @unchecked Sendable {
         }
         let xmlPath = workDirectory.appendingPathComponent(xmlFileName(for: phase))
         let summary = RuntimeNmapXMLParser.parse(contentsOf: xmlPath)
+        let artifactIsValid = FileManager.default.fileExists(atPath: xmlPath.path) && summary != nil
+        let completed = exitCode == 0 && artifactIsValid
         return ScanResult(
             phase: phase,
             duration: duration,
             xmlPath: FileManager.default.fileExists(atPath: xmlPath.path) ? xmlPath : nil,
             summary: summary,
-            completed: exitCode == 0,
-            error: exitCode == 0 ? nil : "Nmap exited with status \(exitCode)"
+            completed: completed,
+            error: completed ? nil : (exitCode == 0 ? "Nmap completed without a valid XML result" : "Nmap exited with status \(exitCode)")
         )
     }
 
@@ -367,8 +405,8 @@ final class ScanCoordinator: @unchecked Sendable {
             .filter { !$0.isEmpty }
     }
 
-    static func completeScanArguments(usePn: Bool, vpnHelper: Bool) -> [String] {
-        var args = ["-sS", "-sV", "-O"]
+    static func completeScanArguments(usePn: Bool, vpnHelper: Bool, target: String? = nil) -> [String] {
+        var args = ["-sS", "-sV", "-O", "-sC"]
         if usePn { args.append("-Pn") }
         args.append(vpnHelper ? "-T2" : "-T3")
         args.append(contentsOf: [
@@ -379,18 +417,22 @@ final class ScanCoordinator: @unchecked Sendable {
             "--max-rtt-timeout", "1000ms",
             "--min-hostgroup", "8",
             "--max-hostgroup", "16",
-            "--script", "vulners",
+            "--script", RuntimeVulners.scriptPath(),
             "--script-args", vpnHelper ? "mincvss=0,threads=5" : "mincvss=0,threads=10",
             "--stylesheet", "nmap-modern.xsl",
             "-oX", Artifact.phase2XML,
-            "-oG", Artifact.phase2Progress,
-            "-iL", Artifact.targets
+            "-oG", Artifact.phase2Progress
         ])
+        if let target, !target.isEmpty {
+            args.append(contentsOf: target.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map(String.init))
+        } else {
+            args.append(contentsOf: ["-iL", Artifact.targets])
+        }
         return args
     }
 
-    static func quickPortScanArguments(vpnHelper: Bool) -> [String] {
-        [
+    static func quickPortScanArguments(vpnHelper: Bool, target: String? = nil) -> [String] {
+        var args = [
             "-sT",
             "-sV",
             "--version-light",
@@ -399,9 +441,25 @@ final class ScanCoordinator: @unchecked Sendable {
             "--max-retries", "1",
             vpnHelper ? "-T2" : "-T4",
             "--open",
-            "-oX", Artifact.phase2XML,
-            "-iL", Artifact.targets
+            "-oX", Artifact.phase2XML
         ]
+        if let target, !target.isEmpty {
+            args.append(contentsOf: target.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map(String.init))
+        } else {
+            args.append(contentsOf: ["-iL", Artifact.targets])
+        }
+        return args
+    }
+
+    private func invalidTargetResult(_ target: String, error: String? = nil) -> ScanResult {
+        ScanResult(
+            phase: .phase1,
+            duration: "0.00",
+            xmlPath: nil,
+            summary: nil,
+            completed: false,
+            error: error ?? "Invalid scan target: \(target)"
+        )
     }
 
     private func xmlFileName(for phase: Phase) -> String {

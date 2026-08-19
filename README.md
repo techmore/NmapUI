@@ -11,23 +11,21 @@ cd TM-NmapUI
 cd packaging/macos && ./run.sh
 ```
 
-The app will open its local UI automatically. If you need to access it directly, use the loopback URL shown by the launcher, usually `http://127.0.0.1:9000`.
-
-The Swift-native launcher handles the app startup path directly.
+The command launches the Swift-native macOS interface directly. There is no local dashboard HTTP server or loopback URL.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Runtime | Swift menu bar app |
-| Desktop Shell | Swift menu bar app |
-| Web Framework | Legacy Node host only |
+| Runtime | SwiftUI macOS app |
+| Desktop UI | Native SwiftUI views |
+| HTML | Generated scan reports only |
 | Real-time | Native Swift transport |
 | Scanner | Nmap + NSE (Nmap Scripting Engine) |
 | PDF Generation | wkhtmltopdf / Chromium |
-| XML Processing | xml2js |
-| Scheduling | node-cron |
-| HTTP Client | axios |
+| XML Processing | Native Swift parsers |
+| Scheduling | macOS LaunchAgent + Swift runner |
+| HTTP Client | URLSession |
 | Cloud Sync | Google Drive helper |
 
 ## Requirements
@@ -48,13 +46,14 @@ All dependencies are installed automatically by `install.sh`.
    cd NmapUI
    ```
 
-2. Build and launch the menu bar app:
+2. Build and launch the native app:
    ```bash
-   open NmapUIMenuBar.app
+   cd packaging/macos
+   ./bundle.sh
+   open build/NmapUI.app
    ```
 
-   After launch, look for the network icon in your macOS menu bar. The app serves NmapUI on a local loopback URL, defaulting to `http://127.0.0.1:9000` and falling back to the next available local port if needed.
-   The menu bar app now exposes a `Launch at Login` toggle and an `Uninstall NmapUI` menu action. Uninstall removes the login item registration first and then moves the app bundle to the Trash.
+   NmapUI opens as a normal SwiftUI window. Privileged Nmap capabilities use the separately installed scanner helper; the GUI itself remains unprivileged.
 
    > **Prerequisites**: Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh) are needed by `install.sh` to pull in `nmap`, `arp-scan`, etc.
 

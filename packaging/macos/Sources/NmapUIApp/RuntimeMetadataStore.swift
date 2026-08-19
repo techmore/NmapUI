@@ -1,5 +1,18 @@
 import Foundation
+import Darwin
 import RuntimeContracts
+
+enum RuntimeMetadataStoreError: LocalizedError {
+    case lockUnavailable(String)
+    case corruptConfiguration
+
+    var errorDescription: String? {
+        switch self {
+        case .lockUnavailable(let path): return "Could not lock metadata file at \(path)"
+        case .corruptConfiguration: return "Configuration is corrupt and no valid backup is available"
+        }
+    }
+}
 
 struct RuntimeMetadataStore {
     static func persistIdentity(_ identity: RuntimeIdentity, to directoryURL: URL) {
@@ -94,13 +107,45 @@ struct RuntimeMetadataStore {
         return prefix
     }
 
-    static func persistConfigSection(_ key: String, values: [String: RuntimeJSONValue], to directoryURL: URL) {
-        let configURL = directoryURL.appendingPathComponent("config.json")
-        let existing = (try? Data(contentsOf: configURL)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        var config = existing
-        config[key] = values.mapValues { $0.toAnyJSONValue() }
-        if let data = try? JSONSerialization.data(withJSONObject: config, options: [.sortedKeys, .prettyPrinted]) {
-            try? data.write(to: configURL, options: [.atomic])
+    @discardableResult
+    static func persistConfigSection(_ key: String, values: [String: RuntimeJSONValue], to directoryURL: URL) -> Result<Void, Error> {
+        do {
+            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            let lockURL = directoryURL.appendingPathComponent("config.lock")
+            let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+            guard descriptor >= 0 else { throw RuntimeMetadataStoreError.lockUnavailable(lockURL.path) }
+            defer { flock(descriptor, LOCK_UN); close(descriptor) }
+            guard flock(descriptor, LOCK_EX) == 0 else { throw RuntimeMetadataStoreError.lockUnavailable(lockURL.path) }
+
+            let configURL = directoryURL.appendingPathComponent("config.json")
+            let backupURL = configURL.appendingPathExtension("backup")
+            var config: [String: Any]
+            var recoveredFromBackup = false
+            if let data = try? Data(contentsOf: configURL),
+               let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                config = decoded
+            } else if let data = try? Data(contentsOf: backupURL),
+                      let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                config = decoded
+                RuntimeDiagnosticsLogger.error("Configuration file is corrupt; recovered the previous snapshot")
+                recoveredFromBackup = true
+            } else if FileManager.default.fileExists(atPath: configURL.path) {
+                throw RuntimeMetadataStoreError.corruptConfiguration
+            } else {
+                config = [:]
+            }
+
+            config[key] = values.mapValues { $0.toAnyJSONValue() }
+            let data = try JSONSerialization.data(withJSONObject: config, options: [.sortedKeys, .prettyPrinted])
+            if FileManager.default.fileExists(atPath: configURL.path), !recoveredFromBackup {
+                try? FileManager.default.removeItem(at: backupURL)
+                try FileManager.default.copyItem(at: configURL, to: backupURL)
+            }
+            try data.write(to: configURL, options: [.atomic])
+            return .success(())
+        } catch {
+            RuntimeDiagnosticsLogger.error("Failed to persist configuration section \(key): \(error.localizedDescription)")
+            return .failure(error)
         }
     }
 
@@ -108,7 +153,9 @@ struct RuntimeMetadataStore {
         let fileURL = directoryURL.appendingPathComponent("runtime-google-drive-credentials.json")
         do {
             try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            try credentialsJson.data(using: .utf8)?.write(to: fileURL, options: [.atomic])
+            guard let data = credentialsJson.data(using: .utf8) else { return }
+            try data.write(to: fileURL, options: [.atomic])
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {
             NSLog("Failed to persist runtime Google Drive credentials: \(error.localizedDescription)")
         }
@@ -136,29 +183,83 @@ struct RuntimeMetadataStore {
         return try? JSONDecoder().decode(RuntimeReportMetadata.self, from: data)
     }
 
-    static func persistHistory(_ history: [RuntimeReportHistoryEntry], to directoryURL: URL) {
+    @discardableResult
+    static func persistHistory(_ history: [RuntimeReportHistoryEntry], to directoryURL: URL) -> Result<Void, Error> {
         let fileManager = FileManager.default
         let metadataURL = directoryURL.appendingPathComponent("history.json")
+        let lockURL = directoryURL.appendingPathComponent("history.lock")
+        try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else {
+            NSLog("Failed to lock runtime history metadata")
+            return .failure(CocoaError(.fileWriteUnknown, userInfo: [NSLocalizedDescriptionKey: "Could not open the history lock file."]))
+        }
+        defer { flock(descriptor, LOCK_UN); close(descriptor) }
+        guard flock(descriptor, LOCK_EX) == 0 else {
+            return .failure(CocoaError(.fileLocking, userInfo: [NSLocalizedDescriptionKey: "Could not lock the history file."]))
+        }
         do {
-            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            try JSONEncoder().encode(history).write(to: metadataURL, options: [.atomic])
+            let existing = loadHistoryUnlocked(from: metadataURL)
+            let incomingKeys = Set(history.map(historyKey))
+            let merged = (history + existing.filter { !incomingKeys.contains(historyKey($0)) })
+                .sorted { $0.timestamp > $1.timestamp }
+            let backupURL = metadataURL.appendingPathExtension("backup")
+            if fileManager.fileExists(atPath: metadataURL.path) {
+                if fileManager.fileExists(atPath: backupURL.path) { try fileManager.removeItem(at: backupURL) }
+                try fileManager.copyItem(at: metadataURL, to: backupURL)
+            }
+            try JSONEncoder().encode(Array(merged.prefix(200))).write(to: metadataURL, options: [.atomic])
+            return .success(())
         } catch {
             NSLog("Failed to persist runtime history metadata: \(error.localizedDescription)")
+            return .failure(error)
         }
     }
 
     static func loadHistory(from directoryURL: URL) -> [RuntimeReportHistoryEntry] {
         let metadataURL = directoryURL.appendingPathComponent("history.json")
-        guard let data = try? Data(contentsOf: metadataURL) else { return [] }
-        return (try? JSONDecoder().decode([RuntimeReportHistoryEntry].self, from: data)) ?? []
+        return loadHistoryUnlocked(from: metadataURL)
+    }
+
+    private static func loadHistoryUnlocked(from metadataURL: URL) -> [RuntimeReportHistoryEntry] {
+        let backupURL = metadataURL.appendingPathExtension("backup")
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: metadataURL.path) || fileManager.fileExists(atPath: backupURL.path) else {
+            return []
+        }
+        if FileManager.default.fileExists(atPath: metadataURL.path),
+           let data = try? Data(contentsOf: metadataURL),
+           let history = try? JSONDecoder().decode([RuntimeReportHistoryEntry].self, from: data) {
+            return history
+        }
+        if let data = try? Data(contentsOf: backupURL), let history = try? JSONDecoder().decode([RuntimeReportHistoryEntry].self, from: data) {
+            RuntimeDiagnosticsLogger.error("History file is corrupt; recovered the previous snapshot")
+            return history
+        }
+        RuntimeDiagnosticsLogger.error("History file is corrupt and no valid backup exists")
+        return []
+    }
+
+    private static func historyKey(_ entry: RuntimeReportHistoryEntry) -> String {
+        if let reportUrl = entry.reportUrl, !reportUrl.isEmpty {
+            return "report:\(reportUrl)"
+        }
+        return [
+            entry.timestamp,
+            entry.target,
+            entry.scanKind,
+            entry.customerProfile?.customerID ?? ""
+        ].joined(separator: "\u{1f}")
     }
 
     static func loadReportsSnapshot(reportsDirectory: URL, historyPath: URL) -> RuntimeReportsSnapshot {
         let history = loadHistory(from: historyPath.deletingLastPathComponent())
-        let historyByReportUrl: [String: RuntimeReportHistoryEntry] = Dictionary(uniqueKeysWithValues: history.compactMap { entry in
-            guard let reportUrl = entry.reportUrl else { return nil }
-            return (reportUrl, entry)
-        })
+        // History can contain retry/migration duplicates; keep the newest entry instead of trapping.
+        let historyByReportUrl = history.reduce(into: [String: RuntimeReportHistoryEntry]()) { result, entry in
+            guard let reportUrl = entry.reportUrl else { return }
+            if let existing = result[reportUrl], existing.timestamp >= entry.timestamp { return }
+            result[reportUrl] = entry
+        }
         var reports: [RuntimeReportListEntry] = []
         guard FileManager.default.fileExists(atPath: reportsDirectory.path) else {
             return RuntimeReportsSnapshot.make(reports: [])
@@ -179,6 +280,9 @@ struct RuntimeMetadataStore {
             let pdfURL = reportDirectory.appendingPathComponent(pdfName)
             let xmlURL = reportDirectory.appendingPathComponent(xmlName)
             let historyEntry = historyByReportUrl[url]
+            let driveMetadata = loadReportMetadata(from: fileURL)
+            let driveHTMLURL = driveMetadata?.links.first(where: { $0.name == name })?.webViewLink
+            let drivePDFURL = driveMetadata?.links.first(where: { $0.name == pdfName })?.webViewLink
             let fileDate = (try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)?.ISO8601Format()
             let date = historyEntry?.timestamp ?? fileDate ?? Date().ISO8601Format()
             reports.append(RuntimeReportListEntry(
@@ -189,8 +293,8 @@ struct RuntimeMetadataStore {
                 pdfUrl: FileManager.default.fileExists(atPath: pdfURL.path) ? "/reports/\(folder)/\(pdfName)" : nil,
                 xmlName: FileManager.default.fileExists(atPath: xmlURL.path) ? xmlName : nil,
                 xmlUrl: FileManager.default.fileExists(atPath: xmlURL.path) ? "/reports/\(folder)/\(xmlName)" : nil,
-                driveHtmlUrl: nil,
-                drivePdfUrl: nil,
+                driveHtmlUrl: driveHTMLURL,
+                drivePdfUrl: drivePDFURL,
                 date: date,
                 duration: historyEntry?.duration,
                 hostCount: historyEntry?.hostCount,

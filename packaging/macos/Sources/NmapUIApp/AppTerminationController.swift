@@ -4,14 +4,7 @@ import ServiceManagement
 
 @MainActor
 final class AppTerminationController {
-    private let runtimeLifecycleController: RuntimeLifecycleController
-
-    init(runtimeLifecycleController: RuntimeLifecycleController) {
-        self.runtimeLifecycleController = runtimeLifecycleController
-    }
-
     func uninstallApp() {
-        runtimeLifecycleController.stopForQuitOrUninstall()
         if #available(macOS 13.0, *) {
             try? SMAppService.mainApp.unregister()
         }
@@ -27,7 +20,6 @@ final class AppTerminationController {
     }
 
     func quitApp() {
-        runtimeLifecycleController.stopForQuitOrUninstall()
         NSApp.terminate(nil)
     }
 }

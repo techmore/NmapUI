@@ -9,13 +9,9 @@ final class AppCommandController {
         NSApp.windows.first?.orderFrontRegardless()
     }
 
-    func openBrowser() {
-        openApp()
-    }
-
     func showAbout() {
         NSApplication.shared.orderFrontStandardAboutPanel(options: [
-            .credits: NSAttributedString(string: "Menu bar shell for the NmapUI runtime")
+            .credits: NSAttributedString(string: "Native SwiftUI network scanner")
         ])
         NSApplication.shared.activate(ignoringOtherApps: true)
     }

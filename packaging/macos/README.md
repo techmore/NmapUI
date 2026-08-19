@@ -1,10 +1,10 @@
 # macOS Native Shell
 
-This directory packages the macOS menu bar shell that launches the local NmapUI runtime.
+This directory contains the Swift-native macOS application and its helper executables.
 
 ## Goal
 
-Launch a normal (non-root) SwiftUI macOS app that hosts the perfected HTML product UI, runs nmap with root privileges via a one-time-installed helper, and supports unattended scheduled scans.
+Launch a normal (non-root) SwiftUI macOS app, run privileged Nmap operations through a one-time-installed helper, and support unattended scheduled scans.
 
 ### Privilege model
 
@@ -16,9 +16,9 @@ Launch a normal (non-root) SwiftUI macOS app that hosts the perfected HTML produ
 
 ### UI model
 
-- The perfected HTML dashboard (`index.html` + `static/`) is the product UX.
-- Swift hosts it full-bleed in `WKWebView` with a native bridge (no competing native chrome).
-- Menu bar + Preferences remain native.
+- The dashboard, scan controls, history, reports, settings, and customer workflows are native SwiftUI.
+- Generated HTML and PDF reports remain available for detailed review and export.
+- Legacy HTML assets are retained only where report generation or migration compatibility still requires them.
 
 ### Scheduling
 

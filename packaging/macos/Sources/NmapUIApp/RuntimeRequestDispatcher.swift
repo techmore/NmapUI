@@ -64,11 +64,31 @@ final class RuntimeRequestDispatcher: RuntimeRequestDispatching {
             Task { @MainActor in
                 do {
                     try await PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
-                    AutoScanScheduler.sync(enabled: true, recurrence: recurrence, startTime: startTime)
+                    switch AutoScanScheduler.sync(enabled: true, recurrence: recurrence, startTime: startTime) {
+                    case .success:
+                        break
+                    case .failure(let error):
+                        sessionState.updateAutoScanConfig(
+                            enabled: false,
+                            recurrence: recurrence,
+                            startTime: startTime,
+                            target: target,
+                            dataDirectory: dataDirectory
+                        )
+                        sessionState.scanFeedback = "Auto-scan could not be enabled: \(error.localizedDescription)"
+                        sessionState.emitAutoScanConfig()
+                    }
                 } catch {
                     PrivilegeElevationController.presentHelperInstallFailure(error)
-                    // Keep config enabled in UI, but unattended runs need the helper.
-                    RuntimeDiagnosticsLogger.error("Auto-scan schedule deferred until helper is installed")
+                    sessionState.updateAutoScanConfig(
+                        enabled: false,
+                        recurrence: recurrence,
+                        startTime: startTime,
+                        target: target,
+                        dataDirectory: dataDirectory
+                    )
+                    sessionState.scanFeedback = "Auto-scan could not be enabled: \(error.localizedDescription)"
+                    sessionState.emitAutoScanConfig()
                 }
             }
             if let autoScan = sessionState.runtimeAutoScanConfigEnvelope() {

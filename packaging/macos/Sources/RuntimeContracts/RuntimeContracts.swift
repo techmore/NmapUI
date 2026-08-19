@@ -60,6 +60,30 @@ public struct RuntimeReportPayload: Codable, Equatable {
     }
 }
 
+public struct RuntimeScanComparison: Codable, Equatable, Sendable {
+    public let newHosts: [String]
+    public let removedHosts: [String]
+    public let changedHosts: [String]
+    public let newPorts: [String]
+    public let removedPorts: [String]
+    public let newVulnerabilities: [String]
+    public let resolvedVulnerabilities: [String]
+
+    public init(newHosts: [String] = [], removedHosts: [String] = [], changedHosts: [String] = [], newPorts: [String] = [], removedPorts: [String] = [], newVulnerabilities: [String] = [], resolvedVulnerabilities: [String] = []) {
+        self.newHosts = newHosts
+        self.removedHosts = removedHosts
+        self.changedHosts = changedHosts
+        self.newPorts = newPorts
+        self.removedPorts = removedPorts
+        self.newVulnerabilities = newVulnerabilities
+        self.resolvedVulnerabilities = resolvedVulnerabilities
+    }
+
+    public var hasChanges: Bool {
+        !newHosts.isEmpty || !removedHosts.isEmpty || !changedHosts.isEmpty || !newPorts.isEmpty || !removedPorts.isEmpty || !newVulnerabilities.isEmpty || !resolvedVulnerabilities.isEmpty
+    }
+}
+
 public struct RuntimeReportHistoryEntry: Codable, Equatable {
     public let timestamp: String
     public let target: String
@@ -72,6 +96,7 @@ public struct RuntimeReportHistoryEntry: Codable, Equatable {
     public let pdfUrl: String?
     public let xmlUrl: String?
     public let customerProfile: RuntimeCustomerProfile?
+    public let comparison: RuntimeScanComparison?
 
     public init(
         timestamp: String,
@@ -84,7 +109,8 @@ public struct RuntimeReportHistoryEntry: Codable, Equatable {
         reportUrl: String?,
         pdfUrl: String?,
         xmlUrl: String?,
-        customerProfile: RuntimeCustomerProfile?
+        customerProfile: RuntimeCustomerProfile?,
+        comparison: RuntimeScanComparison? = nil
     ) {
         self.timestamp = timestamp
         self.target = target
@@ -97,6 +123,7 @@ public struct RuntimeReportHistoryEntry: Codable, Equatable {
         self.pdfUrl = pdfUrl
         self.xmlUrl = xmlUrl
         self.customerProfile = customerProfile
+        self.comparison = comparison
     }
 
     public init(from decoder: Decoder) throws {
@@ -113,6 +140,7 @@ public struct RuntimeReportHistoryEntry: Codable, Equatable {
         xmlUrl = try container.decodeIfPresent(String.self, forKey: .xmlUrl)
         // Older history entries included extra customer fields; ignore decode failures.
         customerProfile = try? container.decodeIfPresent(RuntimeCustomerProfile.self, forKey: .customerProfile) ?? nil
+        comparison = try? container.decodeIfPresent(RuntimeScanComparison.self, forKey: .comparison) ?? nil
     }
 }
 
@@ -202,6 +230,26 @@ public struct RuntimeFailedScanEntry: Codable, Equatable {
     }
 }
 
+public struct RuntimeVulnerabilityFinding: Codable, Equatable, Sendable {
+    public let id: String
+    public let score: Double
+    public let severity: String
+    public let port: String?
+    public let service: String?
+    public let url: String?
+    public let exploit: Bool
+
+    public init(id: String, score: Double, severity: String, port: String? = nil, service: String? = nil, url: String? = nil, exploit: Bool = false) {
+        self.id = id
+        self.score = score
+        self.severity = severity
+        self.port = port
+        self.service = service
+        self.url = url
+        self.exploit = exploit
+    }
+}
+
 public struct RuntimeNmapXMLHostSummary: Codable, Equatable, Sendable {
     public let ip: String
     public let mac: String
@@ -213,8 +261,9 @@ public struct RuntimeNmapXMLHostSummary: Codable, Equatable, Sendable {
     public let version: String
     public let highCVEs: String
     public let lowCVECount: Int
+    public let vulnerabilities: [RuntimeVulnerabilityFinding]
 
-    public init(ip: String, mac: String, vendor: String, hostname: String, os: String, latency: String, ports: String, version: String, highCVEs: String, lowCVECount: Int) {
+    public init(ip: String, mac: String, vendor: String, hostname: String, os: String, latency: String, ports: String, version: String, highCVEs: String, lowCVECount: Int, vulnerabilities: [RuntimeVulnerabilityFinding] = []) {
         self.ip = ip
         self.mac = mac
         self.vendor = vendor
@@ -225,6 +274,25 @@ public struct RuntimeNmapXMLHostSummary: Codable, Equatable, Sendable {
         self.version = version
         self.highCVEs = highCVEs
         self.lowCVECount = lowCVECount
+        self.vulnerabilities = vulnerabilities
+    }
+
+    private enum CodingKeys: String, CodingKey { case ip, mac, vendor, hostname, os, latency, ports, version, highCVEs, lowCVECount, vulnerabilities }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            ip: try c.decodeIfPresent(String.self, forKey: .ip) ?? "",
+            mac: try c.decodeIfPresent(String.self, forKey: .mac) ?? "",
+            vendor: try c.decodeIfPresent(String.self, forKey: .vendor) ?? "",
+            hostname: try c.decodeIfPresent(String.self, forKey: .hostname) ?? "",
+            os: try c.decodeIfPresent(String.self, forKey: .os) ?? "--",
+            latency: try c.decodeIfPresent(String.self, forKey: .latency) ?? "--",
+            ports: try c.decodeIfPresent(String.self, forKey: .ports) ?? "",
+            version: try c.decodeIfPresent(String.self, forKey: .version) ?? "",
+            highCVEs: try c.decodeIfPresent(String.self, forKey: .highCVEs) ?? "",
+            lowCVECount: try c.decodeIfPresent(Int.self, forKey: .lowCVECount) ?? 0,
+            vulnerabilities: try c.decodeIfPresent([RuntimeVulnerabilityFinding].self, forKey: .vulnerabilities) ?? []
+        )
     }
 }
 

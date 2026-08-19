@@ -9,13 +9,14 @@ struct RuntimeNetworkState: Codable, Equatable {
     let tracerouteHops: [RuntimeTracerouteHop]
 
     static func current() async -> RuntimeNetworkState {
-        let localInfo = localNetworkInfo()
+        async let localInfo = localNetworkInfo()
         async let publicIP = publicIPAddress()
         async let tracerouteHops = tracerouteHops()
+        let resolvedLocalInfo = await localInfo
         return RuntimeNetworkState(
-            localIP: localInfo.localIP,
-            mask: localInfo.mask,
-            cidr: localInfo.cidr,
+            localIP: resolvedLocalInfo.localIP,
+            mask: resolvedLocalInfo.mask,
+            cidr: resolvedLocalInfo.cidr,
             publicIP: await publicIP,
             tracerouteHops: await tracerouteHops
         )
@@ -156,29 +157,14 @@ struct RuntimeNetworkState: Codable, Equatable {
     }
 
     static func runProcess(_ executable: String, _ arguments: [String], timeout: TimeInterval = 10) -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        do {
-            try process.run()
-        } catch {
+        guard let result = try? ExternalProcessRunner.run(
+            executable: URL(fileURLWithPath: executable),
+            arguments: arguments,
+            timeout: timeout
+        ) else {
             return ""
         }
-
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
-            if process.isRunning {
-                process.terminate()
-            }
-        }
-
-        process.waitUntilExit()
-        return String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return result.stdout
     }
 
     static func firstCapture(in text: String, pattern: String, group: Int = 1) -> String? {

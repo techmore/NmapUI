@@ -37,7 +37,7 @@ final class RuntimeMenuPresenter {
     }
 
     func syncRuntimeMenuState(isReady: Bool, statusText: String) {
-        runtimeStatusMenuItem?.title = "Runtime: \(statusText)"
+        runtimeStatusMenuItem?.title = "Native: \(statusText)"
         let canOpenUIAnyway = statusText == "Waiting"
         openAppMenuItem?.title = isReady ? "Open NmapUI" : (canOpenUIAnyway ? "Open UI Anyway" : "Starting NmapUI...")
         openAppMenuItem?.isEnabled = isReady || canOpenUIAnyway

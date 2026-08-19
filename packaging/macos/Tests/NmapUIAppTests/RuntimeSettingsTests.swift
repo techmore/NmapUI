@@ -1,10 +1,338 @@
 import Foundation
+import RuntimeContracts
 import Testing
 import RuntimeContracts
 @testable import NmapUIApp
 
 @Suite("Runtime Settings", .serialized)
 struct RuntimeSettingsTests {
+    @Test("compares host, port, and vulnerability changes deterministically")
+    func comparesScanChanges() {
+        let oldFinding = RuntimeVulnerabilityFinding(id: "CVE-2020-0001", score: 7.5, severity: "high", port: "443")
+        let newFinding = RuntimeVulnerabilityFinding(id: "CVE-2024-0002", score: 9.8, severity: "critical", port: "8080")
+        let oldHost = RuntimeNmapXMLHostSummary(ip: "192.168.1.10", mac: "", vendor: "", hostname: "", os: "", latency: "", ports: "80, 443", version: "", highCVEs: "", lowCVECount: 0, vulnerabilities: [oldFinding])
+        let currentHost = RuntimeNmapXMLHostSummary(ip: "192.168.1.10", mac: "", vendor: "", hostname: "", os: "", latency: "", ports: "443, 8080", version: "", highCVEs: "", lowCVECount: 0, vulnerabilities: [newFinding])
+        let comparison = RuntimeNmapXMLSummary(hosts: [currentHost]).comparison(to: RuntimeNmapXMLSummary(hosts: [oldHost]))
+        #expect(comparison.newHosts.isEmpty)
+        #expect(comparison.newPorts == ["8080"])
+        #expect(comparison.removedPorts == ["80"])
+        #expect(comparison.newVulnerabilities == ["CVE-2024-0002@8080"])
+        #expect(comparison.resolvedVulnerabilities == ["CVE-2020-0001@443"])
+    }
+
+    @Test("preserves structured Vulners metadata from Nmap XML")
+    func parsesStructuredVulnersMetadata() {
+        let xml = """
+        <nmaprun><host><address addr="192.168.1.10" addrtype="ipv4"/><ports><port portid="443" protocol="tcp"><state state="open"/><service name="https" product="nginx" version="1.24"/><script id="vulners"><table key="cpe:/a:nginx:nginx:1.24"><table><elem key="id">CVE-2024-1234</elem><elem key="cvss">9.8</elem><elem key="type">cve</elem><elem key="is_exploit">true</elem></table></table></script></port></ports></host></nmaprun>
+        """
+        let summary = RuntimeNmapXMLParser.parse(xml: xml)
+        let finding = summary?.hosts.first?.vulnerabilities.first
+        #expect(finding?.id == "CVE-2024-1234")
+        #expect(finding?.score == 9.8)
+        #expect(finding?.port == "443")
+        #expect(finding?.service == "https")
+        #expect(finding?.exploit == true)
+        #expect(finding?.severity == "critical")
+    }
+
+    @Test("validates and bounds scan targets")
+    func validatesScanTargets() throws {
+        #expect(try ScanTargetValidator.validate("127.0.0.1") == "127.0.0.1")
+        #expect(try ScanTargetValidator.validate("192.168.1.1, 192.168.1.2") == "192.168.1.1,192.168.1.2")
+        #expect(throws: ScanTargetValidationError.self) {
+            try ScanTargetValidator.validate("10.0.0.0/8")
+        }
+        #expect(throws: ScanTargetValidationError.self) {
+            try ScanTargetValidator.validate("bad/999")
+        }
+        #expect(ScanTargetValidator.targetContains(localCIDR: "10.10.0.0/24", target: "10.0.0.0/8"))
+    }
+
+    @Test("complete scans apply Pn only to hosts selected by discovery")
+    func completeScanUsesPnDiscoveredTargets() {
+        let arguments = ScanCoordinator.completeScanArguments(usePn: true, vpnHelper: false)
+        #expect(arguments.contains("-Pn"))
+        #expect(arguments.contains("-iL"))
+        #expect(arguments.contains("targets.tmp"))
+    }
+
+    @Test("complete discovery uses privileged ARP before deep scanning")
+    func completeDiscoveryUsesARP() {
+        let complete = ScanCoordinator.phase1Arguments(target: "192.168.1.0/24", privilegedARP: true)
+        let quick = ScanCoordinator.phase1Arguments(target: "192.168.1.0/24", privilegedARP: false)
+        #expect(complete.contains("-sn"))
+        #expect(complete.contains("-PR"))
+        #expect(complete.contains("192.168.1.0/24"))
+        #expect(!quick.contains("-PR"))
+    }
+
+    @Test("scan lock prevents manual and scheduled overlap")
+    func scanLockIsSingleFlight() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("nmapui-lock-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = ScanRunLock.acquire(in: directory)
+        #expect(first != nil)
+        let second = ScanRunLock.acquire(in: directory)
+        #expect(second == nil)
+        _ = first
+    }
+
+    @Test("duplicate ARP rows use the last parsed identity")
+    func duplicateARPRowsAreSafe() {
+        let rows = ARPDiscovery.parse("""
+        Interface: en0, type: EN10MB, MAC: 00:00:00:00:00:01
+        10.0.0.10  aa:bb:cc:dd:ee:ff  Old Vendor
+        10.0.0.10  aa:bb:cc:dd:ee:ff  New Vendor
+        """)
+        #expect(rows.count == 2)
+        #expect(rows.last?.vendor == "New Vendor")
+    }
+
+    @Test("parses arp-scan identities while ignoring headers")
+    func parsesARPScanIdentities() {
+        let output = """
+        Interface: en0, type: EN10MB, 192.168.1.0/24
+        Starting arp-scan 1.10.0
+        192.168.1.1  aa:bb:cc:dd:ee:ff  Router Vendor
+        192.168.1.20  11:22:33:44:55:66  Device Vendor
+        2 packets received by filter, 0 packets dropped by kernel
+        """
+        let identities = ARPDiscovery.parse(output)
+        #expect(identities.count == 2)
+        #expect(identities[0].ip == "192.168.1.1")
+        #expect(identities[0].mac == "AA:BB:CC:DD:EE:FF")
+        #expect(identities[1].vendor == "Device Vendor")
+    }
+
+    @Test("scheduled customer resolution ignores stale manual selection")
+    func scheduledResolutionIgnoresManualSelection() {
+        let stale = CustomerRecord(name: "Old Site", reportPrefix: "OLD", publicIPs: ["198.51.100.1"])
+        let current = CustomerRecord(name: "Current Site", reportPrefix: "CURRENT", publicIPs: ["203.0.113.4"])
+        let registry = CustomerRegistry(customers: [stale, current], activeCustomerID: stale.id)
+        let network = RuntimeNetworkState(localIP: "10.10.0.20", mask: "255.255.255.0", cidr: "10.10.0.0/24", publicIP: "203.0.113.4", tracerouteHops: [])
+        #expect(registry.resolvedCustomerForScheduledScan(network: network) == .assigned(current, source: .automatic))
+    }
+
+    @Test("customer matching accepts WAN and local subnet containment")
+    func customerMatchingUsesContainment() {
+        let customer = CustomerRecord(name: "Range Customer", reportPrefix: "RANGE", publicIPs: ["203.0.113.0/24"], cidrs: ["10.20.0.0/16"])
+        let registry = CustomerRegistry(customers: [customer], activeCustomerID: nil)
+        let network = RuntimeNetworkState(localIP: "10.20.44.8", mask: "255.255.0.0", cidr: "10.20.0.0/16", publicIP: "203.0.113.88", tracerouteHops: [])
+        #expect(registry.resolvedCustomer(network: network) == .assigned(customer, source: .automatic))
+        #expect(registry.resolvedCustomerForScheduledScan(network: network) == .assigned(customer, source: .automatic))
+    }
+
+    @Test("customer filesystem names are sanitized")
+    @MainActor
+    func customerFilesystemNamesAreSanitized() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let state = AppSessionState()
+        #expect(throws: CustomerRegistryError.self) {
+            try state.createCustomer(name: "../../Desktop", networkState: nil, dataDirectory: directory)
+        }
+    }
+
+    @Test("history recovers the previous valid snapshot")
+    func historyRecoversBackup() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = RuntimeReportHistoryEntry(timestamp: "2026-01-01T00:00:00Z", target: "10.0.0.0/24", duration: "1", hostCount: 1, scanKind: "quick", status: "success", error: nil, reportUrl: nil, pdfUrl: nil, xmlUrl: nil, customerProfile: nil)
+        let second = RuntimeReportHistoryEntry(timestamp: "2026-01-02T00:00:00Z", target: "10.0.0.0/24", duration: "2", hostCount: 2, scanKind: "complete", status: "success", error: nil, reportUrl: nil, pdfUrl: nil, xmlUrl: nil, customerProfile: nil)
+        RuntimeMetadataStore.persistHistory([first], to: directory)
+        RuntimeMetadataStore.persistHistory([second, first], to: directory)
+        try Data("{".utf8).write(to: directory.appendingPathComponent("history.json"), options: .atomic)
+        #expect(RuntimeMetadataStore.loadHistory(from: directory) == [first])
+    }
+
+    @Test("history writes merge concurrent scan completions")
+    func historyWritesMergeConcurrentCompletions() {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        DispatchQueue.concurrentPerform(iterations: 8) { index in
+            let entry = RuntimeReportHistoryEntry(
+                timestamp: String(format: "2026-01-01T00:00:%02dZ", index),
+                target: "10.0.0.\(index)",
+                duration: "1",
+                hostCount: 1,
+                scanKind: "quick",
+                status: "success",
+                error: nil,
+                reportUrl: nil,
+                pdfUrl: nil,
+                xmlUrl: nil,
+                customerProfile: nil
+            )
+            RuntimeMetadataStore.persistHistory([entry], to: directory)
+        }
+
+        #expect(RuntimeMetadataStore.loadHistory(from: directory).count == 8)
+    }
+
+    @Test("corrupt configuration recovers from backup without dropping other sections")
+    func corruptConfigurationUsesBackup() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("nmapui-config-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let configURL = directory.appendingPathComponent("config.json")
+        let backupURL = configURL.appendingPathExtension("backup")
+        let original = #"{"googleDrive":{"enabled":true,"folderId":"folder"}}"#.data(using: .utf8)!
+        try original.write(to: backupURL)
+        try Data("not-json".utf8).write(to: configURL)
+
+        let result = RuntimeMetadataStore.persistConfigSection(
+            "autoScan",
+            values: ["enabled": .bool(false)],
+            to: directory
+        )
+        if case .failure(let error) = result {
+            Issue.record("Configuration persistence failed: \(error.localizedDescription)")
+        }
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: configURL)) as? [String: Any]
+        let drive = json?["googleDrive"] as? [String: Any]
+        #expect(drive?["folderId"] as? String == "folder")
+        #expect(json?["autoScan"] != nil)
+    }
+
+    @Test("records scan attempts that do not produce a report")
+    func recordsHistoryWithoutReport() {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let customer = RuntimeCustomerProfile(
+            customerID: "customer-1",
+            customerName: "Test Customer",
+            prefix: "TEST",
+            publicIP: "",
+            fingerprint: "test",
+            baseName: "TEST",
+            reportLabel: "TEST",
+            folderName: "TEST"
+        )
+
+        ReportGenerator.recordHistoryOnly(
+            dataDirectory: directory,
+            customerProfile: customer,
+            target: "10.0.0.0/24",
+            duration: "3.00",
+            hostCount: 0,
+            scanKind: "quick",
+            status: "failed",
+            error: "Nmap exited with status 1"
+        )
+
+        let entry = RuntimeMetadataStore.loadHistory(from: directory).first
+        #expect(entry?.status == "failed")
+        #expect(entry?.error == "Nmap exited with status 1")
+        #expect(entry?.reportUrl == nil)
+        #expect(entry?.customerProfile?.customerID == "customer-1")
+    }
+
+    @Test("external process runner drains large output without deadlocking")
+    func externalProcessRunnerDrainsOutput() throws {
+        let result = try ExternalProcessRunner.run(
+            executable: URL(fileURLWithPath: "/usr/bin/yes"),
+            arguments: ["nmapui"],
+            timeout: 0.2,
+            maxOutputBytes: 128 * 1024
+        )
+        #expect(result.timedOut)
+        #expect(!result.stdout.isEmpty)
+    }
+
+    @Test("privileged helper response window outlives its scan ceiling")
+    func privilegedHelperTimeoutContractHasCleanupGrace() {
+        #expect(NmapPrivilegedHelperContract.protocolVersion == 4)
+        #expect(NmapPrivilegedHelperContract.privilegedNmapPath.hasSuffix("/com.techmore.nmapui.nmap"))
+        #expect(NmapPrivilegedHelperContract.isAllowedScanTarget("192.168.222.0/24"))
+        #expect(NmapPrivilegedHelperContract.isAllowedScanTarget("scanner.example.com"))
+        #expect(!NmapPrivilegedHelperContract.isAllowedScanTarget("192.168.1.0/99"))
+        #expect(!NmapPrivilegedHelperContract.isAllowedScanTarget("127.0.0.1;id"))
+        #expect(NmapPrivilegedHelperContract.maximumScanRuntime >= 60 * 60)
+        #expect(NmapPrivilegedHelperContract.responseGracePeriod > 0)
+    }
+
+    @Test("local scans drain noisy stdout and stderr before parsing XML")
+    func localScanDrainsNoisyOutput() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let fakeNmap = directory.appendingPathComponent("fake-nmap.sh")
+        let script = """
+        #!/bin/sh
+        /usr/bin/head -c 262144 /dev/zero
+        /usr/bin/head -c 262144 /dev/zero >&2
+        printf '%s' '<nmaprun><host><address addr="127.0.0.1" addrtype="ipv4"/><status state="up"/></host></nmaprun>' > phase1_results.xml
+        """
+        try script.write(to: fakeNmap, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeNmap.path)
+
+        let result = await ScanCoordinator(workDirectory: directory, nmapPath: fakeNmap.path).runPhase1(.init(
+            target: "127.0.0.1",
+            usePn: false,
+            vpnHelper: false,
+            scanKind: .quick,
+            allowInteractivePrivilegePrompt: false
+        ))
+
+        #expect(result.completed)
+        #expect(result.summary?.hosts.first?.ip == "127.0.0.1")
+    }
+
+    @Test("privileged helper plist registers the concrete Mach service")
+    func helperPlistUsesConcreteMachService() {
+        let plist = PrivilegeHelperClient.launchDaemonPlistContents()
+        #expect(plist.contains("<key>com.techmore.nmapui.nmap-helper</key>"))
+        #expect(plist.contains("<key>MachServices</key>"))
+        #expect(!plist.contains("helper.sock"))
+        #expect(!plist.contains("<key>(machServiceName)</key>"))
+    }
+
+    @Test("legacy Google Drive credential persistence remains owner-readable")
+    func googleDriveCredentialPersistenceIsPrivate() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        RuntimeMetadataStore.persistGoogleDriveCredentials("{\"client_secret\":\"redacted\"}", to: directory)
+        let file = directory.appendingPathComponent("runtime-google-drive-credentials.json")
+        let permissions = try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber
+        #expect(permissions?.intValue == 0o600)
+        #expect(RuntimeMetadataStore.loadGoogleDriveCredentials(from: directory) != nil)
+    }
+
+    @Test("report path resolver rejects traversal")
+    func reportResolverRejectsTraversal() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory.appendingPathComponent("reports_archive"), withIntermediateDirectories: true)
+        #expect(ReportGenerator.resolveFileURL(forReportPath: "/reports/../../etc/passwd", dataDirectory: directory) == nil)
+    }
+
+    @Test("persists customer registry and resolves exact network matches")
+    func persistsCustomerRegistryAndResolvesExactNetworkMatches() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let customer = CustomerRecord(name: "Acme", reportPrefix: "ACME", publicIPs: ["203.0.113.4"], cidrs: ["10.10.0.0/24"])
+        let registry = CustomerRegistry(customers: [customer], activeCustomerID: nil)
+        try registry.persist(to: directory)
+        let loaded = CustomerRegistry.load(from: directory)
+        #expect(loaded == registry)
+        let network = RuntimeNetworkState(localIP: "10.10.0.20", mask: "255.255.255.0", cidr: "10.10.0.0/24", publicIP: "203.0.113.4", tracerouteHops: [])
+        #expect(loaded.resolvedCustomer(network: network) == .assigned(customer, source: .automatic))
+    }
+
+    @Test("requires an explicit customer when network matching is ambiguous")
+    func requiresExplicitCustomerForAmbiguousCustomerMatch() {
+        let first = CustomerRecord(name: "Acme East", reportPrefix: "ACME_E", publicIPs: ["203.0.113.4"])
+        let second = CustomerRecord(name: "Acme West", reportPrefix: "ACME_W", publicIPs: ["203.0.113.4"])
+        let registry = CustomerRegistry(customers: [first, second], activeCustomerID: nil)
+        let network = RuntimeNetworkState(localIP: "10.10.0.20", mask: "255.255.255.0", cidr: "10.10.0.0/24", publicIP: "203.0.113.4", tracerouteHops: [])
+        guard case .ambiguous(let matches) = registry.resolvedCustomer(network: network) else {
+            Issue.record("Expected ambiguous match")
+            return
+        }
+        #expect(matches.count == 2)
+    }
     @Test("runs a native quick discovery scan through ScanCoordinator")
     func nativeQuickDiscoveryScanProducesHostSummary() async throws {
         let nmapPath = "/opt/homebrew/bin/nmap"
@@ -282,66 +610,6 @@ struct RuntimeSettingsTests {
         #expect(store.dataDirectoryPath == originalDataDirectoryPath)
         #expect(store.launchAtLoginEnabled == originalLaunchAtLoginEnabled)
         #expect(!store.hasUnsavedChanges)
-    }
-
-    @Test("launcher environment encodes the Swift-managed runtime contract")
-    func launcherEnvironmentEncodesSwiftManagedRuntimeContract() throws {
-        let workDirectory = URL(fileURLWithPath: "/tmp/work")
-        let dataDirectory = URL(fileURLWithPath: "/tmp/data")
-
-        let environment = ProcessLauncher.runtimeEnvironment(
-            workDirectory: workDirectory,
-            dataDirectory: dataDirectory
-        )
-
-        #expect(environment["HOST"] == RuntimeEndpoints.host)
-        #expect(environment["PORT"] == RuntimeEndpoints.fixedPortString)
-        #expect(environment["NMAPUI_PORT"] == RuntimeEndpoints.fixedPortString)
-        #expect(environment["NMAPUI_SWIFT_MANAGED"] == "1")
-        #expect(environment["NMAPUI_RUNTIME_WORKDIR"] == workDirectory.path)
-        #expect(environment["NMAPUI_DATA_DIR"] == dataDirectory.path)
-    }
-
-    @Test("builds the Google Drive OAuth callback URL from runtime endpoints")
-    func buildsTheGoogleDriveOAuthCallbackUrlFromRuntimeEndpoints() {
-        #expect(RuntimeEndpoints.googleDriveOAuthCallbackURL(port: 9123).absoluteString == "http://localhost:9123/google-drive/oauth2callback")
-    }
-
-    @Test("launcher stop terminates a running process")
-    func launcherStopTerminatesRunningProcess() throws {
-        let launcher = ProcessLauncher()
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        process.arguments = ["5"]
-
-        try process.run()
-        launcher.stop(runtimeProcess: process)
-
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline, process.isRunning {
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-
-        #expect(!process.isRunning)
-        #expect(process.terminationStatus == 0 || process.terminationStatus == SIGTERM || process.terminationStatus == SIGKILL)
-    }
-
-    @Test("launcher returns nil when the launcher executable is invalid")
-    func launcherReturnsNilWhenLauncherExecutableIsInvalid() throws {
-        let settings = RuntimeSettings(
-            useDefaultRuntimeCommand: true,
-            runtimeExecutable: "/usr/bin/true",
-            runtimeArguments: "",
-            dataDirectoryPath: FileManager.default.temporaryDirectory.path,
-            launchAtLoginEnabled: false
-        )
-        let launcher = ProcessLauncher(
-            launcherExecutableURL: URL(fileURLWithPath: "/does/not/exist/env"),
-            settings: settings,
-            runtimeWorkDir: URL(fileURLWithPath: "/tmp")
-        )
-
-        #expect(launcher.launchRuntimeIfNeeded() == nil)
     }
 
     @Test("parses the runtime network snapshot helpers")

@@ -12,17 +12,21 @@ enum AutoScanScheduler {
         return agents.appendingPathComponent("\(launchAgentLabel).plist")
     }
 
-    static func sync(enabled: Bool, recurrence: String, startTime: String) {
+    @discardableResult
+    static func sync(enabled: Bool, recurrence: String, startTime: String) -> Result<Void, Error> {
         if enabled {
             do {
                 try install(recurrence: recurrence, startTime: startTime)
                 RuntimeDiagnosticsLogger.log("Auto-scan LaunchAgent installed recurrence=\(recurrence) startTime=\(startTime)")
+                return .success(())
             } catch {
                 RuntimeDiagnosticsLogger.error("Auto-scan LaunchAgent install failed: \(error.localizedDescription)")
+                return .failure(error)
             }
         } else {
             remove()
             RuntimeDiagnosticsLogger.log("Auto-scan LaunchAgent removed")
+            return .success(())
         }
     }
 
@@ -66,11 +70,16 @@ enum AutoScanScheduler {
         }
 
         let data = try PropertyListSerialization.data(fromPropertyList: root, format: .xml, options: 0)
-        try data.write(to: launchAgentPlistURL, options: [.atomic])
-
-        _ = try? runLaunchctl(["bootout", "gui/\(getuid())/\(launchAgentLabel)"])
-        _ = try runLaunchctl(["bootstrap", "gui/\(getuid())", launchAgentPlistURL.path])
-        _ = try runLaunchctl(["enable", "gui/\(getuid())/\(launchAgentLabel)"])
+        do {
+            try data.write(to: launchAgentPlistURL, options: [.atomic])
+            _ = try? runLaunchctl(["bootout", "gui/\(getuid())/\(launchAgentLabel)"])
+            _ = try runLaunchctl(["bootstrap", "gui/\(getuid())", launchAgentPlistURL.path])
+            _ = try runLaunchctl(["enable", "gui/\(getuid())/\(launchAgentLabel)"])
+        } catch {
+            _ = try? runLaunchctl(["bootout", "gui/\(getuid())/\(launchAgentLabel)"])
+            try? FileManager.default.removeItem(at: launchAgentPlistURL)
+            throw error
+        }
     }
 
     static func remove() {
@@ -137,16 +146,12 @@ enum AutoScanScheduler {
 
     @discardableResult
     private static func runLaunchctl(_ arguments: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        process.arguments = arguments
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        try process.run()
-        process.waitUntilExit()
-        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let result = try ExternalProcessRunner.run(
+            executable: URL(fileURLWithPath: "/bin/launchctl"),
+            arguments: arguments,
+            timeout: 30
+        )
         // bootout returns non-zero if not loaded; ignore that at call sites.
-        return output
+        return result.stdout + result.stderr
     }
 }

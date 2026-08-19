@@ -7,16 +7,18 @@ import RuntimeContracts
 /// Native SwiftUI dashboard. The web bridge below is retained for report and
 /// compatibility events, but scan controls do not depend on JavaScript.
 struct NativeShellView: View {
-    let url: URL
     @ObservedObject var sessionState: AppSessionState
-    let onOpenBrowser: () -> Void
     let onQuickScan: () -> Void
     let onStartScan: (String, String, Bool) -> Void
+    let onOpenReport: (String) -> Void
+    let onCreateCustomer: (String) -> Void
+    let onSelectCustomer: (UUID?) -> Void
     @State private var target = ""
     @State private var scanKind = "quick"
     @State private var showingSettings = false
     @State private var selectedTab = "Dashboard"
     @State private var customerPrefix = "CSP"
+    @State private var newCustomerName = ""
     @State private var vpnHelper = false
     @State private var targetFollowsCurrentNetwork = true
     @State private var lastNetworkCIDR: String?
@@ -39,6 +41,9 @@ struct NativeShellView: View {
                 default:
                     statsCard
                     if sessionState.runtimeScanSession.isScanning { scanProgressCard }
+                    if let artifacts = sessionState.currentScanReportArtifacts {
+                        dashboardReportActionsCard(artifacts)
+                    }
                     hostResultsCard
                 }
                 }
@@ -66,10 +71,15 @@ struct NativeShellView: View {
             if let appDelegate = NSApp.delegate as? AppDelegate {
                 PreferencesView(
                     store: appDelegate.preferencesStore,
+                    sessionState: appDelegate.sessionState,
                     onChooseFolder: { appDelegate.chooseDataDirectory() },
                     onRevealFolder: { appDelegate.openDataDirectory() },
                     onSave: { appDelegate.savePreferences() },
-                    onReset: { appDelegate.resetPreferences() }
+                    onReset: { appDelegate.resetPreferences() },
+                    onConnectGoogleDrive: { appDelegate.connectGoogleDriveFromSettings() },
+                    onDisconnectGoogleDrive: { appDelegate.disconnectGoogleDriveFromSettings() },
+                    onSaveGoogleDriveSettings: { enabled, folderID in appDelegate.saveGoogleDriveSettingsFromNative(enabled: enabled, folderID: folderID) },
+                    onSaveGoogleDriveCredentials: { json in appDelegate.saveGoogleDriveCredentialsFromNative(json) }
                 )
             }
         }
@@ -80,6 +90,7 @@ struct NativeShellView: View {
             header
             tabBar
             networkStatusBar
+            capabilityStatusBar
             scanToolbar
         }
         .padding(.horizontal, 28)
@@ -153,6 +164,18 @@ struct NativeShellView: View {
 
     private var statusDivider: some View {
         Rectangle().fill(NativePalette.olive200).frame(width: 1, height: 34).padding(.horizontal, 16)
+    }
+
+    private var capabilityStatusBar: some View {
+        let capabilities = sessionState.runtimeCapabilities
+        return HStack(spacing: 8) {
+            Text("Capabilities").font(.caption.weight(.bold)).foregroundStyle(NativePalette.olive600)
+            CapabilityBadge(label: "Vulners", available: capabilities?.vulnersAvailable ?? false)
+            CapabilityBadge(label: "ARP", available: capabilities?.arpScanAvailable ?? false)
+            CapabilityBadge(label: "GoWitness", available: capabilities?.gowitnessAvailable ?? false)
+            CapabilityBadge(label: "Helper", available: capabilities?.privilegedHelperAvailable ?? false)
+            Spacer()
+        }
     }
 
     private var scanToolbar: some View {
@@ -357,12 +380,32 @@ struct NativeShellView: View {
         }
     }
 
+    private func dashboardReportActionsCard(_ artifacts: CurrentScanReportArtifacts) -> some View {
+        return NativeCard("Completed scan reports", background: NativePalette.olive50, border: NativePalette.olive300) {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.seal.fill").foregroundStyle(NativePalette.emerald600)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(artifacts.name)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(NativePalette.olive950)
+                    Text("This scan is complete. Open its deliverables directly from the Dashboard.")
+                        .font(.caption)
+                        .foregroundStyle(NativePalette.olive600)
+                }
+                Spacer()
+                ReportArtifactButton(title: "HTML", icon: "doc.richtext", path: artifacts.htmlPath, accent: NativePalette.olive600, onOpen: onOpenReport)
+                if let pdfPath = artifacts.pdfPath { ReportArtifactButton(title: "PDF", icon: "doc.fill", path: pdfPath, accent: NativePalette.red600, onOpen: onOpenReport) }
+                ReportArtifactButton(title: "XML", icon: "chevron.left.forwardslash.chevron.right", path: artifacts.xmlPath, accent: NativePalette.amber700, onOpen: onOpenReport)
+            }
+        }
+    }
+
     private var historySection: some View {
         NativeCard("Scan history") {
             Text("Review prior scans, compare network context, and reopen historical artifacts.")
                 .font(.callout).foregroundStyle(NativePalette.olive600)
             if sessionState.runtimeDataSnapshot.history.isEmpty { Text("No archived scans yet.").foregroundStyle(NativePalette.olive600) }
-            else { ForEach(Array(sessionState.runtimeDataSnapshot.history.prefix(12)), id: \.timestamp) { entry in HistoryRow(entry: entry) } }
+            else { ForEach(Array(sessionState.runtimeDataSnapshot.history.prefix(12)), id: \.timestamp) { entry in HistoryRow(entry: entry, onOpenReport: onOpenReport) } }
         }
     }
 
@@ -371,26 +414,49 @@ struct NativeShellView: View {
             Text("Open archived scan reports without relying on transient scan notifications.")
                 .font(.callout).foregroundStyle(NativePalette.olive600)
             if sessionState.runtimeDataSnapshot.reports.isEmpty { Text("Reports will appear here after a successful scan.").foregroundStyle(NativePalette.olive600) }
-            else { ForEach(sessionState.runtimeDataSnapshot.reports, id: \.name) { report in ReportRow(report: report) } }
+            else { ForEach(sessionState.runtimeDataSnapshot.reports, id: \.name) { report in ReportRow(report: report, onOpenReport: onOpenReport) } }
         }
     }
 
     private var customersSection: some View {
         NativeCard("Customer assignment") {
-            Text("Manage the WAN fingerprint and report identity used by native reports and history.")
+            Text("Reports require an explicit customer or one unambiguous WAN IP/CIDR match.")
                 .font(.callout).foregroundStyle(NativePalette.olive600)
+            HStack {
+                TextField("New customer name", text: $newCustomerName).textFieldStyle(.roundedBorder)
+                Button("Create and assign") {
+                    onCreateCustomer(newCustomerName)
+                    newCustomerName = ""
+                }
+                .disabled(newCustomerName.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
+                .buttonStyle(OliveButtonStyle(fill: NativePalette.olive600, hoverFill: NativePalette.olive700, text: .white))
+            }
+            if sessionState.customerRegistry.customers.isEmpty {
+                Text("No customers exist. Create one to assign this network before scanning.").foregroundStyle(NativePalette.amber700)
+            } else {
+                ForEach(sessionState.customerRegistry.customers) { customer in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(customer.name).font(.headline)
+                            Text("WAN: \(customer.publicIPs.joined(separator: ", "))  |  CIDR: \(customer.cidrs.joined(separator: ", "))")
+                                .font(.caption).foregroundStyle(NativePalette.olive600)
+                        }
+                        Spacer()
+                        Button(customer.id == sessionState.customerRegistry.activeCustomerID ? "Assigned" : "Assign") {
+                            onSelectCustomer(customer.id)
+                        }
+                        .buttonStyle(OliveButtonStyle(fill: customer.id == sessionState.customerRegistry.activeCustomerID ? NativePalette.emerald600 : NativePalette.olive100, hoverFill: NativePalette.olive600, text: customer.id == sessionState.customerRegistry.activeCustomerID ? .white : NativePalette.olive700))
+                    }
+                    .padding(10).background(NativePalette.olive50).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                Button("Use automatic matching") { onSelectCustomer(nil) }
+                    .buttonStyle(OliveButtonStyle(fill: NativePalette.olive100, hoverFill: NativePalette.olive200, text: NativePalette.olive700))
+            }
             if let profile = sessionState.runtimeCustomerProfile {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(profile.reportLabel).font(.title3.weight(.semibold))
                     Text("Public IP: \(profile.publicIP)  ·  Fingerprint: \(profile.fingerprint)")
                     Text("Folder: \(profile.folderName)").font(.system(.caption, design: .monospaced)).foregroundStyle(NativePalette.olive500)
-                    HStack {
-                        TextField("Report prefix", text: $customerPrefix).textFieldStyle(.roundedBorder)
-                        Button("Save assignment") {
-                            (NSApp.delegate as? AppDelegate)?.updateCustomerPrefix(customerPrefix)
-                        }
-                        .buttonStyle(OliveButtonStyle(fill: NativePalette.olive600, hoverFill: NativePalette.olive700, text: .white))
-                    }
                 }
                 .padding(14)
                 .background(NativePalette.olive50)
@@ -423,10 +489,22 @@ struct NativeShellView: View {
             Text("Manage native runtime preferences, report storage, launch behavior, and integrations.")
                 .font(.callout).foregroundStyle(NativePalette.olive600)
             if let appDelegate = NSApp.delegate as? AppDelegate {
+                let helperReady = sessionState.runtimeCapabilities?.privilegedHelperAvailable ?? false
                 VStack(alignment: .leading, spacing: 10) {
                     SettingsSummaryRow(label: "Nmap", value: appDelegate.sessionState.runtimeToolchain?.nmapPath ?? "Not found")
                     SettingsSummaryRow(label: "Traceroute", value: appDelegate.sessionState.runtimeToolchain?.traceroutePath ?? "Not found")
-                    SettingsSummaryRow(label: "Privilege helper", value: PrivilegeHelperClient.isHelperReachable ? "Ready" : "Not installed")
+                    SettingsSummaryRow(label: "GoWitness", value: appDelegate.sessionState.runtimeToolchain?.gowitnessPath ?? "Not installed")
+                    if appDelegate.sessionState.runtimeToolchain?.gowitnessPath == nil {
+                        Button("Install GoWitness \(GowitnessManager.version)") { appDelegate.installGowitness() }
+                            .buttonStyle(OliveButtonStyle(fill: NativePalette.olive600, hoverFill: NativePalette.olive700, text: .white))
+                    }
+                    SettingsSummaryRow(label: "Privilege helper", value: helperReady ? "XPC ready" : "Needs authorization/update")
+                    if !helperReady {
+                        Button("Install / Repair scanner helper") {
+                            appDelegate.installPrivilegeHelperFromSettings()
+                        }
+                        .buttonStyle(OliveButtonStyle(fill: NativePalette.olive600, hoverFill: NativePalette.olive700, text: .white))
+                    }
                     SettingsSummaryRow(label: "Data directory", value: RuntimeSettingsStore.currentDataDirectoryURL().path)
                     Button("Open full native preferences") { showingSettings = true }
                         .buttonStyle(OliveButtonStyle(fill: NativePalette.olive600, hoverFill: NativePalette.olive700, text: .white))
@@ -460,6 +538,7 @@ struct NativeShellView: View {
                         Text("OS / Latency").frame(width: 125, alignment: .leading)
                         Text("Port").frame(width: 64, alignment: .leading)
                         Text("Service").frame(width: 220, alignment: .leading)
+                        Text("Screenshot").frame(width: 96, alignment: .leading)
                         Text("Vulnerabilities").frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .font(.caption.weight(.bold)).foregroundStyle(.white)
@@ -480,6 +559,7 @@ struct NativeShellView: View {
                             }.frame(width: 125, alignment: .leading)
                             HostPortColumn(host: host).frame(width: 64, alignment: .leading)
                             HostServiceColumn(host: host).frame(width: 220, alignment: .leading)
+                            ScreenshotColumn(hostIP: host.ip, screenshots: sessionState.latestScreenshotURLs, onOpen: onOpenReport)
                             HostVulnerabilityColumn(host: host).frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(8)
@@ -499,6 +579,21 @@ struct NativeShellView: View {
 
     private func isPrivateHop(_ ip: String) -> Bool {
         ip.hasPrefix("10.") || ip.hasPrefix("192.168.") || ip.hasPrefix("172.16.") || ip.hasPrefix("172.17.") || ip.hasPrefix("172.18.") || ip.hasPrefix("172.19.") || ip.hasPrefix("172.2") || ip.hasPrefix("172.30.") || ip.hasPrefix("172.31.")
+    }
+}
+
+private struct CapabilityBadge: View {
+    let label: String
+    let available: Bool
+
+    var body: some View {
+        Label(label, systemImage: available ? "checkmark.circle.fill" : "exclamationmark.circle")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(available ? NativePalette.emerald700 : NativePalette.amber700)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(available ? NativePalette.emerald100 : NativePalette.amber100)
+            .clipShape(Capsule())
     }
 }
 
@@ -565,7 +660,7 @@ private struct OliveButtonBody: View {
     var body: some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(isEnabled ? ((hovering && hoverText != nil) ? hoverText! : text) : NativePalette.olive400)
+            .foregroundStyle(isEnabled ? (hovering ? (hoverText ?? text) : text) : NativePalette.olive400)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background(isEnabled ? (hovering ? hoverFill : fill) : NativePalette.olive100)
@@ -713,20 +808,26 @@ private struct NetworkMetric: View {
 
 private struct HistoryRow: View {
     let entry: RuntimeReportHistoryEntry
+    let onOpenReport: (String) -> Void
     var body: some View {
         HStack {
             Text(entry.timestamp).font(.caption).foregroundStyle(NativePalette.olive500)
             Text(entry.target).font(.system(.body, design: .monospaced)).foregroundStyle(NativePalette.olive950)
             Spacer()
             Text("\(entry.hostCount) hosts · \(entry.duration)").foregroundStyle(NativePalette.olive600)
+            if let comparison = entry.comparison, comparison.hasChanges {
+                Text("+\(comparison.newHosts.count) hosts · +\(comparison.newVulnerabilities.count) CVEs")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(NativePalette.amber700)
+            }
             Text(entry.status?.uppercased() ?? "UNKNOWN")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(entry.status == "success" ? NativePalette.emerald700 : NativePalette.amber700)
                 .padding(.horizontal, 7).padding(.vertical, 4)
                 .background(entry.status == "success" ? NativePalette.emerald50 : NativePalette.amber50)
                 .clipShape(Capsule())
-            if let reportURL = entry.reportUrl { ReportArtifactButton(title: "HTML", icon: "doc.richtext", path: reportURL, accent: NativePalette.olive600) }
-            if let pdfURL = entry.pdfUrl { ReportArtifactButton(title: "PDF", icon: "doc.fill", path: pdfURL, accent: NativePalette.red600) }
+            if let reportURL = entry.reportUrl { ReportArtifactButton(title: "HTML", icon: "doc.richtext", path: reportURL, accent: NativePalette.olive600, onOpen: onOpenReport) }
+            if let pdfURL = entry.pdfUrl { ReportArtifactButton(title: "PDF", icon: "doc.fill", path: pdfURL, accent: NativePalette.red600, onOpen: onOpenReport) }
         }
         .padding(8)
         .background(NativePalette.olive50)
@@ -736,15 +837,16 @@ private struct HistoryRow: View {
 
 private struct ReportRow: View {
     let report: RuntimeReportListEntry
+    let onOpenReport: (String) -> Void
     var body: some View {
         HStack {
             Image(systemName: "doc.text").foregroundStyle(NativePalette.olive600)
             Text(report.name).foregroundStyle(NativePalette.olive950)
             Spacer()
             Text(report.date).foregroundStyle(NativePalette.olive600)
-            if let url = report.url { ReportArtifactButton(title: "HTML", icon: "doc.richtext", path: url, accent: NativePalette.olive600) }
-            if let pdfURL = report.pdfUrl { ReportArtifactButton(title: "PDF", icon: "doc.fill", path: pdfURL, accent: NativePalette.red600) }
-            if let xmlURL = report.xmlUrl { ReportArtifactButton(title: "XML", icon: "chevron.left.forwardslash.chevron.right", path: xmlURL, accent: NativePalette.amber700) }
+            if let url = report.url { ReportArtifactButton(title: "HTML", icon: "doc.richtext", path: url, accent: NativePalette.olive600, onOpen: onOpenReport) }
+            if let pdfURL = report.pdfUrl { ReportArtifactButton(title: "PDF", icon: "doc.fill", path: pdfURL, accent: NativePalette.red600, onOpen: onOpenReport) }
+            if let xmlURL = report.xmlUrl { ReportArtifactButton(title: "XML", icon: "chevron.left.forwardslash.chevron.right", path: xmlURL, accent: NativePalette.amber700, onOpen: onOpenReport) }
         }
         .padding(8)
         .background(NativePalette.olive50)
@@ -757,10 +859,11 @@ private struct ReportArtifactButton: View {
     let icon: String
     let path: String
     let accent: Color
+    let onOpen: (String) -> Void
 
     var body: some View {
         Button {
-            (NSApp.delegate as? AppDelegate)?.openReportPath(path)
+            onOpen(path)
         } label: {
             Label(title, systemImage: icon)
         }
@@ -798,13 +901,69 @@ private struct HostServiceColumn: View {
     }
 }
 
+private struct ScreenshotColumn: View {
+    let hostIP: String
+    let screenshots: [URL]
+    let onOpen: (String) -> Void
+
+    var body: some View {
+        let matching = screenshots.first {
+            let name = $0.lastPathComponent
+            return name.contains(hostIP) || name.contains(hostIP.replacingOccurrences(of: ".", with: "-"))
+        }
+        if let matching {
+            Button {
+                onOpen(matching.absoluteString)
+            } label: {
+                Label("Open", systemImage: "photo")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(OliveButtonStyle(fill: NativePalette.olive50, hoverFill: NativePalette.olive100, text: NativePalette.olive600))
+            .help("Open GoWitness screenshot for \(hostIP)")
+            .frame(width: 96, alignment: .leading)
+        } else {
+            Text("--").foregroundStyle(NativePalette.olive400).frame(width: 96, alignment: .leading)
+        }
+    }
+}
+
 private struct HostVulnerabilityColumn: View {
     let host: RuntimeNmapXMLHostSummary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if host.highCVEs.isEmpty {
-                Text(host.lowCVECount == 0 ? "None reported" : "(host.lowCVECount) lower-severity finding(s)")
+            if !host.vulnerabilities.isEmpty {
+                ForEach(Array(host.vulnerabilities.sorted { lhs, rhs in
+                    lhs.score == rhs.score ? lhs.id < rhs.id : lhs.score > rhs.score
+                }.enumerated()), id: \.offset) { _, finding in
+                    HStack(spacing: 5) {
+                        Text("\(finding.id) (\(finding.score, specifier: "%.1f"))")
+                            .font(.system(.caption, design: .monospaced).weight(.semibold))
+                        if finding.exploit {
+                            Text("EXPLOIT")
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(NativePalette.red600)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .foregroundStyle(finding.score >= 7.0 ? NativePalette.red600 : NativePalette.amber700)
+                    if let port = finding.port, !port.isEmpty {
+                        let serviceLabel = finding.service.map { " · \($0)" } ?? ""
+                        Text("Port \(port)\(serviceLabel)")
+                            .font(.caption2)
+                            .foregroundStyle(NativePalette.olive600)
+                    }
+                }
+                if host.lowCVECount > 0 {
+                    Text("+ \(host.lowCVECount) lower-severity finding(s)")
+                        .font(.caption)
+                        .foregroundStyle(NativePalette.amber700)
+                }
+            } else if host.highCVEs.isEmpty {
+                Text(host.lowCVECount == 0 ? "None reported" : "\(host.lowCVECount) lower-severity finding(s)")
                     .font(.caption).foregroundStyle(host.lowCVECount == 0 ? NativePalette.emerald700 : NativePalette.amber700)
             } else {
                 Text(host.highCVEs).font(.system(.caption, design: .monospaced)).foregroundStyle(NativePalette.red600)
@@ -915,18 +1074,16 @@ struct WebPortalView: NSViewRepresentable {
                 guard let action = body["action"] as? String else { return }
                 RuntimeDiagnosticsLogger.log("Received native runtime action=\(action)")
                 let target = (body["target"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let usePn = body["usePn"] as? Bool ?? false
                 let vpnHelper = body["vpnHelper"] as? Bool ?? false
                 let scanKind = body["scanKind"] as? String ?? "quick"
 
                 Task { @MainActor in
                     switch action {
                     case "start_quick_scan", "start_complete_scan", "start_dragnet_scan":
-                        _ = await appDelegate.startSwiftManagedScan(
+                        appDelegate.startScanFromNativeShell(
                             target: target,
-                            usePn: usePn,
-                            vpnHelper: vpnHelper,
-                            scanKind: scanKind
+                            scanKind: scanKind,
+                            vpnHelper: vpnHelper
                         )
                     case "stop_scan":
                         appDelegate.stopSwiftManagedScan()
@@ -986,17 +1143,16 @@ struct WebPortalView: NSViewRepresentable {
                         appDelegate.sessionState.eventRouter.emit(event)
                     }
                     if let scanRequest = dispatcher.scanCoordinatorRequest(from: request) {
-                        _ = await appDelegate.startSwiftManagedScan(
+                        appDelegate.startScanFromNativeShell(
                             target: scanRequest.target,
-                            usePn: scanRequest.usePn,
-                            vpnHelper: scanRequest.vpnHelper,
                             scanKind: {
                                 switch scanRequest.scanKind {
                                 case .complete: return "complete"
                                 case .dragnet: return "dragnet"
                                 case .quick: return "quick"
                                 }
-                            }()
+                            }(),
+                            vpnHelper: scanRequest.vpnHelper
                         )
                     }
                 }
