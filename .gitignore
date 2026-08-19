@@ -13,3 +13,8 @@ history.json
 reports_archive/
 phase2_results.xml
 targets.tmp
+
+# Xcode/Swift build output — never track
+packaging/macos/.build/
+.build/
+packaging/macos/*.xcodeproj/
