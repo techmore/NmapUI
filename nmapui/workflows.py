@@ -686,6 +686,8 @@ def generate_report_task(context, sid, data):
             xml_path,
             scans_dir=scans_dir,
         )
+        # Surface change summary to the Monitoring Hub (#11).
+        emit_to_client(sid, "report_diff_summary", {"diff_summary": diff_summary})
 
         feedback = lambda message: (emit_to_client(sid, "scan_feedback", message), socketio_sleep(0))
 
