@@ -23,8 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let launchAtLoginController = LaunchAtLoginController()
     let sessionState = AppSessionState()
     let preferencesStore = PreferencesStore()
-    private let reportRefreshMonitor = RuntimeReportRefreshMonitor()
-    private var capabilityRefreshTask: Task<Void, Never>?
+    private lazy var lifecycleController = RuntimeLifecycleController(sessionState: sessionState)
+    /// Task handle for privilege-helper status refreshes (distinct from
+    /// lifecycle capability polling, which now lives in RuntimeLifecycleController).
+    private var helperStatusRefreshTask: Task<Void, Never>?
     private lazy var appTerminationController = AppTerminationController()
 
     private var statusItem: NSStatusItem?
@@ -113,47 +115,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 RuntimeMetadataStore.persistCustomerProfile(runtimeCustomerProfile, to: dataDirectory)
             }
         }
-        sessionState.runtimeIsReady = false
-        sessionState.runtimeStatusText = "Starting..."
-        sessionState.startupHint = "Preparing native shell..."
-        sessionState.preloadMessage = "Loading dashboard..."
-        sessionState.showLoadingStrip = true
-        sessionState.emitBootstrapState(
-            version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
-            hosts: []
-        )
-        sessionState.emitHistoryData()
-        sessionState.emitReportsData()
-        sessionState.emitAutoScanConfig()
-        sessionState.emitGoogleDriveStatus()
-        sessionState.emitCustomerProfile()
-        refreshRuntimeCapabilities()
-        // Re-sync LaunchAgent if auto-scan was already enabled.
-        if sessionState.runtimeAutoScanSnapshot.enabled {
-            AutoScanScheduler.sync(
-                enabled: true,
-                recurrence: sessionState.runtimeAutoScanSnapshot.recurrence,
-                startTime: sessionState.runtimeAutoScanSnapshot.startTime
-            )
+        lifecycleController.onReadinessChange = { [weak self] in
+            self?.syncRuntimeMenuState()
         }
-        reportRefreshMonitor.start(dataDirectory: dataDirectory) { [weak self] in
-            self?.sessionState.emitReportsRefresh()
-        }
-        sessionState.clearScanSession()
-        setupStatusItem()
-        syncLaunchAtLoginState()
-        Task { [weak self] in
-            // Let the initial window appear before macOS presents the one-time auth prompt.
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            do {
-                try await PrivilegeElevationController.ensurePrivilegedHelperReady(interactive: true)
-                RuntimeDiagnosticsLogger.log("Launch-time privileged scanner authorization is ready")
-            } catch {
-                RuntimeDiagnosticsLogger.error("Launch-time privileged scanner authorization was not completed: \(error.localizedDescription)")
-            }
+        lifecycleController.onPrivilegeHelperStatusRefresh = { [weak self] in
             self?.emitPrivilegeHelperStatus()
         }
-        markNativeRuntimeReady()
+        lifecycleController.startStartupSequence(dataDirectory: dataDirectory)
+        setupStatusItem()
+        syncLaunchAtLoginState()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -740,8 +710,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func emitPrivilegeHelperStatus() {
-        capabilityRefreshTask?.cancel()
-        capabilityRefreshTask = Task { [weak self] in
+        helperStatusRefreshTask?.cancel()
+        helperStatusRefreshTask = Task { [weak self] in
             let result = await Task.detached(priority: .utility) {
                 (RuntimeCapabilities.current(), PrivilegeHelperClient.isCurrentHelperReachable)
             }.value
@@ -765,18 +735,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshRuntimeCapabilities() {
-        capabilityRefreshTask?.cancel()
-        capabilityRefreshTask = Task { [weak self] in
-            let capabilities = await Task.detached(priority: .utility) {
-                RuntimeCapabilities.current()
-            }.value
-            guard let self, !Task.isCancelled else { return }
-            self.sessionState.runtimeCapabilities = capabilities
-            RuntimeMetadataStore.persistCapabilities(
-                capabilities,
-                to: RuntimeSettingsStore.currentDataDirectoryURL()
-            )
-        }
+        lifecycleController.refreshCapabilities()
     }
 
     @MainActor
@@ -1049,11 +1008,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func markNativeRuntimeReady() {
-        sessionState.runtimeIsReady = true
-        sessionState.runtimeStatusText = "Native ready"
-        sessionState.startupHint = "Ready to scan"
-        sessionState.preloadMessage = "Dashboard ready"
-        sessionState.showLoadingStrip = false
+        lifecycleController.markReady()
         syncRuntimeMenuState()
     }
 
