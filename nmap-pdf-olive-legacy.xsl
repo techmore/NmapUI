@@ -142,6 +142,17 @@ Updated: 2026
             width: 100%;
           }
           
+          /* #167 v2: keep wide tables inside the page */
+          @media print {
+            html, body { width: 100% !important; }
+            .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
+            table { table-layout: auto; }
+            th, td { font-size: 9px !important; padding: 3px 4px !important; }
+            td, th { word-break: break-word; overflow-wrap: anywhere; }
+            .font-mono, td.font-mono { word-break: break-all !important; }
+            nav.fixed { position: static !important; }
+          }
+
           .card {
             background: white;
             border: 1px solid #d8dbc7;
