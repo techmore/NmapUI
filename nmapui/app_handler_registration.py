@@ -17,6 +17,7 @@ def register_app_handlers(
     *,
     app,
     socketio,
+    socket_auth_token=None,
     auto_scan_config,
     save_auto_scan_config,
     validate_auto_scan_config_update,
@@ -129,6 +130,7 @@ def register_app_handlers(
             set_last_scan_target_state=set_last_scan_target_state,
             set_network_key_state=set_network_key_state,
             auto_scan_config=auto_scan_config,
+            socket_auth_token=socket_auth_token,
         ),
         core_routes_deps=build_core_routes_deps(
             build_liveness_payload=build_liveness_payload,
@@ -147,6 +149,7 @@ def register_app_handlers(
             get_auto_scan_thread=get_auto_scan_thread,
             upload_report_artifacts_to_google_drive=upload_report_artifacts_to_google_drive,
             customer_fingerprinter=customer_fingerprinter,
+            socket_auth_token=socket_auth_token,
         ),
         customer_handler_deps=build_customer_handler_deps(
             get_customer_fingerprinter=get_customer_fingerprinter,

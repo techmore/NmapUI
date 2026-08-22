@@ -179,7 +179,7 @@ function updateRowWithResults(host) {
 
     const ports = host.ports || [];
     const portsStr = ports.map(port => `${port.port}/${String(port.service || '').split(/\s+/)[0]}`).join(', ');
-    const versionHtml = ports.map(port => `<div class="text-xs">${port.service}</div>`).join('');
+    const versionHtml = ports.map(port => `<div class="text-xs">${escapeHTMLValue(port.service)}</div>`).join('');
 
     const openPortsCell = getDiscoveryTableCell(rowToUpdate, 'open_ports');
     const versionCell = getDiscoveryTableCell(rowToUpdate, 'version');
@@ -190,7 +190,7 @@ function updateRowWithResults(host) {
 
     if (host.cves && host.cves.length > 0 && cvesCell) {
         cvesCell.innerHTML = host.cves
-            .map(cve => `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${cve.score}</span><a href="${cve.url}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${cve.id}</a></div>`)
+            .map(cve => `<div class="text-xs py-0.5"><span class="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium mr-1">${escapeHTMLValue(cve.score)}</span><a href="${escapeHTMLValue(cve.url)}" target="_blank" class="text-olive-600 hover:text-olive-800 hover:underline">${escapeHTMLValue(cve.id)}</a></div>`)
             .join('');
     }
 

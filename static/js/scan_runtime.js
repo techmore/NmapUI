@@ -374,8 +374,8 @@ function initializeScanRuntime(socket) {
                         <span class="px-2 py-1 ${failed ? 'bg-red-100 text-red-700' : 'bg-olive-100 text-olive-700'} text-[10px] font-bold rounded-lg">${failed ? 'FAILED' : `${item.duration}s`}</span>
                     </div>
                     <div class="mb-4">
-                        <h4 class="text-olive-900 font-bold text-lg">${item.customerProfile?.baseName || item.target}</h4>
-                        <p class="text-xs text-olive-500">${item.hostCount} Hosts Discovered${item.customerProfile?.folderName ? ` | ${item.customerProfile.folderName}` : ''}</p>
+                        <h4 class="text-olive-900 font-bold text-lg">${escapeHTMLValue(item.customerProfile?.baseName || item.target)}</h4>
+                        <p class="text-xs text-olive-500">${escapeHTMLValue(item.hostCount)} Hosts Discovered${item.customerProfile?.folderName ? ` | ${escapeHTMLValue(item.customerProfile.folderName)}` : ''}</p>
                         ${failed && item.error ? `<p class="mt-2 line-clamp-2 rounded-lg bg-red-50 p-2 font-mono text-[10px] text-red-700">${escapeHTML(item.error)}</p>` : ''}
                     </div>
                     <div class="grid gap-2 sm:grid-cols-2">
@@ -544,15 +544,15 @@ function updateHostRow(data) {
         row.className = 'hover:bg-olive-50 transition-colors border-b border-olive-100';
         row.innerHTML = `
             <td class="px-0 py-0.5 text-center"><span class="size-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span></td>
-            <td class="px-1 py-0.5 font-mono text-[11px] text-olive-900 ip-cell">${data.ip}</td>
-            <td class="px-1 py-0.5 font-mono text-[10px] text-olive-600 mac-cell">${data.mac || '--'}</td>
-            <td class="px-0 py-0.5 text-[10px] text-olive-700 truncate vendor-cell" title="${data.vendor || '--'}">${data.vendor || '--'}</td>
-            <td class="px-0 py-0.5 text-[10px] font-medium text-olive-900 truncate hostname-cell" title="${data.hostname || '--'}">${data.hostname || '--'}</td>
+            <td class="px-1 py-0.5 font-mono text-[11px] text-olive-900 ip-cell">${escapeHTMLValue(data.ip)}</td>
+            <td class="px-1 py-0.5 font-mono text-[10px] text-olive-600 mac-cell">${escapeHTMLValue(data.mac || '--')}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 truncate vendor-cell" title="${escapeHTMLValue(data.vendor || '--')}">${escapeHTMLValue(data.vendor || '--')}</td>
+            <td class="px-0 py-0.5 text-[10px] font-medium text-olive-900 truncate hostname-cell" title="${escapeHTMLValue(data.hostname || '--')}">${escapeHTMLValue(data.hostname || '--')}</td>
             <td class="px-0 py-0.5 text-[10px] cve-cell">--</td>
-            <td class="px-0 py-0.5 text-[10px] text-olive-700 os-cell">${data.os || '--'}</td>
-            <td class="px-0 py-0.5 text-[10px] text-olive-700 latency-cell">${data.latency || '--'}</td>
-            <td class="px-0 py-0.5 text-[10px] text-olive-700 ports-cell">${data.ports || '--'}</td>
-            <td class="px-0 py-0.5 text-[10px] text-olive-700 version-cell">${data.version || '--'}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 os-cell">${escapeHTMLValue(data.os || '--')}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 latency-cell">${escapeHTMLValue(data.latency || '--')}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 ports-cell">${escapeHTMLValue(data.ports || '--')}</td>
+            <td class="px-0 py-0.5 text-[10px] text-olive-700 version-cell">${escapeHTMLValue(data.version || '--')}</td>
             <td class="px-0 py-0.5 screenshot-cell">${renderScreenshotCell(data)}</td>
             <td class="px-0 py-0.5 text-right"><button class="text-[10px] font-bold text-olive-600 bg-olive-100 hover:bg-olive-200 px-0 py-0.5 rounded-full transition-all">DETAILS</button></td>
         `;

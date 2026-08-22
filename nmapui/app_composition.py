@@ -343,6 +343,7 @@ def build_connection_handler_deps(
     set_last_scan_target_state,
     set_network_key_state,
     auto_scan_config,
+    socket_auth_token=None,
 ):
     return {
         "broadcaster": broadcaster,
@@ -355,6 +356,7 @@ def build_connection_handler_deps(
         "set_last_scan_target_state": set_last_scan_target_state,
         "set_network_key_state": set_network_key_state,
         "auto_scan_config": auto_scan_config,
+        "socket_auth_token": socket_auth_token or "",
     }
 
 
@@ -376,6 +378,7 @@ def build_core_routes_deps(
     get_auto_scan_thread,
     upload_report_artifacts_to_google_drive,
     customer_fingerprinter,
+    socket_auth_token=None,
 ):
     return {
         "build_liveness_payload": build_liveness_payload,
@@ -394,6 +397,7 @@ def build_core_routes_deps(
         "get_auto_scan_thread": get_auto_scan_thread,
         "upload_report_artifacts_to_google_drive": upload_report_artifacts_to_google_drive,
         "customer_fingerprinter": customer_fingerprinter,
+        "socket_auth_token": socket_auth_token or "",
     }
 
 

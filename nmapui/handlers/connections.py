@@ -68,9 +68,18 @@ def register_connection_handlers(socketio, deps):
     set_current_customer_state = deps["set_current_customer_state"]
     set_last_scan_target_state = deps["set_last_scan_target_state"]
     set_network_key_state = deps["set_network_key_state"]
+    socket_auth_token = deps.get("socket_auth_token") or ""
 
     @socketio.on("connect")
     def on_connect(auth=None):
+        # Reject connections that did not present the loopback token (#210).
+        if socket_auth_token:
+            if not (isinstance(auth, dict) and auth.get("token") == socket_auth_token):
+                logger.warning(
+                    "Rejected Socket.IO connection from %s without valid token.",
+                    request.remote_addr or "unknown",
+                )
+                return False
         new_sid = request.sid
         if hasattr(broadcaster, "register_client"):
             broadcaster.register_client(new_sid)

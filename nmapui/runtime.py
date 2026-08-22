@@ -3,6 +3,7 @@ import os
 import platform
 import sys
 from datetime import datetime
+from typing import Optional
 
 import requests
 
@@ -11,6 +12,25 @@ from .paths import VERSION_FILE
 
 logger = logging.getLogger(__name__)
 APP_VERSION = None
+
+# Only release downloads from our own GitHub org may ever be surfaced to the UI.
+_ALLOWED_DOWNLOAD_HOSTS = {"github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"}
+
+
+def _validate_download_url(url) -> str | None:
+    """Return the URL only if it is https and points at an allowed host."""
+    if not url or not isinstance(url, str):
+        return None
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+    except (ValueError, AttributeError):
+        return None
+    if parsed.scheme != "https" or parsed.hostname not in _ALLOWED_DOWNLOAD_HOSTS:
+        logger.warning("Rejected untrusted update download URL: %r", url)
+        return None
+    return url
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -109,8 +129,10 @@ def check_for_updates():
                 "available": True,
                 "current_version": current_version,
                 "latest_version": latest_version,
-                "release_url": release_url,
-                "download_url": download_url or release_url,
+                "release_url": _validate_download_url(release_url) or "",
+                "download_url": _validate_download_url(download_url)
+                or _validate_download_url(release_url)
+                or "",
                 "asset_name": asset_name,
                 "install_method": "manual_download",
                 "release_notes": latest_release["body"],

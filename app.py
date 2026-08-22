@@ -152,8 +152,31 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 runtime_options = build_runtime_options(sys.argv)
 allowed_origins = get_allowed_origins(port=runtime_options["port"])
+
+# Loopback-only token required in the Socket.IO handshake auth payload.
+# Clients fetch it from /api/socket-token (restricted to 127.0.0.1) first;
+# the connect handler below rejects sockets that did not present it.
+import secrets as _secrets
+
+SOCKET_AUTH_TOKEN = _secrets.token_hex(32)
 socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+
+
+@app.after_request
+def _set_security_headers(response):
+    """Basic hardening headers (#201). CDN hosts match those used in index.html."""
+    response.headers["Content-Security-Policy"] = "; ".join([
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://unpkg.com",
+        "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: blob:",
+        f"connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*",
+    ])
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 def safe_emit(event, data=None):
@@ -515,6 +538,7 @@ def upload_latest_report_to_google_drive():
 register_app_handlers(
     app=app,
     socketio=socketio,
+    socket_auth_token=SOCKET_AUTH_TOKEN,
     auto_scan_config=auto_scan_config,
     save_auto_scan_config=save_auto_scan_config,
     validate_auto_scan_config_update=validate_auto_scan_config_update,

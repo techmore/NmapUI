@@ -21,8 +21,8 @@ def test_check_for_updates_selects_mac_installer_asset(monkeypatch):
                 "html_url": "https://github.com/techmore/NmapUI/releases/tag/v2026.1.9.12_53",
                 "body": "release notes",
                 "assets": [
-                    {"name": "NmapUI.pkg", "browser_download_url": "https://example.com/NmapUI.pkg"},
-                    {"name": "NmapUI.dmg", "browser_download_url": "https://example.com/NmapUI.dmg"},
+                    {"name": "NmapUI.pkg", "browser_download_url": "https://github.com/techmore/NmapUI/releases/download/v2026.1.9.12_53/NmapUI.pkg"},
+                    {"name": "NmapUI.dmg", "browser_download_url": "https://github.com/techmore/NmapUI/releases/download/v2026.1.9.12_53/NmapUI.dmg"},
                 ],
             }
 
@@ -34,7 +34,7 @@ def test_check_for_updates_selects_mac_installer_asset(monkeypatch):
     assert result["current_version"] == "v2026.1.1.00_00"
     assert result["latest_version"] == "v2026.1.9.12_53"
     assert result["asset_name"] == "NmapUI.dmg"
-    assert result["download_url"] == "https://example.com/NmapUI.dmg"
+    assert result["download_url"] == "https://github.com/techmore/NmapUI/releases/download/v2026.1.9.12_53/NmapUI.dmg"
     assert result["install_method"] == "manual_download"
 
 

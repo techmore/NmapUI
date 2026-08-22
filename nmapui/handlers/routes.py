@@ -77,6 +77,16 @@ def register_core_routes(app, deps):
     def index():
         return render_template("index.html")
 
+    @app.route("/api/socket-token")
+    def socket_token():
+        """Loopback-only token for authenticating the Socket.IO handshake."""
+        from flask import jsonify, request as flask_request
+
+        remote = flask_request.remote_addr or ""
+        if remote not in {"127.0.0.1", "::1"}:
+            return jsonify({"error": "forbidden"}), 403
+        return jsonify({"token": deps["socket_auth_token"]})
+
     @app.route("/api/health")
     def health_check():
         return jsonify(

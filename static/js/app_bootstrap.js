@@ -1,6 +1,25 @@
-var socket = io.connect(`http://${document.domain}:${location.port}`);
-window.socket = socket;
-socket.on('connect', () => console.log('Socket.IO connected'));
+// Fetch the loopback socket token, then connect with it. The server rejects
+// handshakes without the token (see allowRequest in server.js).
+window.socket = null;
+(async function initSocket() {
+    let token = '';
+    try {
+        const res = await fetch('/api/socket-token');
+        if (res.ok) {
+            token = (await res.json()).token || '';
+        }
+    } catch (err) {
+        console.warn('Could not fetch socket token; retrying unauthenticated.');
+    }
+    const socket = io.connect(`http://${document.domain}:${location.port}`, {
+        auth: { token },
+        query: { token }
+    });
+    window.socket = socket;
+    socket.on('connect', () => console.log('Socket.IO connected'));
+    socket.on('connect_error', (err) => console.error('Socket.IO auth/connect error:', err.message));
+    window.dispatchEvent(new CustomEvent('socket-ready', { detail: socket }));
+})();
 
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof initializeScanRuntime === 'function') {

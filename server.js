@@ -13,7 +13,30 @@ const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// Loopback-only token: the UI receives it from the server that rendered it.
+// Any socket connection that did not present the token is disconnected before
+// it can request scan state, history, or trigger scans.
+const SOCKET_AUTH_TOKEN = crypto.randomBytes(32).toString('hex');
+app.get('/api/socket-token', (req, res) => {
+    // Only same-machine clients may fetch the token.
+    const remote = req.socket.remoteAddress || '';
+    const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+    if (!loopback) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+    }
+    res.json({ token: SOCKET_AUTH_TOKEN });
+});
+
+const io = new Server(server, {
+    cors: { origin: true, credentials: true },
+    allowRequest: (req, callback) => {
+        // Handshake must carry the token as a query auth parameter.
+        const token = req._query && req._query.token;
+        callback(null, token === SOCKET_AUTH_TOKEN);
+    }
+});
 
 const APP_IDENTITY = 'tm-network-scanner';
 const PORT = Number(process.env.PORT || 9000);
@@ -24,6 +47,24 @@ const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 const HISTORY_PATH = path.join(DATA_DIR, 'history.json');
 const REPORTS_DIR = path.join(DATA_DIR, 'reports_archive');
 const WORK_DIR = path.join(DATA_DIR, 'work');
+
+// Basic hardening headers. CDN hosts match the scripts/links used in index.html.
+app.use((req, res, next) => {
+    res.setHeader(
+        'Content-Security-Policy',
+        [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://unpkg.com",
+            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "img-src 'self' data: blob:",
+            "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*"
+        ].join('; ')
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+});
 
 app.use(express.static(path.join(__dirname)));
 app.use('/static', express.static(path.join(__dirname, 'static')));
@@ -1753,7 +1794,21 @@ io.on('connection', (socket) => {
         fs.writeFileSync(path.join(WORK_DIR, 'targets.tmp'), targets);
         runNmap(socket, buildPhase2Args(true, true), 3, null, { scanKind: 'dragnet' });
     });
-    socket.on('stop_scan', () => { if (currentScan) currentScan.kill(); });
+    socket.on('stop_scan', () => {
+        if (!currentScan) return;
+        const proc = currentScan;
+        logEvent(socket, 'job', 'Cancellation requested; sending SIGTERM.');
+        proc.kill('SIGTERM');
+        // nmap/NSE children can ignore SIGTERM; escalate to SIGKILL.
+        setTimeout(() => {
+            if (currentScan === proc && proc.exitCode === null && proc.signalCode === null) {
+                logEvent(socket, 'error', 'Scan did not exit after SIGTERM; sending SIGKILL.');
+                try { proc.kill('SIGKILL'); } catch (err) {
+                    console.warn(`SIGKILL escalation failed: ${err.message}`);
+                }
+            }
+        }, 5000);
+    });
     socket.on('enable_auto_scan', (data = {}) => {
         const autoScan = saveAutoScanConfig({
             enabled: true,

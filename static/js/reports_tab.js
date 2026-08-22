@@ -260,8 +260,8 @@ function renderHistoryContextPanel(scans) {
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
                 <div class="text-[11px] font-black uppercase tracking-widest text-olive-500">Current Network Audit</div>
-                <h3 class="mt-2 text-2xl font-display italic text-olive-950">${latestScan.customer_name || 'Unknown'}</h3>
-                <p class="mt-1 text-sm text-olive-700">Target: <span class="font-mono">${latestScan.target || '--'}</span></p>
+                <h3 class="mt-2 text-2xl font-display italic text-olive-950">${escapeHTMLValue(latestScan.customer_name || 'Unknown')}</h3>
+                <p class="mt-1 text-sm text-olive-700">Target: <span class="font-mono">${escapeHTMLValue(latestScan.target || '--')}</span></p>
                 <p class="mt-1 text-sm text-olive-600">Latest scan: ${formatScanTimestamp(latestScan)}</p>
                 <p class="mt-2 text-sm text-olive-700">${assetCount !== null ? `${assetCount} asset(s) in the saved snapshot.` : 'Asset snapshot unavailable for this saved scan.'}</p>
                 <p class="mt-1 text-sm text-olive-700">${diffSummary?.has_changes ? 'Changes detected since the previous scan.' : 'No recorded changes since the previous scan.'}</p>
@@ -362,7 +362,7 @@ function renderHistoryCompareResult(payload) {
         diffSummary.changed_hosts.forEach((hostDiff) => {
             const hostCard = document.createElement('div');
             hostCard.className = 'mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900';
-            hostCard.innerHTML = `<div class="font-mono font-semibold">${hostDiff.host}</div>`;
+            hostCard.innerHTML = `<div class="font-mono font-semibold">${escapeHTMLValue(hostDiff.host)}</div>`;
             const hostFacts = [];
             if (hostDiff.new_ports?.length) hostFacts.push(`new ports: ${hostDiff.new_ports.join(', ')}`);
             if (hostDiff.removed_ports?.length) hostFacts.push(`removed ports: ${hostDiff.removed_ports.join(', ')}`);
@@ -411,10 +411,10 @@ function createHistoryDetailBlock(scan) {
     const meta = document.createElement('div');
     meta.className = 'mt-3 grid gap-2 text-sm text-olive-700';
     meta.innerHTML = `
-        <div><span class="font-semibold text-olive-900">Path:</span> <span class="font-mono">${scan.path}</span></div>
-        <div><span class="font-semibold text-olive-900">Customer ID:</span> <span class="font-mono">${scan.customer_id || '--'}</span></div>
-        <div><span class="font-semibold text-olive-900">Status:</span> ${scan.status || 'completed'}</div>
-        <div><span class="font-semibold text-olive-900">Timestamp:</span> ${formatScanTimestamp(scan)}</div>
+        <div><span class="font-semibold text-olive-900">Path:</span> <span class="font-mono">${escapeHTMLValue(scan.path)}</span></div>
+        <div><span class="font-semibold text-olive-900">Customer ID:</span> <span class="font-mono">${escapeHTMLValue(scan.customer_id || '--')}</span></div>
+        <div><span class="font-semibold text-olive-900">Status:</span> ${escapeHTMLValue(scan.status || 'completed')}</div>
+        <div><span class="font-semibold text-olive-900">Timestamp:</span> ${escapeHTMLValue(formatScanTimestamp(scan))}</div>
     `;
     details.appendChild(meta);
     return details;
