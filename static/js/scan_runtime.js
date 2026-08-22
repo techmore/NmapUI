@@ -599,6 +599,18 @@ function initializeDiscoveryUI(socket) {
     const completeScanBtn = document.getElementById('generate-report-btn');
     const dragnetScanBtn = document.getElementById('dragnet-scan-btn');
     const stopScanBtn = document.getElementById('stop-scan-btn');
+    const vpnHelperToggle = document.getElementById('vpn-helper-toggle');
+    const vpnForceOsWrapper = document.getElementById('vpn-force-os-wrapper');
+    const vpnForceOsToggle = document.getElementById('vpn-force-os-toggle');
+
+    const syncVpnControls = () => {
+        const enabled = !!vpnHelperToggle?.checked;
+        vpnForceOsWrapper?.classList.toggle('hidden', !enabled);
+        vpnForceOsWrapper?.classList.toggle('flex', enabled);
+        if (!enabled && vpnForceOsToggle) vpnForceOsToggle.checked = false;
+    };
+    vpnHelperToggle?.addEventListener('change', syncVpnControls);
+    syncVpnControls();
 
     if (startScanBtn) {
         startScanBtn.addEventListener('click', () => {
@@ -609,8 +621,9 @@ function initializeDiscoveryUI(socket) {
     if (completeScanBtn) {
         completeScanBtn.addEventListener('click', () => {
             const target = document.getElementById('scan-target').value;
-            const vpnHelper = !!document.getElementById('vpn-helper-toggle')?.checked;
-            socket.emit('start_complete_scan', { target, vpnHelper, customerProfilePrefix: getScanCustomerProfilePrefix() });
+            const vpnHelper = !!vpnHelperToggle?.checked;
+            const forceOsDetection = vpnHelper && !!vpnForceOsToggle?.checked;
+            socket.emit('start_complete_scan', { target, vpnHelper, forceOsDetection, customerProfilePrefix: getScanCustomerProfilePrefix() });
         });
     }
     if (dragnetScanBtn) {

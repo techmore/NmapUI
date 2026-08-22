@@ -622,6 +622,56 @@ function isCompleteNmapXML(xmlPath) {
     return xml.includes('<nmaprun') && xml.endsWith('</nmaprun>');
 }
 
+function getHostPrimaryIp(host) {
+    const addresses = host?.address || [];
+    const ipv4 = addresses.find(address => address?.$?.addrtype === 'ipv4')?.$?.addr;
+    return ipv4 || addresses[0]?.$?.addr || '';
+}
+
+async function readNmapXmlObject(xmlPath) {
+    const parser = new xml2js.Parser();
+    return parser.parseStringPromise(fs.readFileSync(xmlPath, 'utf8'));
+}
+
+async function mergeNmapXmlFiles(inputPaths, outputPath) {
+    const completePaths = inputPaths.filter(isCompleteNmapXML);
+    if (!completePaths.length) return false;
+
+    let baseRun = null;
+    const hostByIp = new Map();
+    for (const xmlFile of completePaths) {
+        const parsed = await readNmapXmlObject(xmlFile);
+        const run = parsed.nmaprun || {};
+        if (!baseRun) baseRun = run;
+        (run.host || []).forEach(host => {
+            const ip = getHostPrimaryIp(host);
+            if (!ip) return;
+            const existing = hostByIp.get(ip);
+            if (existing?.os && !host.os) host.os = existing.os;
+            if (existing?.ports && !host.ports) host.ports = existing.ports;
+            hostByIp.set(ip, host);
+        });
+    }
+
+    const hostCount = hostByIp.size;
+    const mergedRun = {
+        ...baseRun,
+        $: {
+            ...(baseRun.$ || {}),
+            args: `${baseRun.$?.args || 'nmap'} -- TM-NmapUI merged VPN helper batch XML`,
+            startstr: baseRun.$?.startstr || new Date().toString()
+        },
+        host: Array.from(hostByIp.values()).sort((a, b) => getHostPrimaryIp(a).localeCompare(getHostPrimaryIp(b), undefined, { numeric: true })),
+        runstats: [{
+            finished: [{ $: { time: String(Math.floor(Date.now() / 1000)), timestr: new Date().toString(), summary: `Merged ${completePaths.length} VPN helper XML batch file(s)` } }],
+            hosts: [{ $: { up: String(hostCount), down: '0', total: String(hostCount) } }]
+        }]
+    };
+    const builder = new xml2js.Builder({ headless: false });
+    fs.writeFileSync(outputPath, builder.buildObject({ nmaprun: mergedRun }));
+    return true;
+}
+
 function buildPhase2Args(usePn = false, fullPortScan = false, options = {}) {
     const hostGroupArgs = options.hostGroup
         ? ['--min-hostgroup', '1', '--max-hostgroup', String(options.hostGroup)]
@@ -1300,6 +1350,125 @@ async function runPhase2Fallback(socket, originalDuration, reportScanKind) {
     });
 }
 
+function chunkArray(items, size) {
+    const chunks = [];
+    for (let index = 0; index < items.length; index += size) {
+        chunks.push(items.slice(index, index + size));
+    }
+    return chunks;
+}
+
+function writeTargetList(fileName, targets) {
+    const filePath = path.join(__dirname, fileName);
+    fs.writeFileSync(filePath, targets.join('\n'));
+    return filePath;
+}
+
+async function runVpnHelperPhase2(socket, originalDuration, reportScanKind, options = {}) {
+    const workflowStartedAt = Date.now();
+    const batchSize = Number(options.batchSize || 50);
+    const forceOsDetection = !!options.forceOsDetection;
+    const hosts = discoveredHosts.map(host => host.ip).filter(Boolean);
+    const batches = chunkArray(hosts, batchSize);
+    const successfulXmlFiles = [];
+    const failedBatches = [];
+
+    logEvent(socket, 'job', `VPN Helper Phase 2 starting split 2.1/2.2 workflow for ${hosts.length} host(s) in ${batches.length} batch(es) of ${batchSize}.`);
+    logEvent(socket, 'job', forceOsDetection
+        ? 'VPN Helper Force OS Detection enabled: Phase 2.1 includes -O.'
+        : 'VPN Helper OS detection disabled by default. Enable Force OS Detection (-O) to include it.');
+
+    for (let index = 0; index < batches.length; index += 1) {
+        const batchNumber = index + 1;
+        const padded = String(batchNumber).padStart(3, '0');
+        const batchTargets = batches[index];
+        const batchFile = `targets_vpn_batch_${padded}.tmp`;
+        const serviceXml = `phase2_vpn_service_batch_${padded}.xml`;
+        const vulnersXml = `phase2_vpn_vulners_batch_${padded}.xml`;
+        [batchFile, serviceXml, vulnersXml].forEach(file => {
+            const filePath = path.join(__dirname, file);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        });
+        writeTargetList(batchFile, batchTargets);
+
+        logEvent(socket, 'job', `VPN Phase 2.1 batch ${batchNumber}/${batches.length}: service scan for ${batchTargets.length} host(s).`);
+        const serviceArgs = [
+            '-sS', '-sV',
+            ...(forceOsDetection ? ['-O'] : []),
+            '-Pn',
+            '-T2',
+            '--open',
+            '--max-parallelism', '15',
+            '--max-retries', '2',
+            '-oX', serviceXml,
+            '-iL', batchFile
+        ];
+        const serviceResult = await runNmapFallbackPass(socket, serviceArgs, 2.1, serviceXml, `VPN service batch ${batchNumber}/${batches.length}`, { scanKind: reportScanKind });
+        if (serviceResult.success) {
+            successfulXmlFiles.push(serviceResult.xmlPath);
+            parseNmapXML(serviceResult.xmlPath, (parsedStats) => {
+                logEvent(socket, 'job', `VPN Phase 2.1 batch ${batchNumber}/${batches.length} parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}.`);
+                io.emit('phase_stats', { phase: 2.1, ...parsedStats });
+            });
+        } else {
+            failedBatches.push({ phase: 2.1, batch: batchNumber, error: serviceResult.error });
+            logEvent(socket, 'error', `VPN Phase 2.1 batch ${batchNumber}/${batches.length} failed: ${serviceResult.error}`);
+        }
+
+        logEvent(socket, 'job', `VPN Phase 2.2 batch ${batchNumber}/${batches.length}: vulners scan for ${batchTargets.length} host(s).`);
+        const vulnersResult = await runNmapFallbackPass(socket, [
+            '-sV',
+            '--script', 'vulners',
+            '--script-args', 'mincvss=0,threads=5',
+            '-iL', batchFile,
+            '-oX', vulnersXml
+        ], 2.2, vulnersXml, `VPN vulners batch ${batchNumber}/${batches.length}`, { scanKind: reportScanKind });
+        if (vulnersResult.success) {
+            successfulXmlFiles.push(vulnersResult.xmlPath);
+            parseNmapXML(vulnersResult.xmlPath, (parsedStats) => {
+                logEvent(socket, 'job', `VPN Phase 2.2 batch ${batchNumber}/${batches.length} parsed. Hosts: ${parsedStats.hostCount}, open ports: ${parsedStats.openPortCount}, critical CVEs: ${parsedStats.criticalCVECount}, LOW CVEs: ${parsedStats.lowCVECount}.`);
+                io.emit('phase_stats', { phase: 2.2, ...parsedStats });
+            });
+        } else {
+            failedBatches.push({ phase: 2.2, batch: batchNumber, error: vulnersResult.error });
+            logEvent(socket, 'error', `VPN Phase 2.2 batch ${batchNumber}/${batches.length} failed: ${vulnersResult.error}`);
+        }
+    }
+
+    const mergedXmlPath = path.join(__dirname, 'phase2_vpn_merged.xml');
+    if (fs.existsSync(mergedXmlPath)) fs.unlinkSync(mergedXmlPath);
+    const merged = await mergeNmapXmlFiles(successfulXmlFiles, mergedXmlPath);
+    const totalDuration = (Number(originalDuration || 0) + ((Date.now() - workflowStartedAt) / 1000)).toFixed(2);
+    if (!merged) {
+        const error = 'VPN Helper Phase 2 did not produce any complete XML batch files.';
+        logEvent(socket, 'error', error);
+        saveFailedScanHistory({
+            target: currentTarget,
+            duration: totalDuration,
+            hostCount: discoveredHosts.length,
+            scanKind: reportScanKind,
+            customerProfile: getCustomerFingerprintProfile(),
+            error
+        });
+        io.emit('scan_complete', { phase: 2.2, duration: totalDuration, ...getScanStats(), status: 'failed', error });
+        return;
+    }
+
+    if (failedBatches.length) {
+        logEvent(socket, 'error', `VPN Helper completed with ${failedBatches.length} failed batch pass(es). Report will include partial successful results.`);
+    }
+    logEvent(socket, 'job', `VPN Helper Phase 2 complete. Merged ${successfulXmlFiles.length} successful XML batch file(s).`);
+    generateReportFromXml(socket, mergedXmlPath, totalDuration, reportScanKind, () => {
+        io.emit('scan_complete', {
+            phase: 3,
+            duration: totalDuration,
+            ...getScanStats(),
+            status: failedBatches.length ? 'partial_complete' : 'complete',
+            failedBatchCount: failedBatches.length
+        });
+    });
+}
+
 function runNmap(socket, args, phase = 1, onComplete = null, options = {}) {
     if (currentScan && phase === 1) {
         if (socket) logEvent(socket, 'error', 'A scan is already running.');
@@ -1530,6 +1699,15 @@ function startChainedScan(socket, target, usePn = false, options = {}) {
 
         if (usePn) {
             const vpnHelper = !!options.vpnHelper;
+            if (vpnHelper) {
+                logEvent(socket, 'job', `Complete+PDF VPN Helper enabled. Phase 2 will run as batched 2.1 service detection and 2.2 vulners passes for ${discoveredHosts.length} host(s).`);
+                runVpnHelperPhase2(socket, 0, scanKind, { forceOsDetection: !!options.forceOsDetection, batchSize: 50 })
+                    .catch(error => {
+                        logEvent(socket, 'error', `VPN Helper Phase 2 failed: ${error.message}`);
+                        io.emit('scan_complete', { phase: 2.2, duration: '0.00', ...getScanStats(), status: 'failed', error: error.message });
+                    });
+                return;
+            }
             const phase2Options = vpnHelper
                 ? {
                     includeDefaultScripts: false,
@@ -1543,7 +1721,7 @@ function startChainedScan(socket, target, usePn = false, options = {}) {
                     includeDefaultScripts: false,
                     minRate: false
                 };
-            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners${vpnHelper ? ' using VPN helper timing' : ''}. UI details will populate after XML parsing completes.`);
+            logEvent(socket, 'job', `Complete+PDF Phase 2 scanning all ${discoveredHosts.length} host(s) in one Nmap command with vulners. UI details will populate after XML parsing completes.`);
             runNmap(
                 socket,
                 buildPhase2Args(true, false, phase2Options),
@@ -1568,7 +1746,7 @@ io.on('connection', (socket) => {
         cachedHops.forEach(hop => socket.emit('traceroute_hop', hop));
     });
     socket.on('start_quick_scan', (data) => startChainedScan(socket, data.target, false, { customerProfilePrefix: data.customerProfilePrefix || '' }));
-    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true, { vpnHelper: !!data.vpnHelper, customerProfilePrefix: data.customerProfilePrefix || '' }));
+    socket.on('start_complete_scan', (data) => startChainedScan(socket, data.target, true, { vpnHelper: !!data.vpnHelper, forceOsDetection: !!data.forceOsDetection, customerProfilePrefix: data.customerProfilePrefix || '' }));
     socket.on('start_dragnet_scan', (data) => {
         if (discoveredHosts.length === 0) { logEvent(socket, 'error', 'No hosts discovered in Phase 1.'); return; }
         const targets = discoveredHosts.map(h => h.ip).join('\n');
