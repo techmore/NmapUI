@@ -24,6 +24,7 @@ def start_scan_task(
     logger,
     settings_state,
     vulners_script,
+    runtime_store=None,
 ):
     return start_scan_task_impl(
         sid=sid,
@@ -31,6 +32,7 @@ def start_scan_task(
         broadcaster=broadcaster,
         emit_to_client=emit_to_client,
         get_client_state=get_client_state,
+        runtime_store=runtime_store,
         ensure_job_not_cancelled=ensure_job_not_cancelled,
         idle_state_manager=idle_state_manager,
         update_job_progress=update_job_progress,

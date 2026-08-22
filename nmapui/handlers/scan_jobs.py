@@ -15,13 +15,16 @@ def register_scan_job_handlers(socketio, deps):
     generate_report_task = deps["generate_report_task"]
     generate_pdf_from_saved_task = deps.get("generate_pdf_from_saved_task")
 
-    @socketio.on("start_scan")
-    @require_socket_auth()
-    def start_scan(data):
+    def _start_scan_core(data, extra=None):
+        payload = dict(extra or {})
         if isinstance(data, dict):
-            target = data.get("target", "")
+            payload.update(data)
         else:
-            target = str(data) if data else ""
+            payload["target"] = str(data) if data else ""
+        target = payload.get("target", "")
+
+        if not isinstance(target, str):
+            target = str(target)
 
         is_valid, error_msg = validate_target(target)
         if not is_valid:
@@ -50,6 +53,27 @@ def register_scan_job_handlers(socketio, deps):
             rate_limiter.record_scan()
         emit_job_status(request.sid, "scan")
         socketio.start_background_task(start_scan_task, request.sid, target)
+
+    # Legacy event names emitted by the frontend buttons (quick/complete/dragnet).
+    @socketio.on("start_quick_scan")
+    @require_socket_auth()
+    def start_quick_scan(data):
+        _start_scan_core(data)
+
+    @socketio.on("start_complete_scan")
+    @require_socket_auth()
+    def start_complete_scan(data):
+        _start_scan_core(data)
+
+    @socketio.on("start_dragnet_scan")
+    @require_socket_auth()
+    def start_dragnet_scan(data):
+        _start_scan_core(data)
+
+    @socketio.on("start_scan")
+    @require_socket_auth()
+    def start_scan(data):
+        _start_scan_core(data)
 
     @socketio.on("generate_report")
     @require_socket_auth()
