@@ -1,4 +1,5 @@
 from flask import jsonify, request
+from html import escape
 
 from nmapui.auto_monitor import build_auto_monitor_rule_status
 from nmapui.auth import require_auth
@@ -111,7 +112,8 @@ def register_settings_routes(app, deps):
     def google_drive_callback_route():
         code = request.args.get("code", "")
         state = request.args.get("state", "")
-        error = request.args.get("error", "")
+        # Reflected values are HTML-escaped to prevent XSS (#197).
+        error = escape(request.args.get("error", ""))
         if error:
             return (
                 "<html><body><h3>Google Drive connection failed</h3>"
@@ -123,7 +125,7 @@ def register_settings_routes(app, deps):
             if not result.get("success"):
                 return (
                     "<html><body><h3>Google Drive connection failed</h3>"
-                    f"<p>{result.get('error', 'Unknown error')}</p></body></html>",
+                    f"<p>{escape(str(result.get('error', 'Unknown error')))}</p></body></html>",
                     400,
                 )
             folder_result = ensure_google_drive_reports_folder()
@@ -178,7 +180,7 @@ def register_settings_routes(app, deps):
             app.logger.exception("Google Drive callback failed")
             return (
                 "<html><body><h3>Google Drive connection failed</h3>"
-                f"<p>Unexpected callback error: {exc}</p></body></html>",
+                f"<p>Unexpected callback error: {escape(str(exc))}</p></body></html>",
                 500,
             )
 

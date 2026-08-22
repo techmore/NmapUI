@@ -88,7 +88,9 @@ app.get('/google-drive/oauth2callback', async (req, res) => {
         return;
     }
     io.emit('google_drive_status', { ...result, config: getGoogleDriveConfig() });
-    res.status(400).send(`<html><body><h1>Google Drive connection failed</h1><p>${String(result.error || 'Unknown error')}</p></body></html>`);
+    // Reflected value is HTML-escaped to prevent XSS (#197).
+    const safeError = escapeHtml(String(result.error || 'Unknown error'));
+    res.status(400).send(`<html><body><h1>Google Drive connection failed</h1><p>${safeError}</p></body></html>`);
 });
 
 // Global state for persistence across tabs
