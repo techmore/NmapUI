@@ -409,15 +409,17 @@ def test_connect_replays_active_scan_events_to_new_tab():
     assert observed["customer_state"][0][1]["id"] == "cust-123"
     assert observed["network_state"][0][1]["target"] == "10.0.0.0/24"
     assert observed["target_state"][0][1] == "10.0.0.0/24"
-    assert [event for _, event, _ in emitted[:4]] == [
+    bridge_events = {"sync_state", "initial_data"}
+    contract_events = [e for e in emitted if e[1] not in bridge_events]
+    assert [event for _, event, _ in contract_events[:4]] == [
         "customer_info",
         "network_key",
         "client_state_snapshot",
         "auto_scan_status",
     ]
-    assert emitted[4][1] == "job_status"
-    assert emitted[4][2]["job_type"] == "scan"
-    assert emitted[5:] == [
+    assert contract_events[4][1] == "job_status"
+    assert contract_events[4][2]["job_type"] == "scan"
+    assert [e for e in contract_events[5:]] == [
         (observed["subscribe"][1], "scan_feedback", "Scanning..."),
         (observed["subscribe"][1], "scan_progress", {"pct": 50}),
     ]
@@ -551,9 +553,11 @@ def test_connect_replays_active_report_events_to_new_tab():
     assert observed["job_lookup"] == ("owner-sid", "report")
     assert observed["buffer_lookup"] == ("owner-sid", "report")
     assert observed["subscribe"][2] == "report"
-    assert emitted[4][1] == "job_status"
-    assert emitted[4][2]["job_type"] == "report"
-    assert emitted[5:] == [
+    bridge_events = {"sync_state", "initial_data"}
+    contract_events = [e for e in emitted if e[1] not in bridge_events]
+    assert contract_events[4][1] == "job_status"
+    assert contract_events[4][2]["job_type"] == "report"
+    assert [e for e in contract_events[5:]] == [
         (observed["subscribe"][1], "scan_feedback", "Generating PDF report..."),
         (
             observed["subscribe"][1],
@@ -595,12 +599,15 @@ def test_connect_hydrates_new_tab_from_shared_snapshot_without_active_scan():
     assert observed["customer_state"][0][1]["id"] == "cust-999"
     assert observed["network_state"][0][1]["target"] == "192.168.1.0/24"
     assert observed["target_state"][0][1] == "192.168.1.0/24"
-    assert [event for _, event, _ in emitted] == [
+    assert [event for _, event, _ in emitted][:4] == [
         "customer_info",
         "network_key",
         "client_state_snapshot",
         "auto_scan_status",
     ]
+    # Legacy protocol bridge (#230): sync_state/initial_data follow the contract events.
+    assert "sync_state" in [event for _, event, _ in emitted]
+    assert "initial_data" in [event for _, event, _ in emitted]
 
 
 def test_connect_hydrates_new_tab_from_sqlite_snapshot_without_active_scan():
