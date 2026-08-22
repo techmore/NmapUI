@@ -684,6 +684,62 @@ Updated: 2026
               </div>
             </div>
             
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 pdf-card-grid-3">
+              <!-- Network Range -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Network Scanned</h3>
+                <div class="space-y-1">
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">Target:</span>
+                    <xsl:value-of select="substring-after(/nmaprun/@args, ' ')"/>
+                  </div>
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">IPs:</span> <xsl:value-of select="/nmaprun/runstats/hosts/@total"/>
+                  </div>
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">Started:</span> <xsl:value-of select="/nmaprun/@startstr"/>
+                  </div>
+                  <div class="text-sm text-olive-700">
+                    <span class="font-medium">Duration:</span>
+                    <xsl:value-of select="/nmaprun/runstats/finished/@elapsed"/>s
+                  </div>
+                </div>
+              </div>
+
+              <!-- Vulnerability Severity -->
+              <div class="card p-4">
+                <h3 class="text-lg font-semibold text-olive-900 mb-3">Vulnerability Levels</h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-red-600 font-medium">Critical (CVSS ≥9.0)</span>
+                    <span class="text-sm font-bold text-red-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '9.') or contains(@output, '10.')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-orange-600 font-medium">High (CVSS ≥7.0)</span>
+                    <span class="text-sm font-bold text-orange-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '7.') or contains(@output, '8.')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-yellow-600 font-medium">Medium (CVSS ≥4.0)</span>
+                    <span class="text-sm font-bold text-yellow-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '4.') or contains(@output, '5.') or contains(@output, '6.')])"/>
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-green-600 font-medium">Low (CVSS &lt;4.0)</span>
+                    <span class="text-sm font-bold text-green-600">
+                      <xsl:value-of select="count(/nmaprun/host/script[@id='vulners'][contains(@output, '0.') or contains(@output, '1.') or contains(@output, '2.') or contains(@output, '3.')])"/>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              </div>
+
+
             <!-- Keyword Highlighting -->
             <div class="border-t border-olive-200 pt-6">
               <label class="block text-sm font-medium text-olive-900 mb-2">Highlight Keywords in Services</label>
