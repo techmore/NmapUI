@@ -486,10 +486,10 @@ def test_find_latest_saved_scan_for_pdf_prefers_latest_matching_customer(tmp_pat
     (older / "scan.xml").write_text("<nmaprun/>")
     (newer / "scan.xml").write_text("<nmaprun/>")
     (older / "metadata.json").write_text(
-        f'{{"target":"192.168.1.0/24","customer_id":"cust-123","timestamp\":\"{_RECENT_TS_1}}}'
+        f'{{\"target\":\"192.168.1.0/24\",\"customer_id\":\"cust-123\",\"timestamp\":\"{_RECENT_TS_1}\"}}'
     )
     (newer / "metadata.json").write_text(
-        f'{{"target":"192.168.1.0/24","customer_id":"cust-123","timestamp":"{{_RECENT_TS_2}}"}}'
+        f'{{\"target\":\"192.168.1.0/24\",\"customer_id\":\"cust-123\",\"timestamp\":\"{_RECENT_TS_2}\"}}'
     )
 
     scan_dir, xml_path = find_latest_saved_scan_for_pdf(

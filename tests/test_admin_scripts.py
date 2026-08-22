@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import sys
 
 from nmapui.runtime_db import create_runtime_state_store
 
@@ -20,7 +21,7 @@ def test_backfill_runtime_store_script_populates_sqlite(tmp_path):
 
     result = subprocess.run(
         [
-            str(Path(__file__).resolve().parents[1] / ".venv" / "bin" / "python"),
+            sys.executable,
             str(Path(__file__).resolve().parents[1] / "scripts" / "backfill_runtime_store.py"),
             "--db-path",
             str(db_path),
