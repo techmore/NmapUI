@@ -12,3 +12,15 @@ history.json
 reports_archive/
 phase2_results.xml
 targets.tmp
+
+# Scan artifacts & local runtime output
+phase*_results*.xml
+phase2_*.xml
+*.tmp
+work/
+.build/
+.tmp-*/
+.pytest_cache/
+.venv/
+.claude/settings.local.json
+EOF
