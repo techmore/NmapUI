@@ -67,6 +67,9 @@ def browser_server():
     os.environ.setdefault("NMAPUI_DEBUG", "false")
     os.environ.setdefault("NMAPUI_USERNAME", "scanner")
     os.environ.setdefault("NMAPUI_PASSWORD", "secret-pass")
+    # The socketio test client and Playwright pages do not carry the loopback
+    # token; disable socket auth for browser regressions.
+    os.environ.setdefault("NMAPUI_SOCKET_AUTH_DISABLED", "true")
 
     app_module = importlib.import_module("app")
 

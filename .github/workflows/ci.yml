@@ -29,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NMAPUI_RUN_BROWSER_REGRESSION: "1"
+      NMAPUI_SOCKET_AUTH_DISABLED: "1"
       NMAPUI_TRUST_LOCAL_UI: "true"
       NMAPUI_ALLOW_UNSAFE_WERKZEUG: "true"
       NMAPUI_DEBUG: "false"
