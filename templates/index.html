@@ -1375,14 +1375,40 @@
                 <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="deep-cves" class="font-medium text-olive-900">--</span></p>
             </div>
         </div>
-            <div class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300 compact-card hover-lift">
-            <h2 class="text-xl font-display italic text-olive-900 mb-3">Dragnet Scan</h2>
+        <div id="monitoring-hub-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300 compact-card hover-lift">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Monitoring Hub</h2>
+                <span id="auto-monitor-indicator" class="hidden relative flex size-3" title="Auto-Monitor active">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-amber-500"></span>
+                </span>
+            </div>
+
+            <!-- Last dragnet run stats (kept from the old Dragnet card) -->
             <div class="space-y-1 text-sm">
-                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="dragnet-time" class="font-medium text-olive-900">--:--:--</span></p>
-                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="dragnet-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Last sweep:</span> <span id="dragnet-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Hosts seen:</span> <span id="dragnet-hosts" class="font-medium text-olive-900">--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="dragnet-ports" class="font-medium text-olive-900">--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="dragnet-cves" class="font-medium text-olive-900">--</span></p>
             </div>
+
+            <div class="mt-4 pt-3 border-t border-olive-200 space-y-2">
+                <!-- Auto-Monitor status row -->
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-olive-600">Auto-Monitor</span>
+                    <span id="monitor-auto-scan-state" class="font-medium text-olive-400">Off</span>
+                </div>
+                <p id="monitor-auto-scan-detail" class="hidden font-mono text-[10px] text-olive-500"></p>
+
+                <!-- Change summary since previous scan -->
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-olive-600">Changes vs last scan</span>
+                    <span id="monitor-change-summary" class="font-medium text-olive-400">--</span>
+                </div>
+
+                <button id="open-reports-tab-btn" class="mt-1 w-full py-1.5 text-[11px] font-bold uppercase tracking-widest bg-white border border-olive-200 text-olive-700 rounded-lg hover:bg-olive-100 transition-colors">View Reports &amp; History</button>
+            </div>
+            <p class="text-olive-500 text-xs mt-2 font-mono">nmap -iL discovered - exhaustive</p>
         </div>
     </div>
 
@@ -1651,6 +1677,9 @@
             }
             if (typeof initializeCustomerUI === 'function') {
                 initializeCustomerUI(socket);
+            }
+            if (typeof initializeMonitoringHub === 'function') {
+                initializeMonitoringHub(socket);
             }
             if (typeof initializeAuditLog === 'function') {
                 initializeAuditLog();
