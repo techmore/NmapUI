@@ -166,6 +166,21 @@ def scan_fixture():
         (scan_dir / "scan_report.pdf").write_bytes(b"%PDF-1.4\n% browser fixture\n")
         (scan_dir / "scan.xml").write_text("<nmaprun></nmaprun>")
         upsert_scan_metadata_index_entry(SCANS_DIR, scan_dir, metadata)
+        # Mirror into the runtime sqlite store: /api/runtime/reports reads only from
+        # the store, so JSON-index-only writes are invisible to the running server.
+        import sys as _sys
+        runtime_store = getattr(_sys.modules.get("app"), "runtime_store", None)
+        if runtime_store is not None:
+            rel = str(scan_dir.relative_to(SCANS_DIR))
+            runtime_store.upsert_report_artifact(
+                scan_path=rel,
+                customer_id=str(metadata.get("customer_id", "") or ""),
+                target=str(metadata.get("target", "") or ""),
+                html_path=str(scan_dir / "scan_web.html"),
+                pdf_path=str(scan_dir / "scan_report.pdf") if (scan_dir / "scan_report.pdf").exists() else None,
+                xml_path=str(scan_dir / "scan.xml"),
+                payload=metadata,
+            )
 
     try:
         yield {
@@ -187,7 +202,7 @@ def test_reports_tab_renders_saved_report_and_view_action(browser_server, playwr
     page.goto(browser_server["base_url"], wait_until="domcontentloaded")
     page.locator("#tab-reports-btn").click()
 
-    page.locator("#reports-tab-list").get_by_text(scan_fixture["customer_name"]).wait_for()
+    page.locator("#reports-tab-list").get_by_text(scan_fixture["customer_name"]).first.wait_for()
     view_link = page.locator("#reports-tab-list").get_by_role("link", name="View Report").first
 
     with context.expect_page() as popup_info:
@@ -209,10 +224,13 @@ def test_history_tab_renders_diff_summary(browser_server, playwright_browser, sc
     page.locator("#tab-history-btn").click()
 
     history_list = page.locator("#history-tab-list")
-    history_list.get_by_text(scan_fixture["customer_name"]).wait_for()
-    history_list.get_by_text("Changes since previous scan").wait_for()
-    history_list.get_by_text("1 new host(s)").wait_for()
-    history_list.get_by_text("1 changed host(s)").wait_for()
+    fixture_card = history_list.locator("article").filter(
+        has=page.locator("h3", has_text=scan_fixture["customer_name"])
+    ).first
+    fixture_card.wait_for()
+    fixture_card.get_by_text("Changes since previous scan").wait_for()
+    fixture_card.get_by_text("1 new host(s)").wait_for()
+    fixture_card.get_by_text("1 changed host(s)").wait_for()
 
     context.close()
 

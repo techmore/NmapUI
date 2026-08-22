@@ -1,3 +1,11 @@
+// Wire tab switching immediately (pure DOM) so tab clicks work even while the
+// socket is still connecting. Data loads inside each tab handle their own readiness.
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initializeReportsTab === 'function') {
+        initializeReportsTab();
+    }
+});
+
 // Fetch the loopback socket token, then connect with it. The server rejects
 // handshakes without the token (see allowRequest in server.js).
 window.socket = null;

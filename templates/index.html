@@ -1602,6 +1602,16 @@
     <div class="page-shell">
 
     <script>
+        // Wire tab switching immediately (pure DOM) so tab clicks work while the
+        // socket is still connecting. Data loads handle their own readiness.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (typeof initializeReportsTab === 'function') initializeReportsTab();
+            });
+        } else if (typeof initializeReportsTab === 'function') {
+            initializeReportsTab();
+        }
+
         // Set current date and time.
         // Fetch the loopback socket token, then connect with it (#210).
         window.socket = null;
