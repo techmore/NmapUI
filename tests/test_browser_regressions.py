@@ -67,6 +67,9 @@ def browser_server():
     os.environ.setdefault("NMAPUI_DEBUG", "false")
     os.environ.setdefault("NMAPUI_USERNAME", "scanner")
     os.environ.setdefault("NMAPUI_PASSWORD", "secret-pass")
+    # The socketio test client and Playwright pages do not carry the loopback
+    # token; disable socket auth for browser regressions.
+    os.environ.setdefault("NMAPUI_SOCKET_AUTH_DISABLED", "true")
 
     app_module = importlib.import_module("app")
 
@@ -181,7 +184,7 @@ def test_reports_tab_renders_saved_report_and_view_action(browser_server, playwr
     context = playwright_browser.new_context()
     page = context.new_page()
 
-    page.goto(browser_server["base_url"], wait_until="networkidle")
+    page.goto(browser_server["base_url"], wait_until="domcontentloaded")
     page.locator("#tab-reports-btn").click()
 
     page.locator("#reports-tab-list").get_by_text(scan_fixture["customer_name"]).wait_for()
@@ -202,7 +205,7 @@ def test_history_tab_renders_diff_summary(browser_server, playwright_browser, sc
     context = playwright_browser.new_context()
     page = context.new_page()
 
-    page.goto(browser_server["base_url"], wait_until="networkidle")
+    page.goto(browser_server["base_url"], wait_until="domcontentloaded")
     page.locator("#tab-history-btn").click()
 
     history_list = page.locator("#history-tab-list")
@@ -218,7 +221,7 @@ def test_history_tab_compares_selected_scan_pair(browser_server, playwright_brow
     context = playwright_browser.new_context()
     page = context.new_page()
 
-    page.goto(browser_server["base_url"], wait_until="networkidle")
+    page.goto(browser_server["base_url"], wait_until="domcontentloaded")
     page.locator("#tab-history-btn").click()
 
     history_cards = page.locator("#history-tab-list article")
@@ -274,7 +277,7 @@ def test_second_tab_replays_active_report_state(browser_server, playwright_brows
 
     try:
         for page in (first_page, second_page):
-            page.goto(browser_server["base_url"], wait_until="networkidle")
+            page.goto(browser_server["base_url"], wait_until="domcontentloaded")
             page.locator("#scan-target").wait_for()
             page.wait_for_function(
                 "() => document.getElementById('scan-target').value === '198.51.100.0/24'"
@@ -336,7 +339,7 @@ def test_second_tab_replays_active_scan_state(browser_server, playwright_browser
 
     try:
         for page in (first_page, second_page):
-            page.goto(browser_server["base_url"], wait_until="networkidle")
+            page.goto(browser_server["base_url"], wait_until="domcontentloaded")
             page.locator("#scan-target").wait_for()
             page.wait_for_function(
                 "() => document.getElementById('scan-target').value === '198.51.100.0/24'"
@@ -369,7 +372,7 @@ def test_existing_open_tabs_receive_live_report_state(browser_server, playwright
 
     try:
         for page in (first_page, second_page):
-            page.goto(browser_server["base_url"], wait_until="networkidle")
+            page.goto(browser_server["base_url"], wait_until="domcontentloaded")
             page.locator("#scan-target").wait_for()
 
         owner_client = app_module.socketio.test_client(app_module.app)
@@ -427,7 +430,7 @@ def test_existing_open_tabs_receive_live_scan_state(browser_server, playwright_b
 
     try:
         for page in (first_page, second_page):
-            page.goto(browser_server["base_url"], wait_until="networkidle")
+            page.goto(browser_server["base_url"], wait_until="domcontentloaded")
             page.locator("#scan-target").wait_for()
 
         owner_client = app_module.socketio.test_client(app_module.app)

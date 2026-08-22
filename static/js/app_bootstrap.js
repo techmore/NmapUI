@@ -21,7 +21,29 @@ window.socket = null;
     window.dispatchEvent(new CustomEvent('socket-ready', { detail: socket }));
 })();
 
-document.addEventListener('DOMContentLoaded', () => {
+// All module initialization needs the live socket, so wait for it (or DOM ready)
+// before wiring modules. Both conditions are awaited below.
+let socketReadyPromise = null;
+function whenSocketReady() {
+    if (!socketReadyPromise) {
+        socketReadyPromise = new Promise((resolve) => {
+            if (window.socket) return resolve(window.socket);
+            window.addEventListener('socket-ready', (e) => resolve(e.detail), { once: true });
+        });
+    }
+    return socketReadyPromise;
+}
+function whenDomReady() {
+    if (document.readyState !== 'loading') return Promise.resolve();
+    return new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+}
+
+async function bootstrapApp() {
+    const [socket] = await Promise.all([whenSocketReady(), whenDomReady()]);
+    // Ensure the engine.io connection is live so early emits are not dropped.
+    if (!socket.connected) {
+        await new Promise((resolve) => socket.on('connect', resolve));
+    }
     if (typeof initializeScanRuntime === 'function') {
         initializeScanRuntime(socket);
     }
@@ -82,4 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-});
+}
+
+bootstrapApp();

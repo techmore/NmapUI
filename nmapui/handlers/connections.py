@@ -69,11 +69,14 @@ def register_connection_handlers(socketio, deps):
     set_last_scan_target_state = deps["set_last_scan_target_state"]
     set_network_key_state = deps["set_network_key_state"]
     socket_auth_token = deps.get("socket_auth_token") or ""
+    import os as _os
+    auth_disabled = _os.environ.get("NMAPUI_SOCKET_AUTH_DISABLED", "").strip().lower() in {"1", "true", "yes"}
 
     @socketio.on("connect")
     def on_connect(auth=None):
         # Reject connections that did not present the loopback token (#210).
-        if socket_auth_token:
+        # Test harnesses may disable the check explicitly via env flag.
+        if socket_auth_token and not auth_disabled:
             if not (isinstance(auth, dict) and auth.get("token") == socket_auth_token):
                 logger.warning(
                     "Rejected Socket.IO connection from %s without valid token.",

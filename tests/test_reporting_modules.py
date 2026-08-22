@@ -3,6 +3,15 @@ import shutil
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
+from datetime import datetime as _dt, timedelta as _td
+
+def _recent_iso(days_ago, hour, minute=0):
+    dt = _dt.now() - _td(days=days_ago)
+    return dt.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat()
+
+_RECENT_TS_1 = _recent_iso(2, 1)
+_RECENT_TS_2 = _recent_iso(1, 2)
+_RECENT_TS_3 = _recent_iso(1, 3)
 
 from nmapui.reporting import (
     build_report_diff_summary,
@@ -297,12 +306,12 @@ def test_get_most_recent_scan_xml_prefers_customer_id_over_folder_name(tmp_path)
     renamed_customer_dir.mkdir(parents=True)
     (renamed_customer_dir / "scan.xml").write_text("<nmaprun/>")
     (renamed_customer_dir / "metadata.json").write_text(
-        """
-        {
+        f"""
+        {{
           "customer_id": "cust-123",
           "customer_name": "Renamed Customer",
-          "timestamp": "2026-03-13T01:00:00"
-        }
+          "timestamp": "{_RECENT_TS_1}"
+        }}
         """
     )
 
@@ -327,12 +336,12 @@ def test_get_most_recent_scan_xml_ignores_invalid_metadata_files(tmp_path):
 
     (valid_dir / "scan.xml").write_text("<nmaprun/>")
     (valid_dir / "metadata.json").write_text(
-        """
-        {
+        f"""
+        {{
           "customer_id": "cust-123",
           "customer_name": "Acme Customer",
-          "timestamp": "2026-03-13T01:00:00"
-        }
+          "timestamp": "{_RECENT_TS_1}"
+        }}
         """
     )
     (invalid_dir / "scan.xml").write_text("<nmaprun/>")
@@ -366,7 +375,7 @@ def test_get_most_recent_scan_xml_prefers_runtime_artifacts(tmp_path):
                     "payload": {
                         "customer_id": "cust-123",
                         "customer_name": "Acme Customer",
-                        "timestamp": "2026-03-14T02:00:00",
+                        "timestamp": _RECENT_TS_2,
                     },
                 }
             ]
@@ -477,10 +486,10 @@ def test_find_latest_saved_scan_for_pdf_prefers_latest_matching_customer(tmp_pat
     (older / "scan.xml").write_text("<nmaprun/>")
     (newer / "scan.xml").write_text("<nmaprun/>")
     (older / "metadata.json").write_text(
-        '{"target":"192.168.1.0/24","customer_id":"cust-123","timestamp":"2026-03-13T01:00:00"}'
+        f'{{\"target\":\"192.168.1.0/24\",\"customer_id\":\"cust-123\",\"timestamp\":\"{_RECENT_TS_1}\"}}'
     )
     (newer / "metadata.json").write_text(
-        '{"target":"192.168.1.0/24","customer_id":"cust-123","timestamp":"2026-03-14T02:00:00"}'
+        f'{{\"target\":\"192.168.1.0/24\",\"customer_id\":\"cust-123\",\"timestamp\":\"{_RECENT_TS_2}\"}}'
     )
 
     scan_dir, xml_path = find_latest_saved_scan_for_pdf(
@@ -512,7 +521,7 @@ def test_find_latest_saved_scan_for_pdf_prefers_runtime_artifacts(tmp_path):
                     "payload": {
                         "target": "192.168.1.0/24",
                         "customer_id": "cust-123",
-                        "timestamp": "2026-03-14T02:00:00",
+                        "timestamp": _RECENT_TS_2,
                     },
                 }
             ]
@@ -538,7 +547,7 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
     previous_dir.mkdir(parents=True)
     scan_dir.mkdir(parents=True)
     (previous_dir / "metadata.json").write_text(
-        '{"path":"Acme/2026-03-13/scan_010000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-13T01:00:00"}'
+        f'{{"path":"Acme/2026-03-13/scan_010000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-13T01:00:00"}}'
     )
     (previous_dir / "scan.xml").write_text(
         """
@@ -564,7 +573,7 @@ def test_generate_pdf_from_saved_task_completes_report_job(tmp_path):
         """
     )
     (scan_dir / "metadata.json").write_text(
-        '{"path":"Acme/2026-03-14/scan_020000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-14T02:00:00"}'
+        f'{{"path":"Acme/2026-03-14/scan_020000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-14T02:00:00"}}'
     )
     observed = {"events": []}
     runtime_calls = []
@@ -702,7 +711,7 @@ def test_build_report_diff_summary_uses_previous_matching_scan(tmp_path):
     current_dir.mkdir(parents=True)
 
     (previous_dir / "metadata.json").write_text(
-        '{"path":"Acme/2026-03-13/scan_010000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-13T01:00:00"}'
+        f'{{"path":"Acme/2026-03-13/scan_010000_target","customer_id":"cust-123","target":"192.168.1.0/24","timestamp":"2026-03-13T01:00:00"}}'
     )
     (current_dir / "scan.xml").write_text(
         """

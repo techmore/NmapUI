@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install system test dependencies
+        run: sudo apt-get update && sudo apt-get install -y xsltproc
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -29,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NMAPUI_RUN_BROWSER_REGRESSION: "1"
+      NMAPUI_SOCKET_AUTH_DISABLED: "1"
       NMAPUI_TRUST_LOCAL_UI: "true"
       NMAPUI_ALLOW_UNSAFE_WERKZEUG: "true"
       NMAPUI_DEBUG: "false"

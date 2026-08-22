@@ -10,3 +10,6 @@ PyYAML==6.0.3
 # PDF generation backend (Apple Silicon / general)
 playwright==1.58.0
 cryptography==46.0.1
+
+# Test dependencies (CI)
+pytest==9.0.2
