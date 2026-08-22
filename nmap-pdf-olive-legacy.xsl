@@ -1322,7 +1322,14 @@ Updated: 2026
                                   <xsl:for-each select="script">
                                     <div class="mb-3">
                                       <h5 class="font-semibold text-olive-800 mb-1"><xsl:value-of select="@id"/></h5>
-                                      <pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto"><xsl:value-of select="@output"/></pre>
+                                      <xsl:choose>
+                                        <xsl:when test="@id = 'vulners'">
+                                          <p class="text-xs text-olive-600 italic">CVE details for this service are listed in the CVE Findings table (page 1).</p>
+                                        </xsl:when>
+                                        <xsl:otherwise>
+                                          <pre class="text-xs bg-white p-3 rounded border border-olive-200 overflow-x-auto"><xsl:value-of select="@output"/></pre>
+                                        </xsl:otherwise>
+                                      </xsl:choose>
                                     </div>
                                   </xsl:for-each>
                                 </td>
