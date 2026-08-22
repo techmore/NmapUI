@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(git -C /Users/seandolbec/.claude-worktrees/Nmap-2026-ui-update/clever-hypatia log --oneline -10)",
+      "Bash(git -C /Users/seandolbec/.claude-worktrees/Nmap-2026-ui-update/clever-hypatia show --stat 03d8c5b)",
+      "Bash(git -C /Users/seandolbec/.claude-worktrees/Nmap-2026-ui-update/clever-hypatia show:*)",
+      "Bash(git -C /Users/seandolbec/.claude-worktrees/Nmap-2026-ui-update/clever-hypatia diff 2cccc86~1 2cccc86)",
+      "Bash(git -C /Users/seandolbec/.claude-worktrees/Nmap-2026-ui-update/clever-hypatia diff 2732fc1~1 2732fc1 -- customer_fingerprint.py)",
+      "Bash(python3:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: Resolve critical bugs from recent refactoring\n\nFixed 4 critical issues that were breaking functionality:\n\n1. Remove duplicate unreachable code in calculate_exit_ip_score\\(\\)\n   - Removed 60 lines of dead code \\(lines 139-197\\)\n   - Function was returning early at line 137, making all subsequent code unreachable\n   \n2. Fix invalid dictionary access pattern\n   - Changed customer.get\\(\"networks\"\\) or {}.get\\(...\\) to customer.get\\(\"networks\", {}\\).get\\(...\\)\n   - Previous pattern created empty dict instead of accessing customer data\n   \n3. Fix undefined JavaScript function call\n   - Changed toggleCustomerForm\\(\\) to hideCustomerForm\\(\\) in addCustomer\\(\\)\n   - toggleCustomerForm\\(\\) function didn''t exist, causing ReferenceError\n   \n4. Add missing feedback-container HTML element\n   - Added div#feedback-container for scan feedback messages\n   - Prevents null reference errors when displaying scan status\n\nAll fixes verified with Python syntax check \\(py_compile\\).\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(traceroute:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
