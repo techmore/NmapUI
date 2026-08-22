@@ -12,9 +12,20 @@ from nmapui.reporting import (
     mark_scan_failure,
 )
 from nmapui.settings import get_effective_scan_rules
+from nmapui.validation import DEFAULT_MAX_TARGETS, count_target_addresses
 
 
 logger = logging.getLogger(__name__)
+
+
+def _plan_report_target_count(targets):
+    """Total planned address count across all chunk targets (#212)."""
+    total = 0
+    for item in targets or []:
+        count = count_target_addresses(str(item).strip())
+        if count is not None:
+            total += count
+    return total
 
 
 def _plan_report_scan_targets(target, *, chunked_requested, split_subnet_into_chunks):
@@ -666,6 +677,9 @@ def generate_report_task(context, sid, data):
             "timestamp": datetime.now().isoformat(),
             "customer_id": str(current_customer.get("id", "") or ""),
             "target": target,
+            # Scan budget (#212): record the planned address count and limit
+            "planned_target_count": _plan_report_target_count(targets),
+            "target_budget": DEFAULT_MAX_TARGETS,
         }
         diff_summary = build_report_diff_summary(
             current_metadata,

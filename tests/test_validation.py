@@ -11,7 +11,7 @@ from nmapui.validation import validate_target
         "192.168.1.1-254",
         "10-12.0.0.1-20",
         "scanme.nmap.org",
-        "192.168.1.1, 10.0.0.0/8",
+        "192.168.1.1, 192.168.2.1-254",
     ],
 )
 def test_validate_target_accepts_supported_target_formats(target):
