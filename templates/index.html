@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/js/utils.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
     <script>
         tailwind.config = {
@@ -1575,12 +1576,39 @@
     <div class="page-shell">
 
     <script>
-        // Set current date and time
-        var socket = io.connect(`http://${document.domain}:${location.port}`);
-        window.socket = socket;
-        socket.on('connect', () => console.log('Socket.IO connected'));
+        // Set current date and time.
+        // Fetch the loopback socket token, then connect with it (#210).
+        window.socket = null;
+        let __socketReadyResolve;
+        const __socketReady = new Promise((resolve) => { __socketReadyResolve = resolve; });
+        (async function initSocket() {
+            let token = '';
+            try {
+                const res = await fetch('/api/socket-token');
+                if (res.ok) token = (await res.json()).token || '';
+            } catch (err) {
+                console.warn('Could not fetch socket token.');
+            }
+            const socket = io.connect(`http://${document.domain}:${location.port}`, {
+                auth: { token },
+                query: { token }
+            });
+            window.socket = socket;
+            socket.on('connect', () => console.log('Socket.IO connected'));
+            socket.on('connect_error', (err) => console.error('Socket.IO error:', err.message));
+            __socketReadyResolve(socket);
+        })();
 
-        document.addEventListener('DOMContentLoaded', () => {
+        async function bootstrapTemplateApp() {
+            const socket = await __socketReady;
+            if (document.readyState === 'loading') {
+                await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+            }
+            // Ensure the underlying engine.io connection is live so early
+            // emits (tab loads, get_reports) are not dropped.
+            if (!socket.connected) {
+                await new Promise((resolve) => socket.on('connect', resolve));
+            }
             if (typeof initializeScanRuntime === 'function') {
                 initializeScanRuntime(socket);
             }
@@ -1608,7 +1636,7 @@
                 initializeReportsTab();
             }
             if (typeof initializeSettingsTab === 'function') {
-                initializeSettingsTab();
+                initializeSettingsTab(socket);
             }
             if (typeof initializeAutoScanUI === 'function') {
                 initializeAutoScanUI(socket, {
@@ -1627,7 +1655,7 @@
             if (typeof initializeAuditLog === 'function') {
                 initializeAuditLog();
             }
-        });
+        }
 
         document.getElementById('reload-last-scan-btn').addEventListener('click', function() {
             // Try localStorage first (faster, more current); fall back to server XML
@@ -1640,6 +1668,7 @@
                 }
             }
         });
+        bootstrapTemplateApp();
 
     </script>
     
