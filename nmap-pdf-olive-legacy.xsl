@@ -740,6 +740,34 @@ Updated: 2026
               </div>
 
 
+
+            <!-- CVE Findings Summary (#167 v2) -->
+            <xsl:if test="//script[@id='vulners']">
+              <div class="border-t border-olive-200 pt-6 mb-6">
+                <h3 class="text-lg font-display font-semibold text-olive-900 mb-3">CVE Findings</h3>
+                <table class="w-full text-left border border-olive-200 rounded">
+                  <thead>
+                    <tr class="bg-olive-50">
+                      <th class="px-3 py-2 text-xs font-bold uppercase tracking-wide text-olive-700">CVE ID</th>
+                      <th class="px-3 py-2 text-xs font-bold uppercase tracking-wide text-olive-700">Port / CPE Host</th>
+                      <th class="px-3 py-2 text-xs font-bold uppercase tracking-wide text-olive-700">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <xsl:for-each select="/nmaprun/host">
+                      <xsl:variable name="host-ip" select="address/@addr"/>
+                      <xsl:for-each select=".//script[@id='vulners']">
+                        <xsl:call-template name="vulners-lines">
+                          <xsl:with-param name="text" select="@output"/>
+                          <xsl:with-param name="port" select="$host-ip"/>
+                        </xsl:call-template>
+                      </xsl:for-each>
+                    </xsl:for-each>
+                  </tbody>
+                </table>
+              </div>
+            </xsl:if>
+
             <!-- Keyword Highlighting -->
             <div class="border-t border-olive-200 pt-6">
               <label class="block text-sm font-medium text-olive-900 mb-2">Highlight Keywords in Services</label>
@@ -1371,4 +1399,34 @@ Updated: 2026
       </body>
     </html>
   </xsl:template>
+
+  <xsl:template name="vulners-lines">
+    <xsl:param name="text"/>
+    <xsl:param name="port"/>
+    <xsl:if test="contains($text, 'CVE-')">
+      <xsl:variable name="after" select="substring-after($text, 'CVE-')"/>
+      <xsl:variable name="rest-tab">
+        <xsl:choose>
+          <xsl:when test="contains($after, '&#9;')"><xsl:value-of select="substring-before($after, '&#9;')"/></xsl:when>
+          <xsl:otherwise><xsl:value-of select="substring-before(concat($after, ' '), ' ')"/></xsl:otherwise>
+        </xsl:choose>
+      </xsl:variable>
+      <xsl:variable name="cve-id" select="concat('CVE-', normalize-space($rest-tab))"/>
+      <tr>
+        <td class="px-3 py-1 font-mono text-xs">
+          <a target="_blank" class="text-olive-700 hover:underline">
+            <xsl:attribute name="href">https://vulners.com/cve/<xsl:value-of select="$cve-id"/></xsl:attribute>
+            <xsl:value-of select="$cve-id"/>
+          </a>
+        </td>
+        <td class="px-3 py-1 font-mono text-xs"><xsl:value-of select="$port"/></td>
+        <td class="px-3 py-1 text-xs"></td>
+      </tr>
+      <xsl:call-template name="vulners-lines">
+        <xsl:with-param name="text" select="substring-after($after, $cve-id)"/>
+        <xsl:with-param name="port" select="$port"/>
+      </xsl:call-template>
+    </xsl:if>
+  </xsl:template>
+
 </xsl:stylesheet>
