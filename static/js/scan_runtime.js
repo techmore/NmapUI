@@ -254,6 +254,14 @@ function initializeMonitoringHub(socket) {
     });
     socket.on('report_diff_summary', (payload = {}) => updateMonitoringHubChangeSummary(payload.diff_summary || payload));
 
+    // Replay/live scan feedback surfaces in the report status strip.
+    socket.on('scan_feedback', (data) => {
+        const message = typeof data === 'string' ? data : (data?.message || '');
+        if (message && typeof window.showReportStatus === 'function') {
+            window.showReportStatus(message, 'info');
+        }
+    });
+
     document.getElementById('open-reports-tab-btn')?.addEventListener('click', () => {
         if (typeof switchAppTab === 'function') switchAppTab('reports');
     });
@@ -326,6 +334,9 @@ function initializeScanRuntime(socket) {
             document.getElementById('scan-target').value = state.target;
             setScanUIActive(state.phase, state.scanKind);
             startPhaseTimer(state.phase, state.startTime);
+        } else if (state.target) {
+            // Prefill with the last known scan target when idle (#230 protocol bridge).
+            document.getElementById('scan-target').value = state.target;
         }
 
         if (state.lastResult) {

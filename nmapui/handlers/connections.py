@@ -2,6 +2,19 @@ from flask import request
 from nmapui.auto_scan import build_auto_scan_status_payload
 
 
+def get_app_version_safe():
+    import os as _os
+    version_file = _os.path.join(
+        _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
+        "VERSION",
+    )
+    try:
+        with open(version_file) as fh:
+            return fh.read().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
 def _load_persisted_source_state(runtime_store):
     if runtime_store is None:
         return None
@@ -116,6 +129,25 @@ def register_connection_handlers(socketio, deps):
         if auto_scan_config is not None:
             emit_to_client(new_sid, "auto_scan_status", build_auto_scan_status_payload(auto_scan_config))
 
+        job = job_registry.get(owner_sid, active_job_type) if owner_sid else None
+        is_scanning = bool(job and job.get("status") in ("running", "cancelling"))
+        last_scan_target = source_state.get("last_scan_target") or ""
+        network_key = source_state.get("network_key") or {}
+        hops = network_key.get("hops", []) if isinstance(network_key, dict) else []
+        auto_scan_payload = (
+            build_auto_scan_status_payload(auto_scan_config) if auto_scan_config else {}
+        )
+        emit_to_client(new_sid, "sync_state", {
+            "version": get_app_version_safe(),
+            "hosts": [],
+            "isScanning": is_scanning,
+            "phase": 1 if is_scanning else None,
+            "target": last_scan_target,
+            "autoScan": auto_scan_payload,
+            "hops": hops,
+        })
+        emit_to_client(new_sid, "initial_data", {"autoScan": auto_scan_payload})
+
         if owner_sid is None:
             persisted_job = _load_persisted_active_job(runtime_store)
             if persisted_job is not None:
@@ -145,3 +177,50 @@ def register_connection_handlers(socketio, deps):
 
         for event, data in replay_buffer:
             emit_to_client(new_sid, event, data)
+
+    @socketio.on("get_initial_data")
+    def on_get_initial_data():
+        """Legacy protocol bridge (#230): re-send the sync snapshot when the frontend
+        asks for it after wiring its listeners."""
+        owner_sid = None
+        active_job_type = None
+        for job_type in ("scan", "report"):
+            owner_sid = broadcaster.find_active_owner(job_type)
+            if owner_sid is not None:
+                active_job_type = job_type
+                break
+
+        source_state = (
+            get_client_state(sid=owner_sid)
+            if owner_sid
+            else _load_persisted_source_state(runtime_store) or get_client_state()
+        )
+
+        job = job_registry.get(owner_sid, active_job_type) if owner_sid else None
+        is_scanning = bool(job and job.get("status") in ("running", "cancelling"))
+        last_scan_target = source_state.get("last_scan_target") or ""
+        network_key = source_state.get("network_key") or {}
+        hops = network_key.get("hops", []) if isinstance(network_key, dict) else []
+        auto_scan_payload = (
+            build_auto_scan_status_payload(auto_scan_config) if auto_scan_config else {}
+        )
+
+        emit_to_client(
+            request.sid,
+            "sync_state",
+            {
+                "version": get_app_version_safe(),
+                "hosts": [],
+                "isScanning": is_scanning,
+                "phase": 1 if is_scanning else None,
+                "target": last_scan_target,
+                "autoScan": auto_scan_payload,
+                "hops": hops,
+            },
+        )
+        emit_to_client(request.sid, "initial_data", {"autoScan": auto_scan_payload})
+
+        # Replay buffered job events for late joiners.
+        if owner_sid:
+            for event, data in broadcaster.get_replay_buffer(owner_sid, job_type=active_job_type):
+                emit_to_client(request.sid, event, data)

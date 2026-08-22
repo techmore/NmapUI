@@ -55,6 +55,8 @@ async function bootstrapApp() {
     if (typeof initializeScanRuntime === 'function') {
         initializeScanRuntime(socket);
     }
+    // Request the legacy sync snapshot now that all listeners are wired (#230 bridge).
+    socket.emit('get_initial_data');
     if (typeof initializeDiscoveryUI === 'function') {
         initializeDiscoveryUI(socket);
     }
