@@ -50,6 +50,9 @@ async function bootstrapApp() {
     if (typeof initializeDiscoveryUI === 'function') {
         initializeDiscoveryUI(socket);
     }
+    if (typeof initializeMonitoringHub === 'function') {
+        initializeMonitoringHub(socket);
+    }
     if (typeof TableSorter === 'function') {
         window.tableSorter = new TableSorter('discovery-table');
     }
