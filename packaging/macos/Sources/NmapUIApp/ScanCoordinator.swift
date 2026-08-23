@@ -437,7 +437,10 @@ final class ScanCoordinator: @unchecked Sendable {
             "-sV",
             "--version-light",
             "--top-ports", "100",
-            "--host-timeout", "25s",
+            // #167 follow-up: 25s starves -sV version probes on slow IoT devices
+            // (cameras/NAS), causing nmap to abort every host with zero ports.
+            // 2m accommodates slow responders while still bounding runaway scans.
+            "--host-timeout", "2m",
             "--max-retries", "1",
             vpnHelper ? "-T2" : "-T4",
             "--open",
