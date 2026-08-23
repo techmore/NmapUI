@@ -1650,6 +1650,13 @@
             }
             // Request the legacy sync snapshot now that all listeners are wired (#230 bridge).
             socket.emit('get_initial_data');
+            // A transport-level reconnect creates a new server session; module
+            // closures still hold the dead socket, so events would vanish. Reload
+            // to rebuild everything against the live session (#237 follow-up).
+            socket.io.on('reconnect', () => { location.reload(); });
+            if (typeof initializeScanButtonWiring === 'function') {
+                initializeScanButtonWiring(socket);
+            }
             if (typeof initializeDiscoveryUI === 'function') {
                 initializeDiscoveryUI(socket);
             }
