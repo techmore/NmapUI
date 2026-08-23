@@ -697,7 +697,7 @@ function updateHostRow(data) {
     updateCVESummaries();
 }
 
-function initializeDiscoveryUI(socket) {
+function initializeScanButtonWiring(socket) {
     const startScanBtn = document.getElementById('start-scan-btn');
     const completeScanBtn = document.getElementById('generate-report-btn');
     const dragnetScanBtn = document.getElementById('dragnet-scan-btn');

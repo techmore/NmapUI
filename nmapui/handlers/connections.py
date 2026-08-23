@@ -129,6 +129,13 @@ def register_connection_handlers(socketio, deps):
         if auto_scan_config is not None:
             emit_to_client(new_sid, "auto_scan_status", build_auto_scan_status_payload(auto_scan_config))
 
+        # #237: ignore zombie jobs whose owner tab has disconnected.
+        if owner_sid and owner_sid not in getattr(broadcaster, "_connected_sids", set()):
+            _complete = getattr(job_registry, "complete", None)
+            if callable(_complete):
+                _complete(owner_sid, active_job_type or "scan", status="completed")
+            broadcaster.end_job(owner_sid, job_type=active_job_type or "scan")
+            job = None
         job = job_registry.get(owner_sid, active_job_type) if owner_sid else None
         is_scanning = bool(job and job.get("status") in ("running", "cancelling"))
         last_scan_target = source_state.get("last_scan_target") or ""
@@ -197,6 +204,14 @@ def register_connection_handlers(socketio, deps):
         )
 
         job = job_registry.get(owner_sid, active_job_type) if owner_sid else None
+        # #237 follow-up: a job whose owner tab is gone is a zombie - it would
+        # otherwise disable scan buttons for every future page load.
+        if owner_sid and owner_sid not in getattr(broadcaster, "_connected_sids", set()):
+            job = None
+            _complete = getattr(job_registry, "complete", None)
+            if callable(_complete):
+                _complete(owner_sid, active_job_type or "scan", status="completed")
+            broadcaster.end_job(owner_sid, job_type=active_job_type or "scan")
         is_scanning = bool(job and job.get("status") in ("running", "cancelling"))
         last_scan_target = source_state.get("last_scan_target") or ""
         network_key = source_state.get("network_key") or {}
