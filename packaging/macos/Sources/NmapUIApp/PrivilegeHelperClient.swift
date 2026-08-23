@@ -53,7 +53,24 @@ enum PrivilegeHelperClient {
 
     static var installedHelperMatchesBundledHelper: Bool {
         guard let bundled = resolveHelperBinaryURL() else { return false }
-        return FileManager.default.contentsEqual(atPath: bundled.path, andPath: helperInstallPath)
+        if FileManager.default.contentsEqual(atPath: bundled.path, andPath: helperInstallPath) {
+            return true
+        }
+        // #237: byte-inequality can be benign (rebuild with identical protocol).
+        // Only treat as stale when the daemon's own install stamp disagrees.
+        return installedStampMatchesBundledProtocol()
+    }
+
+    /// The root daemon writes helper-stamp.json at startup containing its protocol
+    /// version. If it matches ours, the installed helper speaks our contract and no
+    /// reinstall (admin prompt) is needed despite binary drift.
+    private static func installedStampMatchesBundledProtocol() -> Bool {
+        let stampPath = "/Library/Application Support/NmapUI/helper-stamp.json"
+        guard let data = FileManager.default.contents(atPath: stampPath),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (obj["protocolVersion"] as? Int) == NmapPrivilegedHelperContract.protocolVersion
+        else { return false }
+        return true
     }
 
     static func ping() throws -> Bool {
@@ -235,6 +252,7 @@ enum PrivilegeHelperClient {
         isCurrentHelperReachable
             && FileManager.default.isExecutableFile(atPath: nmapInstallPath)
             && FileManager.default.fileExists(atPath: vulnersInstallPath)
+            && installedHelperMatchesBundledHelper
     }
 
     private static func resolveHelperBinaryURL() -> URL? {

@@ -1,4 +1,5 @@
 import AppKit
+import LocalAuthentication
 import Darwin
 import Foundation
 
@@ -37,8 +38,30 @@ enum PrivilegeElevationController {
         guard interactive else {
             throw PrivilegeHelperClient.ClientError.notAvailable
         }
+        try await confirmWithBiometrics(reason: "Authorize NmapUI to install its privileged scanner helper.")
         try await PrivilegeHelperClient.ensureInstalled()
         RuntimeDiagnosticsLogger.log("Privileged nmap helper is ready")
+    }
+
+    /// #237: gate the rare admin-install behind LocalAuthentication so TouchID (or the
+    /// login password) is what the user actually interacts with first. The subsequent
+    /// macOS admin dialog only appears on genuine installs, which are now rare thanks
+    /// to the version-stamped handshake.
+    @MainActor
+    private static func confirmWithBiometrics(reason: String) async throws {
+        let context = LAContext()
+        var error: NSError?
+        // Fall back to .deviceOwnerPassword when TouchID is unavailable - the policy
+        // degrades gracefully instead of failing.
+        let policy: LAPolicy = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+            ? .deviceOwnerAuthenticationWithBiometrics
+            : .deviceOwnerAuthentication
+        do {
+            try await context.evaluatePolicy(policy, localizedReason: reason)
+            RuntimeDiagnosticsLogger.log("Local authentication succeeded (biometric or password)")
+        } catch {
+            throw PrivilegeHelperClient.ClientError.installFailed("Local authentication failed: \(error.localizedDescription)")
+        }
     }
 
     @MainActor
