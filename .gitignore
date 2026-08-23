@@ -24,3 +24,13 @@ packaging/macos/run_2.sh
 nmap-vulners/
 phase1_results.xml
 docs/notes/eval-logs/
+# Scan artifacts & local runtime output
+phase*_results*.xml
+phase2_*.xml
+*.tmp
+work/
+.tmp-*/
+.pytest_cache/
+.venv/
+.claude/settings.local.json
+EOF

@@ -121,6 +121,12 @@ To install or remove the macOS scheduler from the repo root, use:
 - **Complete Scan** - Full port scan with OS detection and vulnerability scripts
 - **Dragnet Scan** - Scan all hosts from previous discovery with exhaustive options
 
+### VPN Helper
+
+VPN Helper is intended for remote/VPN or large-scope scans. Phase 1 discovery uses the normal scan path. After discovery completes, VPN Helper batches the successful live IPs into Phase 2.1 service/version scans and Phase 2.2 vulners scans. OS detection is disabled by default in VPN Helper mode; enable **Force OS Detection (-O)** when OS fingerprinting is worth the extra time and instability risk.
+
+Normal Complete scans keep the faster combined Phase 2 behavior. Use VPN Helper when Phase 2 stalls, crashes, or the scan is running across a slow VPN.
+
 ### Auto-Monitor
 
 Schedule automatic scans to run daily, weekly, monthly, or hourly. Results are saved to `reports_archive/` and optionally synced to Google Drive.

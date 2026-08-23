@@ -1,0 +1,108 @@
+from nmapui.scan_runtime import start_scan_task as start_scan_task_impl
+from nmapui.scanning import (
+    run_arp_scan as run_arp_scan_impl,
+    run_nmap_with_xml_output as run_nmap_with_xml_output_impl,
+)
+
+
+def start_scan_task(
+    *,
+    sid,
+    target,
+    broadcaster,
+    emit_to_client,
+    get_client_state,
+    ensure_job_not_cancelled,
+    idle_state_manager,
+    update_job_progress,
+    socketio_sleep,
+    run_cancellable_command,
+    run_arp_scan,
+    identify_gateway_firewall_targets,
+    job_registry,
+    emit_job_status,
+    logger,
+    settings_state,
+    vulners_script,
+    runtime_store=None,
+):
+    return start_scan_task_impl(
+        sid=sid,
+        target=target,
+        broadcaster=broadcaster,
+        emit_to_client=emit_to_client,
+        get_client_state=get_client_state,
+        runtime_store=runtime_store,
+        ensure_job_not_cancelled=ensure_job_not_cancelled,
+        idle_state_manager=idle_state_manager,
+        update_job_progress=update_job_progress,
+        socketio_sleep=socketio_sleep,
+        run_cancellable_command=run_cancellable_command,
+        run_arp_scan=run_arp_scan,
+        identify_gateway_firewall_targets=identify_gateway_firewall_targets,
+        job_registry=job_registry,
+        emit_job_status=emit_job_status,
+        logger=logger,
+        settings_state=settings_state,
+        vulners_script=vulners_script,
+    )
+
+
+def run_arp_scan(
+    *,
+    target,
+    interface=None,
+    sid=None,
+    get_default_interface_cached,
+    which,
+    emit_to_client,
+    socketio_emit,
+    socketio_sleep,
+    run_cancellable_command,
+):
+    return run_arp_scan_impl(
+        target,
+        interface=interface,
+        sid=sid,
+        get_default_interface_cached=get_default_interface_cached,
+        which=which,
+        emit_to_client=emit_to_client,
+        socketio_emit=socketio_emit,
+        socketio_sleep=socketio_sleep,
+        run_cancellable_command=run_cancellable_command,
+    )
+
+
+def run_nmap_with_xml_output(
+    *,
+    target,
+    output_base,
+    scan_type="comprehensive",
+    sid=None,
+    excluded_targets=None,
+    scan_only_mode=False,
+    force_privileged_scan=False,
+    timeout_seconds=None,
+    vulners_script,
+    stylesheet_pdf,
+    emit_to_client,
+    socketio_emit,
+    socketio_sleep,
+    run_cancellable_command,
+):
+    return run_nmap_with_xml_output_impl(
+        target,
+        output_base,
+        scan_type=scan_type,
+        sid=sid,
+        excluded_targets=excluded_targets,
+        scan_only_mode=scan_only_mode,
+        force_privileged_scan=force_privileged_scan,
+        timeout_seconds=timeout_seconds,
+        vulners_script=vulners_script,
+        stylesheet_pdf=stylesheet_pdf,
+        emit_to_client=emit_to_client,
+        socketio_emit=socketio_emit,
+        socketio_sleep=socketio_sleep,
+        run_cancellable_command=run_cancellable_command,
+    )

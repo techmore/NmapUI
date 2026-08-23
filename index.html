@@ -6,24 +6,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
-    <script>
-        window.__NMAPUI_NATIVE_RUNTIME__ = !!window.webkit?.messageHandlers?.nmapuiRequest;
-        if (!window.__NMAPUI_NATIVE_RUNTIME__) {
-            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"><\/script>');
-        } else {
-            window.io = {
-                connect() {
-                    return {
-                        on() {},
-                        once() {},
-                        off() {},
-                        emit() {},
-                        disconnect() {}
-                    };
-                }
-            };
-        }
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"></script>
+    <script src="/static/js/utils.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
     <script>
@@ -540,7 +524,7 @@
             <div>
                 <h1 class="text-4xl font-display italic text-olive-950">TM-NMAPUI</h1>
                 <div class="flex items-center gap-2">
-                    <div id="app-version" class="text-sm text-olive-600 font-medium">Loading...</div>
+                    <div id="app-version" class="text-sm text-olive-600 font-medium">v2026.5.2.15.58</div>
                     <a
                         href="https://github.com/techmore/NmapUI"
                         target="_blank"
@@ -600,7 +584,7 @@
                 </div>
                 <div>
                     <h3 class="text-lg font-semibold">Update Available!</h3>
-                    <p id="update-description" class="text-olive-100">NmapUI update status will appear here</p>
+                    <p id="update-description" class="text-olive-100">NmapUI v2026.5.2.15.58 is ready to install</p>
                 </div>
             </div>
             <div class="flex items-center space-x-4">
@@ -910,29 +894,6 @@
                         </button>
                     </div>
                     <div id="settings-profile-list" class="mt-5 grid gap-3"></div>
-                </section>
-
-                <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <h3 class="text-xl font-display italic text-olive-900">Scanner Privilege Helper</h3>
-                            <p class="mt-2 text-sm text-olive-700">Full nmap scans need root once via a small helper. The app itself stays a normal user process. After install, daily/weekly schedules run without password prompts.</p>
-                        </div>
-                        <button id="settings-privilege-helper-install-btn" type="button" class="action-button action-button-primary action-button-compact" aria-label="Install privileged scanner helper">
-                            Install Helper
-                        </button>
-                    </div>
-                    <div class="mt-4 grid gap-2 rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-800">
-                        <div class="flex justify-between gap-3">
-                            <span class="font-semibold">Status</span>
-                            <span id="settings-privilege-helper-state" class="font-semibold text-amber-700">Checking…</span>
-                        </div>
-                        <div class="flex justify-between gap-3">
-                            <span class="font-semibold">Mode</span>
-                            <span class="text-right text-olive-600">App user / nmap root helper</span>
-                        </div>
-                        <p id="settings-privilege-helper-status" class="mt-1 text-xs text-olive-600">Waiting for native runtime status…</p>
-                    </div>
                 </section>
 
                 <section class="rounded-2xl border border-olive-200 bg-olive-50 p-5">
@@ -1467,6 +1428,10 @@
                     <input type="checkbox" id="vpn-helper-toggle" class="size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500" aria-label="Enable VPN helper scan mode">
                     <span>VPN Helper</span>
                 </label>
+                <label id="vpn-force-os-wrapper" class="hidden items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-olive-500 cursor-pointer">
+                    <input type="checkbox" id="vpn-force-os-toggle" class="size-4 rounded border-olive-300 text-olive-700 focus:ring-olive-500" aria-label="Force OS detection in VPN helper mode">
+                    <span>Force OS Detection (-O)</span>
+                </label>
             </div>
         </div>
 
@@ -1556,14 +1521,40 @@
                 <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="deep-cves" class="font-medium text-olive-900">--</span></p>
             </div>
         </div>
-            <div class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300 compact-card hover-lift">
-            <h2 class="text-xl font-display italic text-olive-900 mb-3">Dragnet Scan</h2>
+        <div id="monitoring-hub-card" class="bg-olive-50 p-5 rounded-xl shadow-sm border border-olive-300 compact-card hover-lift">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-display italic text-olive-900">Monitoring Hub</h2>
+                <span id="auto-monitor-indicator" class="hidden relative flex size-3" title="Auto-Monitor active">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full size-3 bg-amber-500"></span>
+                </span>
+            </div>
+
+            <!-- Last dragnet run stats (kept from the old Dragnet card) -->
             <div class="space-y-1 text-sm">
-                <p class="flex justify-between"><span class="text-olive-600">Time taken:</span> <span id="dragnet-time" class="font-medium text-olive-900">--:--:--</span></p>
-                <p class="flex justify-between"><span class="text-olive-600">Total Hosts:</span> <span id="dragnet-hosts" class="font-medium text-olive-900">--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Last sweep:</span> <span id="dragnet-time" class="font-medium text-olive-900">--:--:--</span></p>
+                <p class="flex justify-between"><span class="text-olive-600">Hosts seen:</span> <span id="dragnet-hosts" class="font-medium text-olive-900">--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Open Ports:</span> <span id="dragnet-ports" class="font-medium text-olive-900">--</span></p>
                 <p class="flex justify-between"><span class="text-olive-600">Critical CVEs:</span> <span id="dragnet-cves" class="font-medium text-olive-900">--</span></p>
             </div>
+
+            <div class="mt-4 pt-3 border-t border-olive-200 space-y-2">
+                <!-- Auto-Monitor status row -->
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-olive-600">Auto-Monitor</span>
+                    <span id="monitor-auto-scan-state" class="font-medium text-olive-400">Off</span>
+                </div>
+                <p id="monitor-auto-scan-detail" class="hidden font-mono text-[10px] text-olive-500"></p>
+
+                <!-- Change summary since previous scan -->
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-olive-600">Changes vs last scan</span>
+                    <span id="monitor-change-summary" class="font-medium text-olive-400">--</span>
+                </div>
+
+                <button id="open-reports-tab-btn" class="mt-1 w-full py-1.5 text-[11px] font-bold uppercase tracking-widest bg-white border border-olive-200 text-olive-700 rounded-lg hover:bg-olive-100 transition-colors">View Reports &amp; History</button>
+            </div>
+            <p class="text-olive-500 text-xs mt-2 font-mono">nmap -iL discovered - exhaustive</p>
         </div>
     </div>
 <!--
@@ -1854,20 +1845,20 @@
         });
     </script>
 
-    <script src="static/js/scan_runtime.js"></script>
-    <script src="static/js/scan_banners.js"></script>
-    <script src="static/js/report_status.js"></script>
-    <script src="static/js/update_modal.js"></script>
-    <script src="static/js/auto_update_banner.js"></script>
-    <script src="static/js/asset_details_modal.js"></script>
-    <script src="static/js/table_sorter.js"></script>
-    <script src="static/js/site_chrome.js"></script>
-    <script src="static/js/reports_tab.js"></script>
-    <script src="static/js/settings_tab.js"></script>
-    <script src="static/js/auto_scan_ui.js"></script>
-    <script src="static/js/customer_ui.js"></script>
-    <script src="static/js/report_generation_ui.js"></script>
-    <script src="static/js/app_bootstrap.js"></script>
+    <script src="/static/js/scan_runtime.js"></script>
+    <script src="/static/js/scan_banners.js"></script>
+    <script src="/static/js/report_status.js"></script>
+    <script src="/static/js/update_modal.js"></script>
+    <script src="/static/js/auto_update_banner.js"></script>
+    <script src="/static/js/asset_details_modal.js"></script>
+    <script src="/static/js/table_sorter.js"></script>
+    <script src="/static/js/site_chrome.js"></script>
+    <script src="/static/js/reports_tab.js"></script>
+    <script src="/static/js/settings_tab.js"></script>
+    <script src="/static/js/auto_scan_ui.js"></script>
+    <script src="/static/js/customer_ui.js"></script>
+    <script src="/static/js/report_generation_ui.js"></script>
+    <script src="/static/js/app_bootstrap.js"></script>
 
     <!-- ── Audit Log Panel ─────────────────────────────────────────────── -->
     <div id="log-panel" class="hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col" style="height:320px;">

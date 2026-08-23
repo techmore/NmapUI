@@ -1,0 +1,62 @@
+# Simple Customer Configuration Example
+version: "1.0"
+description: "Basic customer fingerprinting example"
+
+settings:
+  min_confidence: 0.6
+  fuzzy_ip_matching: true
+  weights:
+    exit_ip: 0.3
+    hop_pattern: 0.4
+    latency: 0.2
+    network_size: 0.1
+
+customers:
+  - name: "Home Office"
+    id: "home_office"
+    description: "Typical home network setup"
+    confidence: 0.7
+    networks:
+      public_ip: "dynamic"
+      private_ranges: ["192.168.0.0/16"]
+      exit_ips: "dynamic"
+      gateway_pattern: "192.168.1.1"
+    fingerprints:
+      - type: "home_router"
+        description: "Standard home broadband router"
+        hop_count: 2-5
+        private_hop_pattern:
+          - ip_pattern: "192.168.1.1"
+            is_private: true
+            position: 1
+        public_exit_pattern:
+          - ip_pattern: "*.*.*.*"
+            is_private: false
+            position: 2
+        latency_profile:
+          first_hop: "<2ms"
+          exit_hop: "5-50ms"
+          total_time: "<100ms"
+    metadata:
+      location: "Unknown - Home"
+      connection_type: ["residential"]
+      isp: "variable"
+      network_size: "small"
+      last_updated: "2024-01-08"
+
+unknown_customer:
+  name: "Unknown Network"
+  id: "unknown"
+  description: "Unidentified network"
+  confidence: 0.0
+
+indexing:
+  enabled: true
+  storage_path: "data/scan_history.json"
+  max_entries: 1000
+  retention_days: 30
+  index_fields:
+    - "customer_id"
+    - "timestamp"
+    - "exit_ip"
+    - "hop_count"

@@ -1,62 +1,67 @@
-function createNativeSocketShim() {
-    const listeners = new Map();
-    const emitNative = (event, payload = {}) => {
-        if (window.webkit?.messageHandlers?.nmapuiRequest?.postMessage) {
-            window.webkit.messageHandlers.nmapuiRequest.postMessage({ event, payload });
-            return true;
-        }
-        return false;
-    };
-    return {
-        connected: true,
-        id: 'native-runtime',
-        on(event, handler) {
-            const existing = listeners.get(event) || [];
-            existing.push(handler);
-            listeners.set(event, existing);
-        },
-        once(event, handler) {
-            const wrapped = (payload) => {
-                this.off(event, wrapped);
-                handler(payload);
-            };
-            this.on(event, wrapped);
-        },
-        off(event, handler) {
-            if (!listeners.has(event)) return;
-            listeners.set(event, (listeners.get(event) || []).filter(item => item !== handler));
-        },
-        emit(event, payload = {}) {
-            return emitNative(event, payload);
-        },
-        __receive(event, payload) {
-            (listeners.get(event) || []).forEach(handler => {
-                try { handler(payload); } catch (error) { console.warn(`Native socket handler failed for ${event}`, error); }
-            });
-        },
-        connect() {
-            (listeners.get('connect') || []).forEach(handler => {
-                try { handler(); } catch (error) { console.warn('Native socket connect handler failed', error); }
-            });
-        }
-    };
-}
-
-const useNativeRuntime = !!window.__NMAPUI_NATIVE_RUNTIME__ || !!window.webkit?.messageHandlers?.nmapuiRequest;
-var socket = useNativeRuntime ? createNativeSocketShim() : io.connect(`http://${document.domain}:${location.port}`);
-window.socket = socket;
-if (!useNativeRuntime) {
-    socket.on('connect', () => console.log('Socket.IO connected'));
-} else {
-    queueMicrotask(() => socket.connect());
-}
-
+// Wire tab switching immediately (pure DOM) so tab clicks work even while the
+// socket is still connecting. Data loads inside each tab handle their own readiness.
 document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initializeReportsTab === 'function') {
+        initializeReportsTab();
+    }
+});
+
+// Fetch the loopback socket token, then connect with it. The server rejects
+// handshakes without the token (see allowRequest in server.js).
+window.socket = null;
+(async function initSocket() {
+    let token = '';
+    try {
+        const res = await fetch('/api/socket-token');
+        if (res.ok) {
+            token = (await res.json()).token || '';
+        }
+    } catch (err) {
+        console.warn('Could not fetch socket token; retrying unauthenticated.');
+    }
+    const socket = io.connect(`http://${document.domain}:${location.port}`, {
+        auth: { token },
+        query: { token }
+    });
+    window.socket = socket;
+    socket.on('connect', () => console.log('Socket.IO connected'));
+    socket.on('connect_error', (err) => console.error('Socket.IO auth/connect error:', err.message));
+    window.dispatchEvent(new CustomEvent('socket-ready', { detail: socket }));
+})();
+
+// All module initialization needs the live socket, so wait for it (or DOM ready)
+// before wiring modules. Both conditions are awaited below.
+let socketReadyPromise = null;
+function whenSocketReady() {
+    if (!socketReadyPromise) {
+        socketReadyPromise = new Promise((resolve) => {
+            if (window.socket) return resolve(window.socket);
+            window.addEventListener('socket-ready', (e) => resolve(e.detail), { once: true });
+        });
+    }
+    return socketReadyPromise;
+}
+function whenDomReady() {
+    if (document.readyState !== 'loading') return Promise.resolve();
+    return new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+}
+
+async function bootstrapApp() {
+    const [socket] = await Promise.all([whenSocketReady(), whenDomReady()]);
+    // Ensure the engine.io connection is live so early emits are not dropped.
+    if (!socket.connected) {
+        await new Promise((resolve) => socket.on('connect', resolve));
+    }
     if (typeof initializeScanRuntime === 'function') {
         initializeScanRuntime(socket);
     }
+    // Request the legacy sync snapshot now that all listeners are wired (#230 bridge).
+    socket.emit('get_initial_data');
     if (typeof initializeDiscoveryUI === 'function') {
         initializeDiscoveryUI(socket);
+    }
+    if (typeof initializeMonitoringHub === 'function') {
+        initializeMonitoringHub(socket);
     }
     if (typeof TableSorter === 'function') {
         window.tableSorter = new TableSorter('discovery-table');
@@ -112,4 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-});
+}
+
+bootstrapApp();
