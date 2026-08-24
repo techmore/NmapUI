@@ -15,7 +15,11 @@ function applyAutoScanConfigState(config = {}) {
 // The packaged Flask runtime exposes /api/auto_scan/*; prefer it and fall back
 // to socket events for the Node dev runtime. Returns true when handled via HTTP.
 async function sendAutoScanUpdate(payload) {
-    if (autoScanHttpBusy) return true;
+    if (autoScanHttpBusy) {
+        // Never report an in-flight update as handled - the caller must still
+        // emit over socket so rapid toggle changes cannot be silently dropped.
+        return false;
+    }
     autoScanHttpBusy = true;
     try {
         const response = await fetch('/api/auto_scan/update', {

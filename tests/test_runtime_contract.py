@@ -144,6 +144,10 @@ def test_auto_scan_ui_uses_flask_runtime_contract():
     assert "fetch('/api/auto_scan/status')" in source
     assert "fetch('/api/auto_scan/update'" in source
     assert "start_time: startTime, end_time: endTime" in source
+    # An in-flight update must not report itself as handled (rapid toggle race).
+    busy_idx = source.find("if (autoScanHttpBusy)")
+    assert busy_idx != -1
+    assert "return false;" in source[busy_idx:busy_idx + 400]
     assert "socket.on('auto_scan_status'" in source
     assert "socket.emit('disable_auto_scan')" in source  # node fallback retained
     assert "emit('enable_auto_scan'" in source  # node fallback retained

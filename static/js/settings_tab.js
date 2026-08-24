@@ -236,6 +236,7 @@ function buildServerSettingsPayload(settings, existingDoc = {}) {
             remote_sync: {
                 enabled: !!settings.remoteSyncEnabled,
                 endpoint: settings.remoteSyncEndpoint || '',
+                api_key: settings.remoteSyncApiKey || '',
                 api_key_configured: !!(existingSync.remote_sync || {}).api_key_configured,
             },
         },
@@ -309,13 +310,18 @@ function addTargetProfile() {
         id: (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 12) : `p${Date.now()}`),
         name,
         target,
-        customer_id: '',
+        customer_id: document.getElementById('settings-profile-customer')?.value || '',
         customer_name: '',
         notes,
         scan_rules: {
-            scan_only_mode: false,
-            excluded_targets: [],
-            max_scan_minutes: 120,
+            scan_only_mode: !!document.getElementById('settings-profile-scan-only-mode')?.checked,
+            excluded_targets: String(document.getElementById('settings-profile-excluded-targets')?.value || '')
+                .split(/[\n,]+/)
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+            max_scan_minutes: Number.parseInt(
+                document.getElementById('settings-profile-max-scan-minutes')?.value || '', 10,
+            ) || 120,
         },
     };
     pendingTargetProfiles.push(profile);
