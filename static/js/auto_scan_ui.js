@@ -24,7 +24,9 @@ async function sendAutoScanUpdate(payload) {
             body: JSON.stringify(payload),
         });
         if (!response.ok) return false;
-        applyAutoScanConfigState(await response.json());
+        // The update acknowledgement is only {success: true}; pull the
+        // effective config (incl. next_run/warning fields) separately.
+        await refreshAutoScanStatus();
         return true;
     } catch (error) {
         return false;

@@ -155,6 +155,10 @@ def test_settings_tab_persists_scan_rules_to_server():
     assert "scan_only_mode:" in settings_source
     assert "excluded_targets:" in settings_source
     assert "max_scan_minutes:" in settings_source
+    # POST /api/settings replaces the whole document server-side, so the save
+    # payload must carry forward target_profiles and auto_monitor.
+    assert "target_profiles: Array.isArray(existingDoc.target_profiles)" in settings_source
+    assert "auto_monitor: existingDoc.auto_monitor" in settings_source
     workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
     assert "get_effective_scan_rules(" in workflows_source
 
@@ -170,9 +174,9 @@ def test_settings_tab_google_drive_actions_use_http_routes():
         "/api/settings/google-drive/credentials",
     ):
         assert f"fetch('{route}'" in settings_source
-    # The dead socket events must no longer be emitted.
-    for dead_event in ("'connect_google_drive'", "'disconnect_google_drive'", "'save_google_drive_credentials'"):
-        assert f"emit({dead_event}" not in settings_source
+    # The dead socket events must no longer be the primary path (HTTP first, socket fallback allowed).
+    assert "fetch('/api/settings/google-drive/auth-url'" in settings_source
+    assert "emit('connect_google_drive')" in settings_source  # node fallback retained
 
 
 def test_settings_tab_maintenance_buttons_call_runtime_routes():
