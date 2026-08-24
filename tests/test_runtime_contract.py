@@ -138,10 +138,12 @@ def test_settings_tab_includes_auto_monitor_defaults():
 
 def test_auto_scan_ui_uses_flask_runtime_contract():
     """Auto-scan scheduling must hit the Flask /api/auto_scan/* routes (packaged runtime),
-    with socket fallbacks for the Node dev runtime."""
+    with socket fallbacks for the Node dev runtime. The Flask schedule is a daily
+    start/end window, so both times must be sent."""
     source = (ROOT / "static" / "js" / "auto_scan_ui.js").read_text()
     assert "fetch('/api/auto_scan/status')" in source
     assert "fetch('/api/auto_scan/update'" in source
+    assert "start_time: startTime, end_time: endTime" in source
     assert "socket.on('auto_scan_status'" in source
     assert "socket.emit('disable_auto_scan')" in source  # node fallback retained
     assert "emit('enable_auto_scan'" in source  # node fallback retained
@@ -149,16 +151,20 @@ def test_auto_scan_ui_uses_flask_runtime_contract():
 
 def test_settings_tab_persists_scan_rules_to_server():
     """Scan-only mode, exclusions and max duration must reach the backend settings_state,
-    not just localStorage - workflows read them via get_effective_scan_rules."""
+    not just localStorage - workflows read them via get_effective_scan_rules. The POST
+    replaces the whole settings document, so target_profiles, auto_monitor defaults,
+    and auto_monitor rules must be carried through."""
     settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
     assert "fetch('/api/settings'" in settings_source
     assert "scan_only_mode:" in settings_source
     assert "excluded_targets:" in settings_source
     assert "max_scan_minutes:" in settings_source
     # POST /api/settings replaces the whole document server-side, so the save
-    # payload must carry forward target_profiles and auto_monitor.
+    # payload must carry forward sections outside the form.
     assert "target_profiles: Array.isArray(existingDoc.target_profiles)" in settings_source
-    assert "auto_monitor: existingDoc.auto_monitor" in settings_source
+    assert "buildAutoMonitorDefaultsPayload(settings, existingDoc)" in settings_source
+    assert "enabled_by_default: !!settings.autoMonitorEnabledByDefault" in settings_source
+    assert "rules: Array.isArray(existing.rules) ? existing.rules : []" in settings_source
     workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
     assert "get_effective_scan_rules(" in workflows_source
 

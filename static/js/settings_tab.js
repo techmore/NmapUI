@@ -129,6 +129,20 @@ function applyServerSettingsDocument(doc = {}) {
         remoteSyncEnabled: !!(sync.remote_sync || {}).enabled,
         remoteSyncEndpoint: (sync.remote_sync || {}).endpoint || '',
     });
+    // Auto-monitor defaults come from the server document, not localStorage.
+    const defaults = (doc.auto_monitor || {}).defaults || {};
+    if (document.getElementById('settings-auto-monitor-enabled-by-default')) {
+        document.getElementById('settings-auto-monitor-enabled-by-default').checked = !!defaults.enabled_by_default;
+    }
+    if (document.getElementById('settings-auto-monitor-recurrence')) {
+        document.getElementById('settings-auto-monitor-recurrence').value = defaults.recurrence || 'weekly';
+    }
+    if (document.getElementById('settings-auto-monitor-day')) {
+        document.getElementById('settings-auto-monitor-day').value = defaults.day_of_week || 'sunday';
+    }
+    if (document.getElementById('settings-auto-monitor-time')) {
+        document.getElementById('settings-auto-monitor-time').value = defaults.time || '01:00';
+    }
     renderGoogleDriveSummary({ config: sync.google_drive || {}, status: sync.google_drive_status || {} });
 }
 
@@ -162,6 +176,21 @@ async function loadSettingsTab() {
     }
 }
 
+function buildAutoMonitorDefaultsPayload(settings, existingDoc = {}) {
+    // The settings form owns auto_monitor.defaults; keep any existing rules.
+    const existing = (existingDoc.auto_monitor || {});
+    const defaults = existing.defaults || {};
+    return {
+        defaults: {
+            enabled_by_default: !!settings.autoMonitorEnabledByDefault,
+            recurrence: settings.autoMonitorRecurrence || defaults.recurrence || 'weekly',
+            day_of_week: settings.autoMonitorDay || defaults.day_of_week || 'sunday',
+            time: settings.autoMonitorTime || defaults.time || '01:00',
+        },
+        rules: Array.isArray(existing.rules) ? existing.rules : [],
+    };
+}
+
 function buildServerSettingsPayload(settings, existingDoc = {}) {
     // POST /api/settings replaces the whole document server-side
     // (settings_state.clear() + update), so carry forward sections the
@@ -193,7 +222,7 @@ function buildServerSettingsPayload(settings, existingDoc = {}) {
         target_profiles: Array.isArray(existingDoc.target_profiles)
             ? existingDoc.target_profiles
             : [],
-        auto_monitor: existingDoc.auto_monitor || undefined,
+        auto_monitor: buildAutoMonitorDefaultsPayload(settings, existingDoc),
     };
 }
 

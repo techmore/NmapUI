@@ -2,14 +2,14 @@ let autoScanHttpBusy = false;
 
 function applyAutoScanConfigState(config = {}) {
     if (!config || typeof config !== 'object') return;
-    // Flask payloads use start_time; the Node dev runtime uses startTime.
+    // Flask payloads use start_time/end_time; the Node dev runtime uses startTime.
     window.currentAutoScanConfig = config || {};
     const autoScanToggle = document.getElementById('auto-scan-toggle');
-    const recurrenceInput = document.getElementById('auto-recurrence');
     const startTimeInput = document.getElementById('auto-start-time');
+    const endTimeInput = document.getElementById('auto-end-time');
     if (autoScanToggle) autoScanToggle.checked = !!config.enabled;
-    if (recurrenceInput) recurrenceInput.value = config.recurrence || 'daily';
     if (startTimeInput) startTimeInput.value = config.startTime || config.start_time || '01:00';
+    if (endTimeInput) endTimeInput.value = config.endTime || config.end_time || '06:00';
 }
 
 // The packaged Flask runtime exposes /api/auto_scan/*; prefer it and fall back
@@ -70,13 +70,14 @@ function initializeAutoScanUI(socket) {
 }
 
 async function saveAutoScanTimes() {
-    const recurrence = document.getElementById('auto-recurrence')?.value || 'daily';
     const startTime = document.getElementById('auto-start-time')?.value || '01:00';
-    const target = document.getElementById('scan-target')?.value;
+    const endTime = document.getElementById('auto-end-time')?.value || '06:00';
 
-    const handled = await sendAutoScanUpdate({ enabled: true, start_time: startTime });
+    // Flask schedule is a daily start/end window scanning the current network
+    // target; recurrence/target selectors only exist on the Node dev runtime.
+    const handled = await sendAutoScanUpdate({ enabled: true, start_time: startTime, end_time: endTime });
     if (!handled) {
-        window.socket.emit('enable_auto_scan', { recurrence, startTime, target });
+        window.socket.emit('enable_auto_scan', { startTime, target: document.getElementById('scan-target')?.value });
     }
     document.getElementById('auto-scan-modal').classList.add('hidden');
 }

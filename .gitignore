@@ -24,4 +24,4 @@ work/
 .venv/
 .claude/settings.local.json
 .playwright-browsers/
-config/auto_scan_config.json
+auto_scan_config.json
