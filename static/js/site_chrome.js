@@ -188,3 +188,5 @@ function initializeLayoutRuntime() {
     // Placeholder for layout initialization
     console.log('Layout runtime initialized');
 }
+
+window.initializeSiteChrome = initializeSiteChrome;

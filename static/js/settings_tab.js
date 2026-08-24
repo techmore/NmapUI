@@ -115,30 +115,175 @@ function renderSettingsRuntimeSummary() {
     `;
 }
 
-function loadSettingsTab() {
+function applyServerSettingsDocument(doc = {}) {
+    const scanRules = doc.scan_rules || {};
+    const reports = doc.reports || {};
+    const sync = doc.sync || {};
+    applySettingsForm({
+        scanOnlyMode: !!scanRules.scan_only_mode,
+        excludedTargets: (scanRules.excluded_targets || []).join('\n'),
+        maxScanMinutes: scanRules.max_scan_minutes != null ? String(scanRules.max_scan_minutes) : '',
+        saveReportsDesktop: !!reports.save_to_desktop,
+        googleDriveEnabled: !!(sync.google_drive || {}).enabled,
+        googleDriveFolder: (sync.google_drive || {}).folder_id || '',
+        remoteSyncEnabled: !!(sync.remote_sync || {}).enabled,
+        remoteSyncEndpoint: (sync.remote_sync || {}).endpoint || '',
+    });
+    // Auto-monitor defaults come from the server document, not localStorage.
+    const defaults = (doc.auto_monitor || {}).defaults || {};
+    if (document.getElementById('settings-auto-monitor-enabled-by-default')) {
+        document.getElementById('settings-auto-monitor-enabled-by-default').checked = !!defaults.enabled_by_default;
+    }
+    if (document.getElementById('settings-auto-monitor-recurrence')) {
+        document.getElementById('settings-auto-monitor-recurrence').value = defaults.recurrence || 'weekly';
+    }
+    if (document.getElementById('settings-auto-monitor-day')) {
+        document.getElementById('settings-auto-monitor-day').value = defaults.day_of_week || 'sunday';
+    }
+    if (document.getElementById('settings-auto-monitor-time')) {
+        document.getElementById('settings-auto-monitor-time').value = defaults.time || '01:00';
+    }
+    renderGoogleDriveSummary({ config: sync.google_drive || {}, status: {} });
+}
+
+async function refreshGoogleDriveSummaryFromStatus() {
     try {
-        const saved = JSON.parse(localStorage.getItem(getSettingsStorageKey()) || 'null');
-        applySettingsForm(saved);
-        window.socket?.emit('get_google_drive_status');
-        renderSettingsRuntimeSummary();
-        setSettingsStatus(saved ? 'Settings loaded from this browser.' : 'Settings tab ready. Save stores these controls locally for this browser.');
+        const response = await fetch('/api/settings/google-drive/status');
+        if (!response.ok) return;
+        const status = await response.json();
+        let config = {};
+        try {
+            const doc = await fetchServerSettings();
+            if (doc) config = (doc.sync || {}).google_drive || {};
+        } catch (error) {
+            config = {};
+        }
+        renderGoogleDriveSummary({ config, status });
     } catch (error) {
-        setSettingsStatus('Failed to load local settings.', true);
+        // Node dev runtime: socket 'google_drive_status' handler covers this.
+        window.socket?.emit('get_google_drive_status');
     }
 }
 
-function saveSettingsTab() {
+async function fetchServerSettings() {
     try {
-        const settings = collectSettingsForm();
+        const response = await fetch('/api/settings');
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        return null;
+    }
+}
+
+async function loadSettingsTab() {
+    let saved = null;
+    try {
+        saved = JSON.parse(localStorage.getItem(getSettingsStorageKey()) || 'null');
+    } catch (error) {
+        saved = null;
+    }
+    if (saved) applySettingsForm(saved);
+    window.socket?.emit('get_google_drive_status');
+    renderSettingsRuntimeSummary();
+    setSettingsStatus('Loading settings...');
+    const doc = await fetchServerSettings();
+    if (doc) {
+        applyServerSettingsDocument(doc);
+        setSettingsStatus('Settings loaded from the local runtime.');
+    } else {
+        setSettingsStatus(saved ? 'Settings loaded from this browser.' : 'Settings tab ready.');
+    }
+    await refreshGoogleDriveSummaryFromStatus();
+}
+
+function buildAutoMonitorDefaultsPayload(settings, existingDoc = {}) {
+    // The settings form owns auto_monitor.defaults; keep any existing rules.
+    const existing = (existingDoc.auto_monitor || {});
+    const defaults = existing.defaults || {};
+    return {
+        defaults: {
+            enabled_by_default: !!settings.autoMonitorEnabledByDefault,
+            recurrence: settings.autoMonitorRecurrence || defaults.recurrence || 'weekly',
+            day_of_week: settings.autoMonitorDay || defaults.day_of_week || 'sunday',
+            time: settings.autoMonitorTime || defaults.time || '01:00',
+        },
+        rules: Array.isArray(existing.rules) ? existing.rules : [],
+    };
+}
+
+function buildServerSettingsPayload(settings, existingDoc = {}) {
+    // POST /api/settings replaces the whole document server-side
+    // (settings_state.clear() + update), so carry forward sections the
+    // settings form does not own: target_profiles and auto_monitor.
+    const existingSync = existingDoc.sync || {};
+    return {
+        scan_rules: {
+            scan_only_mode: !!settings.scanOnlyMode,
+            excluded_targets: String(settings.excludedTargets || '')
+                .split(/[\n,]+/)
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+            max_scan_minutes: Number.parseInt(settings.maxScanMinutes, 10) || 120,
+        },
+        reports: {
+            save_to_desktop: !!settings.saveReportsDesktop,
+        },
+        sync: {
+            google_drive: {
+                enabled: !!settings.googleDriveEnabled,
+                folder_id: settings.googleDriveFolder || '',
+            },
+            remote_sync: {
+                enabled: !!settings.remoteSyncEnabled,
+                endpoint: settings.remoteSyncEndpoint || '',
+                api_key: settings.remoteSyncApiKey || '',
+                api_key_configured: !!(existingSync.remote_sync || {}).api_key_configured,
+            },
+        },
+        target_profiles: [
+            ...(Array.isArray(existingDoc.target_profiles) ? existingDoc.target_profiles : []),
+            ...pendingTargetProfiles,
+        ],
+        auto_monitor: buildAutoMonitorDefaultsPayload(settings, existingDoc),
+    };
+}
+
+async function saveSettingsTab() {
+    let settings;
+    try {
+        settings = collectSettingsForm();
         localStorage.setItem(getSettingsStorageKey(), JSON.stringify(settings));
-        window.socket?.emit('save_google_drive_settings', {
-            enabled: settings.googleDriveEnabled,
-            folderId: settings.googleDriveFolder
-        });
-        renderSettingsRuntimeSummary();
-        setSettingsStatus('Settings saved locally in this browser.');
     } catch (error) {
         setSettingsStatus('Failed to save local settings.', true);
+        return;
+    }
+    window.socket?.emit('save_google_drive_settings', {
+        enabled: settings.googleDriveEnabled,
+        folderId: settings.googleDriveFolder
+    });
+    try {
+        // POST /api/settings clears and replaces the whole server document.
+        // If we cannot read the current doc first, a replacement save could
+        // wipe target_profiles / auto_monitor rules - abort instead of risk it.
+        const currentDoc = await fetchServerSettings();
+        if (!currentDoc) {
+            throw new Error('could not read current settings from the runtime; save aborted to avoid data loss');
+        }
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildServerSettingsPayload(settings, currentDoc)),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Save failed (${response.status})`);
+        }
+        pendingTargetProfiles = [];
+        renderSettingsRuntimeSummary();
+        setSettingsStatus('Settings saved to the local runtime and this browser.');
+    } catch (error) {
+        renderSettingsRuntimeSummary();
+        setSettingsStatus(`Saved locally in this browser only (${error.message}).`);
     }
 }
 
@@ -149,6 +294,9 @@ function captureCurrentTarget() {
     setSettingsStatus(target ? 'Current dashboard target copied into the profile form.' : 'No dashboard target is available to copy.');
 }
 
+// Target profiles added this session; persisted with the next settings save.
+let pendingTargetProfiles = [];
+
 function addTargetProfile() {
     const name = document.getElementById('settings-profile-name')?.value || 'Target Profile';
     const target = document.getElementById('settings-profile-target')?.value || '';
@@ -158,11 +306,30 @@ function addTargetProfile() {
         setSettingsStatus('Add a target before saving a profile.', true);
         return;
     }
+    const profile = {
+        id: (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 12) : `p${Date.now()}`),
+        name,
+        target,
+        customer_id: document.getElementById('settings-profile-customer')?.value || '',
+        customer_name: '',
+        notes,
+        scan_rules: {
+            scan_only_mode: !!document.getElementById('settings-profile-scan-only-mode')?.checked,
+            excluded_targets: String(document.getElementById('settings-profile-excluded-targets')?.value || '')
+                .split(/[\n,]+/)
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+            max_scan_minutes: Number.parseInt(
+                document.getElementById('settings-profile-max-scan-minutes')?.value || '', 10,
+            ) || 120,
+        },
+    };
+    pendingTargetProfiles.push(profile);
     const card = document.createElement('div');
     card.className = 'rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-800';
     card.innerHTML = `<div class="font-bold text-olive-950">${escapeSettingsHTML(name)}</div><div class="mt-1 font-mono text-xs">${escapeSettingsHTML(target)}</div>${notes ? `<div class="mt-1 text-xs text-olive-600">${escapeSettingsHTML(notes)}</div>` : ''}`;
     list.prepend(card);
-    setSettingsStatus('Target profile added to this session.');
+    setSettingsStatus(`Profile saved locally - click Save Settings to persist it to the runtime.`);
 }
 
 function initializeSettingsTab(socket) {
@@ -198,17 +365,64 @@ function initializeSettingsTab(socket) {
     document.getElementById('refresh-settings-btn')?.addEventListener('click', loadSettingsTab);
     document.getElementById('capture-current-target-btn')?.addEventListener('click', captureCurrentTarget);
     document.getElementById('add-target-profile-btn')?.addEventListener('click', addTargetProfile);
-    document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', () => {
+    document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', async () => {
         setGoogleDriveStatus('Checking Google Drive status...');
-        socket.emit('get_google_drive_status');
+        try {
+            const response = await fetch('/api/settings/google-drive/status');
+            const status = await response.json();
+            renderGoogleDriveSummary({ config: {}, status: status });
+            setGoogleDriveStatus(status.connected ? 'Google Drive is connected.' : 'Google Drive is not connected.');
+        } catch (error) {
+            socket.emit('get_google_drive_status');
+        }
     });
-    document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', () => {
+    document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', async () => {
         setGoogleDriveStatus('Starting Google Drive authorization...');
-        socket.emit('connect_google_drive');
+        try {
+            const response = await fetch('/api/settings/google-drive/auth-url');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const result = await response.json();
+            if (!result.success || !result.auth_url) throw new Error(result.error || 'No authorization URL returned');
+            setGoogleDriveStatus('Complete sign-in in the browser window that opened.');
+            window.open(result.auth_url, '_blank', 'noopener,noreferrer');
+        } catch (error) {
+            // Node dev runtime implements this via socket events instead.
+            setGoogleDriveStatus('Starting Google Drive authorization via local runtime...');
+            socket.emit('connect_google_drive');
+        }
     });
-    document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', () => {
+    document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', async () => {
         setGoogleDriveStatus('Disconnecting Google Drive...');
-        socket.emit('disconnect_google_drive');
+        try {
+            const response = await fetch('/api/settings/google-drive/disconnect', { method: 'POST' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Disconnect failed');
+            setGoogleDriveStatus(result.status || 'Google Drive disconnected.');
+            // The disconnect route only revokes the token; also flip
+            // sync.google_drive.enabled off so report uploads stop failing.
+            const currentDoc = await fetchServerSettings();
+            if (currentDoc) {
+                const payload = buildServerSettingsPayload(collectSettingsForm(), {
+                    ...currentDoc,
+                    sync: {
+                        ...(currentDoc.sync || {}),
+                        google_drive: {
+                            ...((currentDoc.sync || {}).google_drive || {}),
+                            enabled: false,
+                        },
+                    },
+                });
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+            }
+        } catch (error) {
+            // Node dev runtime fallback.
+            socket.emit('disconnect_google_drive');
+        }
     });
     document.getElementById('settings-google-drive-import-btn')?.addEventListener('click', () => {
         document.getElementById('settings-google-drive-credentials-file')?.click();
@@ -217,9 +431,22 @@ function initializeSettingsTab(socket) {
         const file = event.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
             setGoogleDriveStatus('Importing Google Drive credentials...');
-            socket.emit('save_google_drive_credentials', { credentialsJson: String(reader.result || '') });
+            try {
+                const response = await fetch('/api/settings/google-drive/credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ credentials: String(reader.result || '') }),
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Import rejected');
+                setGoogleDriveStatus(result.status || 'Credentials imported.');
+            } catch (error) {
+                // Node dev runtime fallback.
+                socket.emit('save_google_drive_credentials', { credentialsJson: String(reader.result || '') });
+            }
         };
         reader.onerror = () => setGoogleDriveStatus('Failed to read credentials file.', true);
         reader.readAsText(file);
@@ -227,10 +454,40 @@ function initializeSettingsTab(socket) {
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', () => {
         document.getElementById('settings-remote-sync-status').textContent = 'Remote sync integration is not connected in this build.';
     });
-    ['settings-runtime-backfill-btn', 'settings-runtime-retention-btn', 'settings-runtime-export-btn'].forEach(id => {
-        document.getElementById(id)?.addEventListener('click', () => {
-            document.getElementById('settings-maintenance-status').textContent = 'Runtime maintenance endpoints are not connected in this build.';
-        });
+    const setMaintenanceStatus = (message, isError = false) => {
+        const status = document.getElementById('settings-maintenance-status');
+        if (!status) return;
+        status.textContent = message;
+        status.classList.toggle('text-red-700', isError);
+        status.classList.toggle('text-olive-600', !isError);
+    };
+    document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', async () => {
+        setMaintenanceStatus('Running runtime backfill...');
+        try {
+            const response = await fetch('/api/runtime/maintenance/backfill', { method: 'POST' });
+            const payload = await response.json();
+            if (!response.ok || payload.success !== true) throw new Error(payload.error || `Backfill failed (${response.status})`);
+            setMaintenanceStatus(`Backfill complete: ${payload.backfilled} artifact(s) indexed.`);
+            renderSettingsRuntimeSummary();
+        } catch (error) {
+            setMaintenanceStatus(`Backfill failed: ${error.message}`, true);
+        }
+    });
+    document.getElementById('settings-runtime-retention-btn')?.addEventListener('click', async () => {
+        setMaintenanceStatus('Pruning logs and compacting the database...');
+        try {
+            const response = await fetch('/api/runtime/maintenance/retention', { method: 'POST' });
+            const payload = await response.json();
+            if (!response.ok || payload.success !== true) throw new Error(payload.error || `Retention failed (${response.status})`);
+            setMaintenanceStatus('Retention policies applied and database compacted.');
+        } catch (error) {
+            setMaintenanceStatus(`Retention failed: ${error.message}`, true);
+        }
+    });
+    document.getElementById('settings-runtime-export-btn')?.addEventListener('click', () => {
+        setMaintenanceStatus('Preparing runtime database export...');
+        window.location.href = '/api/runtime/export';
+        setMaintenanceStatus('Runtime database download started.');
     });
 }
 

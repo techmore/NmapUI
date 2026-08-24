@@ -23,4 +23,5 @@ work/
 .pytest_cache/
 .venv/
 .claude/settings.local.json
-EOF
+.playwright-browsers/
+auto_scan_config.json
