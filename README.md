@@ -108,6 +108,23 @@ cp /path/to/runtime.sqlite3 NmapUIMenuBar.app/Contents/Resources/data/runtime.sq
 
 The current repository does not include the old `build.sh` installer flow referenced in earlier notes.
 
+## Build Environment Variables
+
+The macOS wrapper build accepts the following environment variables:
+
+- `NMAPUI_SWIFT_TARGET` - Override the Swift compilation target (defaults are picked from `uname -m`: `arm64-apple-macosx13.0` or `x86_64-apple-macosx13.0`)
+- `NMAPUI_APPLICATIONS_DIR` - Override the install destination; otherwise the bundle goes to `/Applications` when writable, or `~/Applications`
+- `NMAPUI_MIGRATE_DB=1 ./build.sh` - Migrate an existing runtime database during install
+- `NMAPUI_MIGRATE_DB_FROM=<path>` - Explicit source database for the migration
+
+## Runtime Maintenance
+
+Backfill scan artifacts and customer history into the SQLite runtime store:
+
+```bash
+python3 scripts/backfill_runtime_store.py
+```
+
 ## Usage
 
 ### Start the app
