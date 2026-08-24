@@ -115,30 +115,107 @@ function renderSettingsRuntimeSummary() {
     `;
 }
 
-function loadSettingsTab() {
+function applyServerSettingsDocument(doc = {}) {
+    const scanRules = doc.scan_rules || {};
+    const reports = doc.reports || {};
+    const sync = doc.sync || {};
+    applySettingsForm({
+        scanOnlyMode: !!scanRules.scan_only_mode,
+        excludedTargets: (scanRules.excluded_targets || []).join('\n'),
+        maxScanMinutes: scanRules.max_scan_minutes != null ? String(scanRules.max_scan_minutes) : '',
+        saveReportsDesktop: !!reports.save_to_desktop,
+        googleDriveEnabled: !!(sync.google_drive || {}).enabled,
+        googleDriveFolder: (sync.google_drive || {}).folder_id || '',
+        remoteSyncEnabled: !!(sync.remote_sync || {}).enabled,
+        remoteSyncEndpoint: (sync.remote_sync || {}).endpoint || '',
+    });
+    renderGoogleDriveSummary({ config: sync.google_drive || {}, status: sync.google_drive_status || {} });
+}
+
+async function fetchServerSettings() {
     try {
-        const saved = JSON.parse(localStorage.getItem(getSettingsStorageKey()) || 'null');
-        applySettingsForm(saved);
-        window.socket?.emit('get_google_drive_status');
-        renderSettingsRuntimeSummary();
-        setSettingsStatus(saved ? 'Settings loaded from this browser.' : 'Settings tab ready. Save stores these controls locally for this browser.');
+        const response = await fetch('/api/settings');
+        if (!response.ok) return null;
+        return await response.json();
     } catch (error) {
-        setSettingsStatus('Failed to load local settings.', true);
+        return null;
     }
 }
 
-function saveSettingsTab() {
+async function loadSettingsTab() {
+    let saved = null;
     try {
-        const settings = collectSettingsForm();
+        saved = JSON.parse(localStorage.getItem(getSettingsStorageKey()) || 'null');
+    } catch (error) {
+        saved = null;
+    }
+    if (saved) applySettingsForm(saved);
+    window.socket?.emit('get_google_drive_status');
+    renderSettingsRuntimeSummary();
+    setSettingsStatus('Loading settings...');
+    const doc = await fetchServerSettings();
+    if (doc) {
+        applyServerSettingsDocument(doc);
+        setSettingsStatus('Settings loaded from the local runtime.');
+    } else {
+        setSettingsStatus(saved ? 'Settings loaded from this browser.' : 'Settings tab ready.');
+    }
+}
+
+function buildServerSettingsPayload(settings) {
+    return {
+        scan_rules: {
+            scan_only_mode: !!settings.scanOnlyMode,
+            excluded_targets: String(settings.excludedTargets || '')
+                .split(/[\n,]+/)
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+            max_scan_minutes: Number.parseInt(settings.maxScanMinutes, 10) || 120,
+        },
+        reports: {
+            save_to_desktop: !!settings.saveReportsDesktop,
+        },
+        sync: {
+            google_drive: {
+                enabled: !!settings.googleDriveEnabled,
+                folder_id: settings.googleDriveFolder || '',
+            },
+            remote_sync: {
+                enabled: !!settings.remoteSyncEnabled,
+                endpoint: settings.remoteSyncEndpoint || '',
+            },
+        },
+    };
+}
+
+async function saveSettingsTab() {
+    let settings;
+    try {
+        settings = collectSettingsForm();
         localStorage.setItem(getSettingsStorageKey(), JSON.stringify(settings));
-        window.socket?.emit('save_google_drive_settings', {
-            enabled: settings.googleDriveEnabled,
-            folderId: settings.googleDriveFolder
-        });
-        renderSettingsRuntimeSummary();
-        setSettingsStatus('Settings saved locally in this browser.');
     } catch (error) {
         setSettingsStatus('Failed to save local settings.', true);
+        return;
+    }
+    window.socket?.emit('save_google_drive_settings', {
+        enabled: settings.googleDriveEnabled,
+        folderId: settings.googleDriveFolder
+    });
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildServerSettingsPayload(settings)),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || `Save failed (${response.status})`);
+        }
+        renderSettingsRuntimeSummary();
+        setSettingsStatus('Settings saved to the local runtime and this browser.');
+    } catch (error) {
+        renderSettingsRuntimeSummary();
+        setSettingsStatus(`Saved locally in this browser only (${error.message}).`);
     }
 }
 
@@ -198,17 +275,39 @@ function initializeSettingsTab(socket) {
     document.getElementById('refresh-settings-btn')?.addEventListener('click', loadSettingsTab);
     document.getElementById('capture-current-target-btn')?.addEventListener('click', captureCurrentTarget);
     document.getElementById('add-target-profile-btn')?.addEventListener('click', addTargetProfile);
-    document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', () => {
+    document.getElementById('settings-google-drive-test-btn')?.addEventListener('click', async () => {
         setGoogleDriveStatus('Checking Google Drive status...');
-        socket.emit('get_google_drive_status');
+        try {
+            const response = await fetch('/api/settings/google-drive/status');
+            const status = await response.json();
+            renderGoogleDriveSummary({ config: {}, status: status });
+            setGoogleDriveStatus(status.connected ? 'Google Drive is connected.' : 'Google Drive is not connected.');
+        } catch (error) {
+            socket.emit('get_google_drive_status');
+        }
     });
-    document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', () => {
+    document.getElementById('settings-google-drive-connect-btn')?.addEventListener('click', async () => {
         setGoogleDriveStatus('Starting Google Drive authorization...');
-        socket.emit('connect_google_drive');
+        try {
+            const response = await fetch('/api/settings/google-drive/auth-url');
+            const result = await response.json();
+            if (!result.success || !result.auth_url) throw new Error(result.error || 'No authorization URL returned');
+            setGoogleDriveStatus('Complete sign-in in the browser window that opened.');
+            window.open(result.auth_url, '_blank', 'noopener,noreferrer');
+        } catch (error) {
+            setGoogleDriveStatus(`Unable to start Google Drive authorization: ${error.message}`, true);
+        }
     });
-    document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', () => {
+    document.getElementById('settings-google-drive-disconnect-btn')?.addEventListener('click', async () => {
         setGoogleDriveStatus('Disconnecting Google Drive...');
-        socket.emit('disconnect_google_drive');
+        try {
+            const response = await fetch('/api/settings/google-drive/disconnect', { method: 'POST' });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Disconnect failed');
+            setGoogleDriveStatus(result.status || 'Google Drive disconnected.');
+        } catch (error) {
+            setGoogleDriveStatus(`Disconnect failed: ${error.message}`, true);
+        }
     });
     document.getElementById('settings-google-drive-import-btn')?.addEventListener('click', () => {
         document.getElementById('settings-google-drive-credentials-file')?.click();
@@ -217,9 +316,20 @@ function initializeSettingsTab(socket) {
         const file = event.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
             setGoogleDriveStatus('Importing Google Drive credentials...');
-            socket.emit('save_google_drive_credentials', { credentialsJson: String(reader.result || '') });
+            try {
+                const response = await fetch('/api/settings/google-drive/credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ credentials: String(reader.result || '') }),
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Import rejected');
+                setGoogleDriveStatus(result.status || 'Credentials imported.');
+            } catch (error) {
+                setGoogleDriveStatus(`Credential import failed: ${error.message}`, true);
+            }
         };
         reader.onerror = () => setGoogleDriveStatus('Failed to read credentials file.', true);
         reader.readAsText(file);
@@ -227,10 +337,40 @@ function initializeSettingsTab(socket) {
     document.getElementById('settings-remote-sync-test-btn')?.addEventListener('click', () => {
         document.getElementById('settings-remote-sync-status').textContent = 'Remote sync integration is not connected in this build.';
     });
-    ['settings-runtime-backfill-btn', 'settings-runtime-retention-btn', 'settings-runtime-export-btn'].forEach(id => {
-        document.getElementById(id)?.addEventListener('click', () => {
-            document.getElementById('settings-maintenance-status').textContent = 'Runtime maintenance endpoints are not connected in this build.';
-        });
+    const setMaintenanceStatus = (message, isError = false) => {
+        const status = document.getElementById('settings-maintenance-status');
+        if (!status) return;
+        status.textContent = message;
+        status.classList.toggle('text-red-700', isError);
+        status.classList.toggle('text-olive-600', !isError);
+    };
+    document.getElementById('settings-runtime-backfill-btn')?.addEventListener('click', async () => {
+        setMaintenanceStatus('Running runtime backfill...');
+        try {
+            const response = await fetch('/api/runtime/maintenance/backfill', { method: 'POST' });
+            const payload = await response.json();
+            if (!response.ok || payload.success !== true) throw new Error(payload.error || `Backfill failed (${response.status})`);
+            setMaintenanceStatus(`Backfill complete: ${payload.backfilled} artifact(s) indexed.`);
+            renderSettingsRuntimeSummary();
+        } catch (error) {
+            setMaintenanceStatus(`Backfill failed: ${error.message}`, true);
+        }
+    });
+    document.getElementById('settings-runtime-retention-btn')?.addEventListener('click', async () => {
+        setMaintenanceStatus('Pruning logs and compacting the database...');
+        try {
+            const response = await fetch('/api/runtime/maintenance/retention', { method: 'POST' });
+            const payload = await response.json();
+            if (!response.ok || payload.success !== true) throw new Error(payload.error || `Retention failed (${response.status})`);
+            setMaintenanceStatus('Retention policies applied and database compacted.');
+        } catch (error) {
+            setMaintenanceStatus(`Retention failed: ${error.message}`, true);
+        }
+    });
+    document.getElementById('settings-runtime-export-btn')?.addEventListener('click', () => {
+        setMaintenanceStatus('Preparing runtime database export...');
+        window.location.href = '/api/runtime/export';
+        setMaintenanceStatus('Runtime database download started.');
     });
 }
 

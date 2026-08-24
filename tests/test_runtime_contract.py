@@ -136,6 +136,54 @@ def test_settings_tab_includes_auto_monitor_defaults():
     assert "settings-auto-monitor-time" in settings_source
 
 
+def test_auto_scan_ui_uses_flask_runtime_contract():
+    """Auto-scan scheduling must hit the Flask /api/auto_scan/* routes (packaged runtime),
+    with socket fallbacks for the Node dev runtime."""
+    source = (ROOT / "static" / "js" / "auto_scan_ui.js").read_text()
+    assert "fetch('/api/auto_scan/status')" in source
+    assert "fetch('/api/auto_scan/update'" in source
+    assert "socket.on('auto_scan_status'" in source
+    assert "socket.emit('disable_auto_scan')" in source  # node fallback retained
+    assert "emit('enable_auto_scan'" in source  # node fallback retained
+
+
+def test_settings_tab_persists_scan_rules_to_server():
+    """Scan-only mode, exclusions and max duration must reach the backend settings_state,
+    not just localStorage - workflows read them via get_effective_scan_rules."""
+    settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    assert "fetch('/api/settings'" in settings_source
+    assert "scan_only_mode:" in settings_source
+    assert "excluded_targets:" in settings_source
+    assert "max_scan_minutes:" in settings_source
+    workflows_source = (ROOT / "nmapui" / "workflows.py").read_text()
+    assert "get_effective_scan_rules(" in workflows_source
+
+
+def test_settings_tab_google_drive_actions_use_http_routes():
+    """Drive connect/disconnect/import must call the implemented Flask HTTP routes;
+    the old socket events were only ever handled by the Node dev runtime."""
+    settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    for route in (
+        "/api/settings/google-drive/status",
+        "/api/settings/google-drive/auth-url",
+        "/api/settings/google-drive/disconnect",
+        "/api/settings/google-drive/credentials",
+    ):
+        assert f"fetch('{route}'" in settings_source
+    # The dead socket events must no longer be emitted.
+    for dead_event in ("'connect_google_drive'", "'disconnect_google_drive'", "'save_google_drive_credentials'"):
+        assert f"emit({dead_event}" not in settings_source
+
+
+def test_settings_tab_maintenance_buttons_call_runtime_routes():
+    """Maintenance buttons must invoke the registered /api/runtime/maintenance/* + export routes."""
+    settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
+    assert "fetch('/api/runtime/maintenance/backfill'" in settings_source
+    assert "fetch('/api/runtime/maintenance/retention'" in settings_source
+    assert "'/api/runtime/export'" in settings_source
+    assert "Runtime maintenance endpoints are not connected" not in settings_source
+
+
 def test_settings_tab_exposes_google_drive_credentials_import():
     html = (ROOT / "templates" / "index.html").read_text()
     settings_source = (ROOT / "static" / "js" / "settings_tab.js").read_text()
@@ -145,9 +193,9 @@ def test_settings_tab_exposes_google_drive_credentials_import():
     assert 'id="settings-google-drive-credentials-file"' in html
     assert 'accept=".json,application/json"' in html
     assert "Builds can bundle Google Drive OAuth credentials." in html
-    assert "socket.emit('connect_google_drive');" in settings_source
-    assert "socket.emit('disconnect_google_drive');" in settings_source
-    assert "socket.emit('save_google_drive_credentials', { credentialsJson: String(reader.result || '') });" in settings_source
+    assert "fetch('/api/settings/google-drive/auth-url'" in settings_source
+    assert "fetch('/api/settings/google-drive/disconnect'" in settings_source
+    assert "fetch('/api/settings/google-drive/credentials'" in settings_source
     assert "document.getElementById('settings-google-drive-import-btn')?.addEventListener" in settings_source
     assert "document.getElementById('settings-google-drive-credentials-file')?.addEventListener" in settings_source
 
@@ -1494,8 +1542,8 @@ def test_google_drive_integration_contract_exists():
     assert "REMOTE_SYNC_SECRET_FILE" in app_source
     assert "function uploadReportToGoogleDrive(scanPath)" in reports_tab_source
     assert "Upload to Drive" in reports_tab_source
-    assert "socket.emit('connect_google_drive');" in settings_tab_source
-    assert "socket.emit('disconnect_google_drive');" in settings_tab_source
+    assert "fetch('/api/settings/google-drive/auth-url'" in settings_tab_source
+    assert "fetch('/api/settings/google-drive/disconnect'" in settings_tab_source
     assert 'id="settings-google-drive-connect-btn"' in template
     assert 'id="settings-google-drive-disconnect-btn"' in template
     settings_source = (ROOT / "nmapui" / "settings.py").read_text()

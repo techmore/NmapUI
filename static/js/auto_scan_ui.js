@@ -1,38 +1,81 @@
+let autoScanHttpBusy = false;
+
+function applyAutoScanConfigState(config = {}) {
+    if (!config || typeof config !== 'object') return;
+    // Flask payloads use start_time; the Node dev runtime uses startTime.
+    window.currentAutoScanConfig = config || {};
+    const autoScanToggle = document.getElementById('auto-scan-toggle');
+    const recurrenceInput = document.getElementById('auto-recurrence');
+    const startTimeInput = document.getElementById('auto-start-time');
+    if (autoScanToggle) autoScanToggle.checked = !!config.enabled;
+    if (recurrenceInput) recurrenceInput.value = config.recurrence || 'daily';
+    if (startTimeInput) startTimeInput.value = config.startTime || config.start_time || '01:00';
+}
+
+// The packaged Flask runtime exposes /api/auto_scan/*; prefer it and fall back
+// to socket events for the Node dev runtime. Returns true when handled via HTTP.
+async function sendAutoScanUpdate(payload) {
+    if (autoScanHttpBusy) return true;
+    autoScanHttpBusy = true;
+    try {
+        const response = await fetch('/api/auto_scan/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) return false;
+        applyAutoScanConfigState(await response.json());
+        return true;
+    } catch (error) {
+        return false;
+    } finally {
+        autoScanHttpBusy = false;
+    }
+}
+
+async function refreshAutoScanStatus() {
+    try {
+        const response = await fetch('/api/auto_scan/status');
+        if (!response.ok) return;
+        applyAutoScanConfigState(await response.json());
+    } catch (error) {
+        // Socket handlers remain the fallback on the Node dev runtime.
+    }
+}
+
 function initializeAutoScanUI(socket) {
     const autoScanToggle = document.getElementById('auto-scan-toggle');
     const autoScanModal = document.getElementById('auto-scan-modal');
-    const recurrenceInput = document.getElementById('auto-recurrence');
-    const startTimeInput = document.getElementById('auto-start-time');
     if (!autoScanToggle || !autoScanModal) return;
 
     window.currentAutoScanConfig = window.currentAutoScanConfig || {};
 
-    function applyAutoScanConfig(config = {}) {
-        window.currentAutoScanConfig = config || {};
-        autoScanToggle.checked = !!config.enabled;
-        if (recurrenceInput) recurrenceInput.value = config.recurrence || 'daily';
-        if (startTimeInput) startTimeInput.value = config.startTime || '01:00';
-    }
-    
     autoScanToggle.addEventListener('change', () => {
         if (autoScanToggle.checked) {
             autoScanModal.classList.remove('hidden');
         } else {
-            socket.emit('disable_auto_scan');
+            sendAutoScanUpdate({ enabled: false }).then((handled) => {
+                if (!handled) socket.emit('disable_auto_scan');
+            });
         }
     });
 
-    socket.on('sync_state', (state = {}) => applyAutoScanConfig(state.autoScan));
-    socket.on('initial_data', (data = {}) => applyAutoScanConfig(data.autoScan));
-    socket.on('auto_scan_config', applyAutoScanConfig);
+    socket.on('sync_state', (state = {}) => applyAutoScanConfigState(state.autoScan));
+    socket.on('initial_data', (data = {}) => applyAutoScanConfigState(data.autoScan));
+    socket.on('auto_scan_config', applyAutoScanConfigState);
+    socket.on('auto_scan_status', applyAutoScanConfigState);
+    refreshAutoScanStatus();
 }
 
-function saveAutoScanTimes() {
-    const recurrence = document.getElementById('auto-recurrence').value;
-    const startTime = document.getElementById('auto-start-time').value;
-    const target = document.getElementById('scan-target').value;
+async function saveAutoScanTimes() {
+    const recurrence = document.getElementById('auto-recurrence')?.value || 'daily';
+    const startTime = document.getElementById('auto-start-time')?.value || '01:00';
+    const target = document.getElementById('scan-target')?.value;
 
-    window.socket.emit('enable_auto_scan', { recurrence, startTime, target });
+    const handled = await sendAutoScanUpdate({ enabled: true, start_time: startTime });
+    if (!handled) {
+        window.socket.emit('enable_auto_scan', { recurrence, startTime, target });
+    }
     document.getElementById('auto-scan-modal').classList.add('hidden');
 }
 
