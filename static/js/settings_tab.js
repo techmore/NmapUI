@@ -239,9 +239,10 @@ function buildServerSettingsPayload(settings, existingDoc = {}) {
                 api_key_configured: !!(existingSync.remote_sync || {}).api_key_configured,
             },
         },
-        target_profiles: Array.isArray(existingDoc.target_profiles)
-            ? existingDoc.target_profiles
-            : [],
+        target_profiles: [
+            ...(Array.isArray(existingDoc.target_profiles) ? existingDoc.target_profiles : []),
+            ...pendingTargetProfiles,
+        ],
         auto_monitor: buildAutoMonitorDefaultsPayload(settings, existingDoc),
     };
 }
@@ -276,6 +277,7 @@ async function saveSettingsTab() {
         if (!response.ok || payload.success !== true) {
             throw new Error(payload.error || `Save failed (${response.status})`);
         }
+        pendingTargetProfiles = [];
         renderSettingsRuntimeSummary();
         setSettingsStatus('Settings saved to the local runtime and this browser.');
     } catch (error) {
@@ -291,6 +293,9 @@ function captureCurrentTarget() {
     setSettingsStatus(target ? 'Current dashboard target copied into the profile form.' : 'No dashboard target is available to copy.');
 }
 
+// Target profiles added this session; persisted with the next settings save.
+let pendingTargetProfiles = [];
+
 function addTargetProfile() {
     const name = document.getElementById('settings-profile-name')?.value || 'Target Profile';
     const target = document.getElementById('settings-profile-target')?.value || '';
@@ -300,11 +305,25 @@ function addTargetProfile() {
         setSettingsStatus('Add a target before saving a profile.', true);
         return;
     }
+    const profile = {
+        id: (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 12) : `p${Date.now()}`),
+        name,
+        target,
+        customer_id: '',
+        customer_name: '',
+        notes,
+        scan_rules: {
+            scan_only_mode: false,
+            excluded_targets: [],
+            max_scan_minutes: 120,
+        },
+    };
+    pendingTargetProfiles.push(profile);
     const card = document.createElement('div');
     card.className = 'rounded-xl border border-olive-200 bg-white px-4 py-3 text-sm text-olive-800';
     card.innerHTML = `<div class="font-bold text-olive-950">${escapeSettingsHTML(name)}</div><div class="mt-1 font-mono text-xs">${escapeSettingsHTML(target)}</div>${notes ? `<div class="mt-1 text-xs text-olive-600">${escapeSettingsHTML(notes)}</div>` : ''}`;
     list.prepend(card);
-    setSettingsStatus('Target profile added to this session.');
+    setSettingsStatus(`Profile saved locally - click Save Settings to persist it to the runtime.`);
 }
 
 function initializeSettingsTab(socket) {
@@ -374,6 +393,26 @@ function initializeSettingsTab(socket) {
             const result = await response.json();
             if (!result.success) throw new Error(result.error || 'Disconnect failed');
             setGoogleDriveStatus(result.status || 'Google Drive disconnected.');
+            // The disconnect route only revokes the token; also flip
+            // sync.google_drive.enabled off so report uploads stop failing.
+            const currentDoc = await fetchServerSettings();
+            if (currentDoc) {
+                const payload = buildServerSettingsPayload(collectSettingsForm(), {
+                    ...currentDoc,
+                    sync: {
+                        ...(currentDoc.sync || {}),
+                        google_drive: {
+                            ...((currentDoc.sync || {}).google_drive || {}),
+                            enabled: false,
+                        },
+                    },
+                });
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+            }
         } catch (error) {
             // Node dev runtime fallback.
             socket.emit('disconnect_google_drive');

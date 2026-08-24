@@ -160,8 +160,10 @@ def test_settings_tab_persists_scan_rules_to_server():
     assert "excluded_targets:" in settings_source
     assert "max_scan_minutes:" in settings_source
     # POST /api/settings replaces the whole document server-side, so the save
-    # payload must carry forward sections outside the form.
-    assert "target_profiles: Array.isArray(existingDoc.target_profiles)" in settings_source
+    # payload must carry forward sections outside the form, plus any profiles
+    # added this session.
+    assert "...pendingTargetProfiles" in settings_source
+    assert "pendingTargetProfiles = [];" in settings_source
     assert "buildAutoMonitorDefaultsPayload(settings, existingDoc)" in settings_source
     assert "enabled_by_default: !!settings.autoMonitorEnabledByDefault" in settings_source
     assert "rules: Array.isArray(existing.rules) ? existing.rules : []" in settings_source
