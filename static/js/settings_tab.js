@@ -143,7 +143,26 @@ function applyServerSettingsDocument(doc = {}) {
     if (document.getElementById('settings-auto-monitor-time')) {
         document.getElementById('settings-auto-monitor-time').value = defaults.time || '01:00';
     }
-    renderGoogleDriveSummary({ config: sync.google_drive || {}, status: sync.google_drive_status || {} });
+    renderGoogleDriveSummary({ config: sync.google_drive || {}, status: {} });
+}
+
+async function refreshGoogleDriveSummaryFromStatus() {
+    try {
+        const response = await fetch('/api/settings/google-drive/status');
+        if (!response.ok) return;
+        const status = await response.json();
+        let config = {};
+        try {
+            const doc = await fetchServerSettings();
+            if (doc) config = (doc.sync || {}).google_drive || {};
+        } catch (error) {
+            config = {};
+        }
+        renderGoogleDriveSummary({ config, status });
+    } catch (error) {
+        // Node dev runtime: socket 'google_drive_status' handler covers this.
+        window.socket?.emit('get_google_drive_status');
+    }
 }
 
 async function fetchServerSettings() {
@@ -174,6 +193,7 @@ async function loadSettingsTab() {
     } else {
         setSettingsStatus(saved ? 'Settings loaded from this browser.' : 'Settings tab ready.');
     }
+    await refreshGoogleDriveSummaryFromStatus();
 }
 
 function buildAutoMonitorDefaultsPayload(settings, existingDoc = {}) {
@@ -240,11 +260,17 @@ async function saveSettingsTab() {
         folderId: settings.googleDriveFolder
     });
     try {
+        // POST /api/settings clears and replaces the whole server document.
+        // If we cannot read the current doc first, a replacement save could
+        // wipe target_profiles / auto_monitor rules - abort instead of risk it.
         const currentDoc = await fetchServerSettings();
+        if (!currentDoc) {
+            throw new Error('could not read current settings from the runtime; save aborted to avoid data loss');
+        }
         const response = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(buildServerSettingsPayload(settings, currentDoc || {})),
+            body: JSON.stringify(buildServerSettingsPayload(settings, currentDoc)),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload.success !== true) {
